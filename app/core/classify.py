@@ -17,6 +17,7 @@ def _load_rules() -> dict[str, dict]:
 
 
 def _match_name(name: str, rules: dict) -> RuleCategory | None:
+    # 先按名称规律匹配，再按扩展名兜底；避免 alarm_*.csv 被通用 .csv 规则抢先分类。
     for cat in RuleCategory:
         if cat == RuleCategory.OTHER:
             continue
@@ -29,6 +30,10 @@ def _match_name(name: str, rules: dict) -> RuleCategory | None:
                     return cat
             except re.error:
                 continue
+    for cat in RuleCategory:
+        if cat == RuleCategory.OTHER:
+            continue
+        spec = rules.get("category", {}).get(cat.value, {})
         if any(name.lower().endswith(ext) for ext in spec.get("extensions", [])):
             return cat
     return None

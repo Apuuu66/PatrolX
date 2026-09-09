@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.archive import ArchiveError, unpack_zip
+from app.core.archive import ArchiveError, is_archive, unpack_zip
 
 
 def test_zip_slip_rejected(tmp_path: Path) -> None:
@@ -24,3 +24,9 @@ def test_unpack_zip_ok(tmp_path: Path) -> None:
     count = unpack_zip(archive, tmp_path / "out")
     assert count == 2
     assert (tmp_path / "out" / "logs" / "a.log").read_text() == "hello"
+
+
+def test_log_gzip_is_not_nested_archive(tmp_path: Path) -> None:
+    path = tmp_path / "app_history.log.gz"
+    path.write_bytes(b"plain")
+    assert is_archive(path) is False

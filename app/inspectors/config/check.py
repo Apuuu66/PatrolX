@@ -19,7 +19,7 @@ inspector = Inspector(
     category=RuleCategory.CONFIG,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.0.0",
+    rule_version="1.0.1",
     description="检查基础配置文件与关键配置项是否存在",
     recommendation="缺失配置项可能导致功能异常，需补齐默认值",
     outputs_metrics=[
@@ -40,17 +40,20 @@ def _run(ctx: RuleContext) -> object:
             summary="未发现配置类文件",
             skip_reason="未发现配置类文件",
         )
-    missing: list[str] = []
+    # 关键配置项允许分散在不同配置文件中；例如 system_info.ini 提供 app 配置，version.ini 提供版本信息。
+    parsers: list[ConfigParser] = []
     for path in files:
         parser = ConfigParser()
         try:
             parser.read(path, encoding="utf-8")
         except OSError:
             continue
-        for section, keys in REQUIRED_KEYS.items():
-            for key in keys:
-                if not parser.has_option(section, key):
-                    missing.append(f"{path.name}:{section}.{key}")
+        parsers.append(parser)
+    missing: list[str] = []
+    for section, keys in REQUIRED_KEYS.items():
+        for key in keys:
+            if not any(parser.has_option(section, key) for parser in parsers):
+                missing.append(f"{section}.{key}")
     findings = (
         [
             Finding(

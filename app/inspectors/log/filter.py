@@ -6,6 +6,7 @@ from pathlib import Path
 # 支持 PyCharm 直接运行单规则文件
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+import gzip
 import json
 from collections import Counter
 
@@ -18,13 +19,25 @@ LEVELS = {"DEBUG": 10, "INFO": 20, "WARN": 30, "WARNING": 30, "ERROR": 40, "FATA
 MIN_LEVEL = 30  # 默认保留 WARN 及以上
 LOGGING_EXT = {".log", ".trace", ".txt"}
 
+
+def _is_log_file(path: Path) -> bool:
+    return path.suffix.lower() in LOGGING_EXT or path.name.lower().endswith(".log.gz")
+
+
+def _read_text(path: Path) -> str:
+    if path.name.lower().endswith(".log.gz"):
+        with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 inspector = Inspector(
     code="log.filter",
     name="日志过滤",
     category=RuleCategory.LOG,
     severity=Severity.LOW,
     priority=Priority.P0,
-    rule_version="1.0.0",
+    rule_version="1.0.1",
     description="扫描日志类文件，按级别裁剪并规范化，产出过滤后数据集与统计索引",
     recommendation="无日志类文件时跳过分析类规则",
     inputs=["pkg.extract.log.ready"],
@@ -42,7 +55,7 @@ def _level_of(line: str) -> tuple[str | None, int]:
 
 def _run(ctx: RuleContext) -> object:
     logs_dir = ctx.data_dir / RuleCategory.LOG.value
-    files = [p for p in sorted(logs_dir.rglob("*")) if p.is_file() and p.suffix.lower() in LOGGING_EXT]
+    files = [p for p in sorted(logs_dir.rglob("*")) if p.is_file() and _is_log_file(p)]
     if not files:
         return make_result(
             inspector,
@@ -59,8 +72,8 @@ def _run(ctx: RuleContext) -> object:
     with (out_root / "filtered.log").open("w", encoding="utf-8") as out:
         for path in files:
             try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
+                text = _read_text(path)
+            except (OSError, gzip.BadGzipFile):
                 continue
             for line in text.splitlines():
                 total_lines += 1

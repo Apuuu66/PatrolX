@@ -105,7 +105,10 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
 
 
 def is_archive(path: Path) -> bool:
-    return path.suffix.lower() in {".zip", ".tar", ".gz", ".tgz"} or path.name.lower().endswith(".tar.gz")
+    name = path.name.lower()
+    if name.endswith(".log.gz"):
+        return False
+    return path.suffix.lower() in {".zip", ".tar", ".gz", ".tgz"} or name.endswith(".tar.gz")
 
 
 def unpack(archive: Path, root: Path, limit: UnpackLimit | None = None) -> int:
