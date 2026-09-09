@@ -1,0 +1,17 @@
+.git
+.venv
+.uv
+.uv-cache
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+uploads
+output
+web
+tests
+docs
+.idea
+.vscode
+*.swp
+.DS_Store

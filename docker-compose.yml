@@ -1,0 +1,28 @@
+services:
+  api:
+    build: .
+    image: patrolx:latest
+    container_name: patrolx-api
+    ports:
+      - "8000:8000"
+    environment:
+      PATROLX_ENV: production
+      PATROLX_LOG_JSON: "1"
+    volumes:
+      - patrolx-uploads:/app/uploads
+      - patrolx-output:/app/output
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  patrolx-uploads:
+  patrolx-output:

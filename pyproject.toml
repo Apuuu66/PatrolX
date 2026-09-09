@@ -1,0 +1,43 @@
+[project]
+name = "patrolx"
+version = "0.1.0"
+description = "PatrolX 离线巡检系统"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "python-multipart>=0.0.9",
+  "sqlalchemy>=2.0",
+  "structlog>=24.1",
+  "prometheus-client>=0.21",
+  "jinja2>=3.1",
+  "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[project.optional-dependencies]
+data = ["pandas>=2.2", "pyarrow>=16.0"]
+dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["B008"]
+
+[tool.ruff.format]
+quote-style = "double"

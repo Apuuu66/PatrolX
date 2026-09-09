@@ -1,0 +1,33 @@
+# 预制数据字典（种子数据，可配置扩展）
+province:
+  - code: gd
+    name: 广东
+  - code: js
+    name: 江苏
+  - code: zj
+    name: 浙江
+  - code: sd
+    name: 山东
+  - code: sc
+    name: 四川
+operator:
+  - code: cmcc
+    name: 移动
+  - code: cucc
+    name: 联通
+  - code: ctcc
+    name: 电信
+product:
+  - code: core
+    name: 核心网
+  - code: ims
+    name: IMS
+  - code: mme
+    name: MME
+version:
+  - code: v10
+    name: R10
+  - code: v11
+    name: R11
+  - code: v12
+    name: R12

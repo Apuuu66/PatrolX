@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PatrolX 巡检报告 - {{ system.system_id }}</title>
+  <style>
+    body { font-family: -apple-system, "PingFang SC", sans-serif; margin: 32px; color: #333; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 16px; margin-top: 24px; }
+    .stats { display: flex; gap: 12px; margin: 16px 0; }
+    .stat { border: 1px solid #eee; border-radius: 8px; padding: 12px 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #eee; padding: 8px 12px; text-align: left; font-size: 14px; }
+    th { background: #fafafa; }
+    .finding { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #faad14; background: #fffbe6; }
+    code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>PatrolX 巡检报告</h1>
+  <p>任务：{{ task_id }} ｜ 系统：{{ system.system_id }}（{{ system.system_name or "" }}） ｜ 数据包：{{ system.package_file }}</p>
+  <div class="stats">
+    <div class="stat">总计 <b>{{ system.summary.total }}</b></div>
+    <div class="stat" style="color:#52c41a">通过 <b>{{ system.summary.pass }}</b></div>
+    <div class="stat" style="color:#faad14">告警 <b>{{ system.summary.warn }}</b></div>
+    <div class="stat" style="color:#ff4d4f">失败 <b>{{ system.summary.fail }}</b></div>
+    <div class="stat" style="color:#8c8c8c">异常 <b>{{ system.summary.error }}</b></div>
+    <div class="stat" style="color:#1677ff">跳过 <b>{{ system.summary.skip }}</b></div>
+  </div>
+  <h2>规则结果</h2>
+  <table>
+    <tr><th>规则</th><th>名称</th><th>状态</th><th>摘要</th><th>跳过原因</th></tr>
+    {% for rule in system.rules %}
+    <tr>
+      <td><code>{{ rule.code }}</code></td>
+      <td>{{ rule.name }}</td>
+      <td><b>{{ rule.status.value }}</b></td>
+      <td>{{ rule.summary or "" }}</td>
+      <td>{{ rule.skip_reason or "" }}</td>
+    </tr>
+    {% if rule.findings %}
+    <tr><td colspan="5">
+      {% for finding in rule.findings %}
+      <div class="finding">
+        <b>[{{ finding.severity.value }}] {{ finding.title }}</b>
+        {% if finding.evidence %}<div><code>{{ finding.evidence }}</code></div>{% endif %}
+        {% if finding.source_file %}<div>来源：{{ finding.source_file }}</div>{% endif %}
+        {% if finding.recommendation %}<div>建议：{{ finding.recommendation }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </td></tr>
+    {% endif %}
+    {% endfor %}
+  </table>
+</body>
+</html>

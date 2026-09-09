@@ -1,0 +1,54 @@
+# 子包/文件分类规则表（正则/通配符 + 中文别名，可配置调整，不改代码）
+# 支持 {module} 业务变量：如 *Log.zip、*Service.zip 归日志
+category:
+  log:
+    patterns:
+      - "*log*"
+      - "*service*"
+      - "*日志*"
+      - "*fault*"
+    extensions:
+      - .log
+      - .trace
+  kpi:
+    patterns:
+      - "*kpi*"
+      - "*指标*"
+      - "*perf*"
+    extensions:
+      - .csv
+      - .xlsx
+  traffic:
+    patterns:
+      - "*traffic*"
+      - "*话统*"
+      - "*call*"
+    extensions: []
+  alarm:
+    patterns:
+      - "*alarm*"
+      - "*告警*"
+      - "*fault*"
+    extensions:
+      - .alarm
+  config:
+    patterns:
+      - "*config*"
+      - "*配置*"
+      - "*param*"
+    extensions:
+      - .ini
+      - .conf
+      - .xml
+      - .yaml
+      - .yml
+      - .json
+  resource:
+    patterns:
+      - "*resource*"
+      - "*资源*"
+      - "*pod*"
+      - "*mem*"
+      - "*timer*"
+    extensions:
+      - .out
