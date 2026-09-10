@@ -19,6 +19,7 @@ from app.models.schemas import (
     InspectionTask,
     InspectorInfo,
     LogEntry,
+    OverviewSummary,
     RerunRequest,
     RuleResult,
     SystemInspection,
@@ -26,6 +27,7 @@ from app.models.schemas import (
     TaskListResponse,
     TaskLogs,
 )
+from app.services.overview import build_overview
 from app.services.tasks import task_service
 
 router = APIRouter(prefix="/api/v1")
@@ -74,6 +76,11 @@ async def create_task(
             out.write(chunk)
     task_service.submit(created.task_id)
     return created
+
+
+@router.get("/overview", response_model=OverviewSummary, operation_id="getOverview")
+def get_overview() -> OverviewSummary:
+    return build_overview()
 
 
 @router.get("/tasks", response_model=TaskListResponse, operation_id="listTasks")

@@ -62,6 +62,16 @@ def test_offline_result_in_task_list(tmp_path: Path, monkeypatch) -> None:
 # ---- 重复上传 ----
 
 
+def _wait_task(task_id: str, timeout: float = 5) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        task = client.get(f"/api/v1/tasks/{task_id}").json()
+        if task["status"] in ("completed", "failed"):
+            return
+        time.sleep(0.05)
+    raise TimeoutError(f"任务 {task_id} 未完成")
+
+
 def test_duplicate_upload_returns_409() -> None:
     # 先上传一次
     with SAMPLE.open("rb") as fh:
@@ -71,6 +81,7 @@ def test_duplicate_upload_returns_409() -> None:
             files={"package_file": ("dup_test.zip", fh, "application/zip")},
         )
     assert resp1.status_code == 202
+    _wait_task(resp1.json()["task_id"])
 
     # 再上传同一个包（不同名但同内容 → 同 ID）
     with SAMPLE.open("rb") as fh:
@@ -89,6 +100,7 @@ def test_duplicate_upload_returns_409() -> None:
             files={"package_file": ("dup_test.zip", fh, "application/zip")},
         )
     assert resp3.status_code == 202
+    _wait_task(resp3.json()["task_id"])
 
     # 清理
     client.delete(f"/api/v1/tasks/{resp3.json()['task_id']}")

@@ -155,6 +155,14 @@ class TaskListResponse(BaseModel):
     page_size: int
 
 
+class OverviewSummary(BaseModel):
+    task_count: int = Field(ge=0)
+    registered_rule_count: int = Field(ge=0)
+    rule_result_count: int = Field(ge=0)
+    finding_count: int = Field(ge=0)
+    status_counts: Summary
+
+
 class RerunRequest(BaseModel):
     rule_codes: list[str] | None = None
 

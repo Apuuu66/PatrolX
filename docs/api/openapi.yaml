@@ -212,6 +212,17 @@ paths:
                 $ref: "#/components/schemas/RuleResult"
         "404":
           $ref: "#/components/responses/Error404"
+  /api/v1/overview:
+    get:
+      summary: 全局巡检概览
+      operationId: getOverview
+      responses:
+        "200":
+          description: 任务、注册规则、规则结果与发现问题统计
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverviewSummary"
   /api/v1/inspectors:
     get:
       summary: 已注册规则元数据（只读）
@@ -556,6 +567,24 @@ components:
           type: integer
         page_size:
           type: integer
+    OverviewSummary:
+      type: object
+      required: [task_count, registered_rule_count, rule_result_count, finding_count, status_counts]
+      properties:
+        task_count:
+          type: integer
+          description: 任务总数
+        registered_rule_count:
+          type: integer
+          description: 注册规则总数（包含 hidden 内部规则）
+        rule_result_count:
+          type: integer
+          description: 全部任务的规则结果总数
+        finding_count:
+          type: integer
+          description: 全部任务的发现问题总数（按 Finding 记录数，不去重）
+        status_counts:
+          $ref: "#/components/schemas/Summary"
     RerunRequest:
       type: object
       properties:

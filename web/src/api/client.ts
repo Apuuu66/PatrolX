@@ -159,6 +159,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 全局巡检概览 */
+        get: operations["getOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inspectors": {
         parameters: {
             query?: never;
@@ -334,6 +351,17 @@ export interface components {
             total: number;
             page: number;
             page_size: number;
+        };
+        OverviewSummary: {
+            /** @description 任务总数 */
+            task_count: number;
+            /** @description 注册规则总数（包含 hidden 内部规则） */
+            registered_rule_count: number;
+            /** @description 全部任务的规则结果总数 */
+            rule_result_count: number;
+            /** @description 全部任务的发现问题总数（按 Finding 记录数，不去重） */
+            finding_count: number;
+            status_counts: components["schemas"]["Summary"];
         };
         RerunRequest: {
             /** @description 不填表示重跑该任务全部规则 */
@@ -732,6 +760,26 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error404"];
+        };
+    };
+    getOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 任务、注册规则、规则结果与发现问题统计 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewSummary"];
+                };
+            };
         };
     };
     listInspectors: {
