@@ -24,7 +24,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
-import { api, type DictsResponse, type TaskStatus, type TaskSummary } from "../api/http";
+import { ApiError, api, type DictsResponse, type TaskStatus, type TaskSummary } from "../api/http";
 import { SummaryCards } from "../components/SummaryCards";
 import { TaskStatusTag } from "../components/StatusBadge";
 import { usePolling } from "../hooks/usePolling";
@@ -37,7 +37,7 @@ const STATUS_OPTIONS = [
 ];
 
 export function TaskListPage() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [items, setItems] = useState<TaskSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -89,7 +89,7 @@ export function TaskListPage() {
     return acc;
   }, [items]);
 
-  const submitUpload = async () => {
+  const submitUpload = async (force = false) => {
     if (!file) {
       message.warning("请选择数据压缩包");
       return;
@@ -103,6 +103,7 @@ export function TaskListPage() {
       if (values.province) fd.append("province", values.province);
       if (values.operator) fd.append("operator", values.operator);
       if (values.version) fd.append("version", values.version);
+      if (force) fd.append("force", "true");
       const created = await api.createTask(fd);
       message.success("任务已创建，开始执行");
       setOpen(false);
@@ -110,7 +111,18 @@ export function TaskListPage() {
       form.resetFields();
       navigate(`/tasks/${created.task_id}`);
     } catch (err) {
-      message.error(err instanceof Error ? err.message : "创建失败");
+      if (err instanceof ApiError && err.code === "duplicate_package") {
+        modal.confirm({
+          title: "任务已存在，是否覆盖？",
+          content: "覆盖后将删除旧任务的现场数据，并重新执行巡检。",
+          okText: "覆盖重跑",
+          okButtonProps: { danger: true },
+          cancelText: "取消",
+          onOk: () => submitUpload(true),
+        });
+      } else {
+        message.error(err instanceof Error ? err.message : "创建失败");
+      }
     } finally {
       setSubmitting(false);
     }

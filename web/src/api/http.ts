@@ -29,14 +29,19 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(url, init);
   if (!resp.ok) {
     let message = `请求失败（HTTP ${resp.status}）`;
+    let code = "http_error";
     try {
       const body = (await resp.json()) as { code?: string; message?: string; detail?: string };
-      if (body.code) message = body.message ?? body.code;
-      else if (body.detail) message = body.detail;
+      if (body.code) {
+        code = body.code;
+        message = body.message ?? body.code;
+      } else if (body.detail) {
+        message = body.detail;
+      }
     } catch {
       /* 非 JSON 响应 */
     }
-    throw new ApiError("http_error", message, resp.status);
+    throw new ApiError(code, message, resp.status);
   }
   if (resp.status === 204) return undefined as T;
   return (await resp.json()) as T;

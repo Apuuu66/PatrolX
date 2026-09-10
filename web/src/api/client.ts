@@ -396,7 +396,11 @@ export interface components {
             name: string;
         };
         Error: {
-            code: string;
+            /**
+             * @description 错误码（新增时同步契约与实现）
+             * @enum {string}
+             */
+            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal";
             message: string;
             detail?: {
                 [key: string]: unknown;
@@ -534,6 +538,11 @@ export interface operations {
                     province?: string;
                     /** @description 运营商字典编码（可选） */
                     operator?: string;
+                    /**
+                     * @description 已存在同包任务时是否删除旧任务并重新创建
+                     * @default false
+                     */
+                    force?: boolean;
                 };
             };
         };
@@ -549,6 +558,15 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error400"];
+            /** @description 已存在相同包的任务 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             413: components["responses"]["Error413"];
         };
     };

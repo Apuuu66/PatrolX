@@ -496,6 +496,13 @@ cd web && npm run dev  # 启动前端开发服务
   - 版本信息由 `SystemInspection.version` 显式承载（在线上传可选填写），趋势分析时按 `system_id + created_at + 版本` 分组。
 - 届时实现形态：新增跨任务聚合分析能力与趋势接口（如 `GET /api/v1/customers/{system_id}/trends?metric=...`）及对应展示组件；涉及契约变更走版本化升级。
 
+## Agent 开发流程约定
+
+- **项目规则优先**：本文件是 PatrolX 的最高约束；Superpowers 只用于辅助 Agent 开发流程，不覆盖、不改写项目架构与契约约定。
+- **适用边界**：新增大功能、修改 OpenAPI 契约/数据模型、演进规则执行器或任务模型、设计复杂前端交互时，可使用 Superpowers 流程（brainstorm → spec → plan → TDD → review）；小型改动、文案调整、单条规则调试不强制走完整流程。
+- **多窗口协作**：多个窗口/Agent 并行开发时，优先使用独立分支或 `git worktree`；共享同一工作区时必须先沟通写文件边界，避免同时修改同一文件。
+- **交付门槛**：无论是否使用 Superpowers，合入前仍必须通过 `make lint`、`make test`；接口变更必须同步 `docs/api/openapi.yaml`，巡检规则逻辑变更必须升级 `rule_version`。
+
 ## 设计原则
 
 - **离线优先**：系统只消费上传的数据包，不连接被检系统、不进行在线采集；被检系统的对接只体现在收集包内容的格式适配。

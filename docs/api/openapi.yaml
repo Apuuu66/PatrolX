@@ -59,6 +59,10 @@ paths:
                 operator:
                   type: string
                   description: 运营商字典编码（可选）
+                force:
+                  type: boolean
+                  default: false
+                  description: 已存在同包任务时是否删除旧任务并重新创建
       responses:
         "202":
           description: 任务已创建，异步执行
@@ -73,6 +77,12 @@ paths:
                 $ref: "#/components/schemas/TaskCreated"
         "400":
           $ref: "#/components/responses/Error400"
+        "409":
+          description: 已存在相同包的任务
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "413":
           $ref: "#/components/responses/Error413"
     get:
