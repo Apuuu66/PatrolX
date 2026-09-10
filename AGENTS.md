@@ -502,6 +502,11 @@ cd web && npm run dev  # 启动前端开发服务
 - **适用边界**：新增大功能、修改 OpenAPI 契约/数据模型、演进规则执行器或任务模型、设计复杂前端交互时，可使用 Superpowers 流程（brainstorm → spec → plan → TDD → review）；小型改动、文案调整、单条规则调试不强制走完整流程。
 - **多窗口协作**：多个窗口/Agent 并行开发时，优先使用独立分支或 `git worktree`；共享同一工作区时必须先沟通写文件边界，避免同时修改同一文件。
 - **交付门槛**：无论是否使用 Superpowers，合入前仍必须通过 `make lint`、`make test`；接口变更必须同步 `docs/api/openapi.yaml`，巡检规则逻辑变更必须升级 `rule_version`。
+- **触发约定**：
+  - “走完整流程” = `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:test-driven-development` → `superpowers:verification-before-completion`。
+  - “小改动” = `superpowers:test-driven-development` → `superpowers:verification-before-completion`。
+  - “排查问题” = `superpowers:systematic-debugging`。
+  - 用户明确指定技能名时，按指定技能执行；纯文档、注释或文案微调可直接修改并验证。
 
 ## 设计原则
 
