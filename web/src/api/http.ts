@@ -9,6 +9,7 @@ export type RuleStatus = components["schemas"]["RuleStatus"];
 export type Severity = components["schemas"]["Severity"];
 export type InspectorInfo = components["schemas"]["InspectorInfo"];
 export type DictsResponse = components["schemas"]["DictsResponse"];
+export type OverviewSummary = components["schemas"]["OverviewSummary"];
 export type DictItem = components["schemas"]["DictItem"];
 export type LogEntry = components["schemas"]["LogEntry"];
 
@@ -68,6 +69,8 @@ export const api = {
   },
 
   getTask: (taskId: string) => request<TaskSummary>(`${BASE}/tasks/${encodeURIComponent(taskId)}`),
+
+  getOverview: () => request<OverviewSummary>(`${BASE}/overview`),
 
   createTask: (form: FormData) =>
     request<{ task_id: string }>(`${BASE}/tasks`, {

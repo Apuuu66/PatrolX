@@ -24,7 +24,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
-import { ApiError, api, type DictsResponse, type TaskStatus, type TaskSummary } from "../api/http";
+import { ApiError, api, type DictsResponse, type OverviewSummary, type TaskStatus, type TaskSummary } from "../api/http";
 import { SummaryCards } from "../components/SummaryCards";
 import { TaskStatusTag } from "../components/StatusBadge";
 import { usePolling } from "../hooks/usePolling";
@@ -48,15 +48,20 @@ export function TaskListPage() {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [dicts, setDicts] = useState<DictsResponse | null>(null);
+  const [overview, setOverview] = useState<OverviewSummary | null>(null);
   const [form] = Form.useForm();
   const [file, setFile] = useState<File | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.listTasks({ page, page_size: pageSize, status });
+      const [data, overviewData] = await Promise.all([
+        api.listTasks({ page, page_size: pageSize, status }),
+        api.getOverview(),
+      ]);
       setItems(data.items);
       setTotal(data.total);
+      setOverview(overviewData);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "加载失败");
     } finally {
@@ -74,20 +79,6 @@ export function TaskListPage() {
 
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
   usePolling(load, 2000, busy);
-
-  const stats = useMemo(() => {
-    const acc = { total: 0, pass: 0, warn: 0, fail: 0, error: 0, skip: 0, systems: 0 };
-    for (const t of items) {
-      acc.total += t.stats.total;
-      acc.pass += t.stats.pass;
-      acc.warn += t.stats.warn;
-      acc.fail += t.stats.fail;
-      acc.error += t.stats.error;
-      acc.skip += t.stats.skip;
-      acc.systems += t.stats.systems ?? 1;
-    }
-    return acc;
-  }, [items]);
 
   const submitUpload = async (force = false) => {
     if (!file) {
@@ -221,7 +212,7 @@ export function TaskListPage() {
   return (
     <div>
       <Card style={{ marginBottom: 16 }}>
-        <SummaryCards stats={stats} />
+        <SummaryCards overview={overview} stats={overview?.status_counts} />
       </Card>
       <Card
         title={
