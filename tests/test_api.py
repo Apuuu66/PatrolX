@@ -15,6 +15,7 @@ def _upload() -> str:
     with SAMPLE.open("rb") as fh:
         resp = client.post(
             "/api/v1/tasks",
+            params={"force": "true"},
             files={"package_file": ("sample.zip", fh, "application/zip")},
             data={"name": "API 样例任务"},
         )

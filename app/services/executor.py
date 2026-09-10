@@ -97,7 +97,11 @@ class Executor:
             order.append(code)
 
         for priority in sorted(by_priority):
-            for code in sorted(by_priority[priority]):
+            codes = sorted(by_priority[priority])
+            # 解压基础设施规则在同优先级内先执行，保证数据就绪
+            extract_first = [c for c in codes if c.startswith("pkg.extract.")]
+            rest = [c for c in codes if not c.startswith("pkg.extract.")]
+            for code in extract_first + rest:
                 visit(code)
         return order
 
@@ -135,8 +139,8 @@ class Executor:
             result = self._result(
                 rule,
                 status=RuleStatus.SKIP,
-                summary="依赖产物缺失",
-                skip_reason=f"依赖产物 {', '.join(missing)} 缺失",
+                summary="数据未准备",
+                skip_reason=(f"数据未准备：依赖产物 {', '.join(missing)} 缺失。请先执行全量巡检生成数据"),
                 duration_ms=int((time.monotonic() - started) * 1000),
             )
             self.collected[code] = result

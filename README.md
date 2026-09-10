@@ -18,10 +18,30 @@ PatrolX 是一个面向系统维护场景的**离线巡检系统**：不连接�
 
 脚本会自动准备本地 Python 虚拟环境；在线模式还会在首次执行时安装前端依赖。
 
-- 离线默认任务 ID 固定为 `task-local-<system_id>`，同一个包重跑复用同一任务现场。
-- 也可以显式指定离线任务 ID：`./run-offline.sh --task-id task-local-sample`
-- 单条规则调试仍然使用：`make verify-one RULE=log.error_density`
-- 在线地址：后端 `http://127.0.0.1:8000`，前端 `http://127.0.0.1:5173`
+### 任务 ID 规则
+
+在线和离线使用统一格式：`task-<system_id>`，同一包 → 同一任务 → 同一输出目录。
+
+```text
+sample.zip → task-sample
+```
+
+### 规则调试闭环
+
+```text
+1. ./run-offline.sh               → 全流程跑完，数据准备好
+2. ./run-online.sh                → 启动 Web
+3. 浏览器打开前端                  → 看到任务结果
+4. 改规则代码                      → 只改目标规则逻辑
+5. make verify-one RULE=xxx       → 秒级重跑该规则
+6. 浏览器刷新                      → 直接看到最新效果
+```
+
+单条规则在数据未准备时会 SKIP 并提示先执行全量巡检，不会回溯解压。
+
+### 重复上传
+
+在线重复上传同一个包时返回 409，前端提示"已存在，是否覆盖？"；确认后携带 `force=true` 重新提交即可覆盖。
 
 前端技术栈：React + TypeScript + Vite + Ant Design + ECharts；API 客户端由契约自动生成：
 

@@ -19,7 +19,7 @@ def test_full_pipeline(tmp_path: Path, monkeypatch) -> None:
     out = tmp_path / "out"
     monkeypatch.setattr(settings, "output_dir", out)
     task = run_task(SAMPLE, name="样例任务")
-    assert task.task_id == "task-local-sample"
+    assert task.task_id == "task-sample"
     assert task.stats.pass_ >= 2
     assert task.stats.warn >= 3
     assert task.stats.fail >= 1
@@ -49,7 +49,7 @@ def test_local_task_id_is_fixed_for_same_package(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(settings, "output_dir", out)
     first = run_task(SAMPLE)
     second = run_task(SAMPLE)
-    assert first.task_id == second.task_id == "task-local-sample"
+    assert first.task_id == second.task_id == "task-sample"
     sys_dir = out / first.task_id / clean_system_id(SAMPLE.name)
     assert (sys_dir / "rules" / "log.filter.json").exists()
     assert (sys_dir / "artifacts" / "log.filter" / "log.filter.artifacts.filtered_logs").exists()

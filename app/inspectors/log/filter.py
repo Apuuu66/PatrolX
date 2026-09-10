@@ -40,7 +40,6 @@ inspector = Inspector(
     rule_version="1.0.1",
     description="扫描日志类文件，按级别裁剪并规范化，产出过滤后数据集与统计索引",
     recommendation="无日志类文件时跳过分析类规则",
-    inputs=["pkg.extract.log.ready"],
     outputs_artifacts=["log.filter.artifacts.filtered_logs"],
     params=[{"key": "min_level", "label": "保留的最低日志级别", "default": "WARN"}],
 )

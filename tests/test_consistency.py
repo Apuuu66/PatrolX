@@ -47,6 +47,7 @@ def test_cli_api_result_consistency(tmp_path: Path, monkeypatch) -> None:
     with SAMPLE.open("rb") as fh:
         resp = client.post(
             "/api/v1/tasks",
+            params={"force": "true"},
             files={"package_file": ("sample.zip", fh, "application/zip")},
             data={"name": "一致性"},
         )

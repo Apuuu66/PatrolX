@@ -43,9 +43,9 @@ def clean_system_id(package_name: str) -> str:
     return name or "system"
 
 
-def local_task_id(package: Path) -> str:
-    """离线开发默认任务 ID：同一包重跑固定到同一任务现场。"""
-    return f"task-local-{clean_system_id(package.name)}"
+def generate_task_id(package_name: str) -> str:
+    """统一任务 ID：同一包 → 同一任务 → 同一输出目录（在线/离线一致）。"""
+    return f"task-{clean_system_id(package_name)}"
 
 
 def find_packages(root: Path | None = None) -> list[Path]:
@@ -136,7 +136,7 @@ def run_task(
     trigger: TaskTrigger = TaskTrigger.CLI,
 ) -> InspectionTask:
     registry.load_all()
-    task_id = task_id or local_task_id(package)
+    task_id = task_id or generate_task_id(package.name)
     system_id = clean_system_id(package.name)
     store.append_log(
         settings.output,
@@ -214,7 +214,7 @@ def run_single_rule(
 ) -> None:
     registry.load_all()
     package = package or latest_package()
-    task_id = task_id or local_task_id(package)
+    task_id = task_id or generate_task_id(package.name)
     sid = system_id or clean_system_id(package.name)
     ctx = _new_context(task_id, sid, package)
     executor = Executor(registry)
@@ -257,12 +257,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="patrolx", description="PatrolX 本地开发模式")
     sub = parser.add_subparsers(dest="cmd")
     run_parser = sub.add_parser("run", help="扫描输入目录并运行全部规则（默认 uploads/）")
-    run_parser.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-local-<system_id>）")
+    run_parser.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<system_id>）")
     run_one = sub.add_parser("run-one", help="仅重跑指定规则（依赖自动补跑）")
     run_one.add_argument("--rule", required=True, help="规则 code")
     run_one.add_argument("--system-id", default=None, help="限定系统（可选）")
     run_one.add_argument("--package-dir", default=None, help="输入目录（可选）")
-    run_one.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-local-<system_id>）")
+    run_one.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<system_id>）")
     args = parser.parse_args(argv)
 
     if args.cmd == "run-one":

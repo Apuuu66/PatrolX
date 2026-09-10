@@ -72,6 +72,13 @@ def save_task_meta(output: Path, task: InspectionTask) -> None:
     )
 
 
+def load_task_meta(output: Path, task_id: str) -> InspectionTask | None:
+    path = task_dir(output, task_id) / "task.json"
+    if not path.exists():
+        return None
+    return InspectionTask.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+
 def load_rule_result(output: Path, task_id: str, system_id: str, code: str) -> RuleResult | None:
     path = rule_path(output, task_id, system_id, code)
     if not path.exists():

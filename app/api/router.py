@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import HTMLResponse, Response
 
+from app.cli import generate_task_id
 from app.core.config import settings
 from app.core.dicts import load_dicts
 from app.inspectors.registry import registry
@@ -46,10 +47,16 @@ async def create_task(
     version: str | None = Form(None),
     province: str | None = Form(None),
     operator: str | None = Form(None),
+    force: bool = False,
 ) -> TaskCreated:
     filename = (package_file.filename or "package.zip").rsplit("/", 1)[-1]
     if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
         raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
+    task_id = generate_task_id(filename)
+    if task_service.exists(task_id):
+        if not force:
+            raise AppError("duplicate_package", "已存在相同包的任务", 409)
+        task_service.delete(task_id)
     created = task_service.reserve(filename, name, province, operator, version)
     task_dir = settings.uploads / created.task_id
     task_dir.mkdir(parents=True, exist_ok=True)

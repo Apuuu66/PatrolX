@@ -17,7 +17,8 @@ def _upload_and_wait() -> str:
     with SAMPLE.open("rb") as fh:
         resp = client.post(
             "/api/v1/tasks",
-            files={"package_file": ("sample.zip", fh, "application/zip")},
+            params={"force": "true"},
+            files={"package_file": ("observability_sample.zip", fh, "application/zip")},
             data={"name": "可观测性"},
         )
     task_id = resp.json()["task_id"]
