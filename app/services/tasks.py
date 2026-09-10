@@ -13,6 +13,7 @@ from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
 from app.models.db import SessionLocal, TaskRecord, init_db
 from app.models.schemas import InspectionTask, TaskCreated, TaskMode, TaskStatus, TaskSummary, TaskTrigger
+from app.services import store
 from app.services.report import render_report
 from app.services.store import append_log, load_system, load_task_meta
 
@@ -67,7 +68,12 @@ class TaskService:
                 if system:
                     render_report(settings.output, task_id, system)
                     append_log(settings.output, task_id, "info", "重跑完成，报告已更新")
-                self.get(task_id)
+                current = load_task_meta(settings.output, task_id)
+                if current:
+                    completed_task = current.model_copy(
+                        update={"status": TaskStatus.COMPLETED, "completed_at": NOW(UTC)}
+                    )
+                    store.save_task_meta(settings.output, completed_task)
             else:
                 run_task(
                     package,
@@ -82,6 +88,10 @@ class TaskService:
             TASKS_TOTAL.labels(result="completed", mode="online").inc()
             self._update_status(task_id, TaskStatus.COMPLETED, completed_at=NOW(UTC))
         except Exception:  # noqa: BLE001
+            failed_task = load_task_meta(settings.output, task_id)
+            if failed_task:
+                failed = failed_task.model_copy(update={"status": TaskStatus.FAILED, "completed_at": NOW(UTC)})
+                store.save_task_meta(settings.output, failed)
             self._update_status(task_id, TaskStatus.FAILED, completed_at=NOW(UTC))
             raise
 
@@ -269,6 +279,9 @@ class TaskService:
         if not package.exists():
             return False
         self._rerun_plan[task_id] = rule_codes
+        # rerun 必须先同步更新 output/ 契约状态，否则轮询会读到旧的 completed。
+        pending_task = task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
+        store.save_task_meta(settings.output, pending_task)
         self._update_status(task_id, TaskStatus.PENDING)
         self._queue.put(task_id)
         return True
