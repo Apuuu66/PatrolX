@@ -13,10 +13,16 @@ PatrolX 是一个面向系统维护场景的**离线巡检系统**：不连接�
 ./run-offline.sh
 
 # 在线预览：启动后端 API 和前端页面，按 Ctrl+C 停止
-./run-online.sh
+python run_online.py
 ```
 
 脚本会自动准备本地 Python 虚拟环境；在线模式还会在首次执行时安装前端依赖。
+
+在线启动器支持常用参数，例如关闭后端自动重载：
+
+```bash
+python run_online.py --no-reload
+```
 
 ### 任务 ID 规则
 

@@ -11,7 +11,7 @@ offline: verify
 online: run
 
 run:
-	$(PYTHON) -m uvicorn app.main:app --reload
+	$(PYTHON) run_online.py
 
 verify:
 	$(PYTHON) main.py
