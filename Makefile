@@ -1,10 +1,14 @@
-.PHONY: install run verify verify-one contract gen-web-api test lint web-install web-dev web-build
+.PHONY: install offline online run verify verify-one contract gen-web-api test lint web-install web-dev web-build
 
 UV := UV_CACHE_DIR=.uv-cache uv
 PYTHON := $(UV) run --python 3.12 python
 
 install:
 	$(UV) sync --extra dev
+
+offline: verify
+
+online: run
 
 run:
 	$(PYTHON) -m uvicorn app.main:app --reload

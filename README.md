@@ -4,23 +4,24 @@ PatrolX 是一个面向系统维护场景的**离线巡检系统**：不连接�
 
 设计文档与开发约定见 [AGENTS.md](AGENTS.md)。
 
-## 快速开始（本地开发模式）
+## 快速开始
+
+只需要使用两类入口：
 
 ```bash
-make install        # 安装依赖（uv + Python 3.12）
-# 将收集包放入 uploads/ 根目录
-python main.py      # 一键扫描 → 解压 → 运行全部规则 → 生成契约数据与报告
-make verify-one RULE=log.error_density   # 单条规则重跑
+# 离线调试：把收集包放入 uploads/ 根目录后执行
+./run-offline.sh
+
+# 在线预览：启动后端 API 和前端页面，按 Ctrl+C 停止
+./run-online.sh
 ```
 
-## 在线模式
+脚本会自动准备本地 Python 虚拟环境；在线模式还会在首次执行时安装前端依赖。
 
-```bash
-make run            # 启动 FastAPI（SQLite + 文件存储）
-cd web
-npm install         # 首次：安装前端依赖
-npm run dev         # 启动前端（默认代理 http://127.0.0.1:8000）
-```
+- 离线默认任务 ID 固定为 `task-local-<system_id>`，同一个包重跑复用同一任务现场。
+- 也可以显式指定离线任务 ID：`./run-offline.sh --task-id task-local-sample`
+- 单条规则调试仍然使用：`make verify-one RULE=log.error_density`
+- 在线地址：后端 `http://127.0.0.1:8000`，前端 `http://127.0.0.1:5173`
 
 前端技术栈：React + TypeScript + Vite + Ant Design + ECharts；API 客户端由契约自动生成：
 

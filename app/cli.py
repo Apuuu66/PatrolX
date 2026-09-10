@@ -43,6 +43,11 @@ def clean_system_id(package_name: str) -> str:
     return name or "system"
 
 
+def local_task_id(package: Path) -> str:
+    """离线开发默认任务 ID：同一包重跑固定到同一任务现场。"""
+    return f"task-local-{clean_system_id(package.name)}"
+
+
 def find_packages(root: Path | None = None) -> list[Path]:
     base = root or Path(os.environ.get("PATROLX_PACKAGE_DIR", settings.uploads))
     base.mkdir(parents=True, exist_ok=True)
@@ -131,7 +136,7 @@ def run_task(
     trigger: TaskTrigger = TaskTrigger.CLI,
 ) -> InspectionTask:
     registry.load_all()
-    task_id = task_id or new_task_id()
+    task_id = task_id or local_task_id(package)
     system_id = clean_system_id(package.name)
     store.append_log(
         settings.output,
@@ -209,7 +214,7 @@ def run_single_rule(
 ) -> None:
     registry.load_all()
     package = package or latest_package()
-    task_id = task_id or new_task_id()
+    task_id = task_id or local_task_id(package)
     sid = system_id or clean_system_id(package.name)
     ctx = _new_context(task_id, sid, package)
     executor = Executor(registry)
@@ -251,11 +256,13 @@ def run_single_rule(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="patrolx", description="PatrolX 本地开发模式")
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("run", help="扫描输入目录并运行全部规则（默认 uploads/）")
+    run_parser = sub.add_parser("run", help="扫描输入目录并运行全部规则（默认 uploads/）")
+    run_parser.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-local-<system_id>）")
     run_one = sub.add_parser("run-one", help="仅重跑指定规则（依赖自动补跑）")
     run_one.add_argument("--rule", required=True, help="规则 code")
     run_one.add_argument("--system-id", default=None, help="限定系统（可选）")
     run_one.add_argument("--package-dir", default=None, help="输入目录（可选）")
+    run_one.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-local-<system_id>）")
     args = parser.parse_args(argv)
 
     if args.cmd == "run-one":
@@ -264,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
         if not packages:
             raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录，或设置 PATROLX_PACKAGE_DIR")
         for pkg in packages:
-            run_single_rule(args.rule, args.system_id, pkg)
+            run_single_rule(args.rule, args.system_id, pkg, task_id=args.task_id)
         return 0
 
     packages = find_packages()
@@ -272,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
         print("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录，或设置 PATROLX_PACKAGE_DIR")
         return 1
     for pkg in packages:
-        run_task(pkg)
+        run_task(pkg, task_id=args.task_id)
     return 0
 
 
