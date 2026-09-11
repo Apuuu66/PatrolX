@@ -43,9 +43,19 @@ def clean_system_id(package_name: str) -> str:
     return name or "system"
 
 
-def generate_task_id(package_name: str) -> str:
-    """统一任务 ID：同一包 → 同一任务 → 同一输出目录（在线/离线一致）。"""
-    return f"task-{clean_system_id(package_name)}"
+def customer_system_id(package_name: str, province: str | None, operator: str | None) -> str:
+    """在线模式系统标识：省份+运营商优先，信息不足时回退包名。"""
+    if province and operator:
+        return clean_system_id(f"{province}_{operator}")
+    if province:
+        return clean_system_id(province)
+    return clean_system_id(package_name)
+
+
+def generate_task_id(package_name: str, system_id: str | None = None) -> str:
+    """统一任务 ID：在线使用客户系统标识，离线使用包名。"""
+    identity = clean_system_id(system_id) if system_id else clean_system_id(package_name)
+    return f"task-{identity}"
 
 
 def find_packages(root: Path | None = None) -> list[Path]:
@@ -132,12 +142,13 @@ def run_task(
     customer: dict[str, str] | None = None,
     version: str | None = None,
     task_id: str | None = None,
+    system_id: str | None = None,
     mode: TaskMode = TaskMode.LOCAL,
     trigger: TaskTrigger = TaskTrigger.CLI,
 ) -> InspectionTask:
     registry.load_all()
-    task_id = task_id or generate_task_id(package.name)
-    system_id = clean_system_id(package.name)
+    task_id = task_id or generate_task_id(package.name, system_id)
+    system_id = clean_system_id(system_id) if system_id else clean_system_id(package.name)
     store.append_log(
         settings.output,
         task_id,

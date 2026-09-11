@@ -7,7 +7,7 @@ import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.cli import clean_system_id, generate_task_id, run_single_rule, run_task
+from app.cli import clean_system_id, customer_system_id, generate_task_id, run_single_rule, run_task
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
@@ -81,6 +81,7 @@ class TaskService:
                     customer=customer,
                     version=version,
                     task_id=task_id,
+                    system_id=system_id,
                     mode=TaskMode.ONLINE,
                     trigger=TaskTrigger.API,
                 )
@@ -120,16 +121,15 @@ class TaskService:
         province: str | None,
         operator: str | None,
         version: str | None,
+        system_id: str | None = None,
     ) -> TaskCreated:
-        task_id = generate_task_id(package_file)
-        system_id = clean_system_id(package_file)
+        system_id = system_id or customer_system_id(package_file, province, operator)
+        task_id = generate_task_id(package_file, system_id)
         customer: dict[str, str] = {}
         if province:
             customer["province"] = province
-            system_id = province
         if operator:
             customer["operator"] = operator
-            system_id = f"{system_id}_{operator}"
         with SessionLocal() as session:
             session.add(
                 TaskRecord(
