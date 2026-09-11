@@ -106,25 +106,25 @@ def test_duplicate_upload_returns_409() -> None:
     client.delete(f"/api/v1/tasks/{resp3.json()['task_id']}")
 
 
-# ---- 单规则 SKIP 提示 ----
+# ---- 单规则依赖自动补跑 ----
 
 
-def test_single_rule_skip_when_no_data(tmp_path: Path, monkeypatch) -> None:
-    """没有解压产物时单规则应 SKIP 并提示数据未准备。"""
+def test_single_rule_prepares_dependencies(tmp_path: Path, monkeypatch) -> None:
+    """没有解压产物时单规则应自动补跑解压与过滤依赖链。"""
     out = tmp_path / "out"
     up = tmp_path / "uploads"
     up.mkdir()
     monkeypatch.setattr(settings, "output_dir", out)
     monkeypatch.setattr(settings, "uploads_dir", up)
 
-    # 不跑全流程，直接跑单规则 → 应 SKIP（不回溯解压）
+    # 不跑全流程，直接跑单规则 → 自动补跑 P0 解压与过滤
     run_single_rule("log.error_density", package=SAMPLE, task_id="task-skip-test")
 
     result_path = out / "task-skip-test" / "sample" / "rules" / "log.error_density.json"
     assert result_path.exists()
     result = json.loads(result_path.read_text(encoding="utf-8"))
-    assert result["status"] == "skip"
-    assert "数据未准备" in result.get("skip_reason", "") or "未发现" in result.get("skip_reason", "")
+    assert result["status"] == "pass"
+    assert result["skip_reason"] is None
 
 
 # ---- 在线重跑离线任务 ----
