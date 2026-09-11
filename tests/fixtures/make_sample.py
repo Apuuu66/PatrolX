@@ -18,21 +18,22 @@ FILES: dict[str, str] = {
         "1002,2026-09-01 10:00:04,2026-09-01 10:00:30,SCTP_LINK_DOWN,HIGH,处理中,app-node-01,SCTP链路中断\n"
         "1003,2026-09-01 10:02:11,,CPU_USAGE_HIGH,MEDIUM,未处理,pod-app-1,CPU使用率偏高\n"
     ),
-    f"{BASE}/Alarm Information/alarm_summary_202609010101137101.json": json.dumps({
-        "scene_id": "333",
-        "scene_name": "app Problem scene",
-        "begin_time": "2026-09-01T10:00:00Z",
-        "end_time": "2026-09-01T10:10:00Z",
-        "total": 3,
-        "unhandled": 2,
-        "severity_distribution": {"CRITICAL": 1, "HIGH": 1, "MEDIUM": 1},
-    }, ensure_ascii=False),
+    f"{BASE}/Alarm Information/alarm_summary_202609010101137101.json": json.dumps(
+        {
+            "scene_id": "333",
+            "scene_name": "app Problem scene",
+            "begin_time": "2026-09-01T10:00:00Z",
+            "end_time": "2026-09-01T10:10:00Z",
+            "total": 3,
+            "unhandled": 2,
+            "severity_distribution": {"CRITICAL": 1, "HIGH": 1, "MEDIUM": 1},
+        },
+        ensure_ascii=False,
+    ),
     f"{BASE}/Basic Information/system_info.ini": (
         "[app]\nname=app\nlog_level=INFO\n\n[system]\nnode_id=app-node-01\nregion=gd\ncollect_time=2026-09-01T10:00:00Z\n"
     ),
-    f"{BASE}/Basic Information/version.ini": (
-        "[version]\nproduct=app\nrelease=R24.1\npatch=SP03\nbuild=20260901.01\n"
-    ),
+    f"{BASE}/Basic Information/version.ini": ("[version]\nproduct=app\nrelease=R24.1\npatch=SP03\nbuild=20260901.01\n"),
     f"{BASE}/KPI/kpi_202609010101137101.csv": (
         "metric,value,unit,timestamp\n"
         "call_success_rate,93.6,%,2026-09-01T10:00:00Z\n"
@@ -40,13 +41,9 @@ FILES: dict[str, str] = {
         "setup_success_rate,95.2,%,2026-09-01T10:00:00Z\n"
     ),
     f"{BASE}/Resource/pod_cpu_mem_202609010101137101.txt": (
-        "pod-app-1 cpu 890m mem 768Mi\n"
-        "pod-app-2 cpu 430m mem 1200Mi\n"
-        "pod-aaa-1 cpu 210m mem 512Mi\n"
+        "pod-app-1 cpu 890m mem 768Mi\npod-app-2 cpu 430m mem 1200Mi\npod-aaa-1 cpu 210m mem 512Mi\n"
     ),
-    f"{BASE}/Traffic/call_stat_202609010101137101.txt": (
-        "total_calls 12345\nanswer_rate 93.8\n"
-    ),
+    f"{BASE}/Traffic/call_stat_202609010101137101.txt": ("total_calls 12345\nanswer_rate 93.8\n"),
 }
 
 AAA_CURRENT = (

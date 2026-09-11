@@ -26,6 +26,19 @@ def processed_files(path: Path) -> list[str]:
     return list(json.loads(index_path.read_text(encoding="utf-8")).get("files", []))
 
 
+def log_processed_files(ctx: RuleContext, path: Path, rule_code: str) -> list[str]:
+    """读取并打印规则处理过的源文件，便于确认扫描范围。"""
+    files = processed_files(path)
+    ctx.log(
+        "info",
+        "日志规则处理文件",
+        rule_code=rule_code,
+        file_count=len(files),
+        files=files,
+    )
+    return files
+
+
 def read_records(path: Path) -> Iterator[dict]:
     """流式读取规范化日志记录。"""
     with path.open(encoding="utf-8") as fh:

@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import json
 
 from app.inspectors.base import Inspector
+from app.inspectors.log.common import log_processed_files
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -21,7 +22,7 @@ inspector = Inspector(
     category=RuleCategory.LOG,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.0.0",
+    rule_version="1.1.0",
     description="统计日志中 ERROR/FATAL/CRITICAL 条数，超过阈值告警",
     recommendation="检查异常来源模块，必要时查看完整日志上下文",
     inputs=["log.filter.artifacts.filtered_logs"],
@@ -48,6 +49,8 @@ def _run(ctx: RuleContext) -> object:
             summary="过滤产物缺少索引",
             skip_reason="过滤产物缺少 index.json",
         )
+    processed_files_list = log_processed_files(ctx, index_path, inspector.code)
+
     index = json.loads(index_path.read_text(encoding="utf-8"))
     error_count = int(index.get("error_count", 0))
 
@@ -80,6 +83,7 @@ def _run(ctx: RuleContext) -> object:
         summary=summary,
         metrics=[{"key": "error_count", "label": "错误条数", "value": error_count, "unit": "条"}],
         findings=findings,
+        metadata={"processed_files": processed_files_list},
     )
 
 

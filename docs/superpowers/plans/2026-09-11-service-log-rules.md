@@ -20,7 +20,7 @@
 - 所有新日志分析规则均为 P1、`category=log`，输入均为 `log.filter.artifacts.filtered_logs`。
 - 新增规则代码固定为 `log.service_errors`、`log.fault_pattern`、`log.repeat_error`、`log.stacktrace`。
 - 修改 `log.filter` 时必须升级 `rule_version`，确保旧产物自动失效重跑。
-- 所有日志规则的 `metadata.processed_files` 必须记录处理过的源文件名；命中类规则还要把命中文件名写入对应 finding 的 `source_file`，终端摘要可据此确认扫描范围。
+- 所有日志规则的 `metadata.processed_files` 必须记录处理过的源文件名；每条日志规则执行时通过 `ctx.log` 打印这些文件；命中类规则还要把命中文件名写入对应 finding 的 `source_file`。
 - 每个 task 结束运行对应测试；最终运行 `make lint`、`make test` 和完整本地流程。
 
 ---
@@ -38,7 +38,7 @@
 - Produces: 嵌套包 `Service Logs (Problem)/ServiceLog_20260901011314.zip`。
 - Produces: `AAAService` 与 `AppService` 的 `.log` 与 `.log.gz`。
 
-- [ ] **Step 1: Replace the simplified sample generator**
+- [x] **Step 1: Replace the simplified sample generator**
 
 Rewrite `tests/fixtures/make_sample.py`:
 
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Regenerate fixture**
+- [x] **Step 2: Regenerate fixture**
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv run --python 3.12 python tests/fixtures/make_sample.py
@@ -159,7 +159,7 @@ UV_CACHE_DIR=.uv-cache uv run --python 3.12 python tests/fixtures/make_sample.py
 
 Expected: `tests/fixtures/sample/sample.zip` regenerated successfully.
 
-- [ ] **Step 3: Verify fixture classification in a temporary output**
+- [x] **Step 3: Verify fixture classification in a temporary output**
 
 ```bash
 rm -rf /tmp/patrolx-fixture-verify
@@ -169,7 +169,7 @@ find /tmp/patrolx-fixture-verify -maxdepth 5 -type f | sort
 
 Expected: 能看到 `alarm/`、`config/`、`kpi/`、`resource/`、`traffic/`、`log/ServiceLog_20260901011314/AAAService/`、`log/ServiceLog_20260901011314/AppService/`。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/fixtures/make_sample.py tests/fixtures/sample/sample.zip
@@ -192,7 +192,7 @@ git commit -m "test(fixture): add full App Problem Scene sample"
 - Produces: JSONL record keys `service,node,source_file,line_no,timestamp,level,message`。
 - Produces: `index.json.services[service]`，包含 `nodes,files,total_lines,kept_lines,levels,error_count,warn_count`。
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_rules.py`:
 
@@ -250,7 +250,7 @@ def test_log_filter_keeps_python_traceback_after_error(tmp_path: Path) -> None:
     assert [record["level"] for record in records] == ["ERROR", "STACK", "STACK", "STACK"]
 ```
 
-- [ ] **Step 2: Run tests and confirm failure**
+- [x] **Step 2: Run tests and confirm failure**
 
 ```bash
 make test
@@ -258,7 +258,7 @@ make test
 
 Expected: 新用例失败，因为 `filtered.jsonl`、`service`、`node`、`services` 和 `STACK` 行为不存在。
 
-- [ ] **Step 3: Implement service/node filtering**
+- [x] **Step 3: Implement service/node filtering**
 
 Modify `app/inspectors/log/filter.py`. Upgrade `rule_version` to `2.0.0`, set `inputs=["pkg.extract.log.ready"]`, and implement:
 
@@ -455,7 +455,7 @@ inspector.run = _run
 registry.register(inspector)
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 make test
@@ -463,7 +463,7 @@ make test
 
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/inspectors/log/filter.py tests/test_rules.py
@@ -485,7 +485,7 @@ git commit -m "feat(log): add ServiceLog service-aware filtering"
 - Produces: rule code `log.service_errors`。
 - Produces metrics: `service_count`（个）、`error_service_count`（个）、`max_service_error_count`（条）。
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_rules.py`:
 
@@ -514,7 +514,7 @@ def test_service_errors_warn_on_hot_service(tmp_path: Path) -> None:
     assert result.findings[0].title.startswith("AppService 服务错误集中")
 ```
 
-- [ ] **Step 2: Run test and confirm failure**
+- [x] **Step 2: Run test and confirm failure**
 
 ```bash
 make test
@@ -522,7 +522,7 @@ make test
 
 Expected: FAIL with `规则未注册: log.service_errors`。
 
-- [ ] **Step 3: Implement `log.service_errors`**
+- [x] **Step 3: Implement `log.service_errors`**
 
 Create `app/inspectors/log/service_errors.py`:
 
@@ -640,7 +640,7 @@ if __name__ == "__main__":
     run_single_rule(inspector.code)
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 make test
@@ -648,7 +648,7 @@ make test
 
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/inspectors/log/service_errors.py tests/test_rules.py
@@ -670,7 +670,7 @@ git commit -m "feat(log): add service error concentration rule"
 - Produces: rule code `log.fault_pattern`。
 - Produces metrics: `matched_pattern_count`（类）、`affected_service_count`（个）、`max_pattern_hit_count`（条）。
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_rules.py`:
 
@@ -699,7 +699,7 @@ def test_fault_pattern_matches_real_operational_cases(tmp_path: Path) -> None:
     assert result.findings[0].title.startswith("AppService 数据库连接池耗尽")
 ```
 
-- [ ] **Step 2: Run test and confirm failure**
+- [x] **Step 2: Run test and confirm failure**
 
 ```bash
 make test
@@ -707,7 +707,7 @@ make test
 
 Expected: FAIL with `规则未注册: log.fault_pattern`。
 
-- [ ] **Step 3: Implement `log.fault_pattern`**
+- [x] **Step 3: Implement `log.fault_pattern`**
 
 Create `app/inspectors/log/fault_pattern.py`:
 
@@ -880,7 +880,7 @@ if __name__ == "__main__":
     run_single_rule(inspector.code)
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 make test
@@ -888,7 +888,7 @@ make test
 
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/inspectors/log/fault_pattern.py tests/test_rules.py
@@ -910,7 +910,7 @@ git commit -m "feat(log): add known fault pattern inspection"
 - Produces: rule code `log.repeat_error`。
 - Produces metrics: `repeated_pattern_count`（个）、`max_repeat_count`（次）。
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_rules.py`:
 
@@ -930,7 +930,7 @@ def test_repeat_error_detects_database_pool_storm(tmp_path: Path) -> None:
     assert result.findings[0].title.startswith("AppService 重复错误：")
 ```
 
-- [ ] **Step 2: Run test and confirm failure**
+- [x] **Step 2: Run test and confirm failure**
 
 ```bash
 make test
@@ -938,7 +938,7 @@ make test
 
 Expected: FAIL with `规则未注册: log.repeat_error`。
 
-- [ ] **Step 3: Implement `log.repeat_error`**
+- [x] **Step 3: Implement `log.repeat_error`**
 
 Create `app/inspectors/log/repeat_error.py`:
 
@@ -1066,7 +1066,7 @@ if __name__ == "__main__":
     run_single_rule(inspector.code)
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 make test
@@ -1074,7 +1074,7 @@ make test
 
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/inspectors/log/repeat_error.py tests/test_rules.py
@@ -1096,7 +1096,7 @@ git commit -m "feat(log): add repeated error inspection"
 - Produces: rule code `log.stacktrace`。
 - Produces metrics: `stacktrace_count`（个）、`exception_type_count`（类）。
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_rules.py`:
 
@@ -1127,7 +1127,7 @@ def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
     assert result.metadata["top_service"] == "AppService"
 ```
 
-- [ ] **Step 2: Run test and confirm failure**
+- [x] **Step 2: Run test and confirm failure**
 
 ```bash
 make test
@@ -1135,7 +1135,7 @@ make test
 
 Expected: FAIL with `规则未注册: log.stacktrace`。
 
-- [ ] **Step 3: Implement `log.stacktrace`**
+- [x] **Step 3: Implement `log.stacktrace`**
 
 Create `app/inspectors/log/stacktrace.py`:
 
@@ -1270,7 +1270,7 @@ if __name__ == "__main__":
     run_single_rule(inspector.code)
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 make test
@@ -1278,7 +1278,7 @@ make test
 
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/inspectors/log/stacktrace.py tests/test_rules.py
@@ -1301,7 +1301,7 @@ git commit -m "feat(log): add service stack trace inspection"
 - Consumes: all prior rules, the full App Problem Scene fixture, and the real uploaded package.
 - Produces: verified local full-flow output.
 
-- [ ] **Step 1: Regenerate and run the fixture package**
+- [x] **Step 1: Regenerate and run the fixture package**
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv run --python 3.12 python tests/fixtures/make_sample.py
@@ -1310,7 +1310,7 @@ PATROLX_PACKAGE_DIR=tests/fixtures/sample make verify
 
 Expected: 全流程完成；输出包含 `log.filter`、`log.service_errors`、`log.fault_pattern`、`log.repeat_error`、`log.stacktrace`。
 
-- [ ] **Step 2: Run the real uploaded package**
+- [x] **Step 2: Run the real uploaded package**
 
 ```bash
 PATROLX_PACKAGE_DIR=uploads make verify
@@ -1318,7 +1318,7 @@ PATROLX_PACKAGE_DIR=uploads make verify
 
 Expected: 真实包的嵌套 `ServiceLog_20260901011314.zip` 只解压一次，`AAAService` 和 `AppService` 日志全部被扫描。
 
-- [ ] **Step 3: Inspect generated rule contracts**
+- [x] **Step 3: Inspect generated rule contracts**
 
 ```bash
 .venv/bin/python - <<'PY'
@@ -1338,7 +1338,7 @@ PY
 
 Expected: `log.filter=PASS`；新增规则至少一条为 `WARN` 或 `FAIL`，发现中包含 `AAAService` / `AppService` 和真实源文件路径。
 
-- [ ] **Step 4: Check reports**
+- [x] **Step 4: Check reports**
 
 Open:
 
@@ -1349,7 +1349,7 @@ output/task-zzapp01bcn_app_problem_scene_333/report.html
 
 Expected: 报告展示新增规则、指标和发现。
 
-- [ ] **Step 5: Final verification and commit**
+- [x] **Step 5: Final verification and commit**
 
 ```bash
 make lint

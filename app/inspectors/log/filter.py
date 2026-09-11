@@ -115,20 +115,26 @@ def _process_file(ctx: RuleContext, logs_dir: Path, path: Path, out_log, out_jso
         out_log.write(record["message"] + "\n")
 
     counts = Counter(record["level"] for record in records)
-    return service, node, {
-        "files": [{
-            "service": service,
-            "node": node,
-            "source_file": source_file,
+    return (
+        service,
+        node,
+        {
+            "files": [
+                {
+                    "service": service,
+                    "node": node,
+                    "source_file": source_file,
+                    "total_lines": total,
+                    "kept_lines": len(records),
+                }
+            ],
             "total_lines": total,
             "kept_lines": len(records),
-        }],
-        "total_lines": total,
-        "kept_lines": len(records),
-        "levels": dict(counts),
-        "error_count": counts["ERROR"] + counts["FATAL"] + counts["CRITICAL"],
-        "warn_count": counts["WARN"] + counts["WARNING"],
-    }
+            "levels": dict(counts),
+            "error_count": counts["ERROR"] + counts["FATAL"] + counts["CRITICAL"],
+            "warn_count": counts["WARN"] + counts["WARNING"],
+        },
+    )
 
 
 def _merge_service(target: dict, source: dict, node: str) -> None:
@@ -161,15 +167,22 @@ def _run(ctx: RuleContext) -> object:
     logs_dir = ctx.data_dir / RuleCategory.LOG.value
     files = [path for path in sorted(logs_dir.rglob("*")) if path.is_file() and _is_log_file(path)]
     if not files:
-        return make_result(inspector, status=RuleStatus.SKIP, summary="未发现日志类文件", skip_reason="未发现日志类文件")
+        return make_result(
+            inspector,
+            status=RuleStatus.SKIP,
+            summary="未发现日志类文件",
+            skip_reason="未发现日志类文件",
+        )
 
     out_root = ctx.rule_artifact_path(inspector.code, inspector.outputs_artifacts[0])
     out_root.mkdir(parents=True, exist_ok=True)
     services: dict[str, dict] = {}
     total_lines = kept_lines = 0
 
-    with (out_root / "filtered.log").open("w", encoding="utf-8") as out_log, \
-            (out_root / "filtered.jsonl").open("w", encoding="utf-8") as out_jsonl:
+    with (
+        (out_root / "filtered.log").open("w", encoding="utf-8") as out_log,
+        (out_root / "filtered.jsonl").open("w", encoding="utf-8") as out_jsonl,
+    ):
         for path in files:
             try:
                 service, node, result = _process_file(ctx, logs_dir, path, out_log, out_jsonl)

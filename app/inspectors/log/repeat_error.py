@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, processed_files, read_records
+from app.inspectors.log.common import filtered_path, log_processed_files, read_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -52,6 +52,8 @@ def _run(ctx: RuleContext) -> object:
         )
 
     counts: Counter[tuple[str, str]] = Counter()
+    processed_files_list = log_processed_files(ctx, path, inspector.code)
+
     groups: dict[tuple[str, str], dict] = {}
 
     for record in read_records(path):
@@ -71,14 +73,16 @@ def _run(ctx: RuleContext) -> object:
     findings = []
     for (service, normalized), count in sorted(repeated.items(), key=lambda item: (-item[1], item[0])):
         group = groups[(service, normalized)]
-        findings.append(Finding(
-            finding_id=f"{inspector.code}-{service}-{len(findings) + 1:03d}".lower(),
-            title=f"{service} 重复错误：{normalized[:120]}",
-            severity=Severity.HIGH if count > FAIL_REPEAT else Severity.MEDIUM,
-            source_file=group["first"]["source_file"],
-            evidence="\n".join(group["evidence"])[:4096],
-            recommendation=inspector.recommendation,
-        ))
+        findings.append(
+            Finding(
+                finding_id=f"{inspector.code}-{service}-{len(findings) + 1:03d}".lower(),
+                title=f"{service} 重复错误：{normalized[:120]}",
+                severity=Severity.HIGH if count > FAIL_REPEAT else Severity.MEDIUM,
+                source_file=group["first"]["source_file"],
+                evidence="\n".join(group["evidence"])[:4096],
+                recommendation=inspector.recommendation,
+            )
+        )
 
     summary = f"发现 {len(repeated)} 个高频重复错误，最大重复 {max_count} 次" if repeated else "未发现高频重复错误"
     return make_result(
@@ -97,7 +101,7 @@ def _run(ctx: RuleContext) -> object:
                 for (service, normalized), count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:10]
                 if count >= WARN_REPEAT
             },
-            "processed_files": processed_files(path),
+            "processed_files": processed_files_list,
         },
     )
 

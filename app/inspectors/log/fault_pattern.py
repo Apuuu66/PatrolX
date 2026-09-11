@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, processed_files, read_records
+from app.inspectors.log.common import filtered_path, log_processed_files, read_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -86,6 +86,8 @@ def _run(ctx: RuleContext) -> object:
             skip_reason="依赖产物 log.filter.artifacts.filtered_logs 缺失或缺少 filtered.jsonl",
         )
 
+    processed_files_list = log_processed_files(ctx, path, inspector.code)
+
     groups: dict[tuple[str, str], dict] = {}
     pattern_counts: Counter[str] = Counter()
     service_counts: Counter[str] = Counter()
@@ -102,8 +104,7 @@ def _run(ctx: RuleContext) -> object:
                 group["records"].append(record)
 
     high_pattern_count = sum(
-        1 for pattern in PATTERNS
-        if pattern["severity"] == Severity.HIGH and pattern_counts[pattern["key"]] > 0
+        1 for pattern in PATTERNS if pattern["severity"] == Severity.HIGH and pattern_counts[pattern["key"]] > 0
     )
     max_count = max(pattern_counts.values(), default=0)
 
@@ -118,16 +119,22 @@ def _run(ctx: RuleContext) -> object:
     for (service, pattern_key), group in sorted(groups.items()):
         pattern = group["pattern"]
         first = group["records"][0]
-        findings.append(Finding(
-            finding_id=f"{inspector.code}-{service}-{pattern_key}".lower(),
-            title=f"{service} {pattern['name']}",
-            severity=pattern["severity"],
-            source_file=first["source_file"],
-            evidence="\n".join(record["message"] for record in group["records"])[:4096],
-            recommendation=pattern["recommendation"],
-        ))
+        findings.append(
+            Finding(
+                finding_id=f"{inspector.code}-{service}-{pattern_key}".lower(),
+                title=f"{service} {pattern['name']}",
+                severity=pattern["severity"],
+                source_file=first["source_file"],
+                evidence="\n".join(record["message"] for record in group["records"])[:4096],
+                recommendation=pattern["recommendation"],
+            )
+        )
 
-    summary = "未命中已知故障模式" if not pattern_counts else f"命中 {len(pattern_counts)} 类故障模式，影响 {len(service_counts)} 个服务"
+    summary = (
+        "未命中已知故障模式"
+        if not pattern_counts
+        else f"命中 {len(pattern_counts)} 类故障模式，影响 {len(service_counts)} 个服务"
+    )
     return make_result(
         inspector,
         status=status,
@@ -142,7 +149,7 @@ def _run(ctx: RuleContext) -> object:
             "pattern_counts": dict(pattern_counts),
             "service_counts": dict(service_counts),
             "high_pattern_count": high_pattern_count,
-            "processed_files": processed_files(path),
+            "processed_files": processed_files_list,
         },
     )
 

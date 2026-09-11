@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, processed_files, read_records
+from app.inspectors.log.common import filtered_path, log_processed_files, read_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -42,6 +42,8 @@ def _run(ctx: RuleContext) -> object:
             skip_reason="依赖产物 log.filter.artifacts.filtered_logs 缺失或缺少 filtered.jsonl",
         )
 
+    processed_files_list = log_processed_files(ctx, path, inspector.code)
+
     services: dict[str, dict] = {}
     for record in read_records(path):
         service = services.setdefault(record["service"], {"errors": 0, "levels": {}, "first": record})
@@ -60,7 +62,7 @@ def _run(ctx: RuleContext) -> object:
                 {"key": "error_service_count", "label": "存在错误的服务数", "value": 0, "unit": "个"},
                 {"key": "max_service_error_count", "label": "单服务最大错误数", "value": 0, "unit": "条"},
             ],
-            metadata={"processed_files": processed_files(path)},
+            metadata={"processed_files": processed_files_list},
         )
 
     max_service = max(services, key=lambda name: (services[name]["errors"], name))
@@ -77,14 +79,16 @@ def _run(ctx: RuleContext) -> object:
     findings = []
     if status != RuleStatus.PASS:
         first = services[max_service]["first"]
-        findings = [Finding(
-            finding_id=f"{inspector.code}-f001",
-            title=f"{max_service} 服务错误集中",
-            severity=Severity.MEDIUM,
-            source_file=first["source_file"],
-            evidence=first["message"],
-            recommendation=inspector.recommendation,
-        )]
+        findings = [
+            Finding(
+                finding_id=f"{inspector.code}-f001",
+                title=f"{max_service} 服务错误集中",
+                severity=Severity.MEDIUM,
+                source_file=first["source_file"],
+                evidence=first["message"],
+                recommendation=inspector.recommendation,
+            )
+        ]
 
     return make_result(
         inspector,
@@ -100,7 +104,7 @@ def _run(ctx: RuleContext) -> object:
             "service_error_counts": {name: item["errors"] for name, item in services.items()},
             "service_level_counts": {name: item["levels"] for name, item in services.items()},
             "hot_service": max_service,
-            "processed_files": processed_files(path),
+            "processed_files": processed_files_list,
         },
     )
 

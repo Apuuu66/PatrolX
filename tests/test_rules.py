@@ -19,13 +19,20 @@ def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
             path.write_bytes(gzip.compress(content.encode("utf-8")))
         else:
             path.write_text(content, encoding="utf-8")
-    return RuleContext(
+    logs: list[dict] = []
+
+    def log(level: str, message: str, detail: dict | None = None) -> None:
+        logs.append({"level": level, "message": message, **(detail or {})})
+
+    ctx = RuleContext(
         task_id="t1",
         system_id="s1",
         data_dir=data,
         artifacts=ArtifactStore(tmp_path / "artifacts"),
-        log=lambda level, message, detail=None: None,
+        log=log,
     )
+    ctx.logs = logs
+    return ctx
 
 
 def _run_rule(code: str, ctx: RuleContext):
@@ -129,10 +136,13 @@ def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) 
         "        at com.patrolx.app.DbPool.acquire(DbPool.java:88)\n"
     )
     aaa = "2026-09-01T10:05:00Z ERROR aaa auth failure count 3\n"
-    ctx = _ctx(tmp_path, {
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
-        "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz": aaa,
-    })
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
+            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz": aaa,
+        },
+    )
 
     result = _run_rule("log.filter", ctx)
     root = Path(ctx.artifacts.get("log.filter.artifacts.filtered_logs").path)
@@ -164,9 +174,13 @@ def test_log_filter_keeps_python_traceback_after_error(tmp_path: Path) -> None:
         "    call_remote()\n"
         "ConnectionError: remote unavailable\n"
     )
-    ctx = _ctx(tmp_path, {
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log": plain,
-    })
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/"
+            "app_service_error_20260901011314.log": plain,
+        },
+    )
 
     result = _run_rule("log.filter", ctx)
     root = Path(ctx.artifacts.get("log.filter.artifacts.filtered_logs").path)
@@ -181,14 +195,27 @@ def _load_filter_artifact(ctx) -> None:
     ctx.inputs[artifact.key] = artifact
 
 
+def _logged_processed_files(ctx, code: str) -> list[str] | None:
+    return next(
+        (entry["files"] for entry in reversed(ctx.logs) if entry.get("rule_code") == code and "files" in entry),
+        None,
+    )
+
+
 def test_service_errors_warn_on_hot_service(tmp_path: Path) -> None:
-    lines = [f"2026-09-01T10:00:{second:02d}Z ERROR app db connection pool exhausted retry={second}" for second in range(1, 7)]
+    lines = [
+        f"2026-09-01T10:00:{second:02d}Z ERROR app db connection pool exhausted retry={second}"
+        for second in range(1, 7)
+    ]
     plain = "\n".join(lines) + "\n"
     aaa = "2026-09-01T10:05:00Z ERROR aaa auth failure count 1\n"
-    ctx = _ctx(tmp_path, {
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": plain,
-        "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
-    })
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": plain,
+            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
+        },
+    )
     _run_rule("log.filter", ctx)
     _load_filter_artifact(ctx)
 
@@ -199,6 +226,7 @@ def test_service_errors_warn_on_hot_service(tmp_path: Path) -> None:
     assert result.metrics[2].value == 6
     assert result.findings[0].title.startswith("AppService 服务错误集中")
     assert result.metadata["processed_files"]
+    assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.service_errors")
 
 
 def test_fault_pattern_matches_real_operational_cases(tmp_path: Path) -> None:
@@ -209,10 +237,13 @@ def test_fault_pattern_matches_real_operational_cases(tmp_path: Path) -> None:
         "2026-09-01T10:00:04Z ERROR app sctp reconnect failed\n"
     )
     aaa = "2026-09-01T10:05:00Z ERROR aaa auth failure count 1\n"
-    ctx = _ctx(tmp_path, {
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
-        "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
-    })
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
+            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
+        },
+    )
     _run_rule("log.filter", ctx)
     _load_filter_artifact(ctx)
 
@@ -224,13 +255,22 @@ def test_fault_pattern_matches_real_operational_cases(tmp_path: Path) -> None:
     assert result.metadata["pattern_counts"]["db_connection_pool_exhausted"] == 2
     assert any(finding.title.startswith("AppService 数据库连接池耗尽") for finding in result.findings)
     assert result.metadata["processed_files"]
+    assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.fault_pattern")
 
 
 def test_repeat_error_detects_database_pool_storm(tmp_path: Path) -> None:
-    lines = [f"2026-09-01T10:00:{second:02d}Z ERROR app db connection pool exhausted id={second}" for second in range(1, 9)]
-    ctx = _ctx(tmp_path, {
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": "\n".join(lines) + "\n",
-    })
+    lines = [
+        f"2026-09-01T10:00:{second:02d}Z ERROR app db connection pool exhausted id={second}" for second in range(1, 9)
+    ]
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": "\n".join(
+                lines
+            )
+            + "\n",
+        },
+    )
     _run_rule("log.filter", ctx)
     _load_filter_artifact(ctx)
 
@@ -240,6 +280,7 @@ def test_repeat_error_detects_database_pool_storm(tmp_path: Path) -> None:
     assert result.metrics[1].value == 8
     assert result.findings[0].title.startswith("AppService 重复错误：")
     assert result.metadata["processed_files"]
+    assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.repeat_error")
 
 
 def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
@@ -253,10 +294,13 @@ def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
         "Traceback (most recent call last):\n"
         "OutOfMemoryError: Java heap space\n"
     )
-    ctx = _ctx(tmp_path, {
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log": app,
-        "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_error_20260901011314.log": aaa,
-    })
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log": app,
+            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_error_20260901011314.log": aaa,
+        },
+    )
     _run_rule("log.filter", ctx)
     _load_filter_artifact(ctx)
 
@@ -267,3 +311,4 @@ def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
     assert result.metrics[1].value == 2
     assert "AppService" in result.metadata["service_counts"]
     assert result.metadata["processed_files"]
+    assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.stacktrace")

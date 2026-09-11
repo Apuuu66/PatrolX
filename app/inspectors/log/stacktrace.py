@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, processed_files, read_records
+from app.inspectors.log.common import filtered_path, log_processed_files, read_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -42,6 +42,8 @@ def _run(ctx: RuleContext) -> object:
             skip_reason="依赖产物 log.filter.artifacts.filtered_logs 缺失或缺少 filtered.jsonl",
         )
 
+    processed_files_list = log_processed_files(ctx, path, inspector.code)
+
     service_counts: Counter[str] = Counter()
     type_counts: Counter[str] = Counter()
     groups: dict[tuple[str, str], dict] = {}
@@ -70,7 +72,7 @@ def _run(ctx: RuleContext) -> object:
                 {"key": "stacktrace_count", "label": "堆栈/异常条数", "value": stack_frame_count, "unit": "个"},
                 {"key": "exception_type_count", "label": "异常类型数", "value": 0, "unit": "类"},
             ],
-            metadata={"processed_files": processed_files(path)},
+            metadata={"processed_files": processed_files_list},
         )
 
     top_service = service_counts.most_common(1)[0][0]
@@ -80,14 +82,16 @@ def _run(ctx: RuleContext) -> object:
     findings = []
     for (service, exception_type), group in sorted(groups.items()):
         first = group["records"][0]
-        findings.append(Finding(
-            finding_id=f"{inspector.code}-{service}-{exception_type}".lower().replace("_", "-"),
-            title=f"{service} 出现 {exception_type}",
-            severity=Severity.HIGH if total_occurrences > 5 else Severity.MEDIUM,
-            source_file=first["source_file"],
-            evidence="\n".join(record["message"] for record in group["records"])[:4096],
-            recommendation=inspector.recommendation,
-        ))
+        findings.append(
+            Finding(
+                finding_id=f"{inspector.code}-{service}-{exception_type}".lower().replace("_", "-"),
+                title=f"{service} 出现 {exception_type}",
+                severity=Severity.HIGH if total_occurrences > 5 else Severity.MEDIUM,
+                source_file=first["source_file"],
+                evidence="\n".join(record["message"] for record in group["records"])[:4096],
+                recommendation=inspector.recommendation,
+            )
+        )
 
     return make_result(
         inspector,
@@ -103,7 +107,7 @@ def _run(ctx: RuleContext) -> object:
             "exception_type_counts": dict(type_counts),
             "stack_frame_count": stack_frame_count,
             "top_service": top_service,
-            "processed_files": processed_files(path),
+            "processed_files": processed_files_list,
         },
     )
 
