@@ -1,15 +1,73 @@
 # 预制数据字典（种子数据，可配置扩展）
 province:
-  - code: gd
-    name: 广东
+  - code: bj
+    name: 北京
+  - code: tj
+    name: 天津
+  - code: heb
+    name: 河北
+  - code: shanxi
+    name: 山西
+  - code: nmg
+    name: 内蒙
+  - code: ln
+    name: 辽宁
+  - code: jl
+    name: 吉林
+  - code: hlj
+    name: 黑龙江
+  - code: sh
+    name: 上海
   - code: js
     name: 江苏
   - code: zj
     name: 浙江
+  - code: ah
+    name: 安徽
+  - code: fj
+    name: 福建
+  - code: jx
+    name: 江西
   - code: sd
     name: 山东
+  - code: hen
+    name: 河南
+  - code: hubei
+    name: 湖北
+  - code: hun
+    name: 湖南
+  - code: gd
+    name: 广东
+  - code: gx
+    name: 广西
+  - code: hainan
+    name: 海南
+  - code: cq
+    name: 重庆
   - code: sc
     name: 四川
+  - code: gz
+    name: 贵州
+  - code: yn
+    name: 云南
+  - code: xz
+    name: 西藏
+  - code: shaanxi
+    name: 陕西
+  - code: gs
+    name: 甘肃
+  - code: qh
+    name: 青海
+  - code: nx
+    name: 宁夏
+  - code: xj
+    name: 新疆
+  - code: xg
+    name: 香港
+  - code: am
+    name: 澳门
+  - code: tw
+    name: 台湾
 operator:
   - code: cmcc
     name: 移动
