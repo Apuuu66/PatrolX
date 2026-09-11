@@ -312,3 +312,104 @@ def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
     assert "AppService" in result.metadata["service_counts"]
     assert result.metadata["processed_files"]
     assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.stacktrace")
+
+
+def test_app_service_rule_detects_pool_and_sctp_errors(tmp_path: Path) -> None:
+    app = (
+        "2026-09-01T10:00:01Z ERROR app db connection pool exhausted\n"
+        "2026-09-01T10:00:02Z ERROR app db connection pool exhausted\n"
+        "2026-09-01T10:00:04Z ERROR app sctp link down\n"
+    )
+    aaa = "2026-09-01T10:05:00Z ERROR aaa auth failure count 3\n"
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
+            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+        },
+    )
+    _run_rule("log.filter", ctx)
+    _load_filter_artifact(ctx)
+
+    result = _run_rule("log.app_service", ctx)
+
+    assert result.status == RuleStatus.FAIL
+    assert result.summary == "AppService 存在数据库连接池耗尽"
+    assert [(metric.key, metric.value) for metric in result.metrics] == [
+        ("error_count", 3),
+        ("pool_exhausted_count", 2),
+        ("sctp_error_count", 1),
+    ]
+    assert [finding.title for finding in result.findings] == [
+        "AppService 数据库连接池耗尽",
+        "AppService SCTP 链路异常",
+    ]
+    assert result.metadata["processed_files"] == [
+        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log"
+    ]
+
+
+def test_app_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
+    aaa = "2026-09-01T10:05:00Z ERROR aaa auth failure count 3\n"
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+        },
+    )
+    _run_rule("log.filter", ctx)
+    _load_filter_artifact(ctx)
+
+    result = _run_rule("log.app_service", ctx)
+
+    assert result.status == RuleStatus.SKIP
+    assert result.skip_reason == "未发现 AppService 日志"
+
+
+def test_aaa_service_rule_detects_auth_and_retry_issues(tmp_path: Path) -> None:
+    app = "2026-09-01T10:00:01Z ERROR app db connection pool exhausted\n"
+    aaa = (
+        "2026-09-01T10:05:00Z ERROR aaa auth failure count 3\n"
+        "2026-09-01T10:05:01Z ERROR aaa auth failure count 4\n"
+        "2026-09-01T10:05:02Z WARN  aaa retry timer exceeded\n"
+    )
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
+            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+        },
+    )
+    _run_rule("log.filter", ctx)
+    _load_filter_artifact(ctx)
+
+    result = _run_rule("log.aaa_service", ctx)
+
+    assert result.status == RuleStatus.WARN
+    assert result.summary == "AAAService 存在认证失败"
+    assert [(metric.key, metric.value) for metric in result.metrics] == [
+        ("error_count", 2),
+        ("auth_failure_count", 2),
+        ("retry_timer_count", 1),
+    ]
+    assert result.findings[0].title == "AAAService 认证失败"
+    assert result.metadata["processed_files"] == [
+        "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log"
+    ]
+
+
+def test_aaa_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
+    app = "2026-09-01T10:00:01Z ERROR app db connection pool exhausted\n"
+    ctx = _ctx(
+        tmp_path,
+        {
+            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
+        },
+    )
+    _run_rule("log.filter", ctx)
+    _load_filter_artifact(ctx)
+
+    result = _run_rule("log.aaa_service", ctx)
+
+    assert result.status == RuleStatus.SKIP
+    assert result.skip_reason == "未发现 AAAService 日志"

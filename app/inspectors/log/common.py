@@ -44,3 +44,29 @@ def read_records(path: Path) -> Iterator[dict]:
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             yield json.loads(line)
+
+
+def service_records(path: Path, service: str) -> tuple[list[dict], list[str]]:
+    """读取指定服务的规范化记录，并按首次出现顺序返回源文件列表。"""
+    records: list[dict] = []
+    source_files: list[str] = []
+    for record in read_records(path):
+        if record.get("service") != service:
+            continue
+        records.append(record)
+        source_file = record.get("source_file")
+        if source_file and source_file not in source_files:
+            source_files.append(source_file)
+    return records, source_files
+
+
+def log_service_processed_files(ctx: RuleContext, rule_code: str, files: list[str]) -> list[str]:
+    """打印服务专属规则实际消费的源文件，便于确认扫描范围。"""
+    ctx.log(
+        "info",
+        "日志规则处理文件",
+        rule_code=rule_code,
+        file_count=len(files),
+        files=files,
+    )
+    return files

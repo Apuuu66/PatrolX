@@ -33,20 +33,20 @@
 - Consumes: `filtered_path(ctx)`, `read_records(path)`, and filtered artifact key from existing log helpers.
 - Produces: registered rule code `log.app_service`; metrics `error_count`, `pool_exhausted_count`, `sctp_error_count`.
 
-- [ ] **Step 1: Write failing AppService tests**
+- [x] **Step 1: Write failing AppService tests**
 
 Add tests that run `log.filter`, load its artifact, run `log.app_service`, and assert detection plus service absence skip behavior.
 
-- [ ] **Step 2: Run AppService tests and confirm failure**
+- [x] **Step 2: Run AppService tests and confirm failure**
 
 Run: `UV_CACHE_DIR=.uv-cache uv run pytest tests/test_rules.py -k app_service -q`
 Expected: FAIL because `log.app_service` is not registered.
 
-- [ ] **Step 3: Implement AppService rule**
+- [x] **Step 3: Implement AppService rule**
 
 Create the Inspector and run function. Select `AppService` records, calculate the three metrics, create targeted findings for database connection pool and SCTP errors, list only AppService source files, and skip when absent.
 
-- [ ] **Step 4: Run AppService tests and confirm pass**
+- [x] **Step 4: Run AppService tests and confirm pass**
 
 Run: `UV_CACHE_DIR=.uv-cache uv run pytest tests/test_rules.py -k app_service -q`
 Expected: PASS.
@@ -61,20 +61,20 @@ Expected: PASS.
 - Consumes: same filtered artifact and shared helpers as AppService.
 - Produces: registered rule code `log.aaa_service`; metrics `error_count`, `auth_failure_count`, `retry_timer_count`.
 
-- [ ] **Step 1: Write failing AAAService tests**
+- [x] **Step 1: Write failing AAAService tests**
 
 Add tests for auth/retry detection and absence skip behavior.
 
-- [ ] **Step 2: Run AAAService tests and confirm failure**
+- [x] **Step 2: Run AAAService tests and confirm failure**
 
 Run: `UV_CACHE_DIR=.uv-cache uv run pytest tests/test_rules.py -k aaa_service -q`
 Expected: FAIL because `log.aaa_service` is not registered.
 
-- [ ] **Step 3: Implement AAAService rule**
+- [x] **Step 3: Implement AAAService rule**
 
 Create the Inspector and run function. Select `AAAService` records, calculate the three metrics, create an auth-failure finding, list only AAAService source files, and skip when absent.
 
-- [ ] **Step 4: Run AAAService tests and confirm pass**
+- [x] **Step 4: Run AAAService tests and confirm pass**
 
 Run: `UV_CACHE_DIR=.uv-cache uv run pytest tests/test_rules.py -k aaa_service -q`
 Expected: PASS.
@@ -88,21 +88,21 @@ Expected: PASS.
 - Consumes: real fixture package in `uploads/ZZapp01BCN_app_problem_scene_333.zip` when present, otherwise tests fixture `tests/fixtures/sample/sample.zip`.
 - Produces: refreshed local output, HTML report, and two new rule result JSON files.
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `UV_CACHE_DIR=.uv-cache uv run pytest`
 Expected: all tests pass.
 
-- [ ] **Step 2: Run lint and format checks**
+- [x] **Step 2: Run lint and format checks**
 
 Run: `UV_CACHE_DIR=.uv-cache uv run ruff check app tests && UV_CACHE_DIR=.uv-cache uv run ruff format --check app tests`
 Expected: clean.
 
-- [ ] **Step 3: Run full offline inspection**
+- [x] **Step 3: Run full offline inspection**
 
 Run: `UV_CACHE_DIR=.uv-cache uv run python main.py`
 Expected: task completes; report generated; `log.app_service.json` and `log.aaa_service.json` exist with expected statuses.
 
-- [ ] **Step 4: Inspect generated rule results**
+- [x] **Step 4: Inspect generated rule results**
 
 Read the two new rule JSON files and report path. Confirm metrics/findings are populated and processed files are service-specific.
