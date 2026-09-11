@@ -34,3 +34,6 @@ patrolx.egg-info/
 # 前端构建/临时产物
 web/tsconfig.tsbuildinfo
 web/smoke.tmp.mjs
+
+# 本地隔离工作树
+.worktrees/
