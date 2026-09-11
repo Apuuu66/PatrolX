@@ -320,6 +320,15 @@ output/                         # 运行时统一目录（处理现场：解压�
 - 文件按分类规则（文件名/扩展名/目录前缀）直接解压到对应类别目录，保留包内相对路径。
 - 嵌套子压缩包先判定类别，解压到 `<类别>/<子包名>/` 下，保留原始层级，便于 `finding.source_file` 定位。
 
+### 真实样例基准：App Problem Scene 完整结构
+
+- 完整真实样例基准见 `docs/example/real-package-structure.md`；原始文件内容示例见 `docs/example/zip.txt`。
+- 主包 `ZZapp01BCN_app_Problem_scene_333.zip` 包含告警、基础配置、KPI、资源、话统和嵌套日志子包；目录名是自然语言名称，不等于 PatrolX 类别枚举。
+- 分类映射必须以文件名规律和分类规则表为准：`alarm_history.csv` / `alarm_summary.json` 归告警，`system_info.ini` / `version.ini` 归配置，`kpi_*.csv` 归 KPI，`pod_cpu_mem_*.txt` 归资源，`call_stat_*.txt` 归话统，`ServiceLog_*.zip` 归日志。
+- `ServiceLog_*.zip` 解压后按 `ServiceLog_*/<service>/logs/<node>/*.log` 与 `*.log.gz` 组织；`ServiceLog_*` 不是服务名。
+- 日志服务名取 `ServiceLog_*` 之后的业务目录（如 `AAAService`、`AppService`），节点名取 `logs/` 后的目录（如 `paas-192.168.2.2`）。
+- 日志过滤必须递归检索 `.log` 与 `.log.gz`，按 gzip 流式读取，并在产物中记录 `service`、`node` 与 `source_file`。
+
 ### 子包只解压一次（幂等 + 去重）
 
 - 每个系统目录维护解压清单 `.patrolx-extracted.json`，记录每个子包的 `checksum + 解压目标目录 + 文件数`。
