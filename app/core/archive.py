@@ -18,6 +18,11 @@ class UnpackLimit:
     expansion_ratio: float = 20.0
 
 
+def _expansion_budget(archive: Path, limit: UnpackLimit) -> int:
+    """允许写入的最大总字节数：压缩包大小 × 膨胀系数。"""
+    return int(archive.stat().st_size * limit.expansion_ratio)
+
+
 def _safe_target(root: Path, member_path: str) -> Path:
     target = (root / member_path).resolve()
     if not target.is_relative_to(root.resolve()):
@@ -43,6 +48,8 @@ def unpack_zip(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
     root = root.resolve()
     root.mkdir(parents=True, exist_ok=True)
     count = 0
+    max_total = _expansion_budget(archive, limit)
+    total_written = 0
     with zipfile.ZipFile(archive) as zf:
         members = [m for m in zf.infolist() if not m.is_dir()]
         if len(members) > limit.max_files:
@@ -58,8 +65,11 @@ def unpack_zip(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
                 written = 0
                 while chunk := src.read(1024 * 1024):
                     written += len(chunk)
+                    total_written += len(chunk)
                     if written > limit.max_single_file:
                         raise ArchiveError(f"解压单文件超限: {member.filename}")
+                    if total_written > max_total:
+                        raise ArchiveError("解压总量超限")
                     dst.write(chunk)
             count += 1
     return count
@@ -79,6 +89,8 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
     root = root.resolve()
     root.mkdir(parents=True, exist_ok=True)
     count = 0
+    max_total = _expansion_budget(archive, limit)
+    total_written = 0
     with tarfile.open(archive, "r:*") as tf:
         members = [m for m in tf.getmembers() if not m.isdir()]
         if len(members) > limit.max_files:
@@ -97,8 +109,11 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
                 written = 0
                 while chunk := src.read(1024 * 1024):
                     written += len(chunk)
+                    total_written += len(chunk)
                     if written > limit.max_single_file:
                         raise ArchiveError(f"解压单文件超限: {member.name}")
+                    if total_written > max_total:
+                        raise ArchiveError("解压总量超限")
                     dst.write(chunk)
             count += 1
     return count
