@@ -7,7 +7,7 @@ import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.cli import clean_system_id, customer_system_id, generate_task_id, run_single_rule, run_task
+from app.cli import customer_system_id, generate_task_id, run_single_rule, run_task
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
