@@ -3,30 +3,35 @@ import {
   App,
   Button,
   Card,
+  Empty,
+  Flex,
   Form,
   Input,
   Modal,
+  Pagination,
   Popconfirm,
   Select,
   Space,
-  Table,
-  Tag,
   Typography,
   Upload,
 } from "antd";
 import {
   DeleteOutlined,
-  EyeOutlined,
-  FileTextOutlined,
   PlusOutlined,
   RedoOutlined,
 } from "@ant-design/icons";
-import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
-import { ApiError, api, type DictsResponse, type OverviewSummary, type TaskStatus, type TaskSummary } from "../api/http";
-import { SummaryCards } from "../components/SummaryCards";
+import {
+  ApiError,
+  api,
+  type DictsResponse,
+  type OverviewSummary,
+  type TaskStatus,
+  type TaskSummary,
+} from "../api/http";
 import { TaskStatusTag } from "../components/StatusBadge";
+import { RESULT_STATUS_META } from "../components/statusLabels";
 import { usePolling } from "../hooks/usePolling";
 
 const STATUS_OPTIONS = [
@@ -35,6 +40,13 @@ const STATUS_OPTIONS = [
   { value: "completed", label: "已完成" },
   { value: "failed", label: "失败" },
 ];
+
+const OVERVIEW_ITEMS = [
+  { key: "task_count", label: "巡检任务" },
+  { key: "registered_rule_count", label: "注册规则" },
+  { key: "rule_result_count", label: "规则结果" },
+  { key: "finding_count", label: "发现问题" },
+] as const;
 
 export function TaskListPage() {
   const { message, modal } = App.useApp();
@@ -139,95 +151,54 @@ export function TaskListPage() {
     }
   };
 
-  const columns: ColumnsType<TaskSummary> = [
-    {
-      title: "任务",
-      dataIndex: "name",
-      render: (_, record) => (
-        <div>
-          <Typography.Link onClick={() => navigate(`/tasks/${record.task_id}`)}>{record.name}</Typography.Link>
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: "block" }}>
-            {record.task_id}
-          </Typography.Text>
-        </div>
-      ),
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      width: 100,
-      render: (v: string) => <TaskStatusTag status={v} />,
-    },
-    {
-      title: "结果统计",
-      width: 220,
-      render: (_, record) => (
-        <Space size={4} wrap>
-          <Tag color="green">P {record.stats.pass}</Tag>
-          <Tag color="gold">W {record.stats.warn}</Tag>
-          <Tag color="red">F {record.stats.fail}</Tag>
-          <Tag color="default">E {record.stats.error}</Tag>
-          <Tag color="blue">S {record.stats.skip}</Tag>
-        </Space>
-      ),
-    },
-    {
-      title: "模式",
-      dataIndex: "mode",
-      width: 90,
-      render: (v: string) => <Tag>{v === "online" ? "在线" : "本地"}</Tag>,
-    },
-    {
-      title: "创建时间",
-      dataIndex: "created_at",
-      width: 160,
-      render: (v: string) => dayjs(v).format("YYYY-MM-DD HH:mm:ss"),
-    },
-    {
-      title: "操作",
-      width: 210,
-      render: (_, record) => (
-        <Space size={4}>
-          <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => navigate(`/tasks/${record.task_id}`)}>
-            详情
-          </Button>
-          <Button size="small" type="link" icon={<FileTextOutlined />} onClick={() => navigate(`/tasks/${record.task_id}/report`)}>
-            报告
-          </Button>
-          <Popconfirm title="重跑该任务全部规则？" onConfirm={() => rerun(record.task_id)}>
-            <Button size="small" type="link" icon={<RedoOutlined />}>
-              重跑
-            </Button>
-          </Popconfirm>
-          <Popconfirm title="删除任务（含现场数据）？" onConfirm={() => remove(record.task_id)}>
-            <Button size="small" type="link" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
   return (
-    <div>
-      <Card style={{ marginBottom: 16 }}>
-        <SummaryCards overview={overview} stats={overview?.status_counts} />
+    <Flex vertical gap={16}>
+      <Card styles={{ body: { padding: "18px 20px" } }}>
+        <Flex gap={28} align="center" justify="space-between" wrap="wrap">
+          <Flex gap={36} wrap="wrap">
+            {OVERVIEW_ITEMS.map((item) => (
+              <div key={item.key}>
+                <Typography.Title level={4} style={{ margin: 0, fontWeight: 700 }}>
+                  {(overview?.[item.key] ?? 0).toLocaleString()}
+                </Typography.Title>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {item.label}
+                </Typography.Text>
+              </div>
+            ))}
+          </Flex>
+          <Flex gap={16} wrap="wrap">
+            {RESULT_STATUS_META.map((item) => (
+              <div key={item.key} style={{ minWidth: 72, textAlign: "center" }}>
+                <Typography.Text strong style={{ display: "block", fontSize: 20, color: item.color }}>
+                  {(overview?.status_counts?.[item.key] ?? 0).toLocaleString()}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {item.label}
+                </Typography.Text>
+              </div>
+            ))}
+          </Flex>
+        </Flex>
       </Card>
+
       <Card
         title={
-          <Space>
+          <Flex align="center" gap={8}>
             <Typography.Text strong>任务列表</Typography.Text>
-            <Typography.Text type="secondary">共 {total} 个任务</Typography.Text>
-          </Space>
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              共 {total} 个任务
+            </Typography.Text>
+          </Flex>
         }
         extra={
-          <Space>
+          <Space wrap>
             <Select
               allowClear
               placeholder="状态筛选"
               style={{ width: 130 }}
               options={STATUS_OPTIONS}
+              value={status}
               onChange={(v) => {
                 setStatus(v);
                 setPage(1);
@@ -239,22 +210,104 @@ export function TaskListPage() {
           </Space>
         }
       >
-        <Table
-          rowKey="task_id"
-          loading={loading}
-          dataSource={items}
-          columns={columns}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (p, ps) => {
-              setPage(p);
-              setPageSize(ps);
-            },
-          }}
-        />
+        <Flex vertical gap={12}>
+          {items.map((record) => (
+            <Card
+              key={record.task_id}
+              hoverable
+              styles={{
+                body: {
+                  padding: 16,
+                  display: "grid",
+                  gridTemplateColumns: "minmax(220px, 1.2fr) minmax(300px, 1fr) auto",
+                  gap: 18,
+                  alignItems: "center",
+                },
+              }}
+            >
+              <div>
+                <Typography.Link strong onClick={() => navigate(`/tasks/${record.task_id}`)}>
+                  {record.name}
+                </Typography.Link>
+                <Flex gap={8} align="center" wrap="wrap" style={{ marginTop: 6 }}>
+                  <Typography.Text code style={{ fontSize: 12 }}>
+                    {record.task_id}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {record.mode === "online" ? "在线" : "本地"}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {dayjs(record.created_at).format("YYYY-MM-DD HH:mm")}
+                  </Typography.Text>
+                </Flex>
+              </div>
+
+              <Flex gap={8} wrap="wrap">
+                {RESULT_STATUS_META.map((item) => {
+                  const value = record.stats[item.key];
+                  return (
+                    <div
+                      key={item.key}
+                      style={{
+                        flex: "1 1 52px",
+                        minWidth: 56,
+                        padding: "7px 6px",
+                        borderRadius: 10,
+                        textAlign: "center",
+                        background: `${item.color}14`,
+                      }}
+                    >
+                      <Typography.Text strong style={{ display: "block", color: item.color, fontSize: 18 }}>
+                        {value}
+                      </Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                        {item.label}
+                      </Typography.Text>
+                    </div>
+                  );
+                })}
+              </Flex>
+
+              <Flex vertical align="flex-end" gap={8}>
+                <TaskStatusTag status={record.status} />
+                <Space size={0} wrap>
+                  <Button type="text" size="small" onClick={() => navigate(`/tasks/${record.task_id}`)}>
+                    详情
+                  </Button>
+                  <Button type="text" size="small" onClick={() => navigate(`/tasks/${record.task_id}/report`)}>
+                    报告
+                  </Button>
+                  <Popconfirm title="重跑该任务全部规则？" onConfirm={() => rerun(record.task_id)}>
+                    <Button type="text" size="small" icon={<RedoOutlined />}>
+                      重跑
+                    </Button>
+                  </Popconfirm>
+                  <Popconfirm title="删除任务（含现场数据）？" onConfirm={() => remove(record.task_id)}>
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              </Flex>
+            </Card>
+          ))}
+
+          {!loading && items.length === 0 && <Empty description="暂无巡检任务" />}
+
+          <Flex justify="flex-end">
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              showSizeChanger
+              showTotal={(value) => `共 ${value} 个任务`}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+              }}
+            />
+          </Flex>
+        </Flex>
       </Card>
 
       <Modal
@@ -299,7 +352,7 @@ export function TaskListPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </Flex>
   );
 }
 

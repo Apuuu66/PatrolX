@@ -1,5 +1,7 @@
 import { Badge, Tag } from "antd";
 
+import { TASK_STATUS_LABELS } from "./statusLabels";
+
 const RULE_COLORS: Record<string, string> = {
   pass: "green",
   warn: "gold",
@@ -33,7 +35,9 @@ export function RuleStatusTag({ status, skipReason }: { status: string; skipReas
 }
 
 export function TaskStatusTag({ status }: { status: string }) {
-  return <Tag color={TASK_COLORS[status] ?? "default"}>{status}</Tag>;
+  return (
+    <Tag color={TASK_COLORS[status] ?? "default"}>{TASK_STATUS_LABELS[status] ?? status}</Tag>
+  );
 }
 
 export function SeverityTag({ severity }: { severity: string }) {

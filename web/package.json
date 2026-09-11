@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "gen-api": "openapi-typescript ../docs/api/openapi.yaml -o src/api/client.ts"
+    "gen-api": "openapi-typescript ../docs/api/openapi.yaml -o src/api/client.ts",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",
