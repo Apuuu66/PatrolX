@@ -255,6 +255,8 @@ def run_single_rule(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="patrolx", description="PatrolX 本地开发模式")
+    # `python main.py` 不带子命令时也必须存在 task_id 默认值。
+    parser.set_defaults(task_id=None)
     sub = parser.add_subparsers(dest="cmd")
     run_parser = sub.add_parser("run", help="扫描输入目录并运行全部规则（默认 uploads/）")
     run_parser.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<system_id>）")
