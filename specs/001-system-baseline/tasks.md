@@ -46,12 +46,15 @@ description: "系统基线功能实现任务列表"
 
 - [ ] T003 在 `app/models/schemas.py` 中添加模型校验：`status=skip` 时 `skip_reason` 必须非空；发现必须提供非空 `source_file` 与 `evidence`
 - [ ] T004 在 `app/models/schemas.py` 中添加摘要校验：`SystemInspection.summary.total` 等于 `rules` 数量，且各状态计数之和等于 `total`
-- [ ] T005 [P] 在 `tests/test_baseline_schemas.py` 中覆盖 skip 原因、发现可追溯性和摘要一致性校验
-- [ ] T006 在 `app/inspectors/registry.py` 中强化注册校验：规则 `code` 文件系统安全，`description` 与 `recommendation` 非空，artifact key 全局唯一且可定位生产者
-- [ ] T007 在 `app/services/executor.py` 中校验 `pass`、`warn`、`fail` 结果的 metrics key/unit 与规则声明契约一致；不一致时记为 `error` 并写入结构化日志
-- [ ] T008 [P] 在 `tests/test_baseline_registry.py` 中覆盖非法注册元数据、未声明 artifact、循环/非法优先级依赖和 metrics 契约不一致
-- [ ] T009 [P] 在 `tests/test_baseline_archive.py` 中补充文件数、单文件大小、总量预算、链接拒绝、路径穿越和深层嵌套限制测试
-- [ ] T010 在 `app/core/archive.py` 中根据 T009 修复安全解压缺口，确保超限或异常归档产生可记录的 `ArchiveError`
+
+- [ ] T005 在 `app/services/store.py` 中固化当前文件存储分层：SQLite 只保存任务运行元数据；本基线的包输入、解压数据、artifacts、规则 JSON、报告和执行日志继续保留在磁盘。业务代码必须通过存储层读写巡检结果，不得直接绑定文件路径或 SQL，为后续结果入库保留可替换后端
+- [ ] T006 [P] 在 `tests/test_baseline_storage.py` 中验证当前 `TaskRecord` 不承载巡检业务数据，规则结果、artifacts、报告和日志落在磁盘，且 API/CLI 不绕过存储层直接访问文件或数据库
+- [ ] T007 [P] 在 `tests/test_baseline_schemas.py` 中覆盖 skip 原因、发现可追溯性和摘要一致性校验
+- [ ] T008 在 `app/inspectors/registry.py` 中强化注册校验：规则 `code` 文件系统安全，`description` 与 `recommendation` 非空，artifact key 全局唯一且可定位生产者
+- [ ] T009 在 `app/services/executor.py` 中校验 `pass`、`warn`、`fail` 结果的 metrics key/unit 与规则声明契约一致；不一致时记为 `error` 并写入结构化日志
+- [ ] T010 [P] 在 `tests/test_baseline_registry.py` 中覆盖非法注册元数据、未声明 artifact、循环/非法优先级依赖和 metrics 契约不一致
+- [ ] T011 [P] 在 `tests/test_baseline_archive.py` 中补充文件数、单文件大小、总量预算、链接拒绝、路径穿越和深层嵌套限制测试
+- [ ] T012 在 `app/core/archive.py` 中根据 T011 修复安全解压缺口，确保超限或异常归档产生可记录的 `ArchiveError`
 
 **检查点**：契约不变量、规则边界和解压安全约束已可作为用户故事的阻塞门禁
 
@@ -65,18 +68,18 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 1 的测试
 
-- [ ] T011 [P] [US1] 在 `tests/test_baseline_pipeline.py` 中验证单包生成单任务、单系统、类别目录、规则 JSON、`report.html` 与 `execution.log`
-- [ ] T012 [US1] 在 `tests/test_baseline_pipeline.py` 中验证同一输入目录中的多个压缩包形成独立任务，任务结果互不合并
-- [ ] T013 [P] [US1] 在 `tests/test_baseline_extraction.py` 中验证主包按类落位、嵌套子包 checksum 去重、重复执行不重复解压
-- [ ] T014 [US1] 在 `tests/test_baseline_extraction.py` 中验证格式错误或不可识别文件不中止任务，并在解压结果、执行日志或对应规则结果中可见
-- [ ] T015 [P] [US1] 在 `tests/test_baseline_report.py` 中验证报告包含状态计数、规则摘要、发现来源/证据/建议、跳过原因和执行时间
+- [ ] T013 [P] [US1] 在 `tests/test_baseline_pipeline.py` 中验证单包生成单任务、单系统、类别目录、规则 JSON、`report.html` 与 `execution.log`
+- [ ] T014 [US1] 在 `tests/test_baseline_pipeline.py` 中验证同一输入目录中的多个压缩包形成独立任务，任务结果互不合并
+- [ ] T015 [P] [US1] 在 `tests/test_baseline_extraction.py` 中验证主包按类落位、嵌套子包 checksum 去重、重复执行不重复解压
+- [ ] T016 [US1] 在 `tests/test_baseline_extraction.py` 中验证格式错误或不可识别文件不中止任务，并在解压结果、执行日志或对应规则结果中可见
+- [ ] T017 [P] [US1] 在 `tests/test_baseline_report.py` 中验证报告包含状态计数、规则摘要、发现来源/证据/建议、跳过原因和执行时间
 
 ### 用户故事 1 的实现
 
-- [ ] T016 [US1] 在 `app/inspectors/pkg.py` 中更新解压清单与规则结果：失败子包记录 checksum、目标目录、错误信息和未解压状态，不静默跳过
-- [ ] T017 [US1] 在 `app/core/classify.py` 与 `deploy/config/classify_rules.yaml` 中核对日志、KPI、话统、告警、配置、资源和 `other` 分类规则，补充缺失的真实样例映射
-- [ ] T018 [US1] 在 `app/cli.py` 中统一离线运行摘要输出：任务数、系统 ID、状态统计、报告路径和执行日志路径
-- [ ] T019 [US1] 在 `app/services/report.py` 与 `app/reports/templates/report.html.j2` 中修正 T015 暴露的报告内容缺口，保持 HTML 只在线预览、无下载入口
+- [ ] T018 [US1] 在 `app/inspectors/pkg.py` 中更新解压清单与规则结果：失败子包记录 checksum、目标目录、错误信息和未解压状态，不静默跳过
+- [ ] T019 [US1] 在 `app/core/classify.py` 与 `deploy/config/classify_rules.yaml` 中核对日志、KPI、话统、告警、配置、资源和 `other` 分类规则，补充缺失的真实样例映射
+- [ ] T020 [US1] 在 `app/cli.py` 中统一离线运行摘要输出：任务数、系统 ID、状态统计、报告路径和执行日志路径
+- [ ] T021 [US1] 在 `app/services/report.py` 与 `app/reports/templates/report.html.j2` 中修正 T017 暴露的报告内容缺口，保持 HTML 只在线预览、无下载入口
 
 **检查点**：此时用户故事 1 应完整可用且可独立测试；`make verify` 与样例流水线测试通过
 
@@ -90,16 +93,16 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 2 的测试
 
-- [ ] T020 [P] [US2] 在 `tests/test_baseline_review.py` 中验证任务摘要、系统、规则结果和发现的接口下钻路径，并断言发现包含非空来源与证据
-- [ ] T021 [US2] 在 `tests/test_baseline_review.py` 中验证跳过规则通过系统、单规则接口和报告暴露 `skip_reason`
-- [ ] T022 [US2] 在 `tests/test_baseline_report.py` 中补充报告与契约结果的对应关系：报告展示的发现/跳过状态必须来自契约 JSON
+- [ ] T022 [P] [US2] 在 `tests/test_baseline_review.py` 中验证任务摘要、系统、规则结果和发现的接口下钻路径，并断言发现包含非空来源与证据
+- [ ] T023 [US2] 在 `tests/test_baseline_review.py` 中验证跳过规则通过系统、单规则接口和报告暴露 `skip_reason`
+- [ ] T024 [US2] 在 `tests/test_baseline_report.py` 中补充报告与契约结果的对应关系：报告展示的发现/跳过状态必须来自契约 JSON
 
 ### 用户故事 2 的实现
 
-- [ ] T023 [US2] 在 `app/api/router.py` 中保证任务、系统、单规则接口返回基线审查所需字段，且不泄漏 hidden 内部规则的成功结果
-- [ ] T024 [US2] 在 `app/reports/templates/report.html.j2` 中为发现的严重程度、来源、证据、建议和跳过原因提供统一可读展示
-- [ ] T025 [P] [US2] 在 `web/src/pages/TaskDetailPage.tsx`、`web/src/pages/RuleDetailPage.tsx` 和 `web/src/components/StatusBadge.tsx` 中核对下钻、状态徽标与 `skip_reason` 展示，仅修复缺失项
-- [ ] T026 [US2] 运行 `make web-build` 验证审查页面和生成 API 客户端保持可构建
+- [ ] T025 [US2] 在 `app/api/router.py` 中保证任务、系统、单规则接口返回基线审查所需字段，且不泄漏 hidden 内部规则的成功结果
+- [ ] T026 [US2] 在 `app/reports/templates/report.html.j2` 中为发现的严重程度、来源、证据、建议和跳过原因提供统一可读展示
+- [ ] T027 [P] [US2] 在 `web/src/pages/TaskDetailPage.tsx`、`web/src/pages/RuleDetailPage.tsx` 和 `web/src/components/StatusBadge.tsx` 中核对下钻、状态徽标与 `skip_reason` 展示，仅修复缺失项
+- [ ] T028 [US2] 运行 `make web-build` 验证审查页面和生成 API 客户端保持可构建
 
 **检查点**：用户故事 1 和 2 均应独立可用
 
@@ -113,13 +116,13 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 3 的测试
 
-- [ ] T027 [P] [US3] 在 `tests/test_baseline_consistency.py` 中比较本地与在线契约结果，忽略 `executed_at`、`duration_ms` 和运行标识，但比较规则状态、metrics、findings 与 `artifacts[]`
-- [ ] T028 [US3] 在 `tests/test_baseline_consistency.py` 中验证两个任务使用相同系统标识时仍保持任务目录、结果与日志隔离
+- [ ] T029 [P] [US3] 在 `tests/test_baseline_consistency.py` 中比较本地与在线契约结果，忽略 `executed_at`、`duration_ms` 和运行标识，但比较规则状态、metrics、findings 与 `artifacts[]`
+- [ ] T030 [US3] 在 `tests/test_baseline_consistency.py` 中验证两个任务使用相同系统标识时仍保持任务目录、结果与日志隔离
 
 ### 用户故事 3 的实现
 
-- [ ] T029 [US3] 在 `app/cli.py` 与 `app/services/tasks.py` 中消除本地/在线执行路径的业务分歧，共享 `Executor`、存储布局和报告生成入口
-- [ ] T030 [US3] 在 `app/services/store.py` 中确保任务、系统、规则结果使用同一 UTC 序列化与别名规则，避免双模式字段语义漂移
+- [ ] T031 [US3] 在 `app/cli.py` 与 `app/services/tasks.py` 中消除本地/在线执行路径的业务分歧，共享 `Executor`、存储布局和报告生成入口
+- [ ] T032 [US3] 在 `app/services/store.py` 中确保任务、系统、规则结果使用同一 UTC 序列化与别名规则，避免双模式字段语义漂移
 
 **检查点**：本地与在线结果一致性测试通过，模式同构约束得到回归保护
 
@@ -133,15 +136,15 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 4 的测试
 
-- [ ] T031 [P] [US4] 在 `tests/test_baseline_rerun.py` 中验证目标规则重跑只改写目标规则结果，无关规则 JSON 内容保持不变
-- [ ] T032 [US4] 在 `tests/test_baseline_rerun.py` 中修改依赖 artifact 的 `rule_version` 或删除 artifact，验证目标规则重跑前自动重建依赖
-- [ ] T033 [US4] 在 `tests/test_baseline_rerun.py` 中验证有效依赖被复用且生产者不重复执行
+- [ ] T033 [P] [US4] 在 `tests/test_baseline_rerun.py` 中验证目标规则重跑只改写目标规则结果，无关规则 JSON 内容保持不变
+- [ ] T034 [US4] 在 `tests/test_baseline_rerun.py` 中修改依赖 artifact 的 `rule_version` 或删除 artifact，验证目标规则重跑前自动重建依赖
+- [ ] T035 [US4] 在 `tests/test_baseline_rerun.py` 中验证有效依赖被复用且生产者不重复执行
 
 ### 用户故事 4 的实现
 
-- [ ] T034 [US4] 在 `app/services/artifacts.py` 中保持 manifest 记录 `rule_code`、`rule_version` 与路径，并拒绝生产者不一致的 artifact 复用
-- [ ] T035 [US4] 在 `app/services/executor.py` 中保证 `run_rule_with_deps()` 递归解析传递依赖、先重建缺失/过期依赖，再更新目标规则
-- [ ] T036 [US4] 在 `app/services/tasks.py` 中保证在线单规则重跑更新受影响结果的系统摘要、任务统计和 HTML 报告
+- [ ] T036 [US4] 在 `app/services/artifacts.py` 中保持 manifest 记录 `rule_code`、`rule_version` 与路径，并拒绝生产者不一致的 artifact 复用
+- [ ] T037 [US4] 在 `app/services/executor.py` 中保证 `run_rule_with_deps()` 递归解析传递依赖、先重建缺失/过期依赖，再更新目标规则
+- [ ] T038 [US4] 在 `app/services/tasks.py` 中保证在线单规则重跑更新受影响结果的系统摘要、任务统计和 HTML 报告
 
 **检查点**：规则开发者可以只重跑目标规则并看到无关结果保留
 
@@ -155,13 +158,13 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 5 的测试
 
-- [ ] T037 [P] [US5] 在 `tests/test_baseline_delete.py` 中验证删除 API 移除 SQLite 记录、任务契约 JSON、规则 JSON、artifacts、报告、日志和 `uploads/<task_id>/` 原始包
-- [ ] T038 [US5] 在 `tests/test_baseline_delete.py` 中验证删除后再次查询任务、系统、规则、报告和日志均返回 404，重复删除返回 404
+- [ ] T039 [P] [US5] 在 `tests/test_baseline_delete.py` 中验证删除 API 移除 SQLite 记录、任务契约 JSON、规则 JSON、artifacts、报告、日志和 `uploads/<task_id>/` 原始包
+- [ ] T040 [US5] 在 `tests/test_baseline_delete.py` 中验证删除后再次查询任务、系统、规则、报告和日志均返回 404，重复删除返回 404
 
 ### 用户故事 5 的实现
 
-- [ ] T039 [US5] 在 `app/services/tasks.py` 中显式清理任务级联目录，避免 `ignore_errors=True` 掩盖残留；无法完全删除时返回明确错误并记录日志
-- [ ] T040 [US5] 在 `app/api/router.py` 中保持删除接口 204/404 语义与 OpenAPI 契约一致
+- [ ] T041 [US5] 在 `app/services/tasks.py` 中显式清理任务级联目录，避免 `ignore_errors=True` 掩盖残留；无法完全删除时返回明确错误并记录日志
+- [ ] T042 [US5] 在 `app/api/router.py` 中保持删除接口 204/404 语义与 OpenAPI 契约一致
 
 **检查点**：所有用户故事均应独立可用
 
@@ -171,11 +174,12 @@ description: "系统基线功能实现任务列表"
 
 **目的**：验证完整基线，清理实现并同步文档
 
-- [ ] T041 检查 `docs/api/openapi.yaml` 与 `app/models/schemas.py`、`app/api/router.py` 的一致性；若模型校验影响错误示例，则同步契约
-- [ ] T042 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、目录布局和文档链接
-- [ ] T043 清理新增代码中的重复逻辑，保持规则互不引用、依赖只通过 `inputs[]` 表达
-- [ ] T044 运行 `make lint`、`make test`、`make contract`、`make verify` 和 `make web-build`
-- [ ] T045 按 `specs/001-system-baseline/quickstart.md` 手工验证离线流程、重跑、本地/在线一致性和任务删除
+- [ ] T043 检查 `docs/api/openapi.yaml` 与 `app/models/schemas.py`、`app/api/router.py` 的一致性；若模型校验影响错误示例，则同步契约
+- [ ] T044 [P] 在 `docs/roadmap.md` 中补充后续巡检结果入库演进方向：Repository 接口、文件与数据库同步投影、一致性校验和查询/归档场景；本基线不实现入库
+- [ ] T045 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、目录布局和文档链接
+- [ ] T046 清理新增代码中的重复逻辑，保持规则互不引用、依赖只通过 `inputs[]` 表达
+- [ ] T047 运行 `make lint`、`make test`、`make contract`、`make verify` 和 `make web-build`
+- [ ] T048 按 `specs/001-system-baseline/quickstart.md` 手工验证离线流程、重跑、本地/在线一致性和任务删除
 
 ---
 
@@ -187,6 +191,8 @@ description: "系统基线功能实现任务列表"
 - **基础层（阶段 2）**：依赖阶段 1；阻塞所有用户故事。
 - **用户故事（阶段 3–7）**：依赖阶段 2；建议按 P1 → P2 → P3 → P4 → P5 交付。
 - **收尾（阶段 8）**：依赖全部用户故事完成。
+
+- **存储演进**：本基线保持磁盘为巡检结果权威源；`T005/T006` 保证业务代码通过存储层访问结果，后续入库时可以增加数据库 Repository 或同步投影，而不要求重写执行器和 API。
 
 ### 用户故事依赖
 
@@ -205,12 +211,12 @@ description: "系统基线功能实现任务列表"
 
 ### 并行机会
 
-- 阶段 2 中 T005、T008、T009 分属不同测试文件，可并行。
-- 阶段 3 中 T011–T015 可并行；实现任务按依赖串行。
-- 阶段 4 中 T020–T022 可并行；前端检查 T025 可与后端报告修正并行。
-- 阶段 5 中 T027–T028 可并行。
-- 阶段 6 中 T031–T033 可并行。
-- 阶段 7 中 T037–T038 可并行。
+- 阶段 2 中 T006、T007、T010、T011 分属不同测试文件，可并行。
+- 阶段 3 中 T013–T017 可并行；实现任务按依赖串行。
+- 阶段 4 中 T022–T024 可并行；前端检查 T027 可与后端报告修正并行。
+- 阶段 5 中 T029–T030 可并行。
+- 阶段 6 中 T033–T035 可并行。
+- 阶段 7 中 T039–T040 可并行。
 
 ---
 
