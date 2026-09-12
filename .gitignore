@@ -37,3 +37,6 @@ web/smoke.tmp.mjs
 
 # 本地隔离工作树
 .worktrees/
+
+# Spec Kit 本地缓存
+.specify/integrations/.cache/

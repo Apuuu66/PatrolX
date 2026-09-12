@@ -534,3 +534,11 @@ cd web && npm run dev  # 启动前端开发服务
 - **简约而不简单**：前端视觉简约克制——留白、语义色（pass/warn/fail/error/skip）、信息密度适中，功能完整但不花哨，不做无意义动效。
 - **容错**：单个文件解析失败不影响整个任务，以“解析失败”规则结果记录。
 - **可扩展**：文件类型识别器与巡检器均采用注册机制，新增数据格式与规则不修改核心流程。
+
+## 工具链协作约定
+
+- **规格与规划**：使用 Spec Kit（`/specify` → `/plan` → `/tasks`）管理需求规格、技术方案与任务拆解，产出物落在 `specs/` 与 `plans/` 目录。
+- **实现与验证**：进入实现阶段后，遵循 Superpowers 技能（TDD、verification-before-completion 等）保证代码质量。
+- **阶段边界**：spec/plan 阶段不触发 Superpowers planning 相关技能；implement 阶段不重走 Spec Kit 流程。两套流程各管一段，不重复叠加。
+- **工作区隔离**：进入 `/implement` 执行任务前，通过 `superpowers:using-git-worktrees` 创建隔离工作区（git worktree），在 worktree 内完成实现并通过 TDD 验证。
+- **全自动合入**：worktree 内验证通过后，自动合入主分支并跑通全部测试用例（`make verify` 或等效命令），端到端无需人工确认；合入后用例失败时自动回滚本次合入并在 worktree 内修复后重试合入，仍然失败再暂停等待人工介入。
