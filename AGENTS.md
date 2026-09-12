@@ -245,14 +245,16 @@ specify → review → plan → review → tasks → implement
 
 ### 实现阶段
 
-进入实现后在 worktree 内按以下顺序调用 Superpowers 技能：
+Speckit 大功能进入实现后，主工作区切回 `main` 释放功能分支，然后在 worktree 内按以下顺序调用 Superpowers 技能：
 
 1. `superpowers:using-git-worktrees` — 创建隔离 worktree（第一步，先于任何代码修改）。
-2. `superpowers:test-driven-development` — 每个任务先写测试、确认失败、再实现、再通过（红绿重构循环）。
+2. `superpowers:test-driven-development` — 代码任务先写测试、确认失败、再实现、再通过（红绿重构循环）。非代码任务（契约更新、客户端生成、配置修改）直接执行并验证。
 3. `superpowers:systematic-debugging` — 遇到 bug 或测试失败时使用，先分析根因再修复。
 4. `superpowers:verification-before-completion` — 声明任务完成前必须运行验证命令并确认输出，禁止凭感觉说"完成"。
 
 Spec/plan 阶段不重复叠加实现计划；实现阶段不重走 Speckit 规划。
+
+小改动（不涉及实现代码变更）可以直接在主工作区进行，无需 worktree。
 
 ### 多窗口协作
 
@@ -260,4 +262,4 @@ Spec/plan 阶段不重复叠加实现计划；实现阶段不重走 Speckit 规�
 - 主工作区仅用于规格规划（specify/plan/tasks），规格文档必须全部提交后才创建 worktree。
 - 主工作区不得修改 `app/`、`web/`、`deploy/`、`tests/` 等实现代码。
 - 避免多个 Agent 同时修改同一文件。
-- worktree 内验证通过后合回主分支并删除 worktree；合入前必须跑通质量门槛，合入失败应回滚并修复后重试。
+- worktree 内验证通过后将功能分支合入 `main` 并删除 worktree；合入前必须跑通质量门槛，合入失败应回滚并修复后重试。

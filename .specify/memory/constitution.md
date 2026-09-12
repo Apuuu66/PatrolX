@@ -76,13 +76,14 @@ OpenAPI 是在线 API 结构的唯一事实来源。后端接口变更前或变�
 
 ### 工作区隔离
 
-实现阶段必须在 git worktree 中执行，不得直接在主工作区修改实现代码。完整流程：
+Speckit 大功能的实现阶段必须在 git worktree 中执行，不得直接在主工作区修改实现代码。完整流程：
 
-1. 主工作区完成 specify → plan → tasks，产生的规格文档必须全部提交到功能分支。
-2. 规格文档提交后，通过 `git worktree add` 创建隔离目录，在 worktree 内完成编码、测试和验证。
-3. worktree 内验证通过后，合回主分支并删除 worktree。
+1. 主工作区完成 specify → plan → tasks，产生的规格文档全部提交到功能分支。
+2. 主工作区切回 `main`，释放功能分支。
+3. 通过 `git worktree add <dir> <feature-branch>` 创建隔离目录，在 worktree 内完成编码、测试和验证。
+4. worktree 内验证通过后，将功能分支合入 `main` 并删除 worktree。
 
-主工作区仅允许写入 `specs/` 和文档，不允许修改 `app/`、`web/`、`deploy/`、`tests/` 等实现代码。
+主工作区仅允许写入 `specs/` 目录和项目文档（`AGENTS.md`、`docs/`、`README.md`、`.specify/`），不允许修改 `app/`、`web/`、`deploy/`、`tests/` 等实现代码。不涉及实现代码的小改动（文档调整、单条规则调试、配置微调）可以直接在主工作区进行，无需创建 worktree。
 
 ## 开发工作流与质量门禁
 
