@@ -74,22 +74,34 @@ OpenAPI 是在线 API 结构的唯一事实来源。后端接口变更前或变�
 
 所有规格产物（`spec.md`、`plan.md`、`tasks.md`、检查清单及相关功能文档）必须使用中文撰写。标识符、接口字段、代码、文件路径、规则代码和技术术语保持英文。行内注释、提交信息和文档也必须使用中文。本策略确保与项目现有文档语言的一致性，降低中文维护者的理解歧义。
 
-### 工作区隔离
+### 主工作区与 Worktree
 
-Speckit 大功能的实现阶段必须在 git worktree 中执行，不得直接在主工作区修改实现代码。完整流程：
+主工作区是仓库默认 checkout 目录；`main` 是分支，不是工作区本身。主工作区通常停留在 `main`，只在 Speckit 规格阶段临时切换到 feature 分支。
 
-1. 主工作区完成 specify → plan → tasks。进入 specify 后，主工作区必须基于最新 `main` 创建并切换到功能分支；产生的规格文档全部提交到该功能分支。
-2. 规格文档提交完成后，主工作区切回 `main`，释放功能分支。
-3. 通过 `git worktree add <dir> <feature-branch>` 创建隔离目录，在 worktree 内完成编码、测试和验证。
-4. worktree 内验证通过后，将功能分支合入 `main` 并删除 worktree。
+主工作区用于讨论、分析、规格、计划、任务清单和纯文档维护。它允许写入 `specs/`、`AGENTS.md`、`README.md`、`.specify/`、`.agents/`，以及 `docs/` 中除 `docs/api/openapi.yaml` 外的叙述文档。主工作区不得修改实现与行为面，包括 `app/`、`web/`、`deploy/`、`tests/`、`docs/api/openapi.yaml`、依赖与构建配置以及运行时配置。
 
-主工作区仅允许写入 `specs/` 目录和项目文档（`AGENTS.md`、`docs/`、`README.md`、`.specify/`），不允许修改 `app/`、`web/`、`deploy/`、`tests/` 等实现代码。不涉及实现代码的小改动（文档调整、单条规则调试、配置微调）可以直接在主工作区进行，无需创建 worktree。
+单条规则调试若只读取或只运行，可以在主工作区进行；一旦需要修改代码、测试、配置或契约，必须进入 worktree。任何实现类变更，无论大小，都必须使用独立 worktree。
+
+worktree 的隔离单位是任务或功能分支，不是会话。每个分支最多对应一个 worktree。新会话必须先查找并复用已有 worktree；只有找不到对应 worktree 时才创建。同一分支不得同时 checkout 到多个 worktree。
+
+Speckit 功能流程如下：
+
+1. 主工作区确认 `main` 干净并更新到最新基线。
+2. 运行 specify 生成 feature 编号和短名称后，立即从 `main` 创建并切换到 `feature/NNN-short-name`。
+3. 主工作区完成 `spec.md`、`plan.md`、`tasks.md` 及检查清单，经显式 review 后全部提交到该功能分支。
+4. 规格文档提交完成后，主工作区切回 `main`，释放功能分支。
+5. 使用 `git worktree add` 在 `../PatrolX-wt/` 下创建该功能分支的隔离目录，安装依赖并验证干净基线。
+6. 在 worktree 内完成编码、契约同步、测试和验证，并同步更新 `tasks.md`。
+7. worktree 内验证通过后，将功能分支合入 `main`；合入后在 `main` 上再次验证。
+8. 验证通过后删除 worktree 和已合入分支。
+
+合并冲突必须先中止主工作区合并，回到对应 worktree 内将 `main` 合入功能分支并解决；主工作区不得直接修改实现代码。合入后若验证失败，保留 worktree 和分支，在 worktree 内修复并重新验证。
 
 ## 开发工作流与质量门禁
 
 ### 变更工作流
 
-大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Spec Kit 流程：specify → plan → tasks → implement。小修复可以直接进行测试和验证。仅文档编辑在不改变实现语义时可以直接进行。
+大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Spec Kit 流程：specify → plan → tasks → implement。小修复可以省略 Speckit，但所有实现类变更仍必须进入 worktree，并完成测试和验证。仅纯文档编辑在不改变实现语义时可以直接在主工作区进行。
 
 ### 必须验证
 
@@ -111,4 +123,4 @@ Speckit 大功能的实现阶段必须在 git worktree 中执行，不得直接�
 
 审查者和 Agent 在合入前必须验证宪法合规性。功能计划与本宪法冲突时，必须通过修改计划解决，除非项目先正式修正宪法。
 
-**版本**：1.2.1 | **批准日期**：2026-09-12 | **最后修正**：2026-09-12
+**版本**：1.3.0 | **批准日期**：2026-09-12 | **最后修正**：2026-09-12
