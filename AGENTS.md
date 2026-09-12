@@ -6,8 +6,9 @@ PatrolX 是离线巡检系统：
 
 - 不连接被检系统、不做在线采集。
 - 输入为用户上传或放入 `uploads/` 的 `zip` / `tar.gz` 数据包。
-- 一个数据包 = 一个任务 = 一个系统。
-- 输出任务 → 系统 → 规则 → 发现四层契约化结果。
+- 压缩包名称唯一并派生 `task_id`；一个数据包 = 一个任务 = 一个输出目录。
+- 省份、运营商、产品形态和版本是任务元数据；不使用 `system_id` 目录层。
+- 输出任务 → 规则 → 发现契约化结果。
 - 本地模式与在线模式共用巡检器、规则库、执行契约和展示结构。
 
 长期设计约束见 [`.specify/memory/constitution.md`](.specify/memory/constitution.md)。
@@ -33,16 +34,16 @@ PatrolX 是离线巡检系统：
 Agent 修改代码前必须遵守：
 
 - MUST NOT 引入被检系统连接或在线采集能力。
-- MUST 保持一个包、一个任务、一个系统的隔离模型。
+- MUST 保持一个包、一个任务、一个输出目录的隔离模型。
 - MUST 同步更新 `docs/api/openapi.yaml`，再修改或扩展接口实现。
 - MUST NOT 手写与 OpenAPI 不一致的前端 API 调用。
 - MUST NOT 破坏既有契约字段含义；破坏性 API 变更必须进入新版本。
-- MUST NOT 让规则直接依赖其他规则实现；规则只通过 `inputs[]` 和 artifacts 交互。
+- MUST NOT 让规则导入、实例化或调用其他规则；普通规则只声明并匹配自己的 `source_patterns`。
 - MUST NOT 在核心调度器中硬编码业务规则。
 - MUST NOT 让单文件解析失败静默中断整个任务。
 - MUST NOT 修改原始上传包内容。
 - MUST 对解压做路径穿越、链接和资源预算防护。
-- MUST 在无数据、依赖缺失或格式不适用时返回 `skip` + `skip_reason`。
+- MUST 在无匹配文件、格式不适用或解析失败时返回 `skip` + `skip_reason`。
 - MUST 在巡检逻辑变化时升级 `rule_version`。
 - MUST 保持 UTC 存储；时间字段使用 `*_at` 命名。
 
@@ -61,7 +62,7 @@ app/
 
 web/                     # React + TypeScript + Vite 前端
 uploads/                 # 原始包输入现场
-output/                  # 解压数据、artifacts、规则结果、日志、报告
+output/<task_id>/        # 解压数据、规则结果、日志、报告
 deploy/                  # Docker 与配置
 docs/                    # 架构、契约、样例和路线图
 tests/                   # 单元测试、契约测试和 fixtures
@@ -74,7 +75,7 @@ tests/                   # 单元测试、契约测试和 fixtures
 ```bash
 make install        # 安装后端依赖
 make verify         # 本地全流程，等价于 python main.py
-make verify-one RULE=<rule_code> [SYSTEM=<system_id>]  # 单规则重跑
+make verify-one RULE=<rule_code>  # 单规则重跑
 make run            # 当前通过 run_online.py 启动在线 API + Web
 make contract       # 导出/校验 OpenAPI
 make gen-web-api    # 生成前端 API 客户端
@@ -87,6 +88,8 @@ make lint           # ruff check + format check
 ```bash
 cd web && npm run dev
 ```
+
+`make verify-one` 只执行目标规则：先保证任务解压完成，再按该规则的 `source_patterns` 匹配文件，最后只重写该规则 JSON、更新任务摘要和 HTML 报告；随后刷新前端即可查看最新结果。
 
 真实样例包结构见 [`docs/example/real-package-structure.md`](docs/example/real-package-structure.md)。
 
@@ -109,9 +112,9 @@ cd web && npm run dev
 - 继承并注册到 `Inspector` 机制。
 - 声明完整元数据：`code`、`name`、`category`、`severity`、`priority`、`rule_version`、
   `description`、`recommendation`。
-- 声明 `inputs[]` 和输出契约。
+- 声明 `source_patterns[]` 和输出指标契约；正则匹配 `output/<task_id>/` 下的相对路径。
 - 不直接依赖其他规则实现。
-- 无数据时返回 `skip`，不得静默通过。
+- 无匹配文件时返回 `skip`，不得静默通过。
 - 单个解析失败不影响任务。
 - 提供单元测试和样例数据。
 - 本地可通过 `make verify-one` 或规则文件内 `__main__` 入口调试。
@@ -128,12 +131,11 @@ cd web && npm run dev
 
 执行编排：
 
-- P0 数据准备。
+- 解压是隐藏的 `pkg.extract.*` 内部前置规则，必须安全、幂等且只解压一次。
 - P1 基础检查。
 - P2 综合分析。
-- 依赖由 `inputs[]` 消费的 artifact key 自动推导。
-- 依赖必须指向更高优先级；`pkg.extract.*` 是隐藏基础设施例外。
-- Artifact 记录生产者 `rule_version`；版本不一致视为过期。
+- 不建立规则间依赖图；每条普通规则只按自己的 `source_patterns` 读取匹配文件。
+- 单规则重跑只执行目标规则，不补跑其他普通规则。
 
 ## API 契约约定
 
@@ -180,7 +182,7 @@ make gen-web-api
 关键场景必须有测试：
 
 - 新巡检规则。
-- artifact 依赖和重跑。
+- `source_patterns` 匹配与单规则重跑。
 - 安全解压。
 - OpenAPI / Pydantic 契约一致性。
 - CLI 与 API 双模式结果一致性。

@@ -9,7 +9,6 @@ InspectionTask 1──1 SystemInspection
 SystemInspection 1──N RuleResult
 RuleResult 0──N Metric
 RuleResult 0──N Finding
-RuleResult 0──N ArtifactReference
 InspectionTask 1──1 ExecutionLog
 InspectionTask 1──1 Report
 ```
@@ -55,11 +54,11 @@ pending → running → completed
 | 名称 | 展示名称 | 可读。 |
 | 类别 | 巡检领域 | 日志、KPI、话统、告警、配置、资源、其他。 |
 | 优先级 | P0/P1/P2 | P0 准备、P1 检查、P2 分析。 |
-| 版本 | 规则逻辑版本 | 逻辑变更时递增；验证 artifact 新鲜度。 |
+| 版本 | 规则逻辑版本 | 提交逻辑变更时递增。 |
 | 描述 | 规则检查什么 | 必填。 |
 | 建议 | 有问题时怎么做 | 必填。 |
-| 输入 | 声明的 artifact 依赖 | 唯一耦合点。 |
-| 输出 | 声明的指标/artifact | 用于结果验证和 UI。 |
+| 源文件规则 | `source_patterns[]` 正则 | 匹配任务目录内相对路径；唯一数据入口。 |
+| 输出 | 声明的指标 | 用于结果验证和 UI。 |
 | 隐藏 | 内部执行标志 | 隐藏规则仍计入摘要。 |
 
 ## RuleResult（规则结果）
@@ -72,7 +71,6 @@ pending → running → completed
 | 执行时间/耗时 | 时序元数据 | UTC 时间戳和持续时间。 |
 | 指标 | 结构化数值/序列结果 | 契约键必须稳定。 |
 | 发现 | 可追溯问题 | 必须包含来源和证据。 |
-| Artifacts | 产生的中间数据引用 | 不嵌入结果 JSON。 |
 | 元数据 | 规则特定扩展数据 | 不得重定义公共字段。 |
 
 ## Metric（指标）
@@ -99,15 +97,13 @@ pending → running → completed
 | 详情 | 说明 | 可选但有用。 |
 | 建议 | 后续行动 | 面向用户。 |
 
-## 准备数据 / Artifact
+## 文件匹配
 
 | 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Artifact 键 | 依赖契约标识 | 由生产者和消费者声明。 |
-| 生产者规则代码 | 产生规则 | 记录用于追溯。 |
-| 生产者规则版本 | 产生时版本 | 必须与当前规则匹配才能复用。 |
-| 目标目录 | 运行时 artifact 位置 | `output/<task_id>/artifacts/<rule_code>/`。 |
-| 内容 | 中间规范化/过滤数据 | 不复制到规则结果 JSON。 |
+| 源文件模式 | `source_patterns[]` 正则 | 对 `output/<task_id>/` 内相对路径完整匹配。 |
+| 匹配结果 | 交给规则的文件路径集合 | 无匹配时规则跳过。 |
+| 解压数据 | 规则直接读取的运行现场 | 按类别和来源相对路径组织。 |
 
 ## 解压记录
 
@@ -139,7 +135,7 @@ not executed → error
 not executed → skip
 ```
 
-重跑替换目标规则结果并可能重新生成过时依赖。不抹除无关规则结果。
+重跑替换目标规则结果并刷新任务摘要和报告。不抹除无关规则结果。
 
 ### 解压记录
 
@@ -158,8 +154,8 @@ pending → rejected/failed
 3. 单系统任务的统计必须与系统摘要一致。
 4. 每条可见发现必须有来源位置和证据。
 5. 每条跳过规则必须有跳过原因。
-6. 规则只能消费其 inputs 中声明的 artifact。
-7. artifact 复用要求生产者规则版本匹配。
+6. 普通规则必须声明可编译且安全约束内的 `source_patterns`。
+7. 无匹配文件的可视规则结果必须是带原因的 `skip`。
 8. pass/warn/fail 的契约化规则结果必须包含声明的指标。
 9. 删除同时移除任务输入和输出。
 10. 持久化时间戳使用 UTC。
