@@ -67,7 +67,7 @@ find output/<task_id> -maxdepth 3 -type f | sort
 确认：
 
 - 原始包保留在 `uploads/` 下。
-- 规则结果存在于 `output/<task_id>/<system_id>/rules/` 下。
+- 规则结果存在于 `output/<task_id>/rules/` 下。
 - 执行日志存在于 `output/<task_id>/execution.log`。
 - 报告存在于 `output/<task_id>/report.html`。
 
@@ -90,7 +90,7 @@ make verify
 预期：
 
 - 创建第二个任务。
-- 每个任务有自己的系统/输出目录。
+- 每个任务有自己的任务输出目录。
 - 一个任务的结果、发现、日志和报告不与另一个合并。
 
 ## 5. 验证规则重跑
@@ -98,7 +98,7 @@ make verify
 从已有任务输出中选择一个规则代码：
 
 ```bash
-make verify-one RULE=<rule_code> SYSTEM=<system_id>
+make verify-one RULE=<rule_code>
 ```
 
 预期：

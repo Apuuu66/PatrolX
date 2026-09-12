@@ -47,8 +47,8 @@ description: "系统基线功能实现任务列表"
 - [ ] T003 在 `app/models/schemas.py` 中添加模型校验：`status=skip` 时 `skip_reason` 必须非空；发现必须提供非空 `source_file` 与 `evidence`
 - [ ] T004 在 `app/models/schemas.py` 中添加摘要校验：`SystemInspection.summary.total` 等于 `rules` 数量，且各状态计数之和等于 `total`
 
-- [ ] T005 在 `app/services/store.py` 中固化当前文件存储分层：SQLite 只保存任务运行元数据；本基线的包输入、解压数据、artifacts、规则 JSON、报告和执行日志继续保留在磁盘。业务代码必须通过存储层读写巡检结果，不得直接绑定文件路径或 SQL，为后续结果入库保留可替换后端
-- [ ] T006 [P] 在 `tests/test_baseline_storage.py` 中验证当前 `TaskRecord` 不承载巡检业务数据，规则结果、artifacts、报告和日志落在磁盘，且 API/CLI 不绕过存储层直接访问文件或数据库
+- [ ] T005 在 `app/services/store.py` 中固化当前文件存储分层：SQLite 只保存任务运行元数据；本基线的包输入、解压数据、artifacts、规则 JSON、报告和执行日志继续保留在磁盘，且统一使用 `output/<task_id>/` 作为任务现场根目录。业务代码必须通过存储层读写巡检结果，不得直接绑定文件路径或 SQL
+- [ ] T006 [P] 在 `tests/test_baseline_storage.py` 中验证当前 `TaskRecord` 不承载巡检业务数据，规则结果、artifacts、报告和日志落在 `output/<task_id>/`，不出现独立的 `system_id` 目录层，且 API/CLI 不绕过存储层直接访问文件或数据库
 - [ ] T007 [P] 在 `tests/test_baseline_schemas.py` 中覆盖 skip 原因、发现可追溯性和摘要一致性校验
 - [ ] T008 在 `app/inspectors/registry.py` 中强化注册校验：规则 `code` 文件系统安全，`description` 与 `recommendation` 非空，artifact key 全局唯一且可定位生产者
 - [ ] T009 在 `app/services/executor.py` 中校验 `pass`、`warn`、`fail` 结果的 metrics key/unit 与规则声明契约一致；不一致时记为 `error` 并写入结构化日志
@@ -69,7 +69,7 @@ description: "系统基线功能实现任务列表"
 ### 用户故事 1 的测试
 
 - [ ] T013 [P] [US1] 在 `tests/test_baseline_pipeline.py` 中验证单包生成单任务、单系统、类别目录、规则 JSON、`report.html` 与 `execution.log`
-- [ ] T014 [US1] 在 `tests/test_baseline_pipeline.py` 中验证同一输入目录中的多个压缩包形成独立任务，任务结果互不合并
+- [ ] T014 [US1] 在 `tests/test_baseline_pipeline.py` 中验证唯一包名生成唯一 `task_id`；同一系统元数据下的不同包名必须形成不同任务，且任务结果互不合并
 - [ ] T015 [P] [US1] 在 `tests/test_baseline_extraction.py` 中验证主包按类落位、嵌套子包 checksum 去重、重复执行不重复解压
 - [ ] T016 [US1] 在 `tests/test_baseline_extraction.py` 中验证格式错误或不可识别文件不中止任务，并在解压结果、执行日志或对应规则结果中可见
 - [ ] T017 [P] [US1] 在 `tests/test_baseline_report.py` 中验证报告包含状态计数、规则摘要、发现来源/证据/建议、跳过原因和执行时间
@@ -117,11 +117,11 @@ description: "系统基线功能实现任务列表"
 ### 用户故事 3 的测试
 
 - [ ] T029 [P] [US3] 在 `tests/test_baseline_consistency.py` 中比较本地与在线契约结果，忽略 `executed_at`、`duration_ms` 和运行标识，但比较规则状态、metrics、findings 与 `artifacts[]`
-- [ ] T030 [US3] 在 `tests/test_baseline_consistency.py` 中验证两个任务使用相同系统标识时仍保持任务目录、结果与日志隔离
+- [ ] T030 [US3] 在 `tests/test_baseline_consistency.py` 中验证两个任务携带相同系统元数据时仍保持任务目录、结果与日志隔离
 
 ### 用户故事 3 的实现
 
-- [ ] T031 [US3] 在 `app/cli.py` 与 `app/services/tasks.py` 中消除本地/在线执行路径的业务分歧，共享 `Executor`、存储布局和报告生成入口
+- [ ] T031 [US3] 在 `app/cli.py` 与 `app/services/tasks.py` 中消除本地/在线执行路径的业务分歧，共享 `Executor`、单 `task_id` 存储布局和报告生成入口
 - [ ] T032 [US3] 在 `app/services/store.py` 中确保任务、系统、规则结果使用同一 UTC 序列化与别名规则，避免双模式字段语义漂移
 
 **检查点**：本地与在线结果一致性测试通过，模式同构约束得到回归保护
@@ -175,11 +175,10 @@ description: "系统基线功能实现任务列表"
 **目的**：验证完整基线，清理实现并同步文档
 
 - [ ] T043 检查 `docs/api/openapi.yaml` 与 `app/models/schemas.py`、`app/api/router.py` 的一致性；若模型校验影响错误示例，则同步契约
-- [ ] T044 [P] 在 `docs/roadmap.md` 中补充巡检结果入库与磁盘增长治理设计：文件继续作为运行现场与证据权威源，数据库优先作为查询投影；定义 `ResultStore`/`ResultRepository` 边界、`FileResultStore` 与 `DatabaseResultProjection` 职责、任务/系统/规则/发现/指标入库粒度、`task_id/system_id/rule_code/rule_version/source_file/evidence` 关键字段、任务完成后同步或异步投影、checksum/总数一致性校验和查询/归档场景。同时按数据类型定义生命周期：active 全现场、compact 清理解压数据和 artifacts、archive 将结果投影/报告索引后归档原始包、deleted 级联清理；说明磁盘水位、保留窗口、dry-run、执行中保护与单规则重跑恢复语义。本基线不实现自动清理
-- [ ] T045 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、目录布局和文档链接
-- [ ] T046 清理新增代码中的重复逻辑，保持规则互不引用、依赖只通过 `inputs[]` 表达
-- [ ] T047 运行 `make lint`、`make test`、`make contract`、`make verify` 和 `make web-build`
-- [ ] T048 按 `specs/001-system-baseline/quickstart.md` 手工验证离线流程、重跑、本地/在线一致性和任务删除
+- [ ] T044 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、目录布局和文档链接
+- [ ] T045 清理新增代码中的重复逻辑，保持规则互不引用、依赖只通过 `inputs[]` 表达
+- [ ] T046 运行 `make lint`、`make test`、`make contract`、`make verify` 和 `make web-build`
+- [ ] T047 按 `specs/001-system-baseline/quickstart.md` 手工验证离线流程、重跑、本地/在线一致性和任务删除
 
 ---
 
@@ -191,8 +190,6 @@ description: "系统基线功能实现任务列表"
 - **基础层（阶段 2）**：依赖阶段 1；阻塞所有用户故事。
 - **用户故事（阶段 3–7）**：依赖阶段 2；建议按 P1 → P2 → P3 → P4 → P5 交付。
 - **收尾（阶段 8）**：依赖全部用户故事完成。
-
-- **存储演进**：本基线保持磁盘为巡检结果权威源；`T005/T006` 保证业务代码通过存储层访问结果，后续入库时可以增加数据库 Repository 或同步投影，而不要求重写执行器和 API。
 
 ### 用户故事依赖
 

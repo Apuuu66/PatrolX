@@ -5,12 +5,14 @@
 | 关注点 | 位置/机制 | 基线要求 |
 | --- | --- | --- |
 | 原始包 | `uploads/<task_id>/` | 不可变的输入证据；保留到删除为止。 |
-| 解压后包内容 | `output/<task_id>/<system_id>/<category>/` | 按类别和来源相对路径组织。 |
-| 准备数据 | `output/<task_id>/<system_id>/artifacts/<rule_code>/` | 运行时 artifact，非契约结果 JSON。 |
-| 规则结果 | `output/<task_id>/<system_id>/rules/<code>.json` | 每条规则一个文件；支持独立更新。 |
+| 解压后包内容 | `output/<task_id>/<category>/` | 按类别和来源相对路径组织。 |
+| 准备数据 | `output/<task_id>/artifacts/<rule_code>/` | 运行时 artifact，非契约结果 JSON。 |
+| 规则结果 | `output/<task_id>/rules/<code>.json` | 每条规则一个文件；支持独立更新。 |
 | 执行日志 | `output/<task_id>/execution.log` | 结构化的任务范围执行历史。 |
 | 报告 | `output/<task_id>/report.html` | 可读的在线预览报告。 |
-| 元数据 | SQLite | 轻量任务/系统状态和运维元数据。 |
+| 任务契约 | `output/<task_id>/task.json` | 任务生命周期、上传系统元数据和汇总统计。 |
+| 系统上下文 | `output/<task_id>/system.json` | 任务内嵌的 1:1 巡检上下文和规则摘要索引。 |
+| 运维元数据 | SQLite | 轻量任务运行元数据；不承载巡检业务证据。 |
 
 ## 类别
 
@@ -37,7 +39,7 @@ other/
 
 ## 解压清单
 
-每个系统维护足以确保以下内容的解压状态：
+每个任务维护足以确保以下内容的解压状态：
 
 - 同一嵌套包不被重复解压。
 - 记录校验和、目标目录和文件数。

@@ -8,7 +8,6 @@ CLI 是规则开发和离线验证的本地模式入口。
 | --- | --- | --- |
 | `make verify` | 通过 `main.py` 运行完整本地流水线 | 扫描包输入、创建/隔离任务、运行规则、写入结果/日志/报告。 |
 | `make verify-one RULE=<rule_code>` | 重跑一条目标规则 | 刷新目标结果并确保过时/缺失依赖被处理。 |
-| `make verify-one RULE=<rule_code> SYSTEM=<system_id>` | 为一个系统重跑一条规则 | 将重跑限定到指定的系统上下文。 |
 | `make contract` | 从实现模型导出/验证 OpenAPI | 实现与契约不一致时失败。 |
 | `make test` | 运行后端测试 | 验证规则、执行器、归档安全、API、Schema 和一致性。 |
 | `make lint` | 运行 Ruff check/format 验证 | 强制代码风格和静态检查。 |
@@ -34,9 +33,9 @@ CLI 是规则开发和离线验证的本地模式入口。
 
 ```text
 uploads/<task_id>/<package>              # 保留的原始包
-output/<task_id>/<system_id>/            # 按类别组织的包内容
-output/<task_id>/<system_id>/artifacts/  # 中间准备数据
-output/<task_id>/<system_id>/rules/      # 每条规则的契约 JSON
+output/<task_id>/            # 按类别组织的包内容
+output/<task_id>/artifacts/  # 中间准备数据
+output/<task_id>/rules/      # 每条规则的契约 JSON
 output/<task_id>/report.html             # 可读报告
 output/<task_id>/execution.log           # 结构化任务执行日志
 ```
