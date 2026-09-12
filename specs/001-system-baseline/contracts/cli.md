@@ -1,43 +1,42 @@
-# CLI Contract: System Baseline
+# CLI 契约：系统基线
 
-The CLI is the local-mode entry point for rule development and offline verification.
+CLI 是规则开发和离线验证的本地模式入口。
 
-## Commands
+## 命令
 
-| Command | Purpose | Baseline Result |
+| 命令 | 用途 | 基线结果 |
 | --- | --- | --- |
-| `make verify` | Run the full local pipeline through `main.py` | Scans package input, creates/isolates tasks, runs rules, writes results/logs/report. |
-| `make verify-one RULE=<rule_code>` | Rerun one target rule | Refreshes the target result and ensures stale/missing dependencies are handled. |
-| `make verify-one RULE=<rule_code> SYSTEM=<system_id>` | Rerun one rule for one system | Narrows rerun to the specified system context. |
-| `make contract` | Export/validate OpenAPI from implementation models | Fails if implementation and contract diverge. |
-| `make test` | Run backend tests | Verifies rules, executor, archive safety, API, schemas, and consistency. |
-| `make lint` | Run Ruff check/format validation | Enforces code style and static checks. |
+| `make verify` | 通过 `main.py` 运行完整本地流水线 | 扫描包输入、创建/隔离任务、运行规则、写入结果/日志/报告。 |
+| `make verify-one RULE=<rule_code>` | 重跑一条目标规则 | 刷新目标结果并确保过时/缺失依赖被处理。 |
+| `make verify-one RULE=<rule_code> SYSTEM=<system_id>` | 为一个系统重跑一条规则 | 将重跑限定到指定的系统上下文。 |
+| `make contract` | 从实现模型导出/验证 OpenAPI | 实现与契约不一致时失败。 |
+| `make test` | 运行后端测试 | 验证规则、执行器、归档安全、API、Schema 和一致性。 |
+| `make lint` | 运行 Ruff check/format 验证 | 强制代码风格和静态检查。 |
 
-## Environment Inputs
+## 环境输入
 
-| Variable | Purpose | Default |
+| 变量 | 用途 | 默认 |
 | --- | --- | --- |
-| `PACKAGE_DIR` | Alternative offline package input directory | `uploads/` root |
-| `PATROLX_PACKAGE_DIR` | Rule-file direct-run package source | Falls back to sample fixture when no package is available |
+| `PACKAGE_DIR` | 替代离线包输入目录 | `uploads/` 根目录 |
+| `PATROLX_PACKAGE_DIR` | 规则文件直接运行的包来源 | 无包可用时回退到样例 fixture |
 
-## Local Mode Invariants
+## 本地模式不变量
 
-1. Offline mode does not require database setup.
-2. Packages placed at the root of the configured input directory are discovered and processed
-   sequentially.
-3. Each package produces one task and one system inspection.
-4. Local output structure matches the online contract structure.
-5. Rule results are written per rule so individual reruns can update them in place.
-6. A missing category or dependency produces `skip` with a visible reason where appropriate.
-7. No command may connect to an inspected system.
+1. 离线模式不需要数据库设置。
+2. 放置在配置输入目录根部的包被发现并顺序处理。
+3. 每个包产生一个任务和一个系统巡检。
+4. 本地输出结构与在线契约结构匹配。
+5. 规则结果按规则写入，使单独重跑可以原地更新。
+6. 缺失类别或依赖在适当情况下产生 `skip` 并附带可见原因。
+7. 任何命令不得连接被检系统。
 
-## Expected Local Outputs
+## 预期本地输出
 
 ```text
-uploads/<task_id>/<package>              # retained original package
-output/<task_id>/<system_id>/            # categorized package content
-output/<task_id>/<system_id>/artifacts/  # intermediate prepared data
-output/<task_id>/<system_id>/rules/      # contract JSON per rule
-output/<task_id>/report.html             # human-readable report
-output/<task_id>/execution.log           # structured task execution log
+uploads/<task_id>/<package>              # 保留的原始包
+output/<task_id>/<system_id>/            # 按类别组织的包内容
+output/<task_id>/<system_id>/artifacts/  # 中间准备数据
+output/<task_id>/<system_id>/rules/      # 每条规则的契约 JSON
+output/<task_id>/report.html             # 可读报告
+output/<task_id>/execution.log           # 结构化任务执行日志
 ```

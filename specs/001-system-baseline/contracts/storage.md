@@ -1,18 +1,18 @@
-# Storage Contract: System Baseline
+# 存储契约：系统基线
 
-## Storage Model
+## 存储模型
 
-| Concern | Location / Mechanism | Baseline Requirement |
+| 关注点 | 位置/机制 | 基线要求 |
 | --- | --- | --- |
-| Original package | `uploads/<task_id>/` | Immutable input evidence; retained until deletion. |
-| Extracted package content | `output/<task_id>/<system_id>/<category>/` | Organized by category and source-relative path. |
-| Prepared data | `output/<task_id>/<system_id>/artifacts/<rule_code>/` | Runtime artifacts, not contract result JSON. |
-| Rule result | `output/<task_id>/<system_id>/rules/<code>.json` | One file per rule; supports independent update. |
-| Execution log | `output/<task_id>/execution.log` | Structured, task-scoped execution history. |
-| Report | `output/<task_id>/report.html` | Human-readable online preview report. |
-| Metadata | SQLite | Lightweight task/system status and operational metadata. |
+| 原始包 | `uploads/<task_id>/` | 不可变的输入证据；保留到删除为止。 |
+| 解压后包内容 | `output/<task_id>/<system_id>/<category>/` | 按类别和来源相对路径组织。 |
+| 准备数据 | `output/<task_id>/<system_id>/artifacts/<rule_code>/` | 运行时 artifact，非契约结果 JSON。 |
+| 规则结果 | `output/<task_id>/<system_id>/rules/<code>.json` | 每条规则一个文件；支持独立更新。 |
+| 执行日志 | `output/<task_id>/execution.log` | 结构化的任务范围执行历史。 |
+| 报告 | `output/<task_id>/report.html` | 可读的在线预览报告。 |
+| 元数据 | SQLite | 轻量任务/系统状态和运维元数据。 |
 
-## Categories
+## 类别
 
 ```text
 logs/
@@ -24,29 +24,26 @@ resource/
 other/
 ```
 
-A category directory exists for recognizable data of that type. Data that cannot be classified
-falls under `other/`.
+某类别的目录为该类型的可识别数据存在。无法分类的数据归入 `other/`。
 
-## Lifecycle Rules
+## 生命周期规则
 
-1. Task creation retains the original package under the task input area.
-2. Extraction reads the original package but never modifies it.
-3. Processing output remains under the task output area.
-4. Completed tasks and evidence are retained until explicit deletion.
-5. Task deletion removes both the task input directory and task output directory.
-6. No automatic retention cleanup is introduced by the baseline.
+1. 任务创建时将原始包保留在任务输入区域。
+2. 解压读取原始包但不修改它。
+3. 处理输出保留在任务输出区域。
+4. 已完成任务和证据保留到显式删除为止。
+5. 任务删除同时移除任务输入目录和任务输出目录。
+6. 基线不引入自动保留清理。
 
-## Extraction Manifest
+## 解压清单
 
-Each system maintains extraction state sufficient to ensure:
+每个系统维护足以确保以下内容的解压状态：
 
-- The same nested package is not extracted repeatedly.
-- Checksum, target directory, and file count are recorded.
-- Reuse and extraction decisions are traceable.
-- Unsafe or rejected items are reported rather than silently ignored.
+- 同一嵌套包不被重复解压。
+- 记录校验和、目标目录和文件数。
+- 复用和解压决策可追溯。
+- 不安全或被拒绝的项被报告而非静默忽略。
 
-## Metadata Versus Files
+## 元数据与文件的关系
 
-SQLite stores only lightweight operational metadata. It is not the authority for every finding,
-metric, artifact, or extracted file. The filesystem remains the authoritative runtime evidence
-layout so local mode and online mode can share the same result semantics.
+SQLite 仅存储轻量运维元数据。它不是每条发现、指标、artifact 或解压文件的权威。文件系统保持为权威的运行时证据布局，使本地模式和在线模式可以共享相同的结果语义。

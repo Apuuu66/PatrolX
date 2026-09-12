@@ -1,208 +1,150 @@
-# Feature Specification: System Baseline
+# 功能规格：系统基线
 
-**Feature Branch**: `001-system-baseline`
+**功能分支**：`001-system-baseline`
 
-**Created**: 2026-09-12
+**创建日期**：2026-09-12
 
-**Status**: Draft
+**状态**：草稿
 
-**Input**: User description: "建立 PatrolX 当前系统的 baseline 规格，固化离线巡检、任务模型、规则执行、报告查看和本地/在线共用体验的核心业务能力。"
+**输入**：用户描述："建立 PatrolX 当前系统的 baseline 规格，固化离线巡检、任务模型、规则执行、报告查看和本地/在线共用体验的核心业务能力。"
 
-## User Scenarios & Testing *(mandatory)*
+## 用户场景与测试 *(必填)*
 
-### User Story 1 - Run an Offline Inspection (Priority: P1)
+### 用户故事 1 - 执行离线巡检（优先级：P1）
 
-A maintainer collects a system data package and places it in the offline input area. The
-system recognizes the package, creates one isolated inspection context, extracts and
-organizes package contents, runs the applicable inspection rules, and produces a readable
-inspection report. The maintainer can understand overall health, problem areas, evidence,
-and recommended follow-up actions without connecting to the inspected system.
+维护者收集一个系统数据包并放入离线输入区域。系统识别该包，创建一个隔离的巡检上下文，解压并组织包内容，运行适用的巡检规则，产出可读的巡检报告。维护者无需连接被检系统即可了解整体健康状况、问题区域、证据和推荐的后续行动。
 
-**Why this priority**: This is the core business flow. PatrolX delivers value only when a
-pre-collected package can be transformed into trustworthy inspection results and findings.
+**优先级理由**：这是核心业务流程。只有当预收集的数据包能够转化为可信的巡检结果和发现时，PatrolX 才能交付价值。
 
-**Independent Test**: Provide one supported package, run the offline flow, and verify that
-exactly one task and one system context are produced, inspection results exist, and a human
-readable report is available.
+**独立测试**：提供一个受支持的包，运行离线流程，验证恰好产生一个任务和一个系统上下文，巡检结果存在，且可读报告可用。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** the offline input area contains one supported package, **When** the user starts
-   the offline inspection flow, **Then** the system creates exactly one inspection task for
-   that package and processes its contents without connecting to the inspected system.
-2. **Given** the package contains recognizable log, KPI, traffic, alarm, configuration, or
-   resource data, **When** processing completes, **Then** the applicable inspection rules
-   produce results and the report summarizes status, findings, and recommendations.
-3. **Given** a rule category has no matching data in the package, **When** processing
-   completes, **Then** that category is clearly marked as skipped with a human-readable
-   reason instead of being silently omitted or reported as healthy.
+1. **给定**离线输入区域包含一个受支持的包，**当**用户启动离线巡检流程，**则**系统为该包创建恰好一个巡检任务并在不连接被检系统的情况下处理其内容。
+2. **给定**包中包含可识别的日志、KPI、话统、告警、配置或资源数据，**当**处理完成，**则**适用的巡检规则产生结果，报告汇总状态、发现和建议。
+3. **给定**某规则类别在包中没有匹配数据，**当**处理完成，**则**该类别被明确标记为跳过并附带可读原因，而非被静默省略或误报为健康。
 
 ---
 
-### User Story 2 - Review Results by Task, System, Rule, and Finding (Priority: P2)
+### 用户故事 2 - 按任务、系统、规则和发现审查结果（优先级：P2）
 
-A maintainer opens an inspection context and drills down from the overall task status to the
-system summary, individual rule results, and concrete findings. For each problem, they can
-see the source location, supporting evidence, severity, and recommendation.
+维护者打开一个巡检上下文，从整体任务状态逐层下钻到系统摘要、各规则结果和具体发现。对每个问题，可以查看来源位置、支撑证据、严重程度和建议。
 
-**Why this priority**: Inspection is only actionable when users can navigate from a high-level
-status to traceable evidence and a concrete next action.
+**优先级理由**：只有当用户能够从高层状态导航到可追溯证据和具体后续行动时，巡检才是可操作的。
 
-**Independent Test**: From a completed inspection, verify that every displayed problem can be
-traced to its rule, source location, evidence, and recommendation.
+**独立测试**：从已完成的巡检中，验证每个展示的问题都可以追溯到其规则、来源位置、证据和建议。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a completed inspection, **When** the user opens the task view, **Then** the user
-   sees aggregate status counts and can navigate to system and rule results.
-2. **Given** a rule result with findings, **When** the user opens the rule detail, **Then**
-   the user sees the rule summary, relevant metrics, findings, source locations, and
-   recommendations.
-3. **Given** a rule was skipped, **When** the user views its result, **Then** the reason for
-   skipping is visible.
+1. **给定**一个已完成的巡检，**当**用户打开任务视图，**则**用户看到汇总状态计数并能导航到系统和规则结果。
+2. **给定**一个含发现的规则结果，**当**用户打开规则详情，**则**用户看到规则摘要、相关指标、发现、来源位置和建议。
+3. **给定**一条规则被跳过，**当**用户查看其结果，**则**跳过原因可见。
 
 ---
 
-### User Story 3 - Keep Local and Online Inspection Experiences Consistent (Priority: P3)
+### 用户故事 3 - 保持本地与在线巡检体验一致（优先级：P3）
 
-A maintainer can use the same package in local mode for quick validation and in online mode
-for shared review. The inspection meaning, task structure, rule results, findings, and report
-concept remain the same across both experiences.
+维护者可以在本地模式中使用同一包进行快速验证，在在线模式中进行共享审查。巡检含义、任务结构、规则结果、发现和报告概念在两种体验中保持一致。
 
-**Why this priority**: Consistency protects user trust and prevents local-only behavior from
-becoming a divergent product.
+**优先级理由**：一致性保护用户信任，防止仅限本地的行为演变为分裂的产品。
 
-**Independent Test**: Process the same supported package through local and online flows and
-compare that the same business result structure and rule outcomes are represented in both.
+**独立测试**：通过本地和在线流程处理同一受支持的包，比较两者中呈现的业务结果结构和规则结果是否一致。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** the same supported package is inspected locally and online, **When** both
-   executions complete, **Then** the same applicable rules produce the same business
-   outcomes, excluding execution identity and timing.
-2. **Given** a completed inspection exists in either mode, **When** the user views it, **Then**
-   the task → system → rule → finding model is recognizable and consistent.
+1. **给定**同一受支持的包在本地和在线分别巡检，**当**两者执行完成，**则**相同的适用规则产生相同的业务结果（执行标识和时间除外）。
+2. **给定**任一模式中存在已完成的巡检，**当**用户查看它，**则**任务→系统→规则→发现模型可识别且一致。
 
 ---
 
-### User Story 4 - Rerun a Target Rule (Priority: P4)
+### 用户故事 4 - 重跑目标规则（优先级：P4）
 
-A rule developer changes an inspection rule and wants to validate it without rerunning every
-rule. The developer can rerun the target rule; if required preparation data is missing or
-stale, the system handles the necessary dependency work first. Existing unrelated results
-remain available.
+规则开发者修改了一条巡检规则并希望在不重跑所有规则的情况下验证它。开发者可以重跑目标规则；如果所需的准备数据缺失或过期，系统先处理必要的依赖工作。已有的无关结果保持可用。
 
-**Why this priority**: Fast rule iteration improves inspection quality, but it depends on the
-baseline inspection flow already working.
+**优先级理由**：快速规则迭代提高巡检质量，但依赖于基线巡检流程已正常工作。
 
-**Independent Test**: After an inspection exists, rerun one rule and verify that only the
-target result is refreshed while other results remain identifiable.
+**独立测试**：在巡检已存在后，重跑一条规则并验证仅目标结果被刷新而其他结果保持可识别。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a completed inspection, **When** the developer reruns one rule, **Then** that
-   rule is reevaluated and its result is updated.
-2. **Given** the target rule depends on prepared data that is missing or produced by an older
-   rule version, **When** the rerun starts, **Then** the system obtains fresh dependency data
-   before evaluating the target rule.
-3. **Given** a rerun completes, **When** the user views the task, **Then** unrelated rule
-   results remain available.
+1. **给定**已完成包含目标规则结果的巡检，**当**用户请求重跑该规则，**则**仅目标规则结果被更新，且过时依赖按需重新生成。
+2. **给定**目标规则依赖的准备数据已过期，**当**用户重跑目标规则，**则**系统在重跑目标规则前重新生成所需的依赖 artifact。
+3. **给定**重跑完成，**当**用户查看其他规则结果，**则**这些结果保持不变且可访问。
 
 ---
 
-### Edge Cases
+### 用户故事 5 - 删除任务（优先级：P5）
 
-- A package is corrupted, unsupported, exceeds limits, or contains unsafe archive paths; the
-  system must reject or contain the problem with a clear user-facing outcome.
-- A nested archive repeats data or has already been processed; the system must avoid
-  duplicating extraction work.
-- A file uses an unrecognized or malformed format; processing must not lose the rest of the
-  inspection.
-- A package contains no data for one or more categories; those rules must be visibly skipped
-  with reasons.
-- Two tasks use the same system identifier over time; each task remains isolated while still
-  supporting later comparison.
-- A user requests deletion of a task; both retained input and generated output must be removed
-  together.
+维护者可以删除一个已完成的巡检任务。删除移除保留的原始包输入和所有生成的巡检输出。被删除的任务不留任何残留。
 
-## Requirements *(mandatory)*
+**优先级理由**：任务生命周期管理对磁盘空间管理和数据卫生是必要的，但依赖前面的故事已可用。
 
-### Functional Requirements
+**独立测试**：创建一个任务，删除它，验证没有输入或输出残留。
 
-- **FR-001**: The system MUST accept one pre-collected package as one inspection task.
-- **FR-002**: The system MUST NOT require access to the inspected system to perform
-  inspection.
-- **FR-003**: The system MUST keep package data, inspection context, artifacts, logs, and
-  reports isolated by task and system.
-- **FR-004**: The system MUST organize package contents into recognizable inspection
-  categories, including log, KPI, traffic, alarm, configuration, resource, and other.
-- **FR-005**: The system MUST safely extract package content, including nested supported
-  packages, without allowing path traversal or unsafe archive expansion.
-- **FR-006**: The system MUST avoid repeatedly extracting the same nested package within a
-  task.
-- **FR-007**: The system MUST execute inspection rules in an order that satisfies declared
-  data dependencies.
-- **FR-008**: The system MUST record rule results with status, summary, metrics where
-  applicable, findings where applicable, execution time, and duration.
-- **FR-009**: The system MUST support pass, warning, failure, error, and skipped rule
-  outcomes.
-- **FR-010**: The system MUST require a visible reason when a rule is skipped.
-- **FR-011**: The system MUST retain source location and evidence for findings so users can
-  trace conclusions back to package data.
-- **FR-012**: The system MUST provide a human-readable inspection report summarizing overall
-  status, rule results, findings, and recommendations.
-- **FR-013**: The system MUST allow users to review results by task, system, rule, and
-  finding.
-- **FR-014**: The system MUST allow a target rule to be rerun without requiring unrelated
-  rules to lose their results.
-- **FR-015**: The system MUST refresh or regenerate missing or outdated dependency data before
-  evaluating a rerun target rule.
-- **FR-016**: The system MUST preserve inspection meaning when the same package is processed
-  through local and shared/online experiences.
-- **FR-017**: The system MUST retain completed tasks and their inspection evidence until a
-  user explicitly deletes the task.
-- **FR-018**: The system MUST remove both retained package input and generated inspection
-  output when a task is deleted.
+**验收场景**：
 
-### Key Entities *(include if feature involves data)*
+1. **给定**一个已完成的任务存在，**当**用户请求删除它，**则**保留的包输入和所有生成的输出均被移除。
+2. **给定**删除完成，**当**用户尝试查看已删除的任务，**则**该任务不再可访问。
+3. **给定**一个任务被删除，**当**用户检查存储区域，**则**没有该任务的残留文件。
 
-- **Inspection Task**: One execution triggered by one package; has identity, lifecycle state,
-  trigger source, timing, and aggregate result counts.
-- **System Inspection**: One inspected system context associated with the task; has package
-  identity, optional customer/version context, status, and rule summaries.
-- **Inspection Rule**: A named, versioned inspection capability with category, priority,
-  declared inputs, outputs, status, summary, metrics, findings, and produced data references.
-- **Finding**: A concrete issue identified by a rule; has severity, source location, evidence,
-  details, and recommendation.
-- **Prepared Data**: Intermediate inspection data produced by preparation rules and consumed
-  only through explicit declared dependencies.
-- **Report**: A human-readable summary of task, system, rules, findings, evidence, and
-  recommendations.
+---
 
-## Success Criteria *(mandatory)*
+### 边界情况
 
-### Measurable Outcomes
+- 包中包含格式错误或不可识别的文件；这些文件不得导致整个任务中止；处理不得丢失其余巡检内容。
+- 包中一个或多个类别没有数据；这些规则必须以原因可见地跳过。
+- 两个任务在不同时间使用相同的系统标识；每个任务保持隔离，同时支持后续比较。
+- 用户请求删除任务；保留的输入和生成的输出必须一并移除。
 
-- **SC-001**: A user can place one supported package and obtain a completed inspection with a
-  report in a single local flow.
-- **SC-002**: 100% of displayed findings can be traced to a rule, source location, and
-  evidence.
-- **SC-003**: 100% of skipped rules expose a readable skip reason.
-- **SC-004**: A rule developer can validate one changed rule without rerunning every rule in
-  the system.
-- **SC-005**: The same supported package produces the same business rule outcomes in local and
-  online experiences, excluding execution identity and timing.
-- **SC-006**: A user can identify overall task health and at least the top actionable findings
-  from the report without reading raw package files.
-- **SC-007**: 100% of deleted tasks leave no retained task input or generated output behind.
+## 需求 *(必填)*
 
-## Assumptions
+### 功能需求
 
-- Users are internal maintainers or rule developers; no public customer authentication is
-  assumed.
-- Packages are pre-collected by an existing customer-side or maintainer process.
-- The first release prioritizes correctness, traceability, and simple operation over
-  concurrency and distributed execution.
-- Report download and PDF export are out of scope.
-- Online rule editing, rule enablement, and parameter configuration are out of scope.
-- Cross-task trend analysis is a future capability, not part of this baseline.
+- **FR-001**：系统必须接受一个预收集包作为一个巡检任务。
+- **FR-002**：系统执行巡检不得要求访问被检系统。
+- **FR-003**：系统必须按任务和系统隔离包数据、巡检上下文、中间产物、日志和报告。
+- **FR-004**：系统必须将包内容组织为可识别的巡检类别，包括日志、KPI、话统、告警、配置、资源和其他。
+- **FR-005**：系统必须安全解压包内容，包括嵌套受支持的包，不允许路径穿越或不安全的归档展开。
+- **FR-006**：系统必须避免在同一任务内重复解压同一嵌套包。
+- **FR-007**：系统必须以满足声明数据依赖的顺序执行巡检规则。
+- **FR-008**：系统必须记录规则结果，包含状态、摘要、适用时的指标、适用时的发现、执行时间和耗时。
+- **FR-009**：系统必须支持通过、告警、失败、异常和跳过的规则结果状态。
+- **FR-010**：系统必须在规则被跳过时要求可见的原因。
+- **FR-011**：系统必须为发现保留来源位置和证据，使用户能够将结论追溯回包数据。
+- **FR-012**：系统必须提供可读的巡检报告，汇总整体状态、规则结果、发现和建议。
+- **FR-013**：系统必须允许用户按任务、系统、规则和发现审查结果。
+- **FR-014**：系统必须允许重跑目标规则而不要求无关规则丢失其结果。
+- **FR-015**：系统必须在评估重跑目标规则前刷新或重新生成缺失或过时的依赖数据。
+- **FR-016**：系统必须在同一包通过本地和共享/在线体验处理时保持巡检含义一致。
+- **FR-017**：系统必须保留已完成的任务及其巡检证据，直到用户显式删除任务。
+- **FR-018**：系统必须在任务被删除时同时移除保留的包输入和生成的巡检输出。
+
+### 关键实体
+
+- **巡检任务**：由一个包触发的一次执行；具有标识、生命周期状态、触发源、时序和汇总结果计数。
+- **系统巡检**：与任务关联的一个被检系统上下文；具有包标识、可选客户/版本上下文、状态和规则摘要。
+- **巡检规则**：命名的、有版本的巡检能力，具有类别、优先级、声明输入、输出、状态、摘要、指标、发现和产生的数据引用。
+- **发现**：由规则识别的具体问题；具有严重程度、来源位置、证据、详情和建议。
+- **准备数据**：由准备规则产生、仅通过显式声明依赖消费的中间巡检数据。
+- **报告**：任务、系统、规则、发现、证据和建议的可读摘要。
+
+## 成功标准 *(必填)*
+
+### 可度量结果
+
+- **SC-001**：用户可以放置一个受支持的包并在单个本地流程中获得带报告的已完成巡检。
+- **SC-002**：100% 的展示发现可以追溯到规则、来源位置和证据。
+- **SC-003**：100% 的跳过规则暴露可读的跳过原因。
+- **SC-004**：规则开发者可以验证一条变更的规则而无需重跑系统中的所有规则。
+- **SC-005**：同一受支持的包在本地和在线体验中产生相同的业务规则结果（执行标识和时间除外）。
+- **SC-006**：用户可以从报告中识别整体任务健康状况和至少最重要的可操作发现，无需阅读原始包文件。
+- **SC-007**：100% 被删除的任务不留任何保留的任务输入或生成的输出。
+
+## 假设
+
+- 用户为内部维护者或规则开发者；不假设公开客户认证。
+- 包由现有客户侧或维护者流程预收集。
+- 首个版本优先考虑正确性、可追溯性和简单操作，而非并发和分布式执行。
+- 报告下载和 PDF 导出不在范围内。
+- 在线规则编辑、规则启用和参数配置不在范围内。
+- 跨任务趋势分析是未来能力，不属于本基线。

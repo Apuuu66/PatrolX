@@ -1,37 +1,35 @@
-# Specification Quality Checklist: System Baseline
+# 规格质量检查清单：系统基线
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-09-12
-**Feature**: [spec.md](../spec.md)
+**目的**：在进入规划前验证规格的完整性和质量
+**创建日期**：2026-09-12
+**功能**：[spec.md](../spec.md)
 
-## Content Quality
+## 内容质量
 
-- [x] No implementation details (languages, frameworks, APIs)
-- [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
-- [x] All mandatory sections completed
+- [x] 无实现细节（语言、框架、API）
+- [x] 聚焦于用户价值和业务需求
+- [x] 面向非技术利益相关者编写
+- [x] 所有必填章节已完成
 
-## Requirement Completeness
+## 需求完整性
 
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
-- [x] Success criteria are measurable
-- [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined
-- [x] Edge cases are identified
-- [x] Scope is clearly bounded
-- [x] Dependencies and assumptions identified
+- [x] 无 [NEEDS CLARIFICATION] 标记残留
+- [x] 需求可测试且无歧义
+- [x] 成功标准可度量
+- [x] 成功标准与技术无关（无实现细节）
+- [x] 所有验收场景已定义
+- [x] 边界情况已识别
+- [x] 范围已明确界定
+- [x] 依赖和假设已识别
 
-## Feature Readiness
+## 功能就绪度
 
-- [x] All functional requirements have clear acceptance criteria
-- [x] User scenarios cover primary flows
-- [x] Feature meets measurable outcomes defined in Success Criteria
-- [x] No implementation details leak into specification
+- [x] 所有功能需求有清晰的验收标准
+- [x] 用户场景覆盖主要流程
+- [x] 功能满足成功标准中定义的可度量结果
+- [x] 无实现细节泄漏到规格中
 
-## Notes
+## 备注
 
-- The spec intentionally describes the current business baseline without prescribing
-  implementation technology.
-- The local/online consistency story excludes execution identity and timing because those are
-  expected to differ between runs.
+- 本规格有意描述当前业务基线，不约束实现技术。
+- 本地/在线一致性描述排除执行标识和时间，因为这些在不同运行间预期不同。

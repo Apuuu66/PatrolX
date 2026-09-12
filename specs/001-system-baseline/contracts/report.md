@@ -1,36 +1,34 @@
-# Report Contract: System Baseline
+# 报告契约：系统基线
 
-## Purpose
+## 目的
 
-The report gives maintainers a human-readable inspection summary without opening raw package
-files. It complements, but does not replace, task/system/rule drill-down in the Web UI.
+报告为维护者提供可读的巡检摘要，无需打开原始包文件。它补充但不替代 Web UI 中的任务/系统/规则下钻。
 
-## Required Report Content
+## 必须的报告内容
 
-1. Task identity and execution context.
-2. System identity and package provenance.
-3. Overall status and aggregate counts for pass, warn, fail, error, and skip.
-4. Rule status summaries, including hidden-rule errors where operationally relevant.
-5. Findings with severity, source location, evidence, and recommendation.
-6. Skipped rules with reasons.
-7. Execution time or duration where available.
+1. 任务标识和执行上下文。
+2. 系统标识和包溯源。
+3. 整体状态和 pass、warn、fail、error、skip 的汇总计数。
+4. 规则状态摘要，包含运维相关的隐藏规则异常。
+5. 含严重程度、来源位置、证据和建议的发现。
+6. 含原因的跳过规则。
+7. 可用时的执行时间或耗时。
 
-## Baseline Constraints
+## 基线约束
 
-- The report is HTML for online preview.
-- PDF export is out of scope.
-- Report download is out of scope.
-- The report must not expose secrets or unrelated customer data.
-- Every actionable finding must remain traceable to source data.
-- The report must be generated from contract results and retained evidence, not ad-hoc
-  unpersisted calculations.
+- 报告为在线预览的 HTML。
+- PDF 导出不在范围内。
+- 报告下载不在范围内。
+- 报告不得暴露秘密或无关客户数据。
+- 每条可操作发现必须保持可追溯到来源数据。
+- 报告必须从契约结果和保留证据生成，而非临时的未持久化计算。
 
-## Review Outcomes
+## 审查结果
 
-A report is acceptable when a maintainer can determine:
+一份报告可接受的标准是维护者能够判断：
 
-- Whether the inspection completed.
-- The overall health/status distribution.
-- Which rules failed, warned, errored, or skipped.
-- Where the most important issues occurred.
-- What follow-up action is recommended.
+- 巡检是否完成。
+- 整体健康/状态分布。
+- 哪些规则失败、告警、异常或跳过。
+- 最重要的问题发生在哪里。
+- 建议的后续行动是什么。

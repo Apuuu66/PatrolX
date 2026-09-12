@@ -1,10 +1,8 @@
-# Data Model: System Baseline
+# 数据模型：系统基线
 
-This model is the baseline business view. The machine-readable API schema remains
-[`docs/api/openapi.yaml`](../../docs/api/openapi.yaml); the narrative contract is in
-[`docs/data-model.md`](../../docs/data-model.md).
+本模型为基线业务视图。机器可读 API Schema 以 [`docs/api/openapi.yaml`](../../docs/api/openapi.yaml) 为准；叙述性契约在 [`docs/data-model.md`](../../docs/data-model.md) 中。
 
-## Entity Relationships
+## 实体关系
 
 ```text
 InspectionTask 1──1 SystemInspection
@@ -16,115 +14,115 @@ InspectionTask 1──1 ExecutionLog
 InspectionTask 1──1 Report
 ```
 
-## InspectionTask
+## InspectionTask（巡检任务）
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Task ID | Stable task identity | Identifies retained input and output directories. |
-| Name | Human-readable task name | Optional display label. |
-| Mode | Local or online execution | Does not change inspection semantics. |
-| Status | Pending, running, completed, failed | Task lifecycle state. |
-| Trigger | CLI, API, or rerun | Records how execution began. |
-| Created At / Completed At | UTC timestamps | Persisted in UTC; display may localize. |
-| Stats | Aggregate rule counts | Includes hidden and skipped rules. |
-| System | One system inspection context | Exactly one per package/task. |
+| 任务 ID | 稳定任务标识 | 标识保留的输入和输出目录。 |
+| 名称 | 可读任务名称 | 可选展示标签。 |
+| 模式 | 本地或在线执行 | 不改变巡检语义。 |
+| 状态 | 待执行、运行中、已完成、已失败 | 任务生命周期状态。 |
+| 触发 | CLI、API 或重跑 | 记录执行开始方式。 |
+| 创建时间/完成时间 | UTC 时间戳 | 以 UTC 持久化；展示可本地化。 |
+| 统计 | 汇总规则计数 | 包含隐藏和跳过的规则。 |
+| 系统 | 一个系统巡检上下文 | 每个包/任务恰好一个。 |
 
-### Lifecycle
+### 生命周期
 
 ```text
 pending → running → completed
                  ↘ failed
 ```
 
-## SystemInspection
+## SystemInspection（系统巡检）
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| System ID | Stable system context identity | Safe for directory naming. |
-| System Name | Display name | Human-facing label. |
-| Package File | Original package name | Retained for provenance. |
-| Package Checksum | Package integrity identity | Supports reproducibility and deduplication. |
-| Version | Optional version context | Provided by upload metadata where available. |
-| Status | Completed or failed | Reflects the system run outcome. |
-| Summary | Rule status counts | `total = pass + warn + fail + error + skip`. |
-| Rules | One result per registered/executed rule | Includes hidden extraction rules in total. |
-| Customer Context | Optional province/operator/product fields | Online upload metadata; offline uses package fallback. |
+| 系统 ID | 稳定系统上下文标识 | 对目录命名安全。 |
+| 系统名称 | 展示名称 | 面向用户的标签。 |
+| 包文件 | 原始包名称 | 保留用于溯源。 |
+| 包校验和 | 包完整性标识 | 支持可重现性和去重。 |
+| 版本 | 可选版本上下文 | 上传元数据可用时提供。 |
+| 状态 | 已完成或已失败 | 反映系统运行结果。 |
+| 摘要 | 规则状态计数 | `total = pass + warn + fail + error + skip`。 |
+| 规则 | 每条注册/执行规则一个结果 | 总计中包含隐藏解压规则。 |
+| 客户上下文 | 可选省份/运营商/产品字段 | 在线上传元数据；离线使用包回退。 |
 
-## InspectionRule
+## InspectionRule（巡检规则）
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Code | Stable rule identity | Lowercase, dot-delimited, filesystem-safe. |
-| Name | Display name | Human-readable. |
-| Category | Inspection domain | Log, KPI, traffic, alarm, config, resource, other. |
-| Priority | P0/P1/P2 | P0 prepares, P1 checks, P2 analyzes. |
-| Version | Rule logic version | Bump on logic change; validates artifact freshness. |
-| Description | What the rule checks | Required. |
-| Recommendation | What to do on issue | Required. |
-| Inputs | Declared artifact dependencies | Sole coupling point. |
-| Outputs | Declared metrics/artifacts | Used for result validation and UI. |
-| Hidden | Internal execution flag | Hidden rules still count in summaries. |
+| 代码 | 稳定规则标识 | 小写、点分、文件系统安全。 |
+| 名称 | 展示名称 | 可读。 |
+| 类别 | 巡检领域 | 日志、KPI、话统、告警、配置、资源、其他。 |
+| 优先级 | P0/P1/P2 | P0 准备、P1 检查、P2 分析。 |
+| 版本 | 规则逻辑版本 | 逻辑变更时递增；验证 artifact 新鲜度。 |
+| 描述 | 规则检查什么 | 必填。 |
+| 建议 | 有问题时怎么做 | 必填。 |
+| 输入 | 声明的 artifact 依赖 | 唯一耦合点。 |
+| 输出 | 声明的指标/artifact | 用于结果验证和 UI。 |
+| 隐藏 | 内部执行标志 | 隐藏规则仍计入摘要。 |
 
-## RuleResult
+## RuleResult（规则结果）
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Status | Pass, warn, fail, error, skip | Semantics are fixed by Constitution. |
-| Summary | Short outcome | Human-readable. |
-| Skip Reason | Why execution did not run | Required for skip. |
-| Executed At / Duration | Timing metadata | UTC timestamp and duration. |
-| Metrics | Structured numeric/series outcomes | Contract keys must be stable. |
-| Findings | Traceable issues | Must include source and evidence. |
-| Artifacts | Produced intermediate data references | Not embedded in result JSON. |
-| Metadata | Rule-specific extension data | Must not redefine common fields. |
+| 状态 | pass、warn、fail、error、skip | 语义由宪法固定。 |
+| 摘要 | 简短结果 | 可读。 |
+| 跳过原因 | 为什么未执行 | 跳过时必填。 |
+| 执行时间/耗时 | 时序元数据 | UTC 时间戳和持续时间。 |
+| 指标 | 结构化数值/序列结果 | 契约键必须稳定。 |
+| 发现 | 可追溯问题 | 必须包含来源和证据。 |
+| Artifacts | 产生的中间数据引用 | 不嵌入结果 JSON。 |
+| 元数据 | 规则特定扩展数据 | 不得重定义公共字段。 |
 
-## Metric
+## Metric（指标）
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Key | Stable identity | Supports cross-task comparison later. |
-| Label | Display label | Human-readable. |
-| Value | Current numeric value | Required where applicable. |
-| Unit | Measurement unit | Stable contract element. |
-| Threshold | Reference bound(s) | Used for status and display. |
-| Baseline | Reference value | Optional. |
-| Series | Trend points | Optional in baseline. |
+| 键 | 稳定标识 | 支持后续跨任务比较。 |
+| 标签 | 展示标签 | 可读。 |
+| 值 | 当前数值 | 适用时必填。 |
+| 单位 | 度量单位 | 稳定契约元素。 |
+| 阈值 | 参考界限 | 用于状态判定和展示。 |
+| 基线 | 参考值 | 可选。 |
+| 序列 | 趋势点 | 基线中可选。 |
 
-## Finding
+## Finding（发现）
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Finding ID | Result-local identity | Uniquely identifies an issue within the rule result. |
-| Title | Short issue description | User-facing. |
-| Severity | Issue severity | May differ from rule severity where appropriate. |
-| Source File | Package-relative origin | Required for traceability. |
-| Evidence | Concrete supporting excerpt | Truncated to safe display size. |
-| Details | Explanation | Optional but useful. |
-| Recommendation | Follow-up action | User-facing. |
+| 发现 ID | 结果局部标识 | 在规则结果内唯一标识一个问题。 |
+| 标题 | 简短问题描述 | 面向用户。 |
+| 严重程度 | 问题严重程度 | 可在适当情况下与规则严重程度不同。 |
+| 来源文件 | 包相对来源 | 可追溯性必填。 |
+| 证据 | 具体支撑摘录 | 截断至安全展示大小。 |
+| 详情 | 说明 | 可选但有用。 |
+| 建议 | 后续行动 | 面向用户。 |
 
-## Prepared Data / Artifact
+## 准备数据 / Artifact
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Artifact Key | Dependency contract identity | Declared by producer and consumer. |
-| Producer Rule Code | Producing rule | Recorded for traceability. |
-| Producer Rule Version | Version at production | Must match current rule for reuse. |
-| Target Directory | Runtime artifact location | `output/<task_id>/<system_id>/artifacts/<rule_code>/`. |
-| Content | Intermediate normalized/filtered data | Not copied into rule result JSON. |
+| Artifact 键 | 依赖契约标识 | 由生产者和消费者声明。 |
+| 生产者规则代码 | 产生规则 | 记录用于追溯。 |
+| 生产者规则版本 | 产生时版本 | 必须与当前规则匹配才能复用。 |
+| 目标目录 | 运行时 artifact 位置 | `output/<task_id>/<system_id>/artifacts/<rule_code>/`。 |
+| 内容 | 中间规范化/过滤数据 | 不复制到规则结果 JSON。 |
 
-## Extraction Record
+## 解压记录
 
-| Field / Concept | Description | Baseline Rule |
+| 字段/概念 | 描述 | 基线规则 |
 | --- | --- | --- |
-| Package Checksum | Content identity | Deduplication key. |
-| Relative Path | Package path identity | Helps avoid duplicate extraction. |
-| Target Directory | Category/subpackage destination | Preserves source-relative context. |
-| File Count | Extracted file count | Used for manifest integrity and limits. |
-| Status | Extracted, reused, or issue | Recorded in execution/report details. |
+| 包校验和 | 内容标识 | 去重键。 |
+| 相对路径 | 包路径标识 | 帮助避免重复解压。 |
+| 目标目录 | 类别/子包目的地 | 保留来源相对上下文。 |
+| 文件数 | 解压文件计数 | 用于清单完整性和限制。 |
+| 状态 | 已解压、已复用或异常 | 记录在执行/报告详情中。 |
 
-## State Transitions
+## 状态转换
 
-### Task
+### 任务
 
 ```text
 pending → running
@@ -132,7 +130,7 @@ running → completed
 running → failed
 ```
 
-### Rule Result
+### 规则结果
 
 ```text
 not executed → pass
@@ -142,10 +140,9 @@ not executed → error
 not executed → skip
 ```
 
-A rerun replaces the target rule result and may regenerate stale dependencies. It does not erase
-unrelated rule results.
+重跑替换目标规则结果并可能重新生成过时依赖。不抹除无关规则结果。
 
-### Extraction Record
+### 解压记录
 
 ```text
 pending → extracted
@@ -153,17 +150,17 @@ pending → reused
 pending → rejected/failed
 ```
 
-Rejected or failed extraction is reported but does not silently modify the original package.
+被拒绝或失败的解压被报告，但不静默修改原始包。
 
-## Validation Rules
+## 验证规则
 
-1. Every task maps to exactly one system inspection.
-2. Rule summary totals must add to total.
-3. Task stats must agree with the system summary for a single-system task.
-4. Every visible finding must have source location and evidence.
-5. Every skipped rule must have a skip reason.
-6. Rules may consume only artifacts declared in their inputs.
-7. Artifact reuse requires a matching producer rule version.
-8. Contracted rule outcomes must include declared metrics for pass/warn/fail.
-9. Deletion removes both task input and output.
-10. UTC is used for persisted timestamps.
+1. 每个任务映射到恰好一个系统巡检。
+2. 规则摘要总计必须加到 total。
+3. 单系统任务的统计必须与系统摘要一致。
+4. 每条可见发现必须有来源位置和证据。
+5. 每条跳过规则必须有跳过原因。
+6. 规则只能消费其 inputs 中声明的 artifact。
+7. artifact 复用要求生产者规则版本匹配。
+8. pass/warn/fail 的契约化规则结果必须包含声明的指标。
+9. 删除同时移除任务输入和输出。
+10. 持久化时间戳使用 UTC。

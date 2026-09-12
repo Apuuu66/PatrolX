@@ -1,178 +1,103 @@
-# PatrolX Constitution
+# PatrolX 宪法
 
-## Core Principles
+## 核心原则
 
-### Offline First
+### 离线优先
 
-PatrolX MUST consume pre-collected, uploaded, or locally placed archive packages only. The
-system MUST NOT connect to inspected systems, collect telemetry online, or require access to
-the customer environment. Inspection behavior MUST remain deterministic from the package and
-declared parameters.
+PatrolX 必须仅消费预收集、上传或本地存放的归档包。系统不得连接被检系统、不得在线采集遥测数据、不得要求访问客户环境。巡检行为必须基于数据包和声明参数保持确定性。
 
-### One Package, One Task, One System
+### 一个包、一个任务、一个系统
 
-One archive package MUST map to exactly one inspection task and exactly one system inspection
-context. Data, artifacts, rules, logs, and reports MUST be isolated by `task_id` and
-`system_id`. Cross-system trend analysis MUST aggregate separately; it MUST NOT merge data
-inside a task.
+一个归档包必须映射到恰好一个巡检任务和恰好一个系统巡检上下文。数据、中间产物、规则、日志和报告必须按 `task_id` 和 `system_id` 隔离。跨系统趋势分析必须独立聚合；不得在任务内部合并数据。
 
-### Contract Driven
+### 契约驱动
 
-OpenAPI is the single source of truth for online API structure. `docs/api/openapi.yaml` MUST
-be updated before or together with backend interface changes. Backend Pydantic/FastAPI schemas
-and generated frontend API clients MUST remain synchronized with the contract. Breaking API
-changes MUST be delivered under a new version prefix instead of changing the meaning of
-existing `/api/v1` fields.
+OpenAPI 是在线 API 结构的唯一事实来源。后端接口变更前或变更时必须同步更新 `docs/api/openapi.yaml`。后端 Pydantic/FastAPI Schema 和生成的前端 API 客户端必须与契约保持同步。破坏性 API 变更必须以新版本前缀交付，不得改变既有 `/api/v1` 字段的含义。
 
-Contracted inspection output is also a public boundary. Existing `RuleResult`, `Metric`,
-`Finding`, state, and field semantics MUST NOT be changed incompatibly. New inspection
-capabilities MUST add rule codes, metric keys, or metadata rather than redefine existing
-contract fields.
+契约化巡检输出也是公共边界。既有 `RuleResult`、`Metric`、`Finding`、状态和字段语义不得被不兼容地修改。新增巡检能力必须增加规则代码、指标键或元数据，而非重定义既有契约字段。
 
-### Mode Isomorphism
+### 模式同构
 
-Local mode and online mode MUST share the same inspectors, rule registry, package-processing
-pipeline, inspection contracts, and output semantics. Local CLI execution MUST be capable of
-producing the same contract JSON as API execution for the same package, except for execution
-identity and timestamps. Product behavior MUST NOT be implemented only in one mode when it
-belongs to the shared inspection domain.
+本地模式和在线模式必须共享相同的巡检器、规则注册表、包处理流水线、巡检契约和输出语义。本地 CLI 执行必须能够对同一数据包产生与 API 执行相同的契约 JSON（执行标识和时间戳除外）。属于共享巡检领域的产品行为不得仅在单一模式中实现。
 
-### Inspector Plugin Architecture
+### 巡检器插件架构
 
-Inspection capabilities MUST be implemented as registered inspectors/rules. The scheduler
-MUST load and orchestrate rules through registry metadata rather than hardcoded business
-logic. A new rule MUST be addable without changing core scheduling code. Rule registration
-MUST declare complete metadata, inputs, outputs, version, description, and recommendation.
+巡检能力必须以注册巡检器/规则的方式实现。调度器必须通过注册表元数据加载和编排规则，不得硬编码业务逻辑。新增规则不得要求修改核心调度代码。规则注册必须声明完整元数据：输入、输出、版本、描述和建议。
 
-### Consumption Is Dependency
+### 消费即依赖
 
-Rules MUST interact only through explicitly declared artifact keys. A rule MUST declare every
-artifact it consumes in `inputs[]`; the executor MUST derive dependency edges from those keys.
-Rules MUST NOT import, instantiate, or read another rule's implementation or undeclared
-artifacts. Registration MUST reject circular, missing, or priority-invalid dependencies.
+规则必须仅通过显式声明的 artifact 键交互。规则必须在 `inputs[]` 中声明其消费的每个 artifact；执行器必须从这些键推导依赖边。规则不得导入、实例化或读取其他规则的实现或未声明的 artifact。注册时必须拒绝循环、缺失或优先级无效的依赖。
 
-### Incremental Rerun
+### 增量重跑
 
-Rule results MUST be persisted at rule granularity so that one rule can be rerun without
-rewriting unrelated results. When rerunning a rule, the executor MUST resolve and rerun only
-its missing or stale dependency chain while reusing valid artifacts. A changed inspection
-logic MUST increment `rule_version`; artifacts produced by an older version MUST be treated
-as stale.
+规则结果必须按规则粒度持久化，使得单条规则可以重跑而不影响无关结果。重跑规则时，执行器必须解析并重跑仅其缺失或过期的依赖链，同时复用有效 artifact。巡检逻辑变更时必须递增 `rule_version`；由旧版本产生的 artifact 必须视为过期。
 
-### Filter Before Analysis
+### 先过滤后分析
 
-Large data domains, especially logs, MUST be prepared into filtered or normalized artifacts
-before analysis. Analysis rules MUST consume prepared artifacts instead of repeatedly scanning
-raw packages. Single-rule debugging MUST be able to run the relevant preparation rules and the
-target rule without executing every rule in the system.
+大体积数据域（尤其是日志）必须先准备为过滤或规范化后的 artifact 再进行分析。分析规则必须消费已准备的 artifact，而非反复扫描原始数据包。单条规则调试必须能够运行相关准备规则和目标规则，而无需执行系统中的每条规则。
 
-### Idempotent and Traceable
+### 幂等与可追溯
 
-Repeated processing of the same package MUST reuse or reproduce equivalent results. Nested
-subpackages and extraction state MUST be deduplicated by checksum or manifest. Every finding
-MUST retain source location, evidence, rule identity, and relevant values or thresholds
-sufficient to trace the conclusion back to package data.
+重复处理同一数据包必须复用或复现等价结果。嵌套子包和解压状态必须通过校验和或清单去重。每条发现必须保留来源位置、证据、规则标识和相关值/阈值，足以将结论追溯回数据包原始数据。
 
-### Lightweight by Default
+### 轻量默认
 
-The default deployment MUST require no external database, broker, or cluster service. SQLite
-plus file storage MUST be the default. The system MUST favor single-node, sequential execution
-until correctness and architecture are stable. Optional PostgreSQL, concurrency, distributed
-execution, or infrastructure MAY be introduced later only without breaking contracts or rule
-isolation.
+默认部署不得要求外部数据库、消息代理或集群服务。SQLite 加文件存储是默认方案。在正确性和架构稳定之前，系统应优先采用单节点顺序执行。可选的 PostgreSQL、并发、分布式执行或基础设施可在后续引入，但不得破坏契约或规则隔离。
 
-### Fault Tolerant
+### 容错
 
-One malformed file, unsupported format, or failed artifact MUST NOT abort the entire task when
-the task can continue safely. The failure MUST be represented in structured execution logs or
-a rule result with an explicit status and reason. Silent swallowing of unexpected errors is
-forbidden.
+一个格式错误的文件、不支持的格式或失败的 artifact 不得在任务可以安全继续时中止整个任务。失败必须以结构化执行日志或具有显式状态和原因的规则结果表示。禁止静默吞没意外错误。
 
-### Secure Extraction
+### 安全解压
 
-All archive extraction MUST guard against path traversal, unsafe links, and archive bombs.
-The system MUST enforce nested depth, file count, single-file size, total size, and path-safety
-limits. Extraction limits MUST be recorded or reported rather than silently ignored. Original
-packages MUST be treated as immutable input evidence.
+所有归档解压必须防护路径穿越、不安全链接和归档炸弹。系统必须强制执行嵌套深度、文件数量、单文件大小、总大小和路径安全限制。解压限制必须被记录或报告，而非静默忽略。原始数据包必须视为不可变的输入证据。
 
-## Additional Constraints
+## 附加约束
 
-### Technology Baseline
+### 技术基线
 
-The enforced baseline is Python 3.11+, FastAPI, Pydantic v2, React + TypeScript + Vite +
-Ant Design + ECharts, SQLite, and file storage. Ruff MUST be used for lint/format support.
-Jinja2 MUST generate HTML reports; PDF export and file download are out of scope. Additional
-libraries such as pandas or pyarrow MAY be introduced when they materially reduce parsing or
-analysis complexity. PostgreSQL and Docker are optional deployment extensions and MUST NOT
-become default dependencies.
+强制基线为 Python 3.11+、FastAPI、Pydantic v2、React + TypeScript + Vite + Ant Design + ECharts、SQLite 和文件存储。Ruff 必须用于 lint/格式化支持。Jinja2 必须生成 HTML 报告；PDF 导出和文件下载不在范围内。当 pandas 或 pyarrow 等附加库能实质降低解析或分析复杂度时可以引入。PostgreSQL 和 Docker 是可选部署扩展，不得成为默认依赖。
 
-### Storage and Runtime Data
+### 存储与运行时数据
 
-Uploaded original packages MUST remain under `uploads/`; runtime extraction, artifacts, rule
-results, execution logs, and reports MUST remain under `output/`. Rule results MUST be stored
-as contract JSON files at task/system/rule granularity. Runtime artifacts MUST stay out of
-contract result documents. Deleting a task MUST cascade across both task locations.
+上传的原始数据包必须保留在 `uploads/` 下；运行时解压、中间产物、规则结果、执行日志和报告必须保留在 `output/` 下。规则结果必须按任务/系统/规则粒度存储为契约 JSON 文件。运行时 artifact 不得写入契约结果文档。删除任务必须级联删除两个任务位置。
 
-### Time, Naming, and Logging
+### 时间、命名与日志
 
-Persisted timestamps MUST use UTC and use `*_at` field names. Display MAY convert timezone.
-Directory and package names MUST use lowercase singular wording. Rule codes MUST use lowercase
-dot-delimited category names and MUST be filesystem-safe. Operational logs MUST use structured
-JSON logging and include task/rule context where applicable.
+持久化时间戳必须使用 UTC 并使用 `*_at` 字段名。展示可以转换时区。目录和数据包名称必须使用小写单数措辞。规则代码必须使用小写点分类别名称且必须对文件系统安全。运维日志必须使用结构化 JSON 日志并在适用时包含任务/规则上下文。
 
-### Finding Evidence
+### 发现证据
 
-Finding evidence MUST be truncated to a safe display size while retaining the source file
-needed for full-context investigation. Findings MUST prefer concrete, reproducible evidence
-over generic summaries.
+发现证据必须截断至安全展示大小，同时保留用于完整上下文调查的来源文件。发现必须优先使用具体、可复现的证据而非泛化摘要。
 
-### Language Policy
+### 语言策略
 
-All specification artifacts (`spec.md`, `plan.md`, `tasks.md`, checklists, and related
-feature documents) MUST be written in Chinese. Identifiers, interface fields, code, file
-paths, rule codes, and technical terms MUST remain in English. Inline comments, commit
-messages, and documentation MUST also use Chinese. This policy ensures consistency with
-the project's existing documentation language and reduces ambiguity for Chinese-speaking
-maintainers.
+所有规格产物（`spec.md`、`plan.md`、`tasks.md`、检查清单及相关功能文档）必须使用中文撰写。标识符、接口字段、代码、文件路径、规则代码和技术术语保持英文。行内注释、提交信息和文档也必须使用中文。本策略确保与项目现有文档语言的一致性，降低中文维护者的理解歧义。
 
-## Development Workflow and Quality Gates
+## 开发工作流与质量门禁
 
-### Change Workflow
+### 变更工作流
 
-Large features, contract changes, data-model evolution, scheduler changes, and complex
-interaction design MUST go through the Spec Kit flow: specify → plan → tasks → implement.
-Small fixes MAY proceed directly with tests and verification. Documentation-only edits MAY be
-made directly when they do not alter implementation semantics.
+大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Spec Kit 流程：specify → plan → tasks → implement。小修复可以直接进行测试和验证。仅文档编辑在不改变实现语义时可以直接进行。
 
-### Required Verification
+### 必须验证
 
-Backend changes MUST pass `make lint` and `make test`. Full local pipeline changes MUST pass
-`make verify` or an equivalent entry point. Inspection rule changes MUST be validated through
-local rule execution and MUST have unit tests plus representative sample data. Interface
-changes MUST include OpenAPI synchronization. Logic-changing inspector updates MUST increment
-`rule_version`.
+后端变更必须通过 `make lint` 和 `make test`。本地全流程变更必须通过 `make verify` 或等效入口。巡检规则变更必须通过本地规则执行验证，且必须具有单元测试和代表性样例数据。接口变更必须包含 OpenAPI 同步。改变逻辑的巡检器更新必须递增 `rule_version`。
 
-### Dual-Mode Compatibility
+### 双模式兼容性
 
-Changes affecting shared inspection behavior MUST preserve CLI/API output compatibility.
-A change that intentionally changes contract output MUST update the contract, schema, tests,
-and frontend consumers as one coherent change.
+影响共享巡检行为的变更必须保持 CLI/API 输出兼容性。有意变更契约输出的变更必须作为一个整体同时更新契约、Schema、测试和前端消费者。
 
-## Governance
+## 治理
 
-This constitution supersedes conflicting implementation preferences, convenience shortcuts,
-and ad-hoc agent instructions. Spec plans and tasks MUST cite compliance with these
-principles when introducing or changing architecture, contracts, storage, execution, or
-inspection behavior.
+本宪法优先于冲突的实现偏好、便利捷径和临时 Agent 指令。规格计划和任务在引入或变更架构、契约、存储、执行或巡检行为时必须引用对这些原则的合规性。
 
-Amendments MUST be written into this file, reviewed explicitly, and versioned semantically:
+修正必须写入本文件、显式审查并按语义版本化：
 
-- MAJOR: incompatible principle removal or redefinition.
-- MINOR: new principle, materially expanded constraint, or new mandatory workflow.
-- PATCH: clarification, typo, wording, or non-semantic refinement.
+- MAJOR：不兼容的原则删除或重定义。
+- MINOR：新增原则、实质性扩展约束或新的强制工作流。
+- PATCH：澄清、拼写、措辞或非语义精化。
 
-Reviewers and agents MUST verify constitution compliance before merge. A conflict between a
-feature plan and this constitution MUST be resolved by changing the plan unless the project
-formally amends this constitution first.
+审查者和 Agent 在合入前必须验证宪法合规性。功能计划与本宪法冲突时，必须通过修改计划解决，除非项目先正式修正宪法。
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-12 | **Last Amended**: 2026-09-12
+**版本**：1.1.0 | **批准日期**：2026-09-12 | **最后修正**：2026-09-12

@@ -1,78 +1,77 @@
-# Rule Contract: System Baseline
+# 规则契约：系统基线
 
-This contract defines how inspectors plug into the baseline executor and how their outputs are
-validated and consumed.
+本契约定义巡检器如何接入基线执行器，以及其输出如何被验证和消费。
 
-## Registration Metadata
+## 注册元数据
 
-Every registered rule MUST declare:
+每条注册规则必须声明：
 
-| Field | Requirement |
+| 字段 | 要求 |
 | --- | --- |
-| `code` | Stable lowercase dot-delimited identifier; usable as a filename. |
-| `name` | Human-readable display name. |
-| `category` | `log`, `kpi`, `traffic`, `alarm`, `config`, `resource`, or `other`. |
-| `severity` | Rule-level severity. |
-| `priority` | P0 for preparation, P1 for basic inspection, P2 for advanced analysis. |
-| `rule_version` | Bumped when logic changes. |
-| `description` | Non-empty explanation of what is checked. |
-| `recommendation` | Non-empty follow-up guidance. |
-| `hidden` | Whether the rule is internal and excluded from normal UI display. |
-| `inputs[]` | Artifact keys consumed by the rule. |
-| `outputs.metrics[]` | Metric keys/units the rule is expected to produce. |
-| `outputs.artifacts[]` | Artifact keys the rule is expected to produce. |
-| `params[]` | Optional parameter metadata. |
+| `code` | 稳定的小写点分标识符；可用作文件名。 |
+| `name` | 可读展示名称。 |
+| `category` | `log`、`kpi`、`traffic`、`alarm`、`config`、`resource` 或 `other`。 |
+| `severity` | 规则级严重程度。 |
+| `priority` | P0 准备、P1 基础巡检、P2 综合分析。 |
+| `rule_version` | 逻辑变更时递增。 |
+| `description` | 非空的检查内容说明。 |
+| `recommendation` | 非空的后续行动指引。 |
+| `hidden` | 规则是否为内部且从正常 UI 展示中排除。 |
+| `inputs[]` | 规则消费的 artifact 键。 |
+| `outputs.metrics[]` | 规则预期产生的指标键/单位。 |
+| `outputs.artifacts[]` | 规则预期产生的 artifact 键。 |
+| `params[]` | 可选参数元数据。 |
 
-## Dependency Rules
+## 依赖规则
 
-1. A rule may consume only artifact keys declared in `inputs[]`.
-2. The executor derives dependencies from `inputs[]`.
-3. Dependencies must point to higher-priority rules.
-4. Same-priority rule-to-rule dependency is forbidden.
-5. Hidden `pkg.extract.*` rules are the permitted infrastructure exception.
-6. Circular, missing, or priority-invalid dependencies must be rejected at registration/startup.
-7. Rules must not import or call other rules' implementations.
+1. 规则只能消费 `inputs[]` 中声明的 artifact 键。
+2. 执行器从 `inputs[]` 推导依赖。
+3. 依赖必须指向更高优先级的规则。
+4. 禁止同优先级规则间依赖。
+5. 隐藏的 `pkg.extract.*` 规则是允许的基础设施例外。
+6. 循环、缺失或优先级无效的依赖必须在注册/启动时被拒绝。
+7. 规则不得导入或调用其他规则的实现。
 
-## Execution Status Contract
+## 执行状态契约
 
-| Status | Meaning | Output Contract |
+| 状态 | 含义 | 输出契约 |
 | --- | --- | --- |
-| `pass` | Rule ran and found no issue | Must produce declared metrics. |
-| `warn` | Rule ran and found warning-level issue | Must produce declared metrics. |
-| `fail` | Rule ran and found failing issue | Must produce declared metrics. |
-| `error` | Rule execution failed | Contract metric output is exempt; failure must be recorded/logged. |
-| `skip` | Rule did not apply | Contract metric output is exempt; `skip_reason` is required. |
+| `pass` | 规则运行且未发现问题 | 必须产生声明的指标。 |
+| `warn` | 规则运行且发现告警级问题 | 必须产生声明的指标。 |
+| `fail` | 规则运行且发现失败级问题 | 必须产生声明的指标。 |
+| `error` | 规则执行失败 | 豁免契约指标输出；失败必须被记录/日志化。 |
+| `skip` | 规则不适用 | 豁免契约指标输出；`skip_reason` 必填。 |
 
-## Finding Contract
+## 发现契约
 
-A finding must provide:
+一条发现必须提供：
 
-- Stable result-local `finding_id`.
-- Title.
-- Severity.
-- Source file or package-relative location.
-- Evidence, truncated to a safe display size.
-- Optional details.
-- Recommendation or clear reference to rule-level recommendation.
+- 稳定的结果局部 `finding_id`。
+- 标题。
+- 严重程度。
+- 来源文件或包相对位置。
+- 证据，截断至安全展示大小。
+- 可选详情。
+- 建议或对规则级建议的明确引用。
 
-Generic conclusions without traceable evidence are not valid baseline findings.
+无可追溯证据的泛化结论不是有效的基线发现。
 
-## Artifact Contract
+## Artifact 契约
 
-Artifacts are the only supported channel for inter-rule data.
+Artifact 是规则间数据的唯一支持通道。
 
-- Producer declares its artifact keys in output metadata.
-- Consumer declares each consumed key in `inputs[]`.
-- The executor records the producer rule and rule version.
-- A consumer may reuse an artifact only when its producer version is current.
-- A stale or missing dependency must be regenerated before target-rule rerun.
-- Artifacts live outside rule result JSON.
+- 生产者在输出元数据中声明其 artifact 键。
+- 消费者在 `inputs[]` 中声明每个消费的键。
+- 执行器记录生产者规则和规则版本。
+- 消费者仅在其生产者版本为当前版本时可复用 artifact。
+- 过时或缺失的依赖必须在目标规则重跑前重新生成。
+- Artifact 位于规则结果 JSON 之外。
 
-## Rerun Contract
+## 重跑契约
 
-1. The target rule can be requested independently.
-2. The executor resolves all transitive artifact dependencies.
-3. Missing or version-stale dependencies are regenerated.
-4. Valid current dependencies may be reused.
-5. The target result is rewritten.
-6. Unrelated rule results are not erased.
+1. 目标规则可以独立请求。
+2. 执行器解析所有传递性 artifact 依赖。
+3. 缺失或版本过时的依赖被重新生成。
+4. 有效的当前依赖可以复用。
+5. 目标结果被重写。
+6. 无关规则结果不被抹除。

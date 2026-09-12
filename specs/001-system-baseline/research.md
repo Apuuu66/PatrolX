@@ -1,155 +1,118 @@
-# Research: System Baseline
+# 研究：系统基线
 
-## 1. Runtime Architecture
+## 1. 运行时架构
 
-**Decision**: Keep the current modular monolith with local CLI, FastAPI service, React web UI,
-and shared inspector/service/core layers.
+**决策**：保持当前模块化单体，包含本地 CLI、FastAPI 服务、React Web UI 和共享巡检器/服务/核心层。
 
-**Rationale**: The baseline capability is already cohesive. Splitting services or adding a
-separate orchestration system would increase deployment and contract complexity without a new
-business need.
+**理由**：基线能力已经内聚。拆分服务或增加独立编排系统会增加部署和契约复杂度，而无新的业务需求。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Rebuild as separate backend/frontend packages: rejected because it adds repository and
-  deployment complexity without improving the current user flows.
-- Introduce a task queue/worker service: rejected because sequential single-node execution is
-  the baseline and correctness must be stabilized first.
-- Embed business rules in the scheduler: rejected by Constitution; it would break inspector
-  extensibility.
+- 重建为独立后端/前端包：拒绝，因为它增加了仓库和部署复杂度，且未改善当前用户流程。
+- 引入任务队列/工作进程服务：拒绝，因为顺序单节点执行是基线，正确性必须先稳定。
+- 在调度器中嵌入业务规则：宪法拒绝；它会破坏巡检器可扩展性。
 
-## 2. Input Model
+## 2. 输入模型
 
-**Decision**: Preserve the one-package/one-task/one-system model.
+**决策**：保持一包/一任务/一系统模型。
 
-**Rationale**: It provides clear isolation, traceability, and simple deletion semantics. It
-also gives future cross-task trends a stable `system_id` grouping model.
+**理由**：它提供清晰的隔离、可追溯性和简单的删除语义。也为未来跨任务趋势提供稳定的 `system_id` 分组模型。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Multi-package tasks: rejected for baseline because ownership and failure attribution become
-  ambiguous.
-- Global package registry without task isolation: rejected because it weakens traceability and
-  lifecycle deletion.
+- 多包任务：基线阶段拒绝，因为归属和失败归因变得模糊。
+- 无任务隔离的全局包注册表：拒绝，因为它削弱了可追溯性和生命周期删除。
 
-## 3. Extraction and Classification
+## 3. 解压与分类
 
-**Decision**: Continue name-rule-based classification through `deploy/config/classify_rules.yaml`,
-with safe extraction, category directories, checksum manifest, and nested-package deduplication.
+**决策**：继续通过 `deploy/config/classify_rules.yaml` 进行基于名称规则的分类，配合安全解压、类别目录、校验和清单和嵌套包去重。
 
-**Rationale**: Real customer package names vary. A configurable rule table allows new formats to
-be supported without changing core extraction logic.
+**理由**：真实客户包名称各异。可配置规则表允许在不修改核心解压逻辑的情况下支持新格式。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Hardcode known package layouts: rejected because it reduces extensibility.
-- Immediately extract every nested archive: rejected because it does unnecessary work and can
-  increase exposure to archive bombs.
-- Infer category only from directory names: rejected because real package directory names are
-  natural language and not stable category enums.
+- 硬编码已知包布局：拒绝，因为它降低了可扩展性。
+- 立即解压每个嵌套归档：拒绝，因为它做了不必要的工作，且可能增加归档炸弹暴露。
+- 仅从目录名推断类别：拒绝，因为真实包目录名是自然语言而非稳定的类别枚举。
 
-## 4. Execution Model
+## 4. 执行模型
 
-**Decision**: Keep P0 preparation, P1 basic inspection, and P2 advanced analysis with
-dependency edges derived from declared artifact consumption.
+**决策**：保持 P0 准备、P1 基础巡检、P2 综合分析，依赖边由声明的 artifact 消费推导。
 
-**Rationale**: This supports fast single-rule debugging, artifact reuse, and predictable
-ordering without direct rule-to-rule imports.
+**理由**：支持快速单规则调试、artifact 复用和可预测排序，无需规则间直接导入。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Static dependency lists in scheduler code: rejected because rules would not be independently
-  extensible.
-- Full rerun for every rule change: rejected because it is wasteful and slows rule iteration.
-- Same-priority dependency graphs: rejected by Constitution because they complicate ordering
-  and can introduce cycles.
+- 调度器代码中的静态依赖列表：拒绝，因为规则将无法独立扩展。
+- 每次规则变更都全量重跑：拒绝，因为浪费且拖慢规则迭代。
+- 同优先级依赖图：宪法拒绝，因为它复杂化排序且可能引入循环。
 
-## 5. Rule Contract
+## 5. 规则契约
 
-**Decision**: Continue registry metadata plus Pydantic-style result contracts. Every rule
-declares code, version, category, priority, inputs, outputs, description, recommendation, and
-severity. `pass`/`warn`/`fail` must satisfy declared metrics; `skip`/`error` are exempt from
-metric contract validation but must explain their state.
+**决策**：继续注册表元数据加 Pydantic 风格结果契约。每条规则声明代码、版本、类别、优先级、输入、输出、描述、建议和严重程度。`pass`/`warn`/`fail` 必须满足声明的指标；`skip`/`error` 豁免指标契约验证但必须解释其状态。
 
-**Rationale**: Stable metadata and metric keys allow the UI and future trend features to consume
-results without coupling to rule internals.
+**理由**：稳定的元数据和指标键允许 UI 和未来趋势功能消费结果而不耦合规则内部。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Free-form rule output: rejected because the frontend would need rule-specific parsing.
-- Contract only on API response: rejected because CLI must share the same semantics.
-- In-code rule chaining: rejected because it violates inspector isolation.
+- 自由格式规则输出：拒绝，因为前端需要规则特定的解析。
+- 仅在 API 响应上契约化：拒绝，因为 CLI 必须共享相同语义。
+- 代码内规则链：拒绝，因为它违反巡检器隔离。
 
-## 6. Storage Layout
+## 6. 存储布局
 
-**Decision**: Retain SQLite for lightweight metadata and files under `uploads/`/`output/` for
-packages, extraction, artifacts, rule results, logs, and reports.
+**决策**：保留 SQLite 用于轻量元数据和 `uploads/`/`output/` 下的文件用于包、解压、中间产物、规则结果、日志和报告。
 
-**Rationale**: This preserves zero-install operation and makes every inspection artifact directly
-inspectable. It also allows rule results to be updated independently.
+**理由**：保持零安装操作，每个巡检 artifact 可直接检查。也允许规则结果独立更新。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Store all findings and metrics in SQLite: rejected because it increases schema customization
-  and weakens file-oriented task lifecycle management.
-- External object store or database service: rejected for baseline because it violates
-  lightweight default deployment.
-- Single monolithic JSON result file: rejected because it prevents independent rule updates.
+- 在 SQLite 中存储所有发现和指标：拒绝，因为它增加 Schema 定制并削弱面向文件的任务生命周期管理。
+- 外部对象存储或数据库服务：基线阶段拒绝，因为它违反轻量默认部署。
+- 单一单体 JSON 结果文件：拒绝，因为它阻止独立规则更新。
 
-## 7. Report
+## 7. 报告
 
-**Decision**: Continue server-rendered HTML reports for online preview. PDF and download remain
-out of scope.
+**决策**：继续服务端渲染 HTML 报告用于在线预览。PDF 和下载保持不在范围内。
 
-**Rationale**: HTML is already part of the baseline and is sufficient for internal review. The
-Web UI can provide navigation while the report remains a human-readable aggregate.
+**理由**：HTML 已是基线一部分，对内部审查已足够。Web UI 可提供导航，而报告保持为可读的汇总。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Add PDF export: rejected because it is explicitly out of scope.
-- Recreate the report fully in frontend charts only: rejected because a retained HTML report is
-  useful for historical review and does not require an active frontend session.
+- 添加 PDF 导出：拒绝，因为它明确不在范围内。
+- 完全在前端图表中重建报告：拒绝，因为保留的 HTML 报告对历史审查有用且不需要活跃的前端会话。
 
-## 8. Frontend
+## 8. 前端
 
-**Decision**: Preserve the current React/TypeScript/Ant Design/ECharts implementation and
-contract-generated API client.
+**决策**：保持当前 React/TypeScript/Ant Design/ECharts 实现和契约生成的 API 客户端。
 
-**Rationale**: The existing pages already cover tasks, rules, reports, logs, inspectors, and
-dictionaries. Rebuilding them would risk regressions without changing business value.
+**理由**：已有页面已覆盖任务、规则、报告、日志、巡检器和字典。重建它们会带来回归风险而不改变业务价值。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Mobile-first UI: rejected because desktop is the target usage.
-- Handwritten API calls: rejected because they drift from OpenAPI.
-- A separate UI for local mode: rejected because mode isomorphism is a baseline requirement.
+- 移动端优先 UI：拒绝，因为桌面是目标使用场景。
+- 手写 API 调用：拒绝，因为它们会偏离 OpenAPI。
+- 为本地模式提供单独 UI：拒绝，因为模式同构是基线要求。
 
-## 9. Quality and Verification
+## 9. 质量与验证
 
-**Decision**: Use pytest, Ruff, contract export, local pipeline verification, and existing
-sample fixtures. Add baseline-specific checks only where current tests do not already cover
-traceability, skip reasons, rerun, deletion, or dual-mode consistency.
+**决策**：使用 pytest、Ruff、契约导出、本地流水线验证和既有样例 fixtures。仅在当前测试尚未覆盖可追溯性、跳过原因、重跑、删除或双模式一致性时添加基线特定检查。
 
-**Rationale**: The code already has focused tests. The baseline should strengthen verification
-without duplicating the suite.
+**理由**：代码已有聚焦的测试。基线应在不重复测试套件的情况下加强验证。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Manual-only validation: rejected because baseline semantics must be repeatable.
-- Require a real internal customer package for every test: rejected because unavailable data
-  would block automated verification; sanitized fixtures should represent real structure.
-- UI screenshot tests as the sole source of validation: rejected because they do not verify
-  contract and executor semantics.
+- 仅手动验证：拒绝，因为基线语义必须可重复。
+- 要求每个测试都使用真实内部客户包：拒绝，因为不可用数据会阻塞自动化验证；脱敏 fixtures 应代表真实结构。
+- UI 截图测试作为唯一验证来源：拒绝，因为它们不验证契约和执行器语义。
 
-## 10. Observability
+## 10. 可观测性
 
-**Decision**: Retain structured logging, task execution logs, health endpoint, and Prometheus
-metrics.
+**决策**：保留结构化日志、任务执行日志、健康端点和 Prometheus 指标。
 
-**Rationale**: Execution traceability is required for package processing, rule failures, and
-report generation.
+**理由**：包处理、规则失败和报告生成需要执行可追溯性。
 
-**Alternatives considered**:
+**已考虑的替代方案**：
 
-- Console-only logging: rejected because task history must be inspectable after execution.
-- External tracing backend: rejected because it is not a baseline dependency.
+- 仅控制台日志：拒绝，因为任务历史必须在执行后可检查。
+- 外部追踪后端：拒绝，因为它不是基线依赖。

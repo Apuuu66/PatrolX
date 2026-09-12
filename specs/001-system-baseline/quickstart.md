@@ -1,24 +1,24 @@
-# Quickstart: System Baseline Validation
+# 快速开始：系统基线验证
 
-This guide validates the baseline business flow without prescribing implementation changes.
+本指南在不约束实现变更的前提下验证基线业务流程。
 
-## Prerequisites
+## 前置条件
 
-- Repository checkout.
-- Python environment prepared by repository tooling.
-- Node.js/npm for frontend build or Web review.
-- At least one supported sample package.
+- 仓库检出。
+- 仓库工具链准备的 Python 环境。
+- 前端构建或 Web 审查所需的 Node.js/npm。
+- 至少一个受支持的样例包。
 
-The repository sample fixture is available at:
+仓库样例 fixture 位于：
 
 ```text
 tests/fixtures/sample/sample.zip
 ```
 
-For real-format validation, use a sanitized internal package and compare its structure with
-[`docs/example/real-package-structure.md`](../../docs/example/real-package-structure.md).
+真实格式验证时，使用脱敏的内部包并对照
+[`docs/example/real-package-structure.md`](../../docs/example/real-package-structure.md) 比较其结构。
 
-## 1. Verify Environment
+## 1. 验证环境
 
 ```bash
 make lint
@@ -26,121 +26,121 @@ make test
 make contract
 ```
 
-Expected:
+预期：
 
-- Ruff check/format passes.
-- All backend tests pass.
-- OpenAPI contract and implementation agree.
+- Ruff check/format 通过。
+- 所有后端测试通过。
+- OpenAPI 契约与实现一致。
 
-## 2. Run the Offline Baseline Flow
+## 2. 运行离线基线流程
 
-Place one supported package in the default offline input area:
+将一个受支持的包放入默认离线输入区域：
 
 ```bash
 cp /path/to/package.zip uploads/
 make verify
 ```
 
-Alternatively, point to another package directory:
+或者指定其他包目录：
 
 ```bash
 PACKAGE_DIR=/path/to/packages make verify
 ```
 
-Expected:
+预期：
 
-1. The package is recognized as one task.
-2. Exactly one system inspection context is produced.
-3. Package contents are safely classified and extracted.
-4. Applicable rules execute.
-5. Rule JSON results, execution log, and HTML report are created.
-6. Categories with no applicable data are skipped with reasons.
+1. 该包被识别为一个任务。
+2. 恰好产生一个系统巡检上下文。
+3. 包内容被安全分类和解压。
+4. 适用规则执行。
+5. 创建规则 JSON 结果、执行日志和 HTML 报告。
+6. 无适用数据的类别以原因跳过。
 
-## 3. Inspect Results
+## 3. 检查结果
 
-Check the task output layout:
+检查任务输出布局：
 
 ```bash
 find output/<task_id> -maxdepth 3 -type f | sort
 ```
 
-Confirm that:
+确认：
 
-- Original package remains under `uploads/`.
-- Rule results exist under `output/<task_id>/<system_id>/rules/`.
-- Execution log exists at `output/<task_id>/execution.log`.
-- Report exists at `output/<task_id>/report.html`.
+- 原始包保留在 `uploads/` 下。
+- 规则结果存在于 `output/<task_id>/<system_id>/rules/` 下。
+- 执行日志存在于 `output/<task_id>/execution.log`。
+- 报告存在于 `output/<task_id>/report.html`。
 
-Open the report and verify that it shows:
+打开报告并验证其展示：
 
-- Overall status counts.
-- Rule outcomes.
-- Findings with source/evidence.
-- Recommendations.
-- Skip reasons where applicable.
+- 整体状态计数。
+- 规则结果。
+- 含来源/证据的发现。
+- 建议。
+- 适用时的跳过原因。
 
-## 4. Validate Single-Task Isolation
+## 4. 验证单任务隔离
 
-Add a second differently named supported package to the input directory and run:
+向输入目录添加第二个不同名称的受支持包并运行：
 
 ```bash
 make verify
 ```
 
-Expected:
+预期：
 
-- A second task is created.
-- Each task has its own system/output directory.
-- Results, findings, logs, and report for one task do not merge into another.
+- 创建第二个任务。
+- 每个任务有自己的系统/输出目录。
+- 一个任务的结果、发现、日志和报告不与另一个合并。
 
-## 5. Validate Rule Rerun
+## 5. 验证规则重跑
 
-Choose a rule code from the existing task output:
+从已有任务输出中选择一个规则代码：
 
 ```bash
 make verify-one RULE=<rule_code> SYSTEM=<system_id>
 ```
 
-Expected:
+预期：
 
-- The requested rule result is refreshed.
-- Missing or stale dependency artifacts are regenerated.
-- Valid dependency artifacts may be reused.
-- Unrelated rule result files remain available.
+- 请求的规则结果被刷新。
+- 缺失或过时的依赖 artifact 被重新生成。
+- 有效依赖 artifact 可以复用。
+- 无关规则结果文件保持可用。
 
-## 6. Validate Local/Online Semantics
+## 6. 验证本地/在线语义
 
-Start the online service:
+启动在线服务：
 
 ```bash
 python run_online.py
 ```
 
-Then upload the same supported package through the Web UI and compare with the local run.
+然后通过 Web UI 上传同一受支持的包并与本地运行比较。
 
-Expected:
+预期：
 
-- Task/system/rule/finding structure has the same business meaning.
-- Rule outcomes match for the same package, excluding execution identity and timing.
-- Report and rule detail remain reviewable in the browser.
+- 任务/系统/规则/发现结构具有相同业务含义。
+- 同一包的规则结果一致（执行标识和时间除外）。
+- 报告和规则详情在浏览器中保持可审查。
 
-## 7. Validate Deletion
+## 7. 验证删除
 
-Delete a completed task through the online task flow or its equivalent API operation.
+通过在线任务流程或等效 API 操作删除一个已完成任务。
 
-Expected:
+预期：
 
-- Task input under `uploads/<task_id>/` is removed.
-- Task output under `output/<task_id>/` is removed.
-- No partial task remains.
+- `uploads/<task_id>/` 下的任务输入被移除。
+- `output/<task_id>/` 下的任务输出被移除。
+- 无残留的部分任务。
 
-## 8. Failure-Handling Checks
+## 8. 故障处理检查
 
-Use a fixture or temporary copy that contains malformed/unrecognized content.
+使用包含格式错误/不可识别内容的 fixture 或临时副本。
 
-Expected:
+预期：
 
-- A malformed file does not abort the entire task when processing can continue.
-- The issue is visible in rule result or structured execution log.
-- Unaffected categories and rules still produce results.
-- Unsupported/no-data categories are skipped with reasons.
+- 处理可继续时，格式错误的文件不中止整个任务。
+- 问题在规则结果或结构化执行日志中可见。
+- 不受影响的类别和规则仍产生结果。
+- 不支持/无数据的类别以原因跳过。
