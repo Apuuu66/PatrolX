@@ -24,8 +24,8 @@ description: "任务详情统计数字过滤实现任务列表"
 
 **目的**：确认现有代码可编译、测试可通过
 
-- [ ] T001 运行 `cd web && npm run build` 确认前端构建通过
-- [ ] T002 [P] 运行 `cd web && npm test` 确认现有测试通过
+- [x] T001 运行 `cd web && npm run build` 确认前端构建通过
+- [x] T002 [P] 运行 `cd web && npm test` 确认现有测试通过
 
 **检查点**：基线确认——变更前构建和测试均通过
 
@@ -39,12 +39,12 @@ description: "任务详情统计数字过滤实现任务列表"
 
 ### 用户故事 1 的测试
 
-- [ ] T003 [P] [US1] 在 `web/src/pages/TaskDetailPage.test.tsx` 中编写状态过滤单元测试：点击"告警"数量后列表只显示告警规则、无匹配分类隐藏、数量为 0 时显示空状态
+- [x] T003 [P] [US1] 在 `web/src/pages/TaskDetailPage.test.tsx` 中编写状态过滤单元测试：点击"告警"数量后列表只显示告警规则、无匹配分类隐藏、数量为 0 时显示空状态
 
 ### 用户故事 1 的实现
 
-- [ ] T004 [P] [US1] 修改 `web/src/components/SummaryCards.tsx`：为状态数量卡片添加可选的 `onStatusClick` 回调属性和 `activeStatus` 属性，点击时调用回调并传递状态 key；当前激活状态卡片增加视觉反馈（边框/阴影变化）
-- [ ] T005 [US1] 修改 `web/src/pages/TaskDetailPage.tsx`：添加 `statusFilter` 状态（类型 `RuleStatus | null`）；从可见规则列表推导各状态数量并传递给 `SummaryCards`；点击状态数量时设置 `statusFilter` 为该状态；使用 `statusFilter` 过滤 `rules` 列表后再进行分类分组（依赖 T004）
+- [x] T004 [P] [US1] 修改 `web/src/components/SummaryCards.tsx`：为状态数量卡片添加可选的 `onStatusClick` 回调属性和 `activeStatus` 属性，点击时调用回调并传递状态 key；当前激活状态卡片增加视觉反馈（边框/阴影变化）
+- [x] T005 [US1] 修改 `web/src/pages/TaskDetailPage.tsx`：添加 `statusFilter` 状态（类型 `RuleStatus | null`）；从可见规则列表推导各状态数量并传递给 `SummaryCards`；点击状态数量时设置 `statusFilter` 为该状态；使用 `statusFilter` 过滤 `rules` 列表后再进行分类分组（依赖 T004）
 
 **检查点**：点击状态数量可过滤规则列表，MVP 可独立验证
 
@@ -58,11 +58,11 @@ description: "任务详情统计数字过滤实现任务列表"
 
 ### 用户故事 2 的测试
 
-- [ ] T006 [P] [US2] 在 `web/src/pages/TaskDetailPage.test.tsx` 中编写取消过滤测试：再次点击同一状态取消过滤、点击不同状态替换过滤、轮询刷新后过滤意图保持
+- [x] T006 [P] [US2] 在 `web/src/pages/TaskDetailPage.test.tsx` 中编写取消过滤测试：再次点击同一状态取消过滤、点击不同状态替换过滤、轮询刷新后过滤意图保持
 
 ### 用户故事 2 的实现
 
-- [ ] T007 [US2] 修改 `web/src/pages/TaskDetailPage.tsx`：点击已激活状态时将 `statusFilter` 设为 `null`（取消过滤）；点击不同状态时替换 `statusFilter`；轮询刷新数据时保留 `statusFilter` 不变（依赖 T005）
+- [x] T007 [US2] 修改 `web/src/pages/TaskDetailPage.tsx`：点击已激活状态时将 `statusFilter` 设为 `null`（取消过滤）；点击不同状态时替换 `statusFilter`；轮询刷新数据时保留 `statusFilter` 不变（依赖 T005）
 
 **检查点**：设置、取消、替换和刷新保持均可独立验证
 
@@ -76,11 +76,11 @@ description: "任务详情统计数字过滤实现任务列表"
 
 ### 用户故事 3 的测试
 
-- [ ] T008 [P] [US3] 在 `web/src/pages/TaskDetailPage.test.tsx` 中编写数量一致性测试：总览状态数量由可见规则列表推导而非 `task.stats`、分类标题数量随过滤变化、总览数字不因过滤而改变
+- [x] T008 [P] [US3] 在 `web/src/pages/TaskDetailPage.test.tsx` 中编写数量一致性测试：总览状态数量由可见规则列表推导而非 `task.stats`、分类标题数量随过滤变化、总览数字不因过滤而改变
 
 ### 用户故事 3 的实现
 
-- [ ] T009 [US3] 修改 `web/src/pages/TaskDetailPage.tsx`：将总览状态数量的数据源从 `task.stats` 改为由可见规则列表按状态统计推导（依赖 T005）；确认分类分组标题中的数量使用过滤后的列表长度（依赖 T005）
+- [x] T009 [US3] 修改 `web/src/pages/TaskDetailPage.tsx`：将总览状态数量的数据源从 `task.stats` 改为由可见规则列表按状态统计推导（依赖 T005）；确认分类分组标题中的数量使用过滤后的列表长度（依赖 T005）
 
 **检查点**：总览数字、分组标题数字和实际展示条数三者一致
 
@@ -90,8 +90,8 @@ description: "任务详情统计数字过滤实现任务列表"
 
 **目的**：最终验证和构建检查
 
-- [ ] T010 运行 `cd web && npm run build` 确认前端构建通过
-- [ ] T011 运行 `cd web && npm test` 确认所有前端测试通过
+- [x] T010 运行 `cd web && npm run build` 确认前端构建通过
+- [x] T011 运行 `cd web && npm test` 确认所有前端测试通过
 - [ ] T012 运行 `make lint` 确认代码风格通过
 - [ ] T013 按 `specs/003-task-detail-count-filter/quickstart.md` 手动验证 5 个场景
 
