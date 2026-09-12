@@ -136,7 +136,7 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 4 的测试
 
-- [ ] T033 [P] [US4] 在 `tests/test_baseline_rerun.py` 中验证目标规则重跑只改写目标规则结果，无关规则 JSON 内容保持不变
+- [ ] T033 [P] [US4] 在 `tests/test_baseline_rerun.py` 中验证本地 CLI 与在线 API 单规则重跑后，目标规则 JSON、`task.json`/`system.json` 摘要和 `report.html` 更新，且无关规则结果不变
 - [ ] T034 [US4] 在 `tests/test_baseline_rerun.py` 中修改依赖 artifact 的 `rule_version` 或删除 artifact，验证目标规则重跑前自动重建依赖
 - [ ] T035 [US4] 在 `tests/test_baseline_rerun.py` 中验证有效依赖被复用且生产者不重复执行
 
@@ -144,7 +144,7 @@ description: "系统基线功能实现任务列表"
 
 - [ ] T036 [US4] 在 `app/services/artifacts.py` 中保持 manifest 记录 `rule_code`、`rule_version` 与路径，并拒绝生产者不一致的 artifact 复用
 - [ ] T037 [US4] 在 `app/services/executor.py` 中保证 `run_rule_with_deps()` 递归解析传递依赖、先重建缺失/过期依赖，再更新目标规则
-- [ ] T038 [US4] 在 `app/services/tasks.py` 中保证在线单规则重跑更新受影响结果的系统摘要、任务统计和 HTML 报告
+- [ ] T038 [US4] 在 `app/cli.py` 与 `app/services/tasks.py` 中统一本地与在线单规则重跑收尾：更新受影响规则结果、系统摘要、任务统计和 HTML 报告，并通过存储层保证前端 API 刷新后可读取最新结果
 
 **检查点**：规则开发者可以只重跑目标规则并看到无关结果保留
 
