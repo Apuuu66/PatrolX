@@ -215,200 +215,29 @@ docs(architecture): 拆分 AGENTS.md
 
 ## Agent 工作流
 
-项目最高约束是 Constitution，不是某个 Agent 或工具流程。
+项目最高约束是 Constitution。
 
-### 主工作区与 Worktree
+### 变更分类
 
-主工作区是默认仓库目录，`main` 是分支；两者不是同一概念。主工作区通常停留在 `main`，用于讨论、分析、规格、计划、任务清单和纯文档维护。
+- Speckit：新增大功能、修改 OpenAPI 契约、修改数据模型、修改规则执行器/任务/存储模型、复杂前端交互、新增运行模式或部署形态。
+- 小改动：小修复、文档调整、单规则调试、测试补齐；可不走 Speckit。
 
-主工作区允许写入：
-
-- `specs/`
-- `AGENTS.md`
-- `README.md`
-- `.specify/`
-- `.agents/`
-- `docs/` 中除 `docs/api/openapi.yaml` 外的叙述文档
-
-主工作区禁止写入：
-
-- `app/`
-- `web/`
-- `deploy/`
-- `tests/`
-- `docs/api/openapi.yaml`
-- `pyproject.toml`、`Makefile`、`package.json` 等依赖和构建配置
-
-worktree 的隔离单位是任务或功能分支，不是会话。每个分支最多对应一个 worktree；新会话必须先查找并复用已有 worktree。实现类变更无论大小都必须在 worktree 内进行。单条规则调试只读取或只运行时可在主工作区进行，修改代码、测试、配置或契约时必须进入 worktree。
-
-worktree 根目录固定为仓库父目录下的 `PatrolX-wt/`：
-
-```text
-<repo-parent>/PatrolX-wt/<branch-name-with-slash-replaced-by-hyphen>
-```
-
-在本机当前仓库中就是：
-
-```text
-/Users/yigui/code/PatrolX-wt/
-```
-
-例如 `feature/003-report-export` 对应：
-
-```text
-/Users/yigui/code/PatrolX-wt/feature-003-report-export
-```
-
-不得把 worktree 放在仓库内部、`.worktrees/`、`worktrees/` 或临时目录中。已有 worktree 通过 `git worktree list` 查找并复用。
-
-### 使用 Spec Kit 的场景
-
-以下工作必须走 Speckit：
-
-- 新增大功能。
-- 修改 OpenAPI 契约。
-- 修改巡检数据模型。
-- 修改规则执行器、任务模型或存储模型。
-- 设计复杂前端交互。
-- 引入新的运行模式或部署形态。
-
-流程：
+### Speckit
 
 ```text
 specify → review → plan → review → tasks → review → implement
 ```
 
-产物放在对应 feature 的 `spec.md`、`plan.md`、`tasks.md` 中。
+`spec.md`、`plan.md`、`tasks.md` 是唯一规划与任务来源。进入实现前必须提交这些产物；实现阶段可更新 `tasks.md` 复选框。修改 `spec.md` / `plan.md` 的需求、范围或方案语义时，必须回到 Speckit review，确认后更新并提交。
 
-### Speckit 功能流程
-
-1. 主工作区确认 `main` 干净并更新到最新基线。
-2. 运行 specify 生成 feature 编号和短名称后，立即创建并切换功能分支：
-
-   ```bash
-   git switch -c feature/NNN-short-name
-   ```
-
-3. 在主工作区完成规格、计划和任务清单；每个 review 通过后提交到功能分支。
-4. 规格文档全部提交后，主工作区切回 `main` 释放功能分支：
-
-   ```bash
-   git switch main
-   ```
-
-5. 将分支名中的 `/` 替换为 `-`，创建 worktree：
-
-   ```bash
-   git worktree add ../PatrolX-wt/feature-NNN-short-name feature/NNN-short-name
-   ```
-
-6. 进入 worktree 后初始化并验证基线：
-
-   ```bash
-   make install
-   make web-install
-   make lint
-   make test
-   ```
-
-7. 在 worktree 内按任务实现，每完成一个任务同步更新 `tasks.md` 复选框并提交。
-8. 验证通过后合入 `main`，在 `main` 上再次验证，最后清理 worktree 和分支。
+实现使用 Superpowers 执行：TDD、systematic-debugging、verification-before-completion。不得重复规划或维护第二份任务清单。
 
 ### 小改动
 
-文档调整、流程调整和其他纯文档修改可以直接在主工作区进行，仍必须检查一致性和链接。
+明确改动边界，使用测试验证，按项目质量门禁执行验证，并遵守 Constitution。
 
-涉及实现的小修复、规则修复、测试补齐、配置调整和契约调整必须创建或复用 worktree。若不需要完整 Speckit，仍必须：
+### 实现与 Worktree
 
-1. 明确改动边界。
-2. 使用测试验证。
-3. 执行 `make lint` / `make test`。
-4. 遵守 Constitution。
+tasks review 通过后创建实现分支，默认在主工作区检出并实现。只有用户要求隔离/并行，或延续已约定的 worktree 任务时使用 worktree；使用回合先执行 `git worktree list`。已有对应分支的 worktree 必须复用；已有实现分支但没有对应 worktree 时，将该分支检出到 worktree；没有实现分支时，从包含 Speckit 产物的基线分支创建实现分支和 worktree。不为了创建 worktree 切换主工作区分支。
 
-### 实现阶段技能
-
-在 worktree 内按以下方式使用 Superpowers：
-
-1. `superpowers:using-git-worktrees` — 确认或创建隔离 worktree，先于任何代码修改。
-2. `superpowers:test-driven-development` — 有行为变更的任务先写失败测试，再实现并使其通过；纯文档和纯生成产物按自身验证方式执行。
-3. `superpowers:systematic-debugging` — 遇到 bug、测试失败或意外行为时，先分析根因再修复。
-4. `superpowers:verification-before-completion` — 声明任务完成前必须运行验证命令并确认输出，禁止凭感觉说“完成”。
-
-Spec/plan 阶段不重复叠加实现计划；实现阶段不重走 Speckit 规划。
-
-### 契约变更顺序
-
-涉及 API 时必须在 worktree 内按以下顺序处理：
-
-1. 修改 `docs/api/openapi.yaml`。
-2. 执行 `make contract`。
-3. 执行 `make gen-web-api`。
-4. 增加或更新契约测试。
-5. 更新 Pydantic Schema、API 实现、前端页面和测试。
-6. 运行完整质量门禁。
-
-禁止手写与 OpenAPI 不一致的前端 API 调用。
-
-### 质量门禁
-
-所有实现变更至少执行：
-
-```bash
-make lint
-make test
-```
-
-涉及本地全流程、解压、执行器或报告时执行：
-
-```bash
-make verify
-```
-
-涉及契约时执行：
-
-```bash
-make contract
-make gen-web-api
-```
-
-涉及前端时执行：
-
-```bash
-make web-build
-```
-
-### 合入与清理
-
-合入前如果 `main` 已前移，必须先在 worktree 内将 `main` 合入功能分支，解决冲突并重新跑质量门禁。
-
-主工作区合入：
-
-```bash
-git switch main
-git merge --no-ff feature/NNN-short-name
-```
-
-合入后至少再次执行：
-
-```bash
-make lint
-make test
-```
-
-并按变更类型追加契约、全流程或前端验证。全部通过后清理：
-
-```bash
-git worktree remove ../PatrolX-wt/feature-NNN-short-name
-git branch -d feature/NNN-short-name
-```
-
-如果合并冲突或合入后验证失败，保留 worktree 和分支，回到 worktree 修复并重新验证；主工作区不得直接修改实现代码。
-
-### 多窗口协作
-
-- 一个功能一个分支，一个分支最多一个 worktree。
-- 主工作区只做规格、计划、任务清单和纯文档维护。
-- 实现代码、契约、测试、配置和生成客户端只在 worktree 内修改。
-- 规格文档全部提交后才创建实现 worktree。
-- 继续已有功能时复用已有 worktree，不按会话重复创建。
-- 避免多个 Agent 同时修改同一文件。
+目录固定为 `<repo-root>/.worktrees/<分支名，/ 替换为 ->`，必须保留在 `.gitignore` 中；同一分支最多一个 worktree。使用 worktree 时，实现、测试和提交都在该 worktree 内执行。回合结束报告路径、分支、变更和验证结果；合入并确认后清理。
