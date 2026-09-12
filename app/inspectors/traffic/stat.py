@@ -21,6 +21,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="统计总话务量与应答率，应答率低于阈值告警",
     recommendation="应答率偏低时核查交换资源与拥塞配置",
+    source_patterns=[r"^traffic/.*$"],
     outputs_metrics=[
         {"key": "total_calls", "label": "总话务量", "unit": "次"},
         {"key": "answer_rate", "label": "应答率", "unit": "%"},
@@ -29,11 +30,9 @@ inspector = Inspector(
 )
 
 
-def _read_traffic(root: Path) -> dict[str, float]:
+def _read_traffic(files: list[Path]) -> dict[str, float]:
     values: dict[str, float] = {}
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
+    for path in files:
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -49,8 +48,7 @@ def _read_traffic(root: Path) -> dict[str, float]:
 
 
 def _run(ctx: RuleContext) -> object:
-    root = ctx.data_dir / RuleCategory.TRAFFIC.value
-    values = _read_traffic(root)
+    values = _read_traffic(sorted(ctx.resolved_files()))
     if not values:
         return make_result(
             inspector,
@@ -67,7 +65,7 @@ def _run(ctx: RuleContext) -> object:
                 finding_id=f"{inspector.code}-answer_rate",
                 title="应答率低于阈值",
                 severity=Severity.MEDIUM,
-                source_file="话统数据",
+                source_file=str(ctx.files[0]),
                 evidence=f"answer_rate={rate}%，阈值下限 {ANSWER_RATE_MIN}%",
                 recommendation=inspector.recommendation,
             )

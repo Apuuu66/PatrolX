@@ -57,16 +57,10 @@ export function InspectorsPage() {
     { title: "描述", dataIndex: "description" },
     { title: "处理建议", dataIndex: "recommendation" },
     {
-      title: "输入依赖",
-      dataIndex: "inputs",
-      width: 160,
+      title: "源文件匹配",
+      dataIndex: "source_patterns",
+      width: 220,
       render: (v: string[]) => (v ?? []).map((i) => <Tag key={i}>{i}</Tag>),
-    },
-    {
-      title: "产出",
-      dataIndex: "outputs",
-      width: 180,
-      render: (v: InspectorInfo["outputs"]) => (v?.artifacts ?? []).map((a) => <Tag key={a}>{a}</Tag>),
     },
   ];
 

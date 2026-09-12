@@ -196,7 +196,6 @@ export function TaskDetailPage() {
           column={4}
           style={{ marginTop: 16 }}
           items={[
-            { key: "system_id", label: "系统标识", children: system?.system_id ?? "-" },
             { key: "package", label: "数据包", children: system?.package_file ?? "-" },
             { key: "version", label: "版本", children: system?.version ?? "-" },
             {

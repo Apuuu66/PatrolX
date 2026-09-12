@@ -294,8 +294,6 @@ export interface components {
             name: string;
             category: components["schemas"]["RuleCategory"];
             priority: components["schemas"]["Priority"];
-            /** @description 消费的中间产物 key（执行器据此推导依赖） */
-            inputs?: string[];
             execution_order: number;
             status: components["schemas"]["RuleStatus"];
             severity: components["schemas"]["Severity"];
@@ -307,15 +305,11 @@ export interface components {
             duration_ms?: number;
             metrics?: components["schemas"]["Metric"][];
             findings?: components["schemas"]["Finding"][];
-            /** @description 产出的中间产物 key（供下游消费） */
-            artifacts?: string[];
             metadata?: {
                 [key: string]: unknown;
             };
         };
         SystemInspection: {
-            system_id: string;
-            system_name?: string;
             package_file: string;
             package_checksum?: string;
             version?: string;
@@ -399,7 +393,8 @@ export interface components {
             hidden: boolean;
             description?: string;
             recommendation?: string;
-            inputs: string[];
+            /** @description 匹配任务目录内相对路径的正则 */
+            source_patterns: string[];
             outputs: {
                 metrics?: {
                     key?: string;
@@ -408,7 +403,6 @@ export interface components {
                     /** @enum {string} */
                     type?: "number" | "string" | "trend";
                 }[];
-                artifacts?: string[];
             };
             params?: {
                 key?: string;
@@ -532,7 +526,6 @@ export interface operations {
                 page?: components["parameters"]["Page"];
                 page_size?: components["parameters"]["PageSize"];
                 status?: components["schemas"]["TaskStatus"];
-                system_id?: string;
             };
             header?: never;
             path?: never;
@@ -760,7 +753,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 规则结果（metrics/findings/artifacts） */
+            /** @description 规则结果（metrics/findings） */
             200: {
                 headers: {
                     [name: string]: unknown;

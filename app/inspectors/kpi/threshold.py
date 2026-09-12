@@ -27,6 +27,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="检查关键 KPI（呼叫/附着/建立成功率）是否低于阈值",
     recommendation="低于阈值时核查对应网元与链路质量",
+    source_patterns=[r"^kpi/.*$"],
     outputs_metrics=[
         {"key": "checked", "label": "检查指标数", "unit": "项"},
         {"key": "below", "label": "低于阈值数", "unit": "项"},
@@ -35,9 +36,9 @@ inspector = Inspector(
 )
 
 
-def _read_kpi(root: Path) -> dict[str, float]:
+def _read_kpi(files: list[Path]) -> dict[str, float]:
     values: dict[str, float] = {}
-    for path in sorted(root.rglob("*")):
+    for path in files:
         if path.suffix.lower() not in {".csv", ".txt"}:
             continue
         try:
@@ -70,8 +71,8 @@ def _read_kpi(root: Path) -> dict[str, float]:
 
 
 def _run(ctx: RuleContext) -> object:
-    root = ctx.data_dir / RuleCategory.KPI.value
-    values = _read_kpi(root)
+    files = sorted(ctx.resolved_files())
+    values = _read_kpi(files)
     if not values:
         return make_result(
             inspector,
@@ -91,7 +92,7 @@ def _run(ctx: RuleContext) -> object:
                 finding_id=f"{inspector.code}-{key}",
                 title=f"{label}低于阈值",
                 severity=Severity.MEDIUM,
-                source_file=", ".join(str(p.relative_to(ctx.data_dir)) for p in sorted(root.rglob("*")) if p.is_file()),
+                source_file=", ".join(path.relative_to(ctx.data_dir).as_posix() for path in files),
                 evidence=f"{key}={value}{unit}，阈值下限 {limit}{unit}",
                 recommendation=inspector.recommendation,
             )

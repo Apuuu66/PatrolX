@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, log_service_processed_files, service_records
+from app.inspectors.log.common import log_service_processed_files, service_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -24,7 +24,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="检查 AAAService 的认证失败和重试定时器超限",
     recommendation="检查认证服务可用性、账号锁定策略和重试定时器配置",
-    inputs=["log.filter.artifacts.filtered_logs"],
+    source_patterns=[r"^logs/.*\.(log|log\.gz)$"],
     outputs_metrics=[
         {"key": "error_count", "label": "错误条数", "unit": "条"},
         {"key": "auth_failure_count", "label": "认证失败条数", "unit": "条"},
@@ -34,16 +34,7 @@ inspector = Inspector(
 
 
 def _run(ctx: RuleContext) -> object:
-    path = filtered_path(ctx)
-    if path is None:
-        return make_result(
-            inspector,
-            status=RuleStatus.SKIP,
-            summary="依赖过滤产物缺失",
-            skip_reason="依赖产物 log.filter.artifacts.filtered_logs 缺失或缺少 filtered.jsonl",
-        )
-
-    records, source_files = service_records(path, SERVICE_NAME)
+    records, source_files = service_records(ctx, SERVICE_NAME)
     if not records:
         return make_result(
             inspector,

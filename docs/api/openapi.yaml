@@ -98,10 +98,6 @@ paths:
           in: query
           schema:
             $ref: "#/components/schemas/TaskStatus"
-        - name: system_id
-          in: query
-          schema:
-            type: string
       responses:
         "200":
           description: 任务摘要列表
@@ -208,7 +204,7 @@ paths:
         - $ref: "#/components/parameters/RuleCode"
       responses:
         "200":
-          description: 规则结果（metrics/findings/artifacts）
+          description: 规则结果（metrics/findings）
           content:
             application/json:
               schema:
@@ -456,11 +452,6 @@ components:
           $ref: "#/components/schemas/RuleCategory"
         priority:
           $ref: "#/components/schemas/Priority"
-        inputs:
-          type: array
-          description: 消费的中间产物 key（执行器据此推导依赖）
-          items:
-            type: string
         execution_order:
           type: integer
         status:
@@ -485,22 +476,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Finding"
-        artifacts:
-          type: array
-          description: 产出的中间产物 key（供下游消费）
-          items:
-            type: string
         metadata:
           type: object
           additionalProperties: true
     SystemInspection:
       type: object
-      required: [system_id, package_file, status, summary, rules]
+      required: [package_file, status, summary, rules]
       properties:
-        system_id:
-          type: string
-        system_name:
-          type: string
         package_file:
           type: string
         package_checksum:
@@ -636,7 +618,7 @@ components:
             $ref: "#/components/schemas/LogEntry"
     InspectorInfo:
       type: object
-      required: [code, name, category, severity, priority, rule_version, hidden, inputs, outputs]
+      required: [code, name, category, severity, priority, rule_version, hidden, source_patterns, outputs]
       properties:
         code:
           type: string
@@ -656,8 +638,9 @@ components:
           type: string
         recommendation:
           type: string
-        inputs:
+        source_patterns:
           type: array
+          description: 匹配任务目录内相对路径的正则
           items:
             type: string
         outputs:
@@ -677,10 +660,6 @@ components:
                   type:
                     type: string
                     enum: [number, string, trend]
-            artifacts:
-              type: array
-              items:
-                type: string
         params:
           type: array
           items:

@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import HTMLResponse, Response
 
-from app.cli import customer_system_id, generate_task_id
+from app.cli import generate_task_id
 from app.core.config import settings
 from app.core.dicts import load_dicts
 from app.inspectors.registry import registry
@@ -55,13 +55,12 @@ async def create_task(
     filename = (package_file.filename or "package.zip").rsplit("/", 1)[-1]
     if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
         raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
-    system_id = customer_system_id(filename, province, operator)
-    task_id = generate_task_id(filename, system_id)
+    task_id = generate_task_id(filename)
     if task_service.exists(task_id):
         if not force:
             raise AppError("duplicate_package", "已存在相同包的任务", 409)
         task_service.delete(task_id)
-    created = task_service.reserve(filename, name, province, operator, version, product=product, system_id=system_id)
+    created = task_service.reserve(filename, name, province, operator, version, product=product)
     task_dir = settings.uploads / created.task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     dest = task_dir / filename
@@ -90,9 +89,8 @@ def list_tasks(
     page: int = 1,
     page_size: int = 20,
     status: str | None = None,
-    system_id: str | None = None,
 ) -> TaskListResponse:
-    items, total = task_service.list_tasks(page, page_size, status, system_id)
+    items, total = task_service.list_tasks(page, page_size, status)
     return TaskListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -155,10 +153,10 @@ def get_task_logs(task_id: str = PathParam()) -> TaskLogs:
 
 
 def _load_system_json(task_id: str) -> SystemInspection:
-    candidates = list((settings.output / task_id).glob("*/system.json")) if (settings.output / task_id).exists() else []
-    if not candidates:
+    path = settings.output / task_id / "system.json"
+    if not path.exists():
         raise AppError("not_found", "系统结果未生成", 404)
-    return SystemInspection.model_validate(json.loads(candidates[0].read_text(encoding="utf-8")))
+    return SystemInspection.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
 @router.get("/tasks/{task_id}/system", response_model=SystemInspection, operation_id="getSystem")
@@ -192,10 +190,9 @@ def list_inspectors(category: str | None = None, include_hidden: bool = False) -
             hidden=r.hidden,
             description=r.description,
             recommendation=r.recommendation,
-            inputs=list(r.inputs),
+            source_patterns=list(r.source_patterns or []),
             outputs={
                 "metrics": [m.__dict__ if hasattr(m, "__dict__") else m for m in r.outputs_metrics],
-                "artifacts": list(r.outputs_artifacts),
             },
             params=r.params,
         )

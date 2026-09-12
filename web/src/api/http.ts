@@ -52,7 +52,6 @@ export interface TaskListQuery {
   page?: number;
   page_size?: number;
   status?: TaskStatus;
-  system_id?: string;
 }
 
 export const api = {
@@ -61,7 +60,6 @@ export const api = {
     if (q.page) params.set("page", String(q.page));
     if (q.page_size) params.set("page_size", String(q.page_size));
     if (q.status) params.set("status", q.status);
-    if (q.system_id) params.set("system_id", q.system_id);
     const qs = params.toString();
     return request<{ items: TaskSummary[]; total: number; page: number; page_size: number }>(
       `${BASE}/tasks${qs ? `?${qs}` : ""}`,

@@ -25,6 +25,7 @@ inspector = Inspector(
     rule_version="1.1.0",
     description="统计告警总量、严重级分布与未处理/未清除告警；存在 CRITICAL 或未处理告警时告警",
     recommendation="优先处理 CRITICAL/HIGH 未处理告警，核查根因",
+    source_patterns=[r"^alarm/.*$"],
     outputs_metrics=[
         {"key": "alarm_total", "label": "告警总量", "unit": "条"},
         {"key": "unhandled", "label": "未处理告警", "unit": "条"},
@@ -78,13 +79,11 @@ def _read_text_alarms(path: Path) -> list[dict]:
     return rows
 
 
-def _read_alarms(root: Path) -> tuple[list[dict], Counter[str], int]:
+def _read_alarms(files: list[Path]) -> tuple[list[dict], Counter[str], int]:
     alarms: list[dict] = []
     severity_counts: Counter[str] = Counter()
     unhandled = 0
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
+    for path in files:
         try:
             if path.suffix.lower() == ".csv":
                 rows = _read_csv_alarm(path)
@@ -102,8 +101,8 @@ def _read_alarms(root: Path) -> tuple[list[dict], Counter[str], int]:
 
 
 def _run(ctx: RuleContext) -> object:
-    root = ctx.data_dir / RuleCategory.ALARM.value
-    alarms, severity_counts, unhandled = _read_alarms(root)
+    files = sorted(ctx.resolved_files())
+    alarms, severity_counts, unhandled = _read_alarms(files)
     if not alarms:
         return make_result(
             inspector,
@@ -119,7 +118,7 @@ def _run(ctx: RuleContext) -> object:
                 finding_id=f"{inspector.code}-unhandled",
                 title="存在未处理/严重告警",
                 severity=Severity.HIGH,
-                source_file="告警导出数据",
+                source_file=files[0].relative_to(ctx.data_dir).as_posix(),
                 evidence=f"告警总量 {len(alarms)} 条，未处理 {unhandled} 条，CRITICAL {critical} 条",
                 recommendation=inspector.recommendation,
             )

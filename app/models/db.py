@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, String, create_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.core.config import settings
 
@@ -20,7 +20,6 @@ class TaskRecord(Base):
     mode: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16), default="pending")
     trigger: Mapped[str] = mapped_column(String(16))
-    system_id: Mapped[str] = mapped_column(String(128))
     package_file: Mapped[str] = mapped_column(String(512))
     customer: Mapped[dict] = mapped_column(JSON, default=dict)
     version: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -29,9 +28,12 @@ class TaskRecord(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-engine = create_engine(f"sqlite:///{settings.sqlite_path}", connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+def session_factory() -> Session:
+    """按当前 settings 创建会话，保证测试环境切换 SQLite 生效。"""
+    engine = create_engine(f"sqlite:///{settings.sqlite_path}", connect_args={"check_same_thread": False})
+    return Session(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 def init_db() -> None:
+    engine = create_engine(f"sqlite:///{settings.sqlite_path}", connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)

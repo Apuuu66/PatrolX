@@ -2,6 +2,7 @@
 
 import tarfile
 import zipfile
+import zlib
 from pathlib import Path
 
 
@@ -12,7 +13,7 @@ class ArchiveError(Exception):
 class UnpackLimit:
     """解压安全限制（默认值，固定不配置化）。"""
 
-    max_depth: int = 2
+    max_depth: int = 12
     max_files: int = 100_000
     max_single_file: int = 2 * 1024 * 1024 * 1024  # 2GB
     expansion_ratio: float = 20.0
@@ -34,6 +35,11 @@ def _is_link(name: str) -> bool:
     return name.startswith(("symlink", "link")) or "->" in name
 
 
+def _path_depth(member_path: str) -> int:
+    """返回归一化前的成员路径深度，用于一致限制 zip/tar 嵌套层级。"""
+    return len([part for part in Path(member_path).parts if part not in {"", "."}])
+
+
 def _validate_zip(member: zipfile.ZipInfo, limit: UnpackLimit) -> None:
     if member.is_dir():
         return
@@ -50,28 +56,31 @@ def unpack_zip(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
     count = 0
     max_total = _expansion_budget(archive, limit)
     total_written = 0
-    with zipfile.ZipFile(archive) as zf:
-        members = [m for m in zf.infolist() if not m.is_dir()]
-        if len(members) > limit.max_files:
-            raise ArchiveError(f"文件数超限: {len(members)}")
-        for member in members:
-            _validate_zip(member, limit)
-            depth = Path(member.filename).parts.count("..")
-            if depth > limit.max_depth:
-                raise ArchiveError(f"嵌套深度超限: {member.filename}")
-            target = _safe_target(root, member.filename)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(member) as src, target.open("wb") as dst:
-                written = 0
-                while chunk := src.read(1024 * 1024):
-                    written += len(chunk)
-                    total_written += len(chunk)
-                    if written > limit.max_single_file:
-                        raise ArchiveError(f"解压单文件超限: {member.filename}")
-                    if total_written > max_total:
-                        raise ArchiveError("解压总量超限")
-                    dst.write(chunk)
-            count += 1
+    try:
+        with zipfile.ZipFile(archive) as zf:
+            members = [m for m in zf.infolist() if not m.is_dir()]
+            if len(members) > limit.max_files:
+                raise ArchiveError(f"文件数超限: {len(members)}")
+            for member in members:
+                _validate_zip(member, limit)
+                depth = _path_depth(member.filename)
+                if depth > limit.max_depth:
+                    raise ArchiveError(f"嵌套深度超限: {member.filename}")
+                target = _safe_target(root, member.filename)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(member) as src, target.open("wb") as dst:
+                    written = 0
+                    while chunk := src.read(1024 * 1024):
+                        written += len(chunk)
+                        total_written += len(chunk)
+                        if written > limit.max_single_file:
+                            raise ArchiveError(f"解压单文件超限: {member.filename}")
+                        if total_written > max_total:
+                            raise ArchiveError("解压总量超限")
+                        dst.write(chunk)
+                count += 1
+    except (zipfile.BadZipFile, zlib.error, OSError) as exc:
+        raise ArchiveError(f"压缩包读取失败: {archive.name}") from exc
     return count
 
 
@@ -91,31 +100,34 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
     count = 0
     max_total = _expansion_budget(archive, limit)
     total_written = 0
-    with tarfile.open(archive, "r:*") as tf:
-        members = [m for m in tf.getmembers() if not m.isdir()]
-        if len(members) > limit.max_files:
-            raise ArchiveError(f"文件数超限: {len(members)}")
-        for member in members:
-            _validate_tar(member, limit)
-            depth = Path(member.name).parts.count("..")
-            if depth > limit.max_depth:
-                raise ArchiveError(f"嵌套深度超限: {member.name}")
-            target = _safe_target(root, member.name)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            src = tf.extractfile(member)
-            if src is None:
-                continue
-            with src, target.open("wb") as dst:
-                written = 0
-                while chunk := src.read(1024 * 1024):
-                    written += len(chunk)
-                    total_written += len(chunk)
-                    if written > limit.max_single_file:
-                        raise ArchiveError(f"解压单文件超限: {member.name}")
-                    if total_written > max_total:
-                        raise ArchiveError("解压总量超限")
-                    dst.write(chunk)
-            count += 1
+    try:
+        with tarfile.open(archive, "r:*") as tf:
+            members = [m for m in tf.getmembers() if not m.isdir()]
+            if len(members) > limit.max_files:
+                raise ArchiveError(f"文件数超限: {len(members)}")
+            for member in members:
+                _validate_tar(member, limit)
+                depth = _path_depth(member.name)
+                if depth > limit.max_depth:
+                    raise ArchiveError(f"嵌套深度超限: {member.name}")
+                target = _safe_target(root, member.name)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                src = tf.extractfile(member)
+                if src is None:
+                    continue
+                with src, target.open("wb") as dst:
+                    written = 0
+                    while chunk := src.read(1024 * 1024):
+                        written += len(chunk)
+                        total_written += len(chunk)
+                        if written > limit.max_single_file:
+                            raise ArchiveError(f"解压单文件超限: {member.name}")
+                        if total_written > max_total:
+                            raise ArchiveError("解压总量超限")
+                        dst.write(chunk)
+                count += 1
+    except (tarfile.TarError, OSError) as exc:
+        raise ArchiveError(f"压缩包读取失败: {archive.name}") from exc
     return count
 
 

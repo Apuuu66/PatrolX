@@ -32,17 +32,6 @@ class RuleRegistry:
     def codes(self) -> list[str]:
         return sorted(self._rules)
 
-    @property
-    def producers(self) -> dict[str, str]:
-        """产物 key → 生产者规则 code。"""
-        mapping: dict[str, str] = {}
-        for code, rule in self._rules.items():
-            for key in rule.outputs_artifacts:
-                if key in mapping and mapping[key] != code:
-                    raise ValueError(f"产物 key 被多个规则产出: {key}")
-                mapping[key] = code
-        return mapping
-
     def load_all(self) -> None:
         if self._loaded:
             return

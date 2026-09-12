@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, log_processed_files, read_records
+from app.inspectors.log.common import log_processed_files, read_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -23,7 +23,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="按服务聚合 ERROR/FATAL/CRITICAL 日志，识别错误最集中的服务",
     recommendation="优先排查错误最集中的服务及其数据库、网络和下游依赖",
-    inputs=["log.filter.artifacts.filtered_logs"],
+    source_patterns=[r"^logs/.*\.(log|log\.gz)$"],
     outputs_metrics=[
         {"key": "service_count", "label": "服务数量", "unit": "个"},
         {"key": "error_service_count", "label": "存在错误的服务数", "unit": "个"},
@@ -33,19 +33,19 @@ inspector = Inspector(
 
 
 def _run(ctx: RuleContext) -> object:
-    path = filtered_path(ctx)
-    if path is None:
+    records = read_records(ctx)
+    if not records:
         return make_result(
             inspector,
             status=RuleStatus.SKIP,
-            summary="依赖过滤产物缺失",
-            skip_reason="依赖产物 log.filter.artifacts.filtered_logs 缺失或缺少 filtered.jsonl",
+            summary="未发现匹配日志",
+            skip_reason="source_patterns 未发现可解析日志",
         )
 
-    processed_files_list = log_processed_files(ctx, path, inspector.code)
+    processed_files_list = log_processed_files(ctx, inspector.code, sorted({r["source_file"] for r in records}))
 
     services: dict[str, dict] = {}
-    for record in read_records(path):
+    for record in records:
         service = services.setdefault(record["service"], {"errors": 0, "levels": {}, "first": record})
         level = record["level"]
         service["levels"][level] = service["levels"].get(level, 0) + 1

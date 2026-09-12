@@ -1,4 +1,4 @@
-"""任务服务：output/ 为唯一数据源，SQLite 仅管理在线任务状态。"""
+"""任务服务：output/ 为唯一数据源，SQLite 只保存在线任务元数据。"""
 
 import json
 import queue
@@ -7,18 +7,16 @@ import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.cli import customer_system_id, generate_task_id, run_single_rule, run_task
+from app.cli import generate_task_id, run_single_rule, run_task
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
-from app.models.db import SessionLocal, TaskRecord, init_db
+from app.models.db import TaskRecord, init_db, session_factory
 from app.models.schemas import InspectionTask, TaskCreated, TaskMode, TaskStatus, TaskSummary, TaskTrigger
 from app.services import store
-from app.services.report import render_report
-from app.services.store import append_log, load_system, load_task_meta
+from app.services.store import append_log, load_task_meta
 
 logger = get_logger("patrolx.tasks")
-
 NOW = datetime.now
 
 
@@ -46,7 +44,7 @@ class TaskService:
                 self._update_status(task_id, TaskStatus.FAILED)
 
     def _update_status(self, task_id: str, status: TaskStatus, completed_at: datetime | None = None) -> None:
-        with SessionLocal() as session:
+        with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record:
                 record.status = status.value
@@ -54,7 +52,7 @@ class TaskService:
                 session.commit()
 
     def _execute(self, task_id: str) -> None:
-        package, customer, version, name, system_id = self._task_info(task_id)
+        package, customer, version, name = self._task_info(task_id)
         if package is None:
             return
         self._update_status(task_id, TaskStatus.RUNNING)
@@ -63,11 +61,8 @@ class TaskService:
             plan = self._rerun_plan.pop(task_id, None)
             if plan:
                 for code in plan:
-                    run_single_rule(code, system_id=system_id, package=package, task_id=task_id)
-                system = load_system(settings.output, task_id, system_id)
-                if system:
-                    render_report(settings.output, task_id, system)
-                    append_log(settings.output, task_id, "info", "重跑完成，报告已更新")
+                    run_single_rule(code, package=package, task_id=task_id)
+                append_log(settings.output, task_id, "info", "重跑完成，报告已更新")
                 current = load_task_meta(settings.output, task_id)
                 if current:
                     completed_task = current.model_copy(
@@ -81,7 +76,6 @@ class TaskService:
                     customer=customer,
                     version=version,
                     task_id=task_id,
-                    system_id=system_id,
                     mode=TaskMode.ONLINE,
                     trigger=TaskTrigger.API,
                 )
@@ -96,14 +90,13 @@ class TaskService:
             self._update_status(task_id, TaskStatus.FAILED, completed_at=NOW(UTC))
             raise
 
-    def _task_info(self, task_id: str) -> tuple[Path | None, dict, str | None, str | None, str | None]:
+    def _task_info(self, task_id: str) -> tuple[Path | None, dict, str | None, str | None]:
         """从 SQLite 获取在线任务的执行信息。"""
-        with SessionLocal() as session:
+        with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record is None:
-                return None, {}, None, None, None
-            package = settings.uploads / task_id / record.package_file
-            return package, record.customer or {}, record.version, record.name, record.system_id
+                return None, {}, None, None
+            return settings.uploads / task_id / record.package_file, record.customer or {}, record.version, record.name
 
     # ---- 创建 / 查询 ----
 
@@ -111,7 +104,7 @@ class TaskService:
         """检查任务是否已存在（output/ 或 SQLite）。"""
         if (settings.output / task_id / "task.json").exists():
             return True
-        with SessionLocal() as session:
+        with session_factory() as session:
             return session.get(TaskRecord, task_id) is not None
 
     def reserve(
@@ -122,10 +115,8 @@ class TaskService:
         operator: str | None,
         version: str | None,
         product: str | None = None,
-        system_id: str | None = None,
     ) -> TaskCreated:
-        system_id = system_id or customer_system_id(package_file, province, operator)
-        task_id = generate_task_id(package_file, system_id)
+        task_id = generate_task_id(package_file)
         customer: dict[str, str] = {}
         if province:
             customer["province"] = province
@@ -133,7 +124,7 @@ class TaskService:
             customer["operator"] = operator
         if product:
             customer["product"] = product
-        with SessionLocal() as session:
+        with session_factory() as session:
             session.add(
                 TaskRecord(
                     task_id=task_id,
@@ -141,7 +132,6 @@ class TaskService:
                     mode=TaskMode.ONLINE.value,
                     status=TaskStatus.PENDING.value,
                     trigger=TaskTrigger.API.value,
-                    system_id=system_id,
                     package_file=package_file,
                     customer=customer,
                     version=version,
@@ -157,7 +147,7 @@ class TaskService:
         self._queue.put(task_id)
 
     def discard(self, task_id: str) -> None:
-        with SessionLocal() as session:
+        with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record:
                 session.delete(record)
@@ -168,8 +158,7 @@ class TaskService:
         task = load_task_meta(settings.output, task_id)
         if task is not None:
             return task
-        # output/ 里没有 → 可能是排队中/执行中，从 SQLite 拿状态
-        with SessionLocal() as session:
+        with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record is None:
                 return None
@@ -185,24 +174,17 @@ class TaskService:
                 system=None,
             )
 
-    def list_tasks(
-        self, page: int, page_size: int, status: str | None, system_id: str | None
-    ) -> tuple[list[TaskSummary], int]:
+    def list_tasks(self, page: int, page_size: int, status: str | None) -> tuple[list[TaskSummary], int]:
         """列表：扫描 output/ 下所有 task.json + SQLite 中尚无 task.json 的进行中任务。"""
         items: list[TaskSummary] = []
         seen_ids: set[str] = set()
-
-        # 1) 扫描 output/（已完成任务，唯一数据源）
         if settings.output.exists():
             for task_file in sorted(settings.output.glob("*/task.json"), reverse=True):
                 try:
                     task = InspectionTask.model_validate(json.loads(task_file.read_text(encoding="utf-8")))
-                except Exception:
+                except Exception:  # noqa: BLE001 - 列表扫描不能被坏任务中断
                     continue
                 if status and task.status.value != status:
-                    continue
-                sid = task.system.system_id if task.system else None
-                if system_id and sid != system_id:
                     continue
                 customer = task.system.customer if task.system else {}
                 items.append(
@@ -223,9 +205,7 @@ class TaskService:
                     )
                 )
                 seen_ids.add(task.task_id)
-
-        # 2) SQLite 兜底（排队中/执行中，还没有 task.json）
-        with SessionLocal() as session:
+        with session_factory() as session:
             query = session.query(TaskRecord).filter(
                 TaskRecord.status.in_([TaskStatus.PENDING.value, TaskStatus.RUNNING.value])
             )
@@ -233,8 +213,6 @@ class TaskService:
                 if record.task_id in seen_ids:
                     continue
                 if status and record.status != status:
-                    continue
-                if system_id and record.system_id != system_id:
                     continue
                 items.append(
                     TaskSummary(
@@ -253,7 +231,6 @@ class TaskService:
                         customer_version=record.version,
                     )
                 )
-
         items.sort(key=lambda t: t.created_at or "", reverse=True)
         total = len(items)
         start = (page - 1) * page_size
@@ -262,20 +239,19 @@ class TaskService:
     def delete(self, task_id: str) -> bool:
         """删除任务：SQLite + output/ + uploads/ 级联清理。"""
         found = False
-        with SessionLocal() as session:
+        with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record:
                 session.delete(record)
                 session.commit()
                 found = True
-        output_dir = settings.output / task_id
-        uploads_dir = settings.uploads / task_id
-        if output_dir.exists():
-            shutil.rmtree(output_dir, ignore_errors=True)
+        for directory in (settings.output / task_id, settings.uploads / task_id):
+            if not directory.exists():
+                continue
             found = True
-        if uploads_dir.exists():
-            shutil.rmtree(uploads_dir, ignore_errors=True)
-            found = True
+            shutil.rmtree(directory)
+            if directory.exists():
+                raise OSError(f"任务目录删除失败: {directory}")
         return found
 
     def rerun(self, task_id: str, rule_codes: list[str] | None) -> bool:
@@ -284,22 +260,17 @@ class TaskService:
         if task is None or task.system is None:
             return False
         package_file = task.system.package_file
-        # 优先在 uploads/<task_id>/ 找，其次 uploads/ 根目录
         package = settings.uploads / task_id / package_file
         if not package.exists():
             package = settings.uploads / package_file
         if not package.exists():
             return False
         self._rerun_plan[task_id] = rule_codes
-        # rerun 必须先同步更新 output/ 契约状态，否则轮询会读到旧的 completed。
         pending_task = task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
         store.save_task_meta(settings.output, pending_task)
         self._update_status(task_id, TaskStatus.PENDING)
         self._queue.put(task_id)
         return True
-
-    def system_dir(self, task_id: str, system_id: str) -> Path:
-        return settings.output / task_id / system_id
 
 
 task_service = TaskService()

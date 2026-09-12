@@ -1,5 +1,6 @@
-"""规则执行器：优先级分级 + 消费即依赖 + 单规则重跑 + 产物版本校验。"""
+"""规则执行器：优先级顺序 + 源文件显式匹配 + 结果契约校验。"""
 
+import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -9,38 +10,34 @@ from app.core.metrics import RULES_TOTAL
 from app.inspectors.base import Inspector
 from app.inspectors.registry import RuleRegistry
 from app.models.schemas import RuleResult, RuleStatus
-from app.services.artifacts import Artifact, ArtifactStore
 
 LogFn = Callable[[str, str, dict], None]
 
 
 class RuleContext:
+    """单条规则的运行上下文；files 是 source_patterns 匹配到的任务内相对路径。"""
+
     def __init__(
         self,
         task_id: str,
-        system_id: str,
         data_dir: Path,
-        artifacts: ArtifactStore,
         log: LogFn,
         package_path: Path | None = None,
         result_dir: Path | None = None,
     ) -> None:
         self.task_id = task_id
-        self.system_id = system_id
         self.data_dir = data_dir
-        self.artifacts = artifacts
-        self.artifacts_dir = artifacts.root
         self._log = log
-        self.inputs: dict[str, Artifact] = {}
         self.package_path = package_path
         self.result_dir = result_dir
+        self.files: list[Path] = []
 
     def log(self, level: str, message: str, **detail: object) -> None:
         self._log(level, message, detail)
 
-    def rule_artifact_path(self, rule_code: str, key: str) -> Path:
-        """规则产出产物的约定路径：artifacts/<rule_code>/<key>。"""
-        return self.artifacts_dir / rule_code / key
+    def resolved_files(self) -> list[Path]:
+        """将相对匹配路径解析为任务现场中的实际文件。"""
+        return [ctx_file if ctx_file.is_absolute() else self.data_dir / ctx_file for ctx_file in self.files]
 
 
 class Executor:
@@ -48,61 +45,24 @@ class Executor:
         self.registry = registry
         self.collected: dict[str, RuleResult] = {}
 
-    def producer_of(self, key: str) -> str | None:
-        return self.registry.producers.get(key)
-
-    def validate_dependencies(self) -> None:
-        producers = self.registry.producers
-        for rule in self.registry.all(include_hidden=True):
-            for key in rule.inputs:
-                producer_code = producers.get(key)
-                if producer_code is None:
-                    raise ValueError(f"规则 {rule.code} 消费未声明的产物: {key}")
-                producer = self.registry.get(producer_code)
-                if producer.priority > rule.priority:
-                    raise ValueError(
-                        f"规则 {rule.code} 依赖 {producer_code} 未指向更高优先级"
-                        f"（P{producer.priority} -> P{rule.priority}）"
-                    )
-                if producer.priority == rule.priority and not self._is_extract_rule(producer):
-                    raise ValueError(f"规则 {rule.code} 同优先级依赖 {producer_code}：仅允许依赖解压基础设施规则")
-
-    @staticmethod
-    def _is_extract_rule(rule: Inspector) -> bool:
-        return rule.hidden and rule.code.startswith("pkg.extract.")
-
     def plan(self) -> list[str]:
-        """全量执行计划：按优先级分组升序，组内按依赖拓扑排序（生产者先于消费者）。"""
-        self.validate_dependencies()
-        producers = self.registry.producers
+        """全量执行计划：P0 基础设施先执行，普通规则按优先级与注册码排序。"""
         by_priority: dict[int, list[str]] = {}
         for code in self.registry.codes():
             by_priority.setdefault(self.registry.get(code).priority.value, []).append(code)
-        visited: set[str] = set()
         order: list[str] = []
-
-        def visit(code: str) -> None:
-            if code in visited:
-                return
-            visited.add(code)
-            rule = self.registry.get(code)
-            for key in rule.inputs:
-                producer_code = producers.get(key)
-                if (
-                    producer_code
-                    and producer_code != code
-                    and self.registry.get(producer_code).priority == rule.priority
-                ):
-                    visit(producer_code)
-            order.append(code)
-
         for priority in sorted(by_priority):
             codes = sorted(by_priority[priority])
-            # 解压基础设施规则在同优先级内先执行，保证数据就绪
-            extract_first = [c for c in codes if c.startswith("pkg.extract.")]
-            rest = [c for c in codes if not c.startswith("pkg.extract.")]
-            for code in extract_first + rest:
-                visit(code)
+            if priority == 0:
+                codes = sorted(
+                    codes,
+                    key=lambda code: (
+                        0 if code == "pkg.extract.main" else 1,
+                        self.registry.get(code).hidden is False,
+                        code,
+                    ),
+                )
+            order.extend(codes)
         return order
 
     def assign_order(self, results: dict[str, RuleResult]) -> None:
@@ -110,37 +70,50 @@ class Executor:
             if code in results:
                 results[code].execution_order = index
 
-    def _ensure_dependency(self, rule: Inspector, ctx: RuleContext) -> list[str]:
-        """确保规则消费的产物可用（缺失/版本过期则补跑生产者），返回缺失的产物 key。"""
-        missing: list[str] = []
-        for key in rule.inputs:
-            producer_code = self.producer_of(key)
-            producer = self.registry.get(producer_code)
-            artifact = ctx.artifacts.valid(key, producer)
-            if artifact is None:
-                self.run_one(producer_code, ctx)
-                artifact = ctx.artifacts.valid(key, producer)
-            if artifact is None:
-                missing.append(key)
-            else:
-                ctx.inputs[key] = artifact
-        return missing
+    def _matched_files(self, rule: Inspector, ctx: RuleContext) -> list[Path]:
+        if not rule.source_patterns:
+            return []
+        candidates = [p.relative_to(ctx.data_dir) for p in ctx.data_dir.rglob("*") if p.is_file()]
+        matched: list[Path] = []
+        for candidate in candidates:
+            relative = Path(candidate).as_posix()
+            if any(re.fullmatch(pattern, relative) for pattern in rule.source_patterns):
+                matched.append(Path(relative))
+        return sorted(set(matched), key=lambda p: p.as_posix())
+
+    @staticmethod
+    def _validate_metrics(rule: Inspector, result: RuleResult) -> str | None:
+        if result.status not in (RuleStatus.PASS, RuleStatus.WARN, RuleStatus.FAIL):
+            return None
+        declared = {
+            (m.get("key") if isinstance(m, dict) else m.key): (m.get("unit") if isinstance(m, dict) else m.unit)
+            for m in rule.outputs_metrics
+        }
+        actual = {metric.key: metric.unit for metric in result.metrics}
+        if actual != declared:
+            return f"metrics 契约不一致: 声明 {declared}, 实际 {actual}"
+        return None
 
     def run_one(self, code: str, ctx: RuleContext) -> RuleResult:
         rule = self.registry.get(code)
         if self._reuse_existing(rule, ctx):
             RULES_TOTAL.labels(rule=code, status=self.collected[code].status.value).inc()
             return self.collected[code]
-        ctx.log("info", f"执行规则 {code}", priority=rule.priority.value, version=rule.rule_version)
+        ctx.files = self._matched_files(rule, ctx)
+        ctx.log(
+            "info",
+            f"执行规则 {code}",
+            priority=rule.priority.value,
+            version=rule.rule_version,
+            matched_files=[p.as_posix() for p in ctx.files],
+        )
         started = time.monotonic()
-        ctx.inputs = {}
-        missing = self._ensure_dependency(rule, ctx)
-        if missing:
+        if rule.source_patterns and not ctx.files:
             result = self._result(
                 rule,
                 status=RuleStatus.SKIP,
-                summary="数据未准备",
-                skip_reason=(f"数据未准备：依赖产物 {', '.join(missing)} 缺失。请先执行全量巡检生成数据"),
+                summary="未发现匹配源文件",
+                skip_reason=f"source_patterns 未匹配到文件: {', '.join(rule.source_patterns)}",
                 duration_ms=int((time.monotonic() - started) * 1000),
             )
             self.collected[code] = result
@@ -150,10 +123,19 @@ class Executor:
             result = rule.run(ctx)
             if not isinstance(result, RuleResult):
                 raise TypeError(f"规则 {code} 未返回 RuleResult")
-            result.executed_at = datetime.now(UTC)
-            result.duration_ms = int((time.monotonic() - started) * 1000)
-            if result.status in (RuleStatus.PASS, RuleStatus.WARN, RuleStatus.FAIL):
-                self._persist_outputs(rule, ctx)
+            contract_error = self._validate_metrics(rule, result)
+            if contract_error:
+                ctx.log("error", f"规则 {code} 输出契约校验失败", error=contract_error)
+                result = self._result(
+                    rule,
+                    status=RuleStatus.ERROR,
+                    summary="规则输出契约校验失败",
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    metadata={"error": contract_error},
+                )
+            else:
+                result.executed_at = datetime.now(UTC)
+                result.duration_ms = int((time.monotonic() - started) * 1000)
             self.collected[code] = result
             RULES_TOTAL.labels(rule=code, status=result.status.value).inc()
             return result
@@ -163,7 +145,6 @@ class Executor:
                 rule,
                 status=RuleStatus.ERROR,
                 summary="规则执行异常",
-                skip_reason=None,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 metadata={"error": str(exc)},
             )
@@ -172,42 +153,17 @@ class Executor:
             return result
 
     def _reuse_existing(self, rule: Inspector, ctx: RuleContext) -> bool:
-        """产物全部有效（存在且 rule_version 一致）且旧结果存在时复用，避免重复解析。"""
-        if not rule.outputs_artifacts:
-            return False
-        if not all(ctx.artifacts.valid(key, rule) for key in rule.outputs_artifacts):
-            return False
-        if ctx.result_dir is None:
-            return False
-        result_path = ctx.result_dir / f"{rule.code}.json"
-        if not result_path.exists():
-            return False
-        import json
-
-        from app.models.schemas import RuleResult
-
-        result = RuleResult.model_validate(json.loads(result_path.read_text(encoding="utf-8")))
-        ctx.log("info", f"复用规则产物 {rule.code}", version=rule.rule_version)
-        self.collected[rule.code] = result
-        return True
-
-    def _persist_outputs(self, rule: Inspector, ctx: RuleContext) -> None:
-        for key in rule.outputs_artifacts:
-            path = ctx.rule_artifact_path(rule.code, key)
-            if not path.exists():
-                ctx.log("warn", f"规则 {rule.code} 声明产物 {key} 但未生成文件")
-                continue
-            ctx.artifacts.save(key, rule, path)
+        """单规则重跑基线不启用全量复用；保留 result_dir 供测试场景使用。"""
+        del rule, ctx
+        return False
 
     def run_all(self, ctx: RuleContext) -> dict[str, RuleResult]:
-        self.validate_dependencies()
         results: dict[str, RuleResult] = {}
         for code in self.plan():
             results[code] = self.run_one(code, ctx)
         return results
 
-    def run_rule_with_deps(self, code: str, ctx: RuleContext) -> RuleResult:
-        self.validate_dependencies()
+    def run_rule(self, code: str, ctx: RuleContext) -> RuleResult:
         return self.run_one(code, ctx)
 
     @staticmethod
@@ -225,13 +181,11 @@ class Executor:
             name=rule.name,
             category=rule.category,
             priority=rule.priority,
-            inputs=list(rule.inputs),
             execution_order=0,
             status=status,
             severity=rule.severity,
             summary=summary,
             skip_reason=skip_reason,
-            executed_at=datetime.now(UTC),
             duration_ms=duration_ms,
             metadata=metadata or {},
         )
@@ -244,7 +198,6 @@ def make_result(rule: Inspector, *, status: RuleStatus, summary: str, **kw) -> R
         name=rule.name,
         category=rule.category,
         priority=rule.priority,
-        inputs=list(rule.inputs),
         execution_order=0,
         status=status,
         severity=rule.severity,

@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, log_processed_files, read_records
+from app.inspectors.log.common import log_processed_files, read_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -67,7 +67,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="将日志消息匹配到数据库连接池、认证失败、SCTP 链路、依赖超时和内存耗尽等已知故障模式",
     recommendation="按命中的故障模式查看证据、受影响服务，并执行对应处置建议",
-    inputs=["log.filter.artifacts.filtered_logs"],
+    source_patterns=[r"^logs/.*\.(log|log\.gz)$"],
     outputs_metrics=[
         {"key": "matched_pattern_count", "label": "命中故障模式数", "unit": "类"},
         {"key": "affected_service_count", "label": "受影响服务数", "unit": "个"},
@@ -77,22 +77,22 @@ inspector = Inspector(
 
 
 def _run(ctx: RuleContext) -> object:
-    path = filtered_path(ctx)
-    if path is None:
+    records = read_records(ctx)
+    if not records:
         return make_result(
             inspector,
             status=RuleStatus.SKIP,
-            summary="依赖过滤产物缺失",
-            skip_reason="依赖产物 log.filter.artifacts.filtered_logs 缺失或缺少 filtered.jsonl",
+            summary="未发现匹配日志",
+            skip_reason="source_patterns 未发现可解析日志",
         )
 
-    processed_files_list = log_processed_files(ctx, path, inspector.code)
+    processed_files_list = log_processed_files(ctx, inspector.code, sorted({r["source_file"] for r in records}))
 
     groups: dict[tuple[str, str], dict] = {}
     pattern_counts: Counter[str] = Counter()
     service_counts: Counter[str] = Counter()
 
-    for record in read_records(path):
+    for record in records:
         for pattern in PATTERNS:
             if not pattern["pattern"].search(record["message"]):
                 continue

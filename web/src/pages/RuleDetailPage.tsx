@@ -75,14 +75,9 @@ export function RuleDetailPage() {
             { key: "version", label: "规则版本", children: meta?.rule_version ?? "-" },
             { key: "summary", label: "结果摘要", children: result.summary ?? "-" },
             {
-              key: "inputs",
-              label: "输入依赖",
-              children: (result.inputs ?? []).length ? result.inputs!.map((i) => <Tag key={i}>{i}</Tag>) : "-",
-            },
-            {
-              key: "artifacts",
-              label: "产出产物",
-              children: (result.artifacts ?? []).length ? result.artifacts!.map((a) => <Tag key={a}>{a}</Tag>) : "-",
+              key: "source_patterns",
+              label: "源文件匹配",
+              children: (meta?.source_patterns ?? []).length ? meta!.source_patterns.map((i) => <Tag key={i}>{i}</Tag>) : "-",
             },
           ]}
         />

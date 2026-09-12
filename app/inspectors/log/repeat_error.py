@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.inspectors.base import Inspector
-from app.inspectors.log.common import filtered_path, log_processed_files, read_records
+from app.inspectors.log.common import log_processed_files, read_records
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
@@ -29,7 +29,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="按服务归一化错误消息，识别连接池耗尽、认证失败、重试风暴等重复错误",
     recommendation="检查重复错误的触发频率、外部依赖可用性、重试与限流配置",
-    inputs=["log.filter.artifacts.filtered_logs"],
+    source_patterns=[r"^logs/.*\.(log|log\.gz)$"],
     outputs_metrics=[
         {"key": "repeated_pattern_count", "label": "重复错误模式数", "unit": "个"},
         {"key": "max_repeat_count", "label": "最大重复次数", "unit": "次"},
@@ -42,21 +42,21 @@ def _normalized_message(message: str) -> str:
 
 
 def _run(ctx: RuleContext) -> object:
-    path = filtered_path(ctx)
-    if path is None:
+    records = read_records(ctx)
+    if not records:
         return make_result(
             inspector,
             status=RuleStatus.SKIP,
-            summary="依赖过滤产物缺失",
-            skip_reason="依赖产物 log.filter.artifacts.filtered_logs 缺失或缺少 filtered.jsonl",
+            summary="未发现匹配日志",
+            skip_reason="source_patterns 未发现可解析日志",
         )
 
     counts: Counter[tuple[str, str]] = Counter()
-    processed_files_list = log_processed_files(ctx, path, inspector.code)
+    processed_files_list = log_processed_files(ctx, inspector.code, sorted({r["source_file"] for r in records}))
 
     groups: dict[tuple[str, str], dict] = {}
 
-    for record in read_records(path):
+    for record in records:
         if record["level"] == "STACK":
             continue
         normalized = _normalized_message(record["message"])

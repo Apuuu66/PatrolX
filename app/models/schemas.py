@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TaskStatus(StrEnum):
@@ -92,6 +92,15 @@ class Finding(BaseModel):
     severity: Severity
     source_file: str | None = None
     evidence: str | None = None
+
+    @model_validator(mode="after")
+    def require_traceability(self) -> "Finding":
+        if not self.source_file or not self.source_file.strip():
+            raise ValueError("finding.source_file 不能为空")
+        if not self.evidence or not self.evidence.strip():
+            raise ValueError("finding.evidence 不能为空")
+        return self
+
     details: str | None = None
     recommendation: str | None = None
     metrics: list[Metric] | None = None
@@ -102,7 +111,6 @@ class RuleResult(BaseModel):
     name: str
     category: RuleCategory
     priority: Priority
-    inputs: list[str] = Field(default_factory=list)
     execution_order: int
     status: RuleStatus
     severity: Severity
@@ -112,13 +120,16 @@ class RuleResult(BaseModel):
     duration_ms: int | None = None
     metrics: list[Metric] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
-    artifacts: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def require_skip_reason(self) -> "RuleResult":
+        if self.status == RuleStatus.SKIP and (not self.skip_reason or not self.skip_reason.strip()):
+            raise ValueError("status=skip 时 skip_reason 不能为空")
+        return self
 
 
 class SystemInspection(BaseModel):
-    system_id: str
-    system_name: str | None = None
     package_file: str
     package_checksum: str | None = None
     version: str | None = None
@@ -138,6 +149,28 @@ class InspectionTask(BaseModel):
     completed_at: datetime | None = None
     stats: TaskStats
     system: SystemInspection | None = None
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> "InspectionTask":
+        if self.system is None:
+            return self
+        rules = self.system.rules
+        if self.stats.total != len(rules) or self.system.summary.total != len(rules):
+            raise ValueError("任务 summary 与规则数量不一致")
+        counted = self.stats.pass_ + self.stats.warn + self.stats.fail + self.stats.error + self.stats.skip
+        if counted != self.stats.total:
+            raise ValueError("任务 summary 各状态计数之和必须等于总数")
+        actual = {
+            RuleStatus.PASS: self.stats.pass_,
+            RuleStatus.WARN: self.stats.warn,
+            RuleStatus.FAIL: self.stats.fail,
+            RuleStatus.ERROR: self.stats.error,
+            RuleStatus.SKIP: self.stats.skip,
+        }
+        for status in RuleStatus:
+            if sum(rule.status == status for rule in rules) != actual[status]:
+                raise ValueError("任务 summary 与规则状态分布不一致")
+        return self
 
 
 class TaskSummary(InspectionTask):
@@ -200,7 +233,7 @@ class InspectorInfo(BaseModel):
     hidden: bool = False
     description: str | None = None
     recommendation: str | None = None
-    inputs: list[str] = Field(default_factory=list)
+    source_patterns: list[str] = Field(default_factory=list)
     outputs: dict[str, Any] = Field(default_factory=dict)
     params: list[dict[str, str]] = Field(default_factory=list)
 

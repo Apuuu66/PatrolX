@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>PatrolX 巡检报告 - {{ system.system_id }}</title>
+  <title>PatrolX 巡检报告 - {{ task_id }}</title>
   <style>
     body { font-family: -apple-system, "PingFang SC", sans-serif; margin: 32px; color: #333; }
     h1 { font-size: 20px; }
@@ -18,10 +18,12 @@
 </head>
 <body>
   <h1>PatrolX 巡检报告</h1>
-  <p>任务：{{ task_id }} ｜ 系统：{{ system.system_id }}（{{ system.system_name or "" }}） ｜ 数据包：{{ system.package_file }}</p>
+  <p>
+    任务：{{ task_id }} ｜ 数据包：{{ system.package_file }} ｜ 执行时间：{{ completed_at or "未完成" }}
+  </p>
   <div class="stats">
     <div class="stat">总计 <b>{{ system.summary.total }}</b></div>
-    <div class="stat" style="color:#52c41a">通过 <b>{{ system.summary.pass }}</b></div>
+    <div class="stat" style="color:#52c41a">通过 <b>{{ system.summary.pass_ }}</b></div>
     <div class="stat" style="color:#faad14">告警 <b>{{ system.summary.warn }}</b></div>
     <div class="stat" style="color:#ff4d4f">失败 <b>{{ system.summary.fail }}</b></div>
     <div class="stat" style="color:#8c8c8c">异常 <b>{{ system.summary.error }}</b></div>
