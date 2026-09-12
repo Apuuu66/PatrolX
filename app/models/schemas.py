@@ -141,7 +141,10 @@ class InspectionTask(BaseModel):
 
 
 class TaskSummary(InspectionTask):
-    pass
+    customer_province: str | None = None
+    customer_operator: str | None = None
+    customer_product: str | None = None
+    customer_version: str | None = None
 
 
 class TaskCreated(BaseModel):

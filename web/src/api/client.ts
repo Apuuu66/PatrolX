@@ -345,6 +345,14 @@ export interface components {
         };
         TaskSummary: components["schemas"]["InspectionTask"] & {
             system?: unknown;
+            /** @description 上传时选择的省份字典编码（可选） */
+            customer_province?: string;
+            /** @description 上传时选择的运营商字典编码（可选） */
+            customer_operator?: string;
+            /** @description 上传时选择的产品形态字典编码（可选） */
+            customer_product?: string;
+            /** @description 上传时选择的版本字典编码（可选） */
+            customer_version?: string;
         };
         TaskListResponse: {
             items: components["schemas"]["TaskSummary"][];
@@ -566,6 +574,8 @@ export interface operations {
                     province?: string;
                     /** @description 运营商字典编码（可选） */
                     operator?: string;
+                    /** @description 产品形态字典编码（可选） */
+                    product?: string;
                     /**
                      * @description 已存在同包任务时是否删除旧任务并重新创建
                      * @default false

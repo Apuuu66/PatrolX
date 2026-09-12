@@ -105,6 +105,7 @@ export function TaskListPage() {
       if (values.name) fd.append("name", values.name);
       if (values.province) fd.append("province", values.province);
       if (values.operator) fd.append("operator", values.operator);
+      if (values.product) fd.append("product", values.product);
       if (values.version) fd.append("version", values.version);
       if (force) fd.append("force", "true");
       const created = await api.createTask(fd);
@@ -240,6 +241,14 @@ export function TaskListPage() {
                     {dayjs(record.created_at).format("YYYY-MM-DD HH:mm")}
                   </Typography.Text>
                 </Flex>
+                {(record.customer_province || record.customer_operator || record.customer_product || record.customer_version) && (
+                  <Flex gap={4} wrap="wrap" style={{ marginTop: 4 }}>
+                    {record.customer_province && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_province}</Typography.Text>}
+                    {record.customer_operator && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_operator}</Typography.Text>}
+                    {record.customer_product && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_product}</Typography.Text>}
+                    {record.customer_version && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_version}</Typography.Text>}
+                  </Flex>
+                )}
               </div>
 
               <Flex gap={8} wrap="wrap">
@@ -346,6 +355,9 @@ export function TaskListPage() {
           </Form.Item>
           <Form.Item label="运营商" name="operator">
             <Select allowClear placeholder="选择运营商" options={dictOptions(dicts?.operator)} />
+          </Form.Item>
+          <Form.Item label="产品形态" name="product">
+            <Select allowClear placeholder="选择产品形态" options={dictOptions(dicts?.product)} />
           </Form.Item>
           <Form.Item label="版本" name="version">
             <Select allowClear placeholder="选择版本" options={dictOptions(dicts?.version)} />

@@ -59,6 +59,9 @@ paths:
                 operator:
                   type: string
                   description: 运营商字典编码（可选）
+                product:
+                  type: string
+                  description: 产品形态字典编码（可选）
                 force:
                   type: boolean
                   default: false
@@ -553,6 +556,18 @@ components:
           properties:
             system:
               nullable: true
+            customer_province:
+              type: string
+              description: 上传时选择的省份字典编码（可选）
+            customer_operator:
+              type: string
+              description: 上传时选择的运营商字典编码（可选）
+            customer_product:
+              type: string
+              description: 上传时选择的产品形态字典编码（可选）
+            customer_version:
+              type: string
+              description: 上传时选择的版本字典编码（可选）
     TaskListResponse:
       type: object
       required: [items, total, page, page_size]

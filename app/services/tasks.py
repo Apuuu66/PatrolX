@@ -121,6 +121,7 @@ class TaskService:
         province: str | None,
         operator: str | None,
         version: str | None,
+        product: str | None = None,
         system_id: str | None = None,
     ) -> TaskCreated:
         system_id = system_id or customer_system_id(package_file, province, operator)
@@ -130,6 +131,8 @@ class TaskService:
             customer["province"] = province
         if operator:
             customer["operator"] = operator
+        if product:
+            customer["product"] = product
         with SessionLocal() as session:
             session.add(
                 TaskRecord(
@@ -201,6 +204,7 @@ class TaskService:
                 sid = task.system.system_id if task.system else None
                 if system_id and sid != system_id:
                     continue
+                customer = task.system.customer if task.system else {}
                 items.append(
                     TaskSummary(
                         task_id=task.task_id,
@@ -212,6 +216,10 @@ class TaskService:
                         completed_at=task.completed_at,
                         stats=task.stats,
                         system=None,
+                        customer_province=customer.get("province"),
+                        customer_operator=customer.get("operator"),
+                        customer_product=customer.get("product"),
+                        customer_version=task.system.version if task.system else None,
                     )
                 )
                 seen_ids.add(task.task_id)
@@ -239,6 +247,10 @@ class TaskService:
                         completed_at=record.completed_at,
                         stats={"total": 0, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 0, "systems": 1},
                         system=None,
+                        customer_province=record.customer.get("province"),
+                        customer_operator=record.customer.get("operator"),
+                        customer_product=record.customer.get("product"),
+                        customer_version=record.version,
                     )
                 )
 

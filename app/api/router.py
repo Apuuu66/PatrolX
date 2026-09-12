@@ -49,6 +49,7 @@ async def create_task(
     version: str | None = Form(None),
     province: str | None = Form(None),
     operator: str | None = Form(None),
+    product: str | None = Form(None),
     force: bool = False,
 ) -> TaskCreated:
     filename = (package_file.filename or "package.zip").rsplit("/", 1)[-1]
@@ -60,7 +61,7 @@ async def create_task(
         if not force:
             raise AppError("duplicate_package", "已存在相同包的任务", 409)
         task_service.delete(task_id)
-    created = task_service.reserve(filename, name, province, operator, version, system_id=system_id)
+    created = task_service.reserve(filename, name, province, operator, version, product=product, system_id=system_id)
     task_dir = settings.uploads / created.task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     dest = task_dir / filename
