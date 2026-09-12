@@ -90,7 +90,7 @@ Speckit 功能流程如下：
 2. 运行 specify 生成 feature 编号和短名称后，立即从 `main` 创建并切换到 `feature/NNN-short-name`。
 3. 主工作区完成 `spec.md`、`plan.md`、`tasks.md` 及检查清单，经显式 review 后全部提交到该功能分支。
 4. 规格文档提交完成后，主工作区切回 `main`，释放功能分支。
-5. 使用 `git worktree add` 在 `../PatrolX-wt/` 下创建该功能分支的隔离目录，安装依赖并验证干净基线。
+5. 使用 `git worktree add` 在仓库父目录的 `PatrolX-wt/` 下创建该功能分支的隔离目录（本机为 `/Users/yigui/code/PatrolX-wt/`），安装依赖并验证干净基线。
 6. 在 worktree 内完成编码、契约同步、测试和验证，并同步更新 `tasks.md`。
 7. worktree 内验证通过后，将功能分支合入 `main`；合入后在 `main` 上再次验证。
 8. 验证通过后删除 worktree 和已合入分支。

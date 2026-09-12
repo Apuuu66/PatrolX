@@ -239,6 +239,26 @@ docs(architecture): 拆分 AGENTS.md
 
 worktree 的隔离单位是任务或功能分支，不是会话。每个分支最多对应一个 worktree；新会话必须先查找并复用已有 worktree。实现类变更无论大小都必须在 worktree 内进行。单条规则调试只读取或只运行时可在主工作区进行，修改代码、测试、配置或契约时必须进入 worktree。
 
+worktree 根目录固定为仓库父目录下的 `PatrolX-wt/`：
+
+```text
+<repo-parent>/PatrolX-wt/<branch-name-with-slash-replaced-by-hyphen>
+```
+
+在本机当前仓库中就是：
+
+```text
+/Users/yigui/code/PatrolX-wt/
+```
+
+例如 `feature/003-report-export` 对应：
+
+```text
+/Users/yigui/code/PatrolX-wt/feature-003-report-export
+```
+
+不得把 worktree 放在仓库内部、`.worktrees/`、`worktrees/` 或临时目录中。已有 worktree 通过 `git worktree list` 查找并复用。
+
 ### 使用 Spec Kit 的场景
 
 以下工作必须走 Speckit：
