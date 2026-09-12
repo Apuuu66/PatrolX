@@ -175,7 +175,7 @@ description: "系统基线功能实现任务列表"
 **目的**：验证完整基线，清理实现并同步文档
 
 - [ ] T043 检查 `docs/api/openapi.yaml` 与 `app/models/schemas.py`、`app/api/router.py` 的一致性；若模型校验影响错误示例，则同步契约
-- [ ] T044 [P] 在 `docs/roadmap.md` 中补充巡检结果入库演进设计：文件继续作为运行现场与证据权威源，数据库优先作为查询投影；定义 `ResultStore`/`ResultRepository` 边界、`FileResultStore` 与 `DatabaseResultProjection` 职责、任务/系统/规则/发现/指标入库粒度、`task_id/system_id/rule_code/rule_version/source_file/evidence` 关键字段、任务完成后同步或异步投影、checksum/总数一致性校验和查询/归档场景；本基线不实现入库
+- [ ] T044 [P] 在 `docs/roadmap.md` 中补充巡检结果入库与磁盘增长治理设计：文件继续作为运行现场与证据权威源，数据库优先作为查询投影；定义 `ResultStore`/`ResultRepository` 边界、`FileResultStore` 与 `DatabaseResultProjection` 职责、任务/系统/规则/发现/指标入库粒度、`task_id/system_id/rule_code/rule_version/source_file/evidence` 关键字段、任务完成后同步或异步投影、checksum/总数一致性校验和查询/归档场景。同时按数据类型定义生命周期：active 全现场、compact 清理解压数据和 artifacts、archive 将结果投影/报告索引后归档原始包、deleted 级联清理；说明磁盘水位、保留窗口、dry-run、执行中保护与单规则重跑恢复语义。本基线不实现自动清理
 - [ ] T045 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、目录布局和文档链接
 - [ ] T046 清理新增代码中的重复逻辑，保持规则互不引用、依赖只通过 `inputs[]` 表达
 - [ ] T047 运行 `make lint`、`make test`、`make contract`、`make verify` 和 `make web-build`
