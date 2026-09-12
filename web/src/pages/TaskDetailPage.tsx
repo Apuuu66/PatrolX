@@ -16,10 +16,11 @@ import { FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type RuleResult, type SystemInspection, type TaskSummary } from "../api/http";
+import { api, type RuleResult, type RuleStatus, type SystemInspection, type TaskSummary } from "../api/http";
 import { RuleStatusTag, SeverityTag, TaskStatusTag } from "../components/StatusBadge";
 import { SummaryCards } from "../components/SummaryCards";
 import { usePolling } from "../hooks/usePolling";
+import { countByStatus, filterByStatus, toggleStatusFilter, type StatusFilter } from "../utils/taskFilter";
 
 const CATEGORY_LABELS: Record<string, string> = {
   log: "日志",
@@ -39,6 +40,7 @@ export function TaskDetailPage() {
   const [system, setSystem] = useState<SystemInspection | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
 
   const load = useCallback(async () => {
     try {
@@ -84,13 +86,24 @@ export function TaskDetailPage() {
     }
   };
 
+  const handleStatusClick = useCallback(
+    (status: RuleStatus) => {
+      setStatusFilter((prev) => toggleStatusFilter(prev, status));
+    },
+    [],
+  );
+
   const rules = useMemo(() => (system?.rules ?? []).filter((r) => !hidden.has(r.code)), [system, hidden]);
+
+  const statusCounts = useMemo(() => countByStatus(rules), [rules]);
+
+  const filteredRules = useMemo(() => filterByStatus(rules, statusFilter), [rules, statusFilter]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, RuleResult[]>();
-    for (const rule of rules) map.set(rule.category, [...(map.get(rule.category) ?? []), rule]);
+    for (const rule of filteredRules) map.set(rule.category, [...(map.get(rule.category) ?? []), rule]);
     return Array.from(map.entries());
-  }, [rules]);
+  }, [filteredRules]);
 
   const columns: ColumnsType<RuleResult> = [
     {
@@ -172,7 +185,12 @@ export function TaskDetailPage() {
         }
         style={{ marginBottom: 16 }}
       >
-        <SummaryCards stats={task.stats} />
+        <SummaryCards
+          stats={task.stats}
+          statusCounts={statusCounts}
+          activeStatus={statusFilter}
+          onStatusClick={handleStatusClick}
+        />
         <Descriptions
           size="small"
           column={4}
@@ -198,6 +216,11 @@ export function TaskDetailPage() {
         />
       </Card>
 
+      {grouped.length === 0 && statusFilter !== null && (
+        <Card style={{ marginBottom: 16 }}>
+          <Empty description={`当前状态"${statusFilter}"没有规则结果`} />
+        </Card>
+      )}
       {grouped.map(([category, list]) => (
         <Card
           key={category}
