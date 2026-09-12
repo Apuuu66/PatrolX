@@ -245,7 +245,13 @@ specify → review → plan → review → tasks → implement
 
 ### 实现阶段
 
-进入实现后遵循 Superpowers 的 TDD、verification-before-completion、debugging 等技能。
+进入实现后在 worktree 内按以下顺序调用 Superpowers 技能：
+
+1. `superpowers:using-git-worktrees` — 创建隔离 worktree（第一步，先于任何代码修改）。
+2. `superpowers:test-driven-development` — 每个任务先写测试、确认失败、再实现、再通过（红绿重构循环）。
+3. `superpowers:systematic-debugging` — 遇到 bug 或测试失败时使用，先分析根因再修复。
+4. `superpowers:verification-before-completion` — 声明任务完成前必须运行验证命令并确认输出，禁止凭感觉说"完成"。
+
 Spec/plan 阶段不重复叠加实现计划；实现阶段不重走 Speckit 规划。
 
 ### 多窗口协作
