@@ -243,10 +243,10 @@ export function TaskListPage() {
                 </Flex>
                 {(record.customer_province || record.customer_operator || record.customer_product || record.customer_version) && (
                   <Flex gap={4} wrap="wrap" style={{ marginTop: 4 }}>
-                    {record.customer_province && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_province}</Typography.Text>}
-                    {record.customer_operator && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_operator}</Typography.Text>}
-                    {record.customer_product && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_product}</Typography.Text>}
-                    {record.customer_version && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{record.customer_version}</Typography.Text>}
+                    {codeToName(dicts, "province", record.customer_province) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "province", record.customer_province)}</Typography.Text>}
+                    {codeToName(dicts, "operator", record.customer_operator) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "operator", record.customer_operator)}</Typography.Text>}
+                    {codeToName(dicts, "product", record.customer_product) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "product", record.customer_product)}</Typography.Text>}
+                    {codeToName(dicts, "version", record.customer_version) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "version", record.customer_version)}</Typography.Text>}
                   </Flex>
                 )}
               </div>
@@ -370,4 +370,14 @@ export function TaskListPage() {
 
 function dictOptions(items?: Array<{ code: string; name?: string }>) {
   return (items ?? []).map((d) => ({ value: d.code, label: d.name || d.code }));
+}
+
+function codeToName(
+  dicts: DictsResponse | null,
+  group: "province" | "operator" | "product" | "version",
+  code: string | null | undefined,
+): string | null {
+  if (!code) return null;
+  const item = dicts?.[group]?.find((d) => d.code === code);
+  return item?.name || code;
 }
