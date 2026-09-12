@@ -27,14 +27,12 @@ def _rule(code: str, status: str, findings: list[dict]) -> dict:
         "name": code,
         "category": "log",
         "priority": 0,
-        "inputs": [],
         "execution_order": 0,
         "status": status,
         "severity": "low",
         "summary": "summary",
         "metrics": [],
         "findings": findings,
-        "artifacts": [],
         "metadata": {},
     }
 
@@ -51,8 +49,6 @@ def _task(task_id: str, stats: dict, rules: list[dict]) -> dict:
         "completed_at": None,
         "stats": {**summary, "systems": 1},
         "system": {
-            "system_id": task_id,
-            "system_name": task_id,
             "package_file": f"{task_id}.zip",
             "package_checksum": None,
             "version": None,

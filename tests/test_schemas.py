@@ -27,14 +27,12 @@ def test_rule_result_and_system_instance() -> None:
         name="日志错误密度",
         category="log",
         priority=1,
-        inputs=["pkg.extract.log.ready"],
         execution_order=3,
         status="warn",
         severity="medium",
         metrics=[Metric(key="error_count", label="错误条数", value=152, unit="条")],
     )
     system = SystemInspection(
-        system_id="gd_cmcc",
         package_file="customer_a.tar.gz",
         status="completed",
         summary=Summary(total=1, pass_=0, warn=1, fail=0, error=0, skip=0),
@@ -52,3 +50,10 @@ def test_rule_result_and_system_instance() -> None:
     )
     assert task.system is not None
     assert task.system.rules[0].code == "log.error_density"
+
+
+def test_legacy_contract_fields_removed() -> None:
+    assert "inputs" not in RuleResult.model_fields
+    assert "artifacts" not in RuleResult.model_fields
+    assert "system_id" not in SystemInspection.model_fields
+    assert "system_name" not in SystemInspection.model_fields

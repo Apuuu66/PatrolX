@@ -1,12 +1,10 @@
-"""六类示例规则单测（正常、告警、无数据处理）。"""
+"""规则单元测试：source_patterns 直读、正常/告警/无数据处理。"""
 
 import gzip
-import json
 from pathlib import Path
 
 from app.inspectors.registry import registry
 from app.models.schemas import RuleStatus
-from app.services.artifacts import ArtifactStore
 from app.services.executor import RuleContext
 
 
@@ -26,24 +24,17 @@ def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
 
     ctx = RuleContext(
         task_id="t1",
-        system_id="s1",
         data_dir=data,
-        artifacts=ArtifactStore(tmp_path / "artifacts"),
         log=log,
     )
+    ctx.files = [Path(rel) for rel in files]
     ctx.logs = logs
     return ctx
 
 
 def _run_rule(code: str, ctx: RuleContext):
     registry.load_all()
-    inspector = registry.get(code)
-    result = inspector.run(ctx)
-    for key in inspector.outputs_artifacts:
-        path = ctx.rule_artifact_path(inspector.code, key)
-        if path.exists():
-            ctx.artifacts.save(key, inspector, path)
-    return result
+    return registry.get(code).run(ctx)
 
 
 def test_kpi_threshold_warn(tmp_path: Path) -> None:
@@ -118,15 +109,17 @@ def test_alarm_stat_csv_created_and_cleared_time(tmp_path: Path) -> None:
 
 def test_log_filter_reads_plain_and_gzip_logs(tmp_path: Path) -> None:
     plain = "2026-09-01T10:00:00Z ERROR app db down\n"
-    log_dir = tmp_path / "data/log/paas-192.168.2.2"
-    log_dir.mkdir(parents=True)
-    (log_dir / "app.log").write_text(plain, encoding="utf-8")
-    (log_dir / "app_history.log.gz").write_bytes(gzip.compress(plain.encode("utf-8")))
-    ctx = _ctx(tmp_path, {})
+    ctx = _ctx(
+        tmp_path,
+        {
+            "logs/paas-192.168.2.2/app.log": plain,
+            "logs/paas-192.168.2.2/app_history.log.gz": plain,
+        },
+    )
     result = _run_rule("log.filter", ctx)
     assert result.status == RuleStatus.PASS
     assert result.metadata["files"] == 2
-    assert result.metadata["total_lines"] == 2
+    assert result.metrics[1].value == 2
 
 
 def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) -> None:
@@ -139,31 +132,22 @@ def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) 
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
-            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz": aaa,
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz": aaa,
         },
     )
 
     result = _run_rule("log.filter", ctx)
-    root = Path(ctx.artifacts.get("log.filter.artifacts.filtered_logs").path)
-    index = json.loads((root / "index.json").read_text(encoding="utf-8"))
 
     assert result.status == RuleStatus.PASS
     assert result.metadata["service_count"] == 2
     assert result.metadata["processed_files"] == [
-        "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz",
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log",
+        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz",
+        "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log",
     ]
-    assert set(index["services"]) == {"AAAService", "AppService"}
-    assert index["services"]["AppService"]["error_count"] == 1
-    assert index["services"]["AppService"]["nodes"] == {"paas-192.168.2.2": 2}
-    assert index["services"]["AAAService"]["error_count"] == 1
-    records = [json.loads(line) for line in (root / "filtered.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert {record["service"] for record in records} == {"AAAService", "AppService"}
-    app_records = [record for record in records if record["service"] == "AppService"]
-    assert [record["level"] for record in app_records] == ["ERROR", "STACK"]
-    assert app_records[0]["node"] == "paas-192.168.2.2"
-    assert "DbPool.acquire" in app_records[1]["message"]
+    assert result.metadata["levels"] == {"ERROR": 2, "STACK": 1}
+    assert result.metadata["files"] == 2
+    assert result.metadata["service_count"] == 2
 
 
 def test_log_filter_keeps_python_traceback_after_error(tmp_path: Path) -> None:
@@ -177,22 +161,15 @@ def test_log_filter_keeps_python_traceback_after_error(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/"
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/"
             "app_service_error_20260901011314.log": plain,
         },
     )
 
     result = _run_rule("log.filter", ctx)
-    root = Path(ctx.artifacts.get("log.filter.artifacts.filtered_logs").path)
-    records = [json.loads(line) for line in (root / "filtered.jsonl").read_text(encoding="utf-8").splitlines()]
 
     assert result.status == RuleStatus.PASS
-    assert [record["level"] for record in records] == ["ERROR", "STACK", "STACK", "STACK", "STACK"]
-
-
-def _load_filter_artifact(ctx) -> None:
-    artifact = ctx.artifacts.get("log.filter.artifacts.filtered_logs")
-    ctx.inputs[artifact.key] = artifact
+    assert result.metadata["levels"] == {"ERROR": 1, "STACK": 4}
 
 
 def _logged_processed_files(ctx, code: str) -> list[str] | None:
@@ -212,13 +189,10 @@ def test_service_errors_warn_on_hot_service(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": plain,
-            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": plain,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.service_errors", ctx)
 
     assert result.status == RuleStatus.WARN
@@ -240,13 +214,10 @@ def test_fault_pattern_matches_real_operational_cases(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
-            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.fault_pattern", ctx)
 
     assert result.status == RuleStatus.FAIL
@@ -265,15 +236,12 @@ def test_repeat_error_detects_database_pool_storm(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": "\n".join(
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": "\n".join(
                 lines
             )
             + "\n",
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.repeat_error", ctx)
 
     assert result.status == RuleStatus.WARN
@@ -297,13 +265,10 @@ def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log": app,
-            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_error_20260901011314.log": aaa,
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log": app,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_error_20260901011314.log": aaa,
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.stacktrace", ctx)
 
     assert result.status == RuleStatus.WARN
@@ -324,13 +289,10 @@ def test_app_service_rule_detects_pool_and_sctp_errors(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
-            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.app_service", ctx)
 
     assert result.status == RuleStatus.FAIL
@@ -345,7 +307,7 @@ def test_app_service_rule_detects_pool_and_sctp_errors(tmp_path: Path) -> None:
         "AppService SCTP 链路异常",
     ]
     assert result.metadata["processed_files"] == [
-        "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log"
+        "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log"
     ]
 
 
@@ -354,12 +316,9 @@ def test_app_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.app_service", ctx)
 
     assert result.status == RuleStatus.SKIP
@@ -376,13 +335,10 @@ def test_aaa_service_rule_detects_auth_and_retry_issues(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
-            "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.aaa_service", ctx)
 
     assert result.status == RuleStatus.WARN
@@ -394,7 +350,7 @@ def test_aaa_service_rule_detects_auth_and_retry_issues(tmp_path: Path) -> None:
     ]
     assert result.findings[0].title == "AAAService 认证失败"
     assert result.metadata["processed_files"] == [
-        "log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log"
+        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log"
     ]
 
 
@@ -403,12 +359,9 @@ def test_aaa_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
+            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
         },
     )
-    _run_rule("log.filter", ctx)
-    _load_filter_artifact(ctx)
-
     result = _run_rule("log.aaa_service", ctx)
 
     assert result.status == RuleStatus.SKIP
