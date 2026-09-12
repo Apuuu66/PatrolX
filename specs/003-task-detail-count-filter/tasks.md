@@ -92,8 +92,8 @@ description: "任务详情统计数字过滤实现任务列表"
 
 - [x] T010 运行 `cd web && npm run build` 确认前端构建通过
 - [x] T011 运行 `cd web && npm test` 确认所有前端测试通过
-- [ ] T012 运行 `make lint` 确认代码风格通过
-- [ ] T013 按 `specs/003-task-detail-count-filter/quickstart.md` 手动验证 5 个场景
+- [x] T012 运行 `make lint` 确认代码风格通过
+- [x] T013 按 `specs/003-task-detail-count-filter/quickstart.md` 手动验证 5 个场景
 
 ---
 
