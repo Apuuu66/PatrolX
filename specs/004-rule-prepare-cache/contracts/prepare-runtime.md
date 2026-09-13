@@ -40,10 +40,10 @@ prepare 可以写任意文件到 `output/<task_id>/prepared/<owner_code>/`，但
 ### Marker
 
 ```text
-output/<task_id>/prepared/<owner_code>/.prepare.md5
+output/<task_id>/prepared/<owner_code>/.prepare.sha256
 ```
 
-- 内容：当前 owner 规则所在 Python 文件内容的 md5。
+- 内容：当前 owner 规则所在 Python 文件内容的 SHA-256。
 - marker 不存在：缓存 miss。
 - marker 存在但内容不同：缓存 miss。
 - marker 存在且内容相同：缓存 hit。

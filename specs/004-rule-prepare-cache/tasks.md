@@ -45,7 +45,7 @@
 - [x] T008 在 `app/inspectors/base.py` 中增加 `source_patterns: list[str]` 和 `PrepareSpec`；约束一个 owner 最多一个 prepare，prepare 只包含 `code`、`owner_code`、`run`，不声明 outputs
 - [x] T009 在 `app/inspectors/registry.py` 中实现 prepare 注册、owner 唯一性校验、prepare code 唯一性校验和按 owner 查询的只读访问
 - [x] T010 在 `app/services/executor.py` 的 `RuleContext` 中增加 `prepared_dir`，并在 `app/cli.py` 的 `_new_context` 注入 `output/<task_id>/prepared/`
-- [x] T011 在 `app/services/prepare.py` 中创建 owner prepared 目录路径、marker 路径、当前规则 Python 文件路径解析和 md5 计算的纯函数 helper
+- [x] T011 在 `app/services/prepare.py` 中创建 owner prepared 目录路径、marker 路径、当前规则 Python 文件路径解析和 SHA-256 计算的纯函数 helper
 - [x] T012 在 `app/inspectors/base.py` 或 `app/services/prepare.py` 中实现 `source_patterns` 匹配 helper：POSIX 相对路径、`re.fullmatch()`、防路径穿越
 
 **检查点**：基础层完成；未实现编排前，现有 `make lint` 和 `make test` 仍必须通过。

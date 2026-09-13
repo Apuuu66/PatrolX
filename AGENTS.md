@@ -140,7 +140,7 @@ cd web && npm run dev
 - P2 综合分析。
 - 不建立规则间依赖图；每条普通规则只按自己的 `source_patterns` 读取匹配文件或自己的 prepared 数据。
 - 单规则重跑只执行目标规则私有 prepare/缓存检查和目标规则，不补跑其他普通规则。
-- prepare 缓存以当前 owner 规则 Python 文件内容 md5 做轻量校验；无手动刷新命令或全局开关。
+- prepare 缓存以当前 owner 规则 Python 文件内容 SHA-256 做轻量校验；无手动刷新命令或全局开关。
 
 ## API 契约约定
 

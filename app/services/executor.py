@@ -10,7 +10,7 @@ from app.core.metrics import RULES_TOTAL
 from app.inspectors.base import Inspector
 from app.inspectors.registry import RuleRegistry
 from app.models.schemas import RuleResult, RuleStatus
-from app.services.prepare import marker_path, match_relative_files, rule_file_md5
+from app.services.prepare import marker_path, match_relative_files, rule_file_sha256
 
 LogFn = Callable[[str, str, dict], None]
 
@@ -110,8 +110,8 @@ class Executor:
                 reason="未发现匹配源文件",
             )
             return "SKIP"
-        expected_md5 = rule_file_md5(owner)
-        if marker.exists() and marker.read_text(encoding="utf-8") == expected_md5:
+        expected_sha256 = rule_file_sha256(owner)
+        if marker.exists() and marker.read_text(encoding="utf-8") == expected_sha256:
             ctx.prepare_states[owner.code] = "HIT"
             ctx.files = matched
             ctx.log(
@@ -128,7 +128,7 @@ class Executor:
         ctx.files = matched
         try:
             prepare.run(ctx)
-            marker.write_text(expected_md5, encoding="utf-8")
+            marker.write_text(expected_sha256, encoding="utf-8")
             ctx.prepare_states[owner.code] = "REBUILT"
             ctx.log(
                 "info",

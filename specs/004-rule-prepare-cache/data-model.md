@@ -68,9 +68,9 @@ PrepareSpec 1 ── 0..1 PrepareCacheMarker
 
 | 属性 | 值 |
 | --- | --- |
-| 路径 | `output/<task_id>/prepared/<owner_code>/.prepare.md5` |
-| 内容 | 当前 owner 规则代码文件内容 md5 |
-| 命中条件 | marker 存在且内容与当前规则文件 md5 一致 |
+| 路径 | `output/<task_id>/prepared/<owner_code>/.prepare.sha256` |
+| 内容 | 当前 owner 规则代码文件内容 SHA-256 |
+| 命中条件 | marker 存在且内容与当前规则文件 SHA-256 一致 |
 | 重建条件 | marker 不存在，或内容不一致 |
 | 成功写入 | prepare 成功后由框架写入 |
 | 失败写入 | 不写入 |

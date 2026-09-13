@@ -1,9 +1,10 @@
-"""规则私有 prepare 轻量缓存测试：只校验当前规则 Python 文件 md5。"""
+"""规则私有 prepare 轻量缓存测试：只校验当前规则 Python 文件 SHA-256。"""
 
 from pathlib import Path
 
 import pytest
 
+from app.core.checksum import sha256_file
 from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
 from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
@@ -70,8 +71,9 @@ def test_prepare_cache_hit_rebuild_on_rule_file_change_and_ignore_output_missing
     executor = Executor(registry)
     executor.run_all(ctx)
     assert calls == ["prepare", "inspect"]
-    marker = ctx.prepared_dir / "rule.owner" / ".prepare.md5"
+    marker = ctx.prepared_dir / "rule.owner" / ".prepare.sha256"
     first_marker = marker.read_text(encoding="utf-8")
+    assert first_marker == sha256_file(owner_file)
 
     executor.run_all(ctx)
     assert calls == ["prepare", "inspect", "inspect"]

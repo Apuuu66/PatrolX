@@ -89,7 +89,7 @@ make verify
    python main.py run-one --rule kpi.threshold
    ```
 
-4. 预期结果：目录和 `.prepare.md5` marker 重新生成。
+4. 预期结果：目录和 `.prepare.sha256` marker 重新生成。
 
 ## 场景 5：prepare 失败不扩散
 
@@ -110,6 +110,6 @@ make verify
 
 ## 验收边界
 
-- 单独删除 prepared 中的业务输出文件但保留 `.prepare.md5` 时，不要求自动重建。
+- 单独删除 prepared 中的业务输出文件但保留 `.prepare.sha256` 时，不要求自动重建。
 - 主包解压失败时任务必须失败，不能继续 prepare/inspect。
 - 不应出现新的手动刷新命令、环境变量或 UI 开关。
