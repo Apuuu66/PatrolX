@@ -339,7 +339,6 @@ outputs.metrics[]  声明的指标契约
 ### 7.7 日志处理
 
 - 日志规则递归匹配 `.log` 和 `.log.gz`。
-- gzip 使用流式读取。
 - 物理落位目录是 `logs/`；契约类别仍然是 `log`。
 - 日志规则解析文件路径时提取 service、node、source_file 等上下文。
 
