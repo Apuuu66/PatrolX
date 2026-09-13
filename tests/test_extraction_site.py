@@ -124,9 +124,30 @@ def test_extraction_process_is_logged(tmp_path, monkeypatch) -> None:
 
     messages = [message for _, message, _ in logs]
     assert "主包解压开始" in messages
+    assert "子包解压开始" in messages
     assert "主包解压完成" in messages
     assert "子包解压完成" in messages
     assert "日志 gzip 解压完成" in messages
+
+    main_start = next(i for i, (_, message, _) in enumerate(logs) if message == "主包解压开始")
+    main_complete = next(i for i, (_, message, _) in enumerate(logs) if message == "主包解压完成")
+    log_subpackage = "ServiceLog_inner.zip"
+    sub_start = next(
+        i
+        for i, (_, message, detail) in enumerate(logs)
+        if message == "子包解压开始" and detail["source"] == log_subpackage
+    )
+    sub_complete = next(
+        i
+        for i, (_, message, detail) in enumerate(logs)
+        if message == "子包解压完成" and detail["source"] == log_subpackage
+    )
+    gzip_complete = next(
+        i
+        for i, (_, message, detail) in enumerate(logs)
+        if message == "日志 gzip 解压完成" and detail["source"] == "InnerService/logs/paas-node-2/error.log.gz"
+    )
+    assert main_start < sub_start < gzip_complete < sub_complete < main_complete
     assert logs[-1][2]["task_id"] == "task-logs"
 
 
@@ -145,10 +166,27 @@ def test_run_task_writes_extraction_logs(tmp_path, monkeypatch) -> None:
     messages = [entry["message"] for entry in entries]
 
     assert "主包解压开始" in messages
+    assert "子包解压开始" in messages
     assert "子包解压完成" in messages
     assert "日志 gzip 解压完成" in messages
     assert "主包解压完成" in messages
     assert all("task_id" in entry for entry in entries if entry["message"].startswith("主包解压"))
+
+    main_start = next(i for i, entry in enumerate(entries) if entry["message"] == "主包解压开始")
+    main_complete = next(i for i, entry in enumerate(entries) if entry["message"] == "主包解压完成")
+    log_subpackage = "ServiceLog_inner.zip"
+    sub_start = next(
+        i for i, entry in enumerate(entries) if entry["message"] == "子包解压开始" and entry["source"] == log_subpackage
+    )
+    sub_complete = next(
+        i for i, entry in enumerate(entries) if entry["message"] == "子包解压完成" and entry["source"] == log_subpackage
+    )
+    gzip_complete = next(
+        i
+        for i, entry in enumerate(entries)
+        if entry["message"] == "日志 gzip 解压完成" and entry["source"] == "InnerService/logs/paas-node-2/error.log.gz"
+    )
+    assert main_start < sub_start < gzip_complete < sub_complete < main_complete
 
 
 def test_log_gz_conflict_and_failure_are_isolated(tmp_path, monkeypatch) -> None:

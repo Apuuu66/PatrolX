@@ -427,6 +427,17 @@ def _extract_subpackage(
     state["target"] = target_relative.as_posix()
     staging = data_dir / f".extract-{checksum[:12]}"
     shutil.rmtree(staging, ignore_errors=True)
+    _log_extract(
+        log,
+        "info",
+        "子包解压开始",
+        task_id=data_dir.name,
+        source=source_relative.as_posix(),
+        target=target_relative.as_posix(),
+        category=state["category"],
+        depth=depth,
+        checksum=checksum,
+    )
     try:
         if budget.files + 1 > budget.max_files:
             raise ArchiveError("任务累计文件数超限")
