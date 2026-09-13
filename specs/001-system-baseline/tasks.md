@@ -55,7 +55,7 @@ description: "系统基线功能实现任务列表"
 - [x] T011 [P] 在 `tests/test_baseline_archive.py` 中补充文件数、单文件大小、总量预算、链接拒绝、路径穿越和深层嵌套限制测试
 - [x] T012 在 `app/core/archive.py` 中根据 T011 修复安全解压缺口，确保超限或异常归档产生可记录的 `ArchiveError`
 - [x] T002C 在基础层完成后，在 `app/api/router.py` 中实现 `/api/v2` 任务、系统、规则、发现、报告、重跑与删除路由；迁移完成前保持 `/api/v1` 行为不变。
-- [ ] T002D [Contract] 将前端、后端契约测试和集成测试的 API 调用迁移到 `/api/v2`；确认没有新增 `/api/v1` 消费者。
+- [x] T002D [Contract] 将前端、后端契约测试和集成测试的 API 调用迁移到 `/api/v2`；确认没有新增 `/api/v1` 消费者。
 
 **检查点**：单任务目录、源文件匹配契约、输出校验、解压安全约束、`/api/v2` 路由和消费者迁移已可作为用户故事的阻塞门禁
 
@@ -176,14 +176,14 @@ description: "系统基线功能实现任务列表"
 
 **目的**：验证完整基线，清理实现并同步文档
 
-- [ ] T041 校验 `docs/api/openapi.yaml`、`app/models/schemas.py`、`app/api/router.py` 与 web 生成客户端全部使用 T002A 定义的 `/api/v2` 基线契约；确认 `/api/v1` 只处于迁移兼容状态且未被不兼容修改。
-- [ ] T042 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、单任务目录布局和文档链接
-- [ ] T043 清理新增代码中的重复逻辑，保持规则互不引用、数据入口只通过 `source_patterns`
-- [ ] T043A 检查本功能中被修改执行或解析逻辑的巡检器；对每条逻辑变更的规则递增 `rule_version`，并在提交信息或变更记录中说明原因。
-- [ ] T043B 在 `/api/v2` 实现与消费者迁移完成后，将 `/api/v1` 在 OpenAPI 和文档中标记为 deprecated，并通过静态检查确认前端、测试和文档无 `/api/v1` 引用。
-- [ ] T043C 确认 `/api/v1` 已无消费者后，从 `docs/api/openapi.yaml`、`app/api/router.py`、`app/models/schemas.py`、测试和 web 生成客户端中删除 `/api/v1` 及其 OpenAPI 专属字段；更新架构与 API 文档，并确认运行时无 `/api/v1` 引用。`Inspector.inputs[]` 和 `outputs_artifacts` 的内部代码迁移仍按预处理优化 TODO 单独处理。
-- [ ] T044 在 T043C 通过后运行 `make lint`、`make test`、`make contract`、`make gen-web-api`、`make verify` 和 `make web-build`；前端目录存在测试脚本时执行 `npm test`。
-- [ ] T045 按 `specs/001-system-baseline/quickstart.md` 手工验证离线流程、重跑、本地/在线一致性和任务删除
+- [x] T041 校验 `docs/api/openapi.yaml`、`app/models/schemas.py`、`app/api/router.py` 与 web 生成客户端全部使用 T002A 定义的 `/api/v2` 基线契约；确认 `/api/v1` 只处于迁移兼容状态且未被不兼容修改。
+- [x] T042 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、单任务目录布局和文档链接
+- [x] T043 清理新增代码中的重复逻辑，保持规则互不引用、数据入口只通过 `source_patterns`
+- [x] T043A 检查本功能中被修改执行或解析逻辑的巡检器；对每条逻辑变更的规则递增 `rule_version`，并在提交信息或变更记录中说明原因。
+- [x] T043B 在 `/api/v2` 实现与消费者迁移完成后，将 `/api/v1` 在 OpenAPI 和文档中标记为 deprecated，并通过静态检查确认前端、测试和文档无 `/api/v1` 引用。
+- [x] T043C 确认 `/api/v1` 已无消费者后，从 `docs/api/openapi.yaml`、`app/api/router.py`、`app/models/schemas.py`、测试和 web 生成客户端中删除 `/api/v1` 及其 OpenAPI 专属字段；更新架构与 API 文档，并确认运行时无 `/api/v1` 引用。`Inspector.inputs[]` 和 `outputs_artifacts` 的内部代码迁移仍按预处理优化 TODO 单独处理。
+- [x] T044 在 T043C 通过后运行 `make lint`、`make test`、`make contract`、`make gen-web-api`、`make verify` 和 `make web-build`；前端目录存在测试脚本时执行 `npm test`。
+- [x] T045 按 `specs/001-system-baseline/quickstart.md` 手工验证离线流程、重跑、本地/在线一致性和任务删除
 
 ---
 

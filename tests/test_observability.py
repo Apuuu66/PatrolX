@@ -16,15 +16,14 @@ client = TestClient(app)
 def _upload_and_wait() -> str:
     with SAMPLE.open("rb") as fh:
         resp = client.post(
-            "/api/v1/tasks",
-            params={"force": "true"},
+            "/api/v2/tasks",
             files={"package_file": ("observability_sample.zip", fh, "application/zip")},
             data={"name": "可观测性"},
         )
     task_id = resp.json()["task_id"]
     deadline = time.time() + 30
     while time.time() < deadline:
-        status = client.get(f"/api/v1/tasks/{task_id}").json()["status"]
+        status = client.get(f"/api/v2/tasks/{task_id}").json()["status"]
         if status in ("completed", "failed"):
             return task_id
         time.sleep(0.1)

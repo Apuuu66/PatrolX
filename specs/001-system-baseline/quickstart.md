@@ -41,10 +41,11 @@ cp /path/to/package.zip uploads/
 make verify
 ```
 
-或者指定其他包目录：
+如需使用其他数据包，先将其复制到 `uploads/` 后再执行：
 
 ```bash
-PACKAGE_DIR=/path/to/packages make verify
+cp /path/to/package.zip uploads/
+make verify
 ```
 
 预期：

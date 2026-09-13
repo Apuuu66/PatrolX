@@ -91,7 +91,7 @@ make lint
 - 一次上传一个包，创建一个任务。
 - 首版任务为单线程顺序执行。
 - SQLite 只保存轻量任务/系统元数据；巡检结果和运行现场以文件为主。
-- 前端通过 `/api/v1` 访问后端，API 客户端由 OpenAPI 生成。
+- 前端通过 `/api/v2` 访问后端，API 客户端由 OpenAPI 生成。
 
 启动：
 
@@ -329,12 +329,12 @@ docs/api/openapi.yaml
 
 原则：
 
-- 接口路径使用 `/api/v1`。
+- 接口路径使用 `/api/v2`。
 - 资源接口直接返回资源 JSON，不套壳。
 - 创建/重跑类操作返回 `202 + Location`。
 - 错误响应统一为 `{code, message, detail}`。
 - 列表使用 `page` / `page_size` 并返回总数。
-- 破坏性变更进入新版本，如 `/api/v2`。
+- 破坏性变更进入新版本，避免改变既有字段语义。
 
 后端使用 Pydantic 和 FastAPI 保证契约一致；前端 API 客户端由 OpenAPI 生成：
 

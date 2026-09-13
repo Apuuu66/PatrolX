@@ -78,13 +78,13 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
         {"total": 2, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 2},
         [_rule("rule.c", "skip", [_finding(3)])],
     )
-    before = client.get("/api/v1/overview").json()
+    before = client.get("/api/v2/overview").json()
     for task in (task1, task2):
         task_dir = output / task["task_id"]
         task_dir.mkdir(parents=True, exist_ok=True)
         (task_dir / "task.json").write_text(json.dumps(task, ensure_ascii=False), encoding="utf-8")
 
-    resp = client.get("/api/v1/overview")
+    resp = client.get("/api/v2/overview")
     assert resp.status_code == 200, resp.text
     body = resp.json()
 

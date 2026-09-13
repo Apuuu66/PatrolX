@@ -4,7 +4,7 @@
 
 **Goal:** 新增全局巡检概览接口，并在任务列表页区分任务数、注册规则数、规则结果数与发现问题数。
 
-**Architecture:** 后端新增 `GET /api/v1/overview`，从 `output/` 的任务契约文件汇总任务数、规则结果数、发现数与状态分布，并从规则注册表读取注册规则数；契约同步 OpenAPI 并重新生成前端客户端；前端任务列表页改为消费该全局接口。
+**Architecture:** 后端新增 `GET /api/v2/overview`，从 `output/` 的任务契约文件汇总任务数、规则结果数、发现数与状态分布，并从规则注册表读取注册规则数；契约同步 OpenAPI 并重新生成前端客户端；前端任务列表页改为消费该全局接口。
 
 **Tech Stack:** Python 3.12、FastAPI、Pydantic v2、pytest、OpenAPI 3、React + TypeScript + Vite。
 
@@ -32,7 +32,7 @@
 
 **Interfaces:**
 
-- Produces: `GET /api/v1/overview` 返回 `OverviewSummary`。
+- Produces: `GET /api/v2/overview` 返回 `OverviewSummary`。
 - Produces: 前端 `api.getOverview()`。
 
 - [ ] **Step 1: 写失败测试**

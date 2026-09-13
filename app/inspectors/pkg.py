@@ -1,11 +1,11 @@
 """解压规则族（hidden P0）：主包按类落位 + 各类别嵌套子包安全解压。"""
 
-import hashlib
 import json
 import shutil
 from pathlib import Path
 
 from app.core import archive
+from app.core.checksum import sha256_file
 from app.core.classify import final_category
 from app.inspectors.base import Inspector
 from app.inspectors.registry import registry
@@ -15,14 +15,6 @@ from app.services.executor import RuleContext, make_result
 EXTRACT_MANIFEST = ".patrolx-extracted.json"
 CATEGORIES = ["logs", "kpi", "traffic", "alarm", "config", "resource", "other"]
 CATEGORY_DIRECTORIES = {"log": "logs", **{name: name for name in CATEGORIES if name != "log"}}
-
-
-def _checksum(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def _manifest_path(ctx: RuleContext) -> Path:
@@ -82,7 +74,7 @@ def _run_main(ctx: RuleContext) -> object:
         )
 
     old_manifest = _load_manifest(ctx)
-    checksum = _checksum(ctx.package_path)
+    checksum = sha256_file(ctx.package_path)
     if (old_manifest.get("main") or {}).get("checksum") == checksum:
         shutil.rmtree(tmp, ignore_errors=True)
         count = int(old_manifest.get("main", {}).get("count", 0))
@@ -107,7 +99,7 @@ def _run_main(ctx: RuleContext) -> object:
         category = final_category(rel.name, src)
         directory = CATEGORY_DIRECTORIES[category.value]
         dest = task_dir / directory / rel.name
-        if dest.exists() and _checksum(dest) == _checksum(src):
+        if dest.exists() and sha256_file(dest) == sha256_file(src):
             manifest["main"]["count"] += 1
             continue
         _move_file(src, dest)
@@ -115,7 +107,7 @@ def _run_main(ctx: RuleContext) -> object:
             item = {
                 "name": rel.name,
                 "category": directory,
-                "checksum": _checksum(dest),
+                "checksum": sha256_file(dest),
                 "extracted": False,
                 "path": str(dest.relative_to(task_dir)),
                 "error": None,

@@ -11,12 +11,12 @@ from app.services.tasks import task_service
 
 def test_rerun_marks_output_task_pending_before_queueing(monkeypatch) -> None:
     client = TestClient(app)
-    task_id = _upload()
+    task_id = _upload("rerun-pending.zip")
     _wait(task_id)
 
     # 阻断队列，保证断言发生在 rerun 受理阶段，而不是依赖 worker 完成速度。
     monkeypatch.setattr(task_service._queue, "put", lambda _task_id: None)
-    resp = client.post(f"/api/v1/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
+    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
     assert resp.status_code == 202
 
     task = task_service.get(task_id)
@@ -30,14 +30,14 @@ def test_rerun_marks_output_task_pending_before_queueing(monkeypatch) -> None:
 
 def test_rerun_failure_updates_output_status(monkeypatch) -> None:
     client = TestClient(app)
-    task_id = _upload()
+    task_id = _upload("rerun-failed.zip")
     _wait(task_id)
 
     def raise_rerun(*args, **kwargs):
         raise RuntimeError("rerun failed")
 
     monkeypatch.setattr("app.services.tasks.run_single_rule", raise_rerun)
-    resp = client.post(f"/api/v1/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
+    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
     assert resp.status_code == 202
 
     deadline = time.time() + 2

@@ -47,7 +47,7 @@ sample.zip → task-sample
 
 ### 重复上传
 
-在线重复上传同一个包时返回 409，前端提示"已存在，是否覆盖？"；确认后携带 `force=true` 重新提交即可覆盖。
+在线重复上传同一个包时，若包 checksum 一致则复用既有任务现场；若 checksum 不同则返回 `409 package_checksum_conflict`，不会删除或覆盖既有任务。
 
 前端技术栈：React + TypeScript + Vite + Ant Design + ECharts；API 客户端由契约自动生成：
 

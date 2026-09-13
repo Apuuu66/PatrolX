@@ -11,12 +11,11 @@ SAMPLE = Path(__file__).resolve().parent / "fixtures" / "sample" / "sample.zip"
 client = TestClient(app)
 
 
-def _upload() -> str:
+def _upload(package_name: str = "sample.zip") -> str:
     with SAMPLE.open("rb") as fh:
         resp = client.post(
-            "/api/v1/tasks",
-            params={"force": "true"},
-            files={"package_file": ("sample.zip", fh, "application/zip")},
+            "/api/v2/tasks",
+            files={"package_file": (package_name, fh, "application/zip")},
             data={"name": "API 样例任务"},
         )
     assert resp.status_code == 202, resp.text
@@ -26,7 +25,7 @@ def _upload() -> str:
 def _wait(task_id: str, timeout: float = 30) -> dict:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        task = client.get(f"/api/v1/tasks/{task_id}").json()
+        task = client.get(f"/api/v2/tasks/{task_id}").json()
         if task["status"] in ("completed", "failed"):
             return task
         time.sleep(0.1)
@@ -39,45 +38,45 @@ def test_upload_list_system_rules_report_logs_delete() -> None:
     assert task["status"] == "completed"
     assert task["stats"]["fail"] >= 1
 
-    system = client.get(f"/api/v1/tasks/{task_id}/system").json()
+    system = client.get(f"/api/v2/tasks/{task_id}/system").json()
     assert system["summary"]["total"] >= 10
 
-    rule = client.get(f"/api/v1/tasks/{task_id}/rules/log.error_density").json()
+    rule = client.get(f"/api/v2/tasks/{task_id}/rules/log.error_density").json()
     assert rule["code"] == "log.error_density"
     assert rule["status"] in ("pass", "warn", "fail")
 
-    report = client.get(f"/api/v1/tasks/{task_id}/report")
+    report = client.get(f"/api/v2/tasks/{task_id}/report")
     assert report.status_code == 200 and "PatrolX" in report.text
 
-    logs = client.get(f"/api/v1/tasks/{task_id}/logs").json()
+    logs = client.get(f"/api/v2/tasks/{task_id}/logs").json()
     assert logs["entries"]
 
-    listing = client.get("/api/v1/tasks").json()
+    listing = client.get("/api/v2/tasks").json()
     assert listing["total"] >= 1
 
-    assert client.delete(f"/api/v1/tasks/{task_id}").status_code == 204
-    assert client.get(f"/api/v1/tasks/{task_id}").status_code == 404
+    assert client.delete(f"/api/v2/tasks/{task_id}").status_code == 204
+    assert client.get(f"/api/v2/tasks/{task_id}").status_code == 404
 
 
 def test_rerun_single_rule() -> None:
-    task_id = _upload()
+    task_id = _upload("rerun-api.zip")
     _wait(task_id)
-    resp = client.post(f"/api/v1/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
+    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
     assert resp.status_code == 202
     task = _wait(task_id)
     assert task["status"] == "completed"
-    rule = client.get(f"/api/v1/tasks/{task_id}/rules/log.error_density").json()
+    rule = client.get(f"/api/v2/tasks/{task_id}/rules/log.error_density").json()
     assert rule["code"] == "log.error_density"
 
 
 def test_dicts_api() -> None:
-    resp = client.get("/api/v1/dicts")
+    resp = client.get("/api/v2/dicts")
     assert resp.status_code == 200
     assert resp.json()["province"]
 
 
 def test_inspectors_metadata() -> None:
-    resp = client.get("/api/v1/inspectors")
+    resp = client.get("/api/v2/inspectors")
     assert resp.status_code == 200
     codes = {item["code"] for item in resp.json()}
     assert {"kpi.threshold", "alarm.stat", "resource.check"} <= codes
