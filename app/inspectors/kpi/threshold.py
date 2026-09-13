@@ -6,11 +6,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import csv
+import json
 
-from app.inspectors.base import Inspector
+from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
+from app.services.prepare import prepared_dir
 
 THRESHOLDS = {
     "call_success_rate": (98.0, "呼叫成功率", "%"),
@@ -24,7 +26,7 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.0.0",
+    rule_version="1.1.0",
     description="检查关键 KPI（呼叫/附着/建立成功率）是否低于阈值",
     recommendation="低于阈值时核查对应网元与链路质量",
     source_patterns=[r"^kpi/.*$"],
@@ -70,9 +72,25 @@ def _read_kpi(files: list[Path]) -> dict[str, float]:
     return values
 
 
+def _prepare(ctx: RuleContext) -> object:
+    """解析原始 KPI 文件并写入规则私有 prepared 数据。"""
+    values = _read_kpi(sorted(ctx.resolved_files()))
+    path = prepared_dir(ctx, inspector.code) / "kpi_values.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(values, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    return None
+
+
 def _run(ctx: RuleContext) -> object:
-    files = sorted(ctx.resolved_files())
-    values = _read_kpi(files)
+    path = prepared_dir(ctx, inspector.code) / "kpi_values.json"
+    if not path.exists():
+        return make_result(
+            inspector,
+            status=RuleStatus.SKIP,
+            summary="预处理数据未就绪",
+            skip_reason="KPI prepared 数据不存在",
+        )
+    values = {key: float(value) for key, value in json.loads(path.read_text(encoding="utf-8")).items()}
     if not values:
         return make_result(
             inspector,
@@ -92,7 +110,7 @@ def _run(ctx: RuleContext) -> object:
                 finding_id=f"{inspector.code}-{key}",
                 title=f"{label}低于阈值",
                 severity=Severity.MEDIUM,
-                source_file=", ".join(path.relative_to(ctx.data_dir).as_posix() for path in files),
+                source_file=", ".join(ctx_file.as_posix() for ctx_file in ctx.files),
                 evidence=f"{key}={value}{unit}，阈值下限 {limit}{unit}",
                 recommendation=inspector.recommendation,
             )
@@ -114,6 +132,7 @@ def _run(ctx: RuleContext) -> object:
 
 
 inspector.run = _run
+inspector.prepare = PrepareSpec(code="prepare.kpi.threshold", owner_code=inspector.code, run=_prepare)
 registry.register(inspector)
 
 

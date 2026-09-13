@@ -144,13 +144,16 @@ summary.total = pass + warn + fail + error + skip
 - evidence 默认截断，完整上下文保留在源文件。
 - 告警、错误、资源异常等结论应尽量携带触发值或阈值。
 
-## 7. Source Patterns
+## 7. Source Patterns 与 Prepared Data
 
 规则不消费中间产物契约，也不依赖其他规则实现。
 
-- `source_patterns[]` 是匹配 `output/<task_id>/` 内相对路径的正则。
-- 执行器把匹配到的相对路径交给规则。
+- `source_patterns[]` 是 Python regex，执行器使用 `re.fullmatch()` 匹配 `output/<task_id>/` 内以 `/` 归一化的相对路径。
+- 路径分隔符统一为 `/`，模式不得造成路径穿越或逃逸任务目录。
+- 执行器把匹配到的相对路径交给规则；示例为 `^logs/.*\.(log|log\.gz)$`、`^kpi/.*$`。
 - 物理日志目录是 `logs/`，规则类别仍然是 `log`。
+- 普通规则可以声明至多一个私有 prepare；prepare 继承 owner 的 `source_patterns` 和 priority。
+- prepared 数据只保存在 `output/<task_id>/prepared/<owner_code>/`，只有 owner 规则可读取，不写入规则契约，也不作为公共输入。
 - 无匹配文件、格式不适用或解析失败时必须返回 `skip` 和非空原因。
 
 ## 8. 文件组织
@@ -179,6 +182,14 @@ output/<task_id>/rules/<code>.json
 ```
 
 支持单规则重跑后原地更新。
+
+规则私有 prepared 数据目录：
+
+```text
+output/<task_id>/prepared/<owner_code>/
+```
+
+该目录属于内部运行时数据，不进入公共 API 契约。
 
 ## 9. 示例
 
