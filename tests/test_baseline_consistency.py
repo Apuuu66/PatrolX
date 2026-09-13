@@ -108,7 +108,7 @@ def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> 
         assert task_dir.is_dir()
         assert (task_dir / "task.json").is_file()
         assert (task_dir / "system.json").is_file()
-        assert (task_dir / "rules" / "kpi.threshold.json").is_file()
+        assert (task_dir / "rules" / "kpi.api.json").is_file()
         assert (task_dir / "report.html").is_file()
         assert load_logs(env, task_id)
 

@@ -249,8 +249,11 @@ def run_single_rule(
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
         store.save_rule_result(settings.output, task_id, extraction)
+    old_result = store.load_rule_result(settings.output, task_id, code)
     executor.run_rule(code, ctx)
     for result in executor.collected.values():
+        if old_result is not None:
+            result.execution_order = old_result.execution_order
         store.save_rule_result(settings.output, task_id, result)
     old = _load_old_task(task_id) or {}
     customer = old.get("system", {}).get("customer") or {}

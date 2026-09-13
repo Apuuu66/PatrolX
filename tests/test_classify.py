@@ -8,6 +8,9 @@ def test_classify_by_pattern() -> None:
     assert classify_name("AAAService.zip") == RuleCategory.LOG
     assert classify_name("ServiceLog.zip") == RuleCategory.LOG
     assert classify_name("kpi_export.csv") == RuleCategory.KPI
+    assert classify_name("kpi-api-5.csv") == RuleCategory.KPI
+    assert classify_name("kpi-media-60.csv") == RuleCategory.KPI
+    assert classify_name("kpi-call-15.csv") == RuleCategory.KPI
     assert classify_name("alarm_export.txt") == RuleCategory.ALARM
     assert classify_name("alarm_history.csv") == RuleCategory.ALARM
     assert classify_name("alarm_summary.json") == RuleCategory.ALARM

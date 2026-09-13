@@ -40,16 +40,19 @@ def _run_rule(code: str, ctx: RuleContext):
     return rule.run(ctx)
 
 
-def test_kpi_threshold_warn(tmp_path: Path) -> None:
-    ctx = _ctx(tmp_path, {"kpi/kpi.csv": "metric,value\ncall_success_rate,99.2\nattach_success_rate,96.5\n"})
-    result = _run_rule("kpi.threshold", ctx)
-    assert result.status == RuleStatus.WARN
-    assert result.findings and "attach_success_rate" in result.findings[0].finding_id
+def test_kpi_api_pass(tmp_path: Path) -> None:
+    content = (
+        "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,2026-09-01 10:00:00,2026-09-01 10:15:00,5000,4800\n"
+    )
+    ctx = _ctx(tmp_path, {"kpi/kpi-api-15.csv": content})
+    result = _run_rule("kpi.api", ctx)
+    assert result.status == RuleStatus.PASS
+    assert result.metrics[0].value == 1  # file_count
 
 
-def test_kpi_threshold_skip(tmp_path: Path) -> None:
+def test_kpi_api_skip(tmp_path: Path) -> None:
     ctx = _ctx(tmp_path, {})
-    result = _run_rule("kpi.threshold", ctx)
+    result = _run_rule("kpi.api", ctx)
     assert result.status == RuleStatus.SKIP
     assert result.skip_reason
 
