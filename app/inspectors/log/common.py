@@ -1,6 +1,5 @@
 """日志规则共享的源文件直读与解析辅助。"""
 
-import gzip
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -40,12 +39,8 @@ def log_files(ctx: RuleContext) -> list[Path]:
 
 
 def _read_lines(path: Path) -> Iterator[str]:
-    if path.name.lower().endswith(".log.gz"):
-        with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
-            yield from fh
-    else:
-        with path.open("rt", encoding="utf-8", errors="replace") as fh:
-            yield from fh
+    with path.open("rt", encoding="utf-8", errors="replace") as fh:
+        yield from fh
 
 
 def read_records(ctx: RuleContext) -> list[dict]:

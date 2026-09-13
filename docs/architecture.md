@@ -118,11 +118,12 @@ python run_online.py
    - 在线可选记录省份、运营商、产品形态、版本等任务元数据。
 
 3. **安全解压与按类落位**
-   - 主包由隐藏规则 `pkg.extract.main` 处理。
-   - 文件按日志、KPI、话统、告警、配置、资源、其他分类落位。
-   - 嵌套包登记清单，由对应 `pkg.extract.{category}` 在 `EXTRACT` 阶段完成解压。
+   - 主包由隐藏规则 `pkg.extract.main` 解压到 `.main/`，该目录永久保留主包原始解压现场。
+   - 共享解压服务从 `.main/` 递归登记并展开子压缩包，再生成分类工作现场。
+   - 文件按日志、KPI、话统、告警、配置、资源、其他分类落位；分类现场只保留最终规则输入。
+   - `.log.gz` 在 `logs/` 内展开为同目录同名 `.log`，成功后移除工作现场的 `.log.gz`。
    - 同一子包通过 checksum/manifest 去重，只解压一次。
-   - 主包解压失败时任务失败，不进入后续阶段。
+   - 主包解压失败时任务失败，不进入后续阶段；子包或 gzip 局部失败保留原因并继续任务。
 
 4. **规则私有 prepare**
    - 全部解压准备到达终态后，才执行 `PREPARE`。
@@ -151,6 +152,7 @@ uploads/
 
 output/
 └── <task_id>/
+    ├── .main/
     ├── task.json
     ├── system.json
     ├── logs/
@@ -180,7 +182,7 @@ output/
 
 生命周期：
 
-- 任务和结果长期保留，不自动清理。
+- 任务和结果长期保留，不自动清理；`.main/` 在任务生命周期内永久保留。
 - 删除任务必须级联删除 `uploads/<task_id>/` 和 `output/<task_id>/`。
 
 ## 6. 包分类与解压
@@ -213,14 +215,16 @@ deploy/config/classify_rules.yaml
 
 名称无法判定时，可解压后做内部文件名或内容嗅探；仍无法判定归入 `other/`。
 
-### 6.2 嵌套包
+### 6.2 嵌套包与 manifest
 
-- 嵌套包按类别解压到 `<category>/<subpackage>/`。
-- 保留包内相对路径，便于 `Finding.source_file` 追溯。
-- 主包解压时只登记嵌套包，不立即解压。
-- `EXTRACT` 阶段执行全部需要的 `pkg.extract.{category}`，并等待所有解压准备到达终态后才进入 `PREPARE`。
-- 解压清单为 `.patrolx-extracted.json`。
-- 清单记录 checksum、目标目录、文件数；同 checksum 或同路径已解压时复用。
+- 主包先解压为 `.main/` 证据现场，原始子压缩包和原始 `.log.gz` 都保留在该现场。
+- 通用递归解压服务按子包自身文件名/内容分类；无法识别时继承父级分类，最后归入 `other/`。
+- 嵌套包展开到 `<category>/<subpackage>/`，KPI 包内的日志子包、日志包内的 KPI 子包都允许跨分类落位。
+- 分类工作现场只保留最终解压结果；中间压缩包和已成功展开的 `.log.gz` 会被移除。
+- `pkg.extract.{category}` 汇总对应分类的 manifest 终态，不再各自维护一套解压流程。
+- 解压清单为 `.patrolx-extracted.json`（manifest v3），记录主包现场、各级子包、`.log.gz`、失败和拒绝状态。
+- manifest 必须校验版本和结构；旧版本、损坏或不匹配 checksum 时整体安全重建现场。
+- 同 checksum 子包去重；任务级累计文件数、总字节数和嵌套深度构成固定安全预算。
 
 ### 6.3 安全限制
 
@@ -338,8 +342,8 @@ outputs.metrics[]  声明的指标契约
 
 ### 7.7 日志处理
 
-- 日志规则递归匹配 `.log` 和 `.log.gz`。
-- gzip 使用流式读取。
+- 解压阶段先把 `.log.gz` 展开为同目录同名 `.log`；日志规则只匹配最终 `.log`。
+- `.main/` 内保留原始 `.log.gz` 作为证据；工作现场的冲突/失败 `.log.gz` 也保留用于排查。
 - 物理落位目录是 `logs/`；契约类别仍然是 `log`。
 - 日志规则解析文件路径时提取 service、node、source_file 等上下文。
 

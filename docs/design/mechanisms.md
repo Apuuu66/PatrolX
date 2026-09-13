@@ -21,7 +21,7 @@
 - 原始上传包只读，不被修改。
 - 解压使用隐藏的 P0 基础设施规则，不作为普通巡检规则展示。
 - 主包内容按类别落位，日志、KPI、话统、告警、配置、资源等分别进入对应目录。
-- 嵌套压缩包登记到清单，由对应类别的隐藏规则按需解压。
+- 主包保留 `.main/` 原始解压现场；嵌套压缩包和 `.log.gz` 通过共享服务安全递归展开。
 - 解压必须具备路径穿越、链接和资源预算防护，并且同一子包只解压一次。
 
 ### 当前实现
@@ -29,19 +29,17 @@
 实现位于 `app/inspectors/pkg.py`。
 
 - `pkg.extract.main`：
-  - 解压主包到临时目录。
-  - 根据 `deploy/config/classify_rules.yaml` 对文件名和嵌套压缩包分类。
-  - 将文件移动到 `output/<task_id>/<category>/`。
-  - 发现嵌套压缩包时登记到 `.patrolx-extracted.json`，状态为 `extracted: false`。
+  - 解压主包到 `.main/` 证据现场。
+  - 调用共享解压服务，按 `deploy/config/classify_rules.yaml` 和内容特征递归分类。
+  - 生成只包含最终文件的分类工作现场，并写入 `.patrolx-extracted.json` manifest v3。
 - `pkg.extract.<category>`：
-  - 依赖 `pkg.extract.main.ready`。
-  - 读取清单中本类别未解压的子包并解压。
-  - 产出 `pkg.extract.<category>.ready`。
+  - 汇总 manifest 中对应分类的子包与 `.log.gz` 终态。
+  - 失败或冲突时返回 `warn`，不阻断其他规则。
 - 解压规则均为 `hidden=true`，优先级为 `P0`。
 
 ### 差异
 
-- 目前 `log.filter` 依赖 `pkg.extract.log.ready`，形成了解压到过滤的 artifact 链。
+- 目前日志过滤通过 `source_patterns` 直读最终 `.log`；`.main/` 只作为证据现场，不进入规则匹配。
 - 文档和红线期望普通规则通过 `source_patterns` 匹配文件；当前部分规则仍以 artifact 依赖为主，尚未全面迁移。
 
 ## 2. Artifact 依赖机制

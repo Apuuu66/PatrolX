@@ -67,6 +67,8 @@ def match_relative_files(data_dir: Path, patterns: list[str]) -> list[Path]:
         posix_relative = relative.as_posix()
         if ".." in relative.parts:
             raise ValueError(f"匹配路径越界: {posix_relative}")
+        if relative.parts[0] == ".main" or posix_relative == ".patrolx-extracted.json":
+            continue
         if any(re.fullmatch(pattern, posix_relative) for pattern in patterns):
             matched.add(Path(relative))
     return sorted(matched, key=lambda path: path.as_posix())
