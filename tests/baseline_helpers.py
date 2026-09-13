@@ -52,7 +52,7 @@ def wait_for_task(client: TestClient, task_id: str, timeout: float = 30.0) -> di
     """轮询在线任务直到 completed/failed。"""
     deadline = time.time() + timeout
     while time.time() < deadline:
-        response = client.get(f"/api/v1/tasks/{task_id}")
+        response = client.get(f"/api/v2/tasks/{task_id}")
         if response.status_code == 200:
             task = response.json()
             if task["status"] in ("completed", "failed"):
@@ -67,14 +67,12 @@ def upload_package(
     *,
     package: Path = SAMPLE,
     name: str | None = None,
-    force: bool = True,
     **metadata: str,
 ) -> str:
     """以在线 API 创建任务并返回 task_id。"""
     with package.open("rb") as fh:
         response = client.post(
-            "/api/v1/tasks",
-            params={"force": force},
+            "/api/v2/tasks",
             files={"package_file": (package.name, fh, "application/zip")},
             data={"name": name or "基线任务", **metadata},
         )

@@ -125,7 +125,13 @@ class Executor:
                 raise TypeError(f"规则 {code} 未返回 RuleResult")
             contract_error = self._validate_metrics(rule, result)
             if contract_error:
-                ctx.log("error", f"规则 {code} 输出契约校验失败", error=contract_error)
+                ctx.log(
+                    "error",
+                    f"规则 {code} 输出契约校验失败",
+                    task_id=ctx.task_id,
+                    rule_code=code,
+                    error=contract_error,
+                )
                 result = self._result(
                     rule,
                     status=RuleStatus.ERROR,
@@ -140,7 +146,13 @@ class Executor:
             RULES_TOTAL.labels(rule=code, status=result.status.value).inc()
             return result
         except Exception as exc:  # noqa: BLE001 - 规则异常统一记为 error
-            ctx.log("error", f"规则 {code} 执行异常", error=str(exc))
+            ctx.log(
+                "error",
+                f"规则 {code} 执行异常",
+                task_id=ctx.task_id,
+                rule_code=code,
+                error=str(exc),
+            )
             result = self._result(
                 rule,
                 status=RuleStatus.ERROR,

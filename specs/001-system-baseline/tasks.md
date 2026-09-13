@@ -69,20 +69,20 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 1 的测试
 
-- [ ] T013 [P] [US1] 在 `tests/test_baseline_pipeline.py` 中验证单包生成单任务目录、类别目录、规则 JSON、`report.html` 与 `execution.log`
-- [ ] T014 [US1] 在 `tests/test_baseline_pipeline.py` 中验证唯一包名生成唯一 `task_id`；同一系统元数据下的不同包名必须形成不同任务，且任务结果互不合并
-- [ ] T014A [US1] 在 `tests/test_baseline_pipeline.py` 中验证同名同 checksum 包复用既有 `task_id` 与任务现场；同名不同 checksum 包返回冲突且不覆盖既有 `uploads/`、`output/`、规则结果、报告和日志；在线 API 断言错误码为 `package_checksum_conflict`。
-- [ ] T015 [P] [US1] 在 `tests/test_baseline_extraction.py` 中验证主包按类落位、嵌套子包 checksum 去重、重复执行不重复解压
-- [ ] T016 [US1] 在 `tests/test_baseline_extraction.py` 中验证格式错误或不可识别文件不中止任务，并在解压结果、执行日志或对应规则结果中可见
-- [ ] T016A [US1] 在 `tests/test_baseline_pipeline.py` 中注入运行时抛异常的规则样例，验证该规则结果为 `error`，结构化日志包含 `task_id` 与 `rule_code`，任务继续完成，其他规则结果保持可访问，并断言 `error` 结果的 metrics 与 findings 为空或显式为空集合。
-- [ ] T017 [P] [US1] 在 `tests/test_baseline_report.py` 中验证报告包含状态计数、规则摘要、发现来源/证据/建议、跳过原因和执行时间；发现按 `critical` → `high` → `medium` → `low` 排序，同级别按规则优先级和规则代码稳定排序。
+- [x] T013 [P] [US1] 在 `tests/test_baseline_pipeline.py` 中验证单包生成单任务目录、类别目录、规则 JSON、`report.html` 与 `execution.log`
+- [x] T014 [US1] 在 `tests/test_baseline_pipeline.py` 中验证唯一包名生成唯一 `task_id`；同一系统元数据下的不同包名必须形成不同任务，且任务结果互不合并
+- [x] T014A [US1] 在 `tests/test_baseline_pipeline.py` 中验证同名同 checksum 包复用既有 `task_id` 与任务现场；同名不同 checksum 包返回冲突且不覆盖既有 `uploads/`、`output/`、规则结果、报告和日志；在线 API 断言错误码为 `package_checksum_conflict`。
+- [x] T015 [P] [US1] 在 `tests/test_baseline_extraction.py` 中验证主包按类落位、嵌套子包 checksum 去重、重复执行不重复解压
+- [x] T016 [US1] 在 `tests/test_baseline_extraction.py` 中验证格式错误或不可识别文件不中止任务，并在解压结果、执行日志或对应规则结果中可见
+- [x] T016A [US1] 在 `tests/test_baseline_pipeline.py` 中注入运行时抛异常的规则样例，验证该规则结果为 `error`，结构化日志包含 `task_id` 与 `rule_code`，任务继续完成，其他规则结果保持可访问，并断言 `error` 结果的 metrics 与 findings 为空或显式为空集合。
+- [x] T017 [P] [US1] 在 `tests/test_baseline_report.py` 中验证报告包含状态计数、规则摘要、发现来源/证据/建议、跳过原因和执行时间；发现按 `critical` → `high` → `medium` → `low` 排序，同级别按规则优先级和规则代码稳定排序。
 
 ### 用户故事 1 的实现
 
-- [ ] T018 [US1] 在 `app/inspectors/pkg.py` 中更新解压清单与规则结果：失败子包记录 checksum、目标目录、错误信息和未解压状态，不静默跳过
-- [ ] T019 [US1] 在 `app/core/classify.py` 与 `deploy/config/classify_rules.yaml` 中核对日志、KPI、话统、告警、配置、资源和 `other` 分类规则，补充缺失的真实样例映射
-- [ ] T020 [US1] 在 `app/cli.py` 中统一离线运行摘要输出：任务 ID、任务数、状态统计、报告路径和执行日志路径
-- [ ] T021 [US1] 在 `app/services/report.py` 与 `app/reports/templates/report.html.j2` 中修正 T017 暴露的报告内容缺口，保持 HTML 只在线预览、无下载入口
+- [x] T018 [US1] 在 `app/inspectors/pkg.py` 中更新解压清单与规则结果：失败子包记录 checksum、目标目录、错误信息和未解压状态，不静默跳过
+- [x] T019 [US1] 在 `app/core/classify.py` 与 `deploy/config/classify_rules.yaml` 中核对日志、KPI、话统、告警、配置、资源和 `other` 分类规则，补充缺失的真实样例映射
+- [x] T020 [US1] 在 `app/cli.py` 中统一离线运行摘要输出：任务 ID、任务数、状态统计、报告路径和执行日志路径
+- [x] T021 [US1] 在 `app/services/report.py` 与 `app/reports/templates/report.html.j2` 中修正 T017 暴露的报告内容缺口，保持 HTML 只在线预览、无下载入口
 
 **检查点**：此时用户故事 1 应完整可用且可独立测试；`make verify` 与样例流水线测试通过
 

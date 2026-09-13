@@ -1,6 +1,7 @@
 """本地开发模式 CLI：python main.py 一键离线全流程 / 单规则调试。"""
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -28,6 +29,14 @@ from app.services.report import render_report
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _file_checksum(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def new_task_id() -> str:
@@ -146,8 +155,10 @@ def run_task(
         store.save_rule_result(settings.output, task_id, result)
     visible = [result for result in ordered if not registry.get(result.code).hidden]
     summary = store.compute_summary(visible)
+    checksum = _file_checksum(package)
     system = SystemInspection(
         package_file=package.name,
+        package_checksum=checksum,
         status=SystemStatus.COMPLETED,
         summary=summary,
         rules=visible,

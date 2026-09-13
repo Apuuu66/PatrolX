@@ -40,19 +40,20 @@
       <td>{{ rule.summary or "" }}</td>
       <td>{{ rule.skip_reason or "" }}</td>
     </tr>
-    {% if rule.findings %}
-    <tr><td colspan="5">
-      {% for finding in rule.findings %}
-      <div class="finding">
-        <b>[{{ finding.severity.value }}] {{ finding.title }}</b>
-        {% if finding.evidence %}<div><code>{{ finding.evidence }}</code></div>{% endif %}
-        {% if finding.source_file %}<div>来源：{{ finding.source_file }}</div>{% endif %}
-        {% if finding.recommendation %}<div>建议：{{ finding.recommendation }}</div>{% endif %}
-      </div>
-      {% endfor %}
-    </td></tr>
-    {% endif %}
     {% endfor %}
   </table>
+
+  {% if findings %}
+  <h2>发现</h2>
+  {% for rule, finding in findings %}
+  <div class="finding">
+    <b>[{{ finding.severity.value }}] {{ finding.title }}</b>
+    <div>规则：{{ rule.code }} ｜ 优先级：{{ rule.priority.value }}</div>
+    {% if finding.evidence %}<div><code>{{ finding.evidence }}</code></div>{% endif %}
+    {% if finding.source_file %}<div>来源：{{ finding.source_file }}</div>{% endif %}
+    {% if finding.recommendation %}<div>建议：{{ finding.recommendation }}</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
 </body>
 </html>

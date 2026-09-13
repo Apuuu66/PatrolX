@@ -163,12 +163,14 @@ def _make_category_inspector(category: str) -> Inspector:
             return make_result(inspector, status=RuleStatus.PASS, summary=f"{category} 类无嵌套子包")
         extracted = 0
         failed = 0
+        failures: list[dict] = []
         for item in pending:
             if item.get("extracted"):
                 extracted += 1
                 continue
             src = ctx.data_dir / item["path"]
             target = ctx.data_dir / category / item["name"].rsplit(".", 1)[0]
+            item["target"] = str(target.relative_to(ctx.data_dir))
             try:
                 archive.unpack(src, target)
                 item["extracted"] = True
@@ -179,15 +181,38 @@ def _make_category_inspector(category: str) -> Inspector:
             except archive.ArchiveError as exc:
                 item["extracted"] = False
                 item["error"] = str(exc)
+                failures.append(
+                    {
+                        "name": item["name"],
+                        "checksum": item.get("checksum"),
+                        "target": str(target.relative_to(ctx.data_dir)),
+                        "error": str(exc),
+                        "extracted": False,
+                    }
+                )
                 failed += 1
-                ctx.log("error", "嵌套子包解压失败", package=item["name"], error=str(exc))
+                ctx.log(
+                    "error",
+                    "嵌套子包解压失败",
+                    task_id=ctx.task_id,
+                    rule_code=inspector.code,
+                    package=item["name"],
+                    checksum=item.get("checksum"),
+                    target=str(target.relative_to(ctx.data_dir)),
+                    error=str(exc),
+                )
         _save_manifest(ctx, manifest)
         status = RuleStatus.PASS if failed == 0 else RuleStatus.WARN
         return make_result(
             inspector,
             status=status,
             summary=f"{category} 类嵌套子包解压 {extracted}/{len(pending)}",
-            metadata={"extracted": extracted, "total": len(pending), "failed": failed},
+            metadata={
+                "extracted": extracted,
+                "total": len(pending),
+                "failed": failed,
+                "failures": failures,
+            },
         )
 
     inspector.run = run

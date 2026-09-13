@@ -1,5 +1,6 @@
 """解压分类、嵌套子包与容错测试。"""
 
+import json
 import zipfile
 from pathlib import Path
 
@@ -53,6 +54,23 @@ def test_invalid_nested_archive_does_not_abort_task(tmp_path: Path, monkeypatch)
     logs = load_logs(env, task.task_id)
 
     assert task.status == "completed"
-    assert load_rule(env, task.task_id, "pkg.extract.logs")["status"] == "warn"
+    result = load_rule(env, task.task_id, "pkg.extract.logs")
+    manifest = json.loads((env.task_dir(task.task_id) / ".patrolx-extracted.json").read_text(encoding="utf-8"))
+    failures = [item for item in manifest["subpackages"] if not item["extracted"]]
+
+    assert result["status"] == "warn"
+    assert result["metadata"]["failed"] == 1
+    assert result["metadata"]["failures"] == [
+        {
+            "name": "bad-service-log.zip",
+            "checksum": failures[0]["checksum"],
+            "target": "logs/bad-service-log",
+            "error": failures[0]["error"],
+            "extracted": False,
+        }
+    ]
+    assert failures[0]["checksum"]
+    assert failures[0]["target"] == "logs/bad-service-log"
+    assert failures[0]["error"]
     assert any("嵌套子包解压失败" in entry["message"] for entry in logs)
     assert (env.task_dir(task.task_id) / ".patrolx-extracted.json").exists()
