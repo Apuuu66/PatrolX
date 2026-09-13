@@ -26,7 +26,7 @@ python run_online.py --no-reload
 
 ### 任务 ID 规则
 
-在线和离线使用统一格式：`task-<system_id>`，同一包 → 同一任务 → 同一输出目录。
+在线和离线使用统一格式：`task-<包名清洗后的标识>`，同一包 → 同一任务 → 同一输出目录。
 
 ```text
 sample.zip → task-sample

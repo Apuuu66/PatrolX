@@ -11,7 +11,7 @@ PatrolX 是离线巡检系统：
 - 不连接被检系统，不做在线数据采集。
 - 输入是预先收集好的 `zip` / `tar.gz` 数据包。
 - 一个包对应一个任务和一个系统巡检上下文。
-- 输出契约化巡检结果、中间产物和 HTML 报告。
+- 输出契约化巡检结果和 HTML 报告。
 - 本地模式与在线模式共用同一套巡检器、规则库和结果契约。
 
 ## 2. 总体结构
@@ -29,8 +29,8 @@ PatrolX 是离线巡检系统：
        │
        ▼
 ┌──────────────┐    ┌────────────────┐
-│ 规则执行器   │───▶│ artifacts/     │
-│ P0/P1/P2 DAG │    │ rules/*.json   │
+│ 规则执行器   │───▶│ rules/*.json   │
+│ P0/P1/P2    │    │ report.html    │
 └──────┬───────┘    └────────────────┘
        │
        ▼
@@ -49,7 +49,7 @@ PatrolX 是离线巡检系统：
 ```text
 api/          HTTP 路由与请求/响应边界
 services/     任务、执行、报告、结果组织等业务编排
-inspectors/   各领域巡检规则，只消费显式 artifacts
+inspectors/   各领域巡检规则，直读 source_patterns 匹配文件
 models/       Pydantic 契约模型与持久化模型
 core/         配置、注册表、安全解压、分类等基础能力
 ```
@@ -58,7 +58,7 @@ core/         配置、注册表、安全解压、分类等基础能力
 
 - `api` 不得直接实现巡检逻辑。
 - `inspectors` 不得依赖 Web 层或数据库。
-- 规则之间不得互相引用实现，只能通过 artifacts 交互。
+- 规则之间不得互相引用实现；每条普通规则只读取自己的 source_patterns 匹配文件。
 
 ## 3. 运行模式
 
@@ -79,9 +79,9 @@ make lint
 
 - 扫描 `uploads/` 根目录下的压缩包。
 - 多个包顺序分析，每个包一个任务。
-- `system_id` 由包名清洗生成。
+- 任务 ID 由包名清洗生成，格式为 `task-<包名清洗后的标识>`。
 - 原始包归档到 `uploads/<task_id>/`。
-- 解压数据、中间产物、规则结果和报告写入 `output/<task_id>/<system_id>/`。
+- 解压数据、规则结果和报告写入 `output/<task_id>/`。
 
 ### 3.2 在线模式
 
@@ -108,10 +108,9 @@ python run_online.py
    - 校验压缩包格式和大小限制。
    - 原始包保留为输入现场，解压过程只读。
 
-2. **系统识别**
-   - 在线可选选择省份、运营商、产品形态、版本等字典值。
-   - 省份 + 运营商可生成 `system_id`，也可手动覆盖。
-   - 离线忽略客户信息，按包名生成 `system_id`。
+2. **任务识别**
+   - 任务 ID 由包名清洗生成。
+   - 在线可选记录省份、运营商、产品形态、版本等任务元数据。
 
 3. **安全解压与按类落位**
    - 主包由隐藏规则 `pkg.extract.main` 处理。
@@ -121,12 +120,13 @@ python run_online.py
 
 4. **规则执行**
    - P0 准备规则先运行。
-   - P1 基础检查和 P2 综合分析按依赖拓扑执行。
-   - 规则产出契约结果和 artifacts。
-   - 单规则可重跑，依赖缺失或过期时自动补跑。
+   - P1 基础检查和 P2 综合分析按优先级顺序执行。
+   - 每条普通规则只按自己的 `source_patterns` 匹配任务目录内相对路径。
+   - 无匹配文件、格式不适用或解析失败时返回 `skip`，不静默通过。
+   - 单规则可原地重跑，不自动补跑其他普通规则。
 
 5. **结果与报告**
-   - 规则结果写入 `rules/<code>.json`。
+   - 规则结果写入 `rules/<rule_code>.json`。
    - 执行日志写入 `output/<task_id>/execution.log`。
    - 报告写入 `output/<task_id>/report.html`。
    - Web 只消费契约化数据，不直接理解规则内部实现。
@@ -140,20 +140,20 @@ uploads/
 
 output/
 └── <task_id>/
-    ├── <system_id>/
-    │   ├── logs/
-    │   ├── kpi/
-    │   ├── traffic/
-    │   ├── alarm/
-    │   ├── config/
-    │   ├── resource/
-    │   ├── other/
-    │   ├── artifacts/
-    │   │   └── <rule_code>/
-    │   └── rules/
-    │       └── <rule_code>.json
+    ├── task.json
+    ├── system.json
+    ├── logs/
+    ├── kpi/
+    ├── traffic/
+    ├── alarm/
+    ├── config/
+    ├── resource/
+    ├── other/
+    ├── rules/
+    │   └── <rule_code>.json
     ├── report.html
-    └── execution.log
+    ├── execution.log
+    └── .patrolx-extracted.json
 ```
 
 职责：
@@ -162,7 +162,6 @@ output/
 | --- | --- |
 | `uploads/` | 原始包输入现场，长期保留，不修改 |
 | `output/` | 处理现场，包含解压数据、结果、日志、报告 |
-| `artifacts/` | 运行时中间产物，可复用，不进入契约结果 JSON |
 | `rules/` | 规则契约结果，单规则单文件，支持原地更新 |
 
 生命周期：
@@ -253,25 +252,19 @@ docs/example/real-package-structure.md
 | P1 | 单维度阈值、统计、完整性检查 | `log.error_density`、`kpi.threshold` |
 | P2 | 跨维度关联、趋势、根因分析 | `traffic.compare`、`resource.trend` |
 
-规则执行按优先级升序分组；组内按 artifact 依赖拓扑排序。
+规则执行按优先级升序分组；组内按规则编码排序。
 
 ### 7.2 依赖
 
 规则只声明：
 
 ```text
-inputs[]    消费的 artifact key
-outputs[]   声明的 metrics / artifacts 契约
+source_patterns[]  匹配任务目录内相对路径的正则
+outputs.metrics[]  声明的指标契约
 ```
 
-执行器维护：
-
-```text
-artifact key → producer rule
-```
-
-并从 `inputs[]` 推导依赖。依赖必须指向更高优先级规则；同优先级互依赖禁止。
-`pkg.extract.*` 是隐藏的基础设施例外，可被其他规则依赖。
+执行器不维护规则依赖图。普通规则只能读取自己的匹配文件；`pkg.extract.*` 是
+隐藏的基础设施规则，负责安全解压和按类落位，但不作为可审查规则暴露。
 
 ### 7.3 Rule Contract
 
@@ -286,9 +279,8 @@ artifact key → producer rule
 - `hidden`
 - `description`
 - `recommendation`
-- `inputs[]`
+- `source_patterns[]`
 - `outputs.metrics[]`
-- `outputs.artifacts[]`
 - 可选 `params[]`
 
 校验要求：
@@ -308,27 +300,22 @@ artifact key → producer rule
 | `error` | 执行异常 | 灰 |
 | `skip` | 跳过 | 蓝，展示原因 |
 
-`skip` 必须填写 `skip_reason`。无数据、依赖产物缺失或格式不适用时使用 `skip`，
+`skip` 必须填写 `skip_reason`。无数据、格式不适用或解析失败时使用 `skip`，
 不得静默通过或抛出任务级异常。
 
-### 7.5 Artifacts 与重跑
+### 7.5 单规则重跑
 
-- Artifacts 是运行时中间数据，不入契约结果 JSON。
-- 下游规则必须显式声明消费的 artifact key。
-- Artifact 记录生产者 `rule_version`。
+- 只执行目标规则，并按其 `source_patterns` 重新匹配文件。
+- 只重写目标规则 JSON，再重建任务摘要和 HTML 报告。
+- 不自动补跑其他普通规则，不建立规则间依赖图。
 - 规则逻辑变化必须升级 `rule_version`。
-- 版本不一致的 artifact 视为过期，必须重跑生产者。
-- 单规则重跑时，先解析依赖链；前置结果缺失或过期则自动补跑。
 
-### 7.6 日志先过滤
+### 7.6 日志处理
 
-日志类规则统一从 `log.filter` 的产物出发：
-
-- 递归读取 `.log` 和 `.log.gz`。
+- 日志规则递归匹配 `.log` 和 `.log.gz`。
 - gzip 使用流式读取。
-- 规范化时间、级别、模块、service、node 等字段。
-- 产出过滤后数据集和索引。
-- 后续日志分析规则只消费 `log.filter.artifacts.filtered_logs`，不重复扫描全量日志。
+- 物理落位目录是 `logs/`；契约类别仍然是 `log`。
+- 日志规则解析文件路径时提取 service、node、source_file 等上下文。
 
 ## 8. 接口与前端
 
@@ -393,8 +380,7 @@ InspectionTask
 └── SystemInspection
     └── RuleResult
         ├── Metric[]
-        ├── Finding[]
-        └── artifacts[]
+        └── Finding[]
 ```
 
 持久化原则：
@@ -409,8 +395,8 @@ InspectionTask
 默认存储：
 
 - SQLite：任务元数据和轻量状态。
-- 文件：原始包、解压数据、artifacts、规则结果、报告、执行日志。
-- 结果文档按任务 → 系统 → 规则平铺组织。
+- 文件：原始包、解压数据、规则结果、报告、执行日志。
+- 结果文档按任务 → 规则平铺组织。
 
 默认不引入：
 

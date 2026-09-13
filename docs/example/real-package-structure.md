@@ -56,10 +56,10 @@ ZZapp01BCN_app_Problem_scene_333.zip
 
 ## PatrolX 解压后的完整目录结构
 
-一个任务对应一个客户系统，系统目录内的落位结果如下：
+任务 ID 由包名生成，解压后的落位结果如下：
 
 ```text
-output/<task_id>/<system_id>/
+output/<task_id>/
 ├── alarm/
 │   └── ZZapp01BCN_app Problem scene_333/
 │       └── 333/
@@ -92,7 +92,7 @@ output/<task_id>/<system_id>/
 │           └── app Problem scene/
 │               └── Traffic/
 │                   └── call_stat_202609010101137101.txt
-├── log/
+├── logs/
 │   ├── ServiceLog_20260901011314.zip
 │   └── ServiceLog_20260901011314/
 │       ├── AAAService/
@@ -106,17 +106,19 @@ output/<task_id>/<system_id>/
 │                   ├── app_service_20260901011314.log
 │                   ├── app_service_error_20260901011314.log
 │                   └── app_service_history_20260901011314.log.gz
-├── artifacts/
 ├── rules/
 ├── .patrolx-extracted.json
-└── ../report.html
+├── report.html
+├── task.json
+├── system.json
+└── execution.log
 ```
 
 其中：
 
-- `report.html` 位于 `output/<task_id>/report.html`，不在 `<system_id>/` 下。
+- `report.html` 位于 `output/<task_id>/report.html`。
 - `.patrolx-extracted.json` 记录嵌套子包的 checksum、目标路径和是否已解压。
-- `artifacts/` 存放规则中间产物；`rules/` 存放契约化规则结果。
+- `rules/` 存放契约化规则结果；规则通过 `source_patterns` 直读任务现场文件。
 - 原始主包保留在 `uploads/<task_id>/` 下。
 
 ## 日志子包详细结构
