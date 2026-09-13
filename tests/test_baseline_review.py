@@ -29,12 +29,12 @@ def test_review_endpoints_follow_contract(tmp_path: Path, monkeypatch) -> None:
     )
     wait_for_task(client, task_id)
 
-    task = client.get(f"/api/v1/tasks/{task_id}")
+    task = client.get(f"/api/v2/tasks/{task_id}")
     assert task.status_code == 200
     task_data = task.json()
     assert task_data["stats"]["total"] > 0
 
-    system = client.get(f"/api/v1/tasks/{task_id}/system")
+    system = client.get(f"/api/v2/tasks/{task_id}/system")
     assert system.status_code == 200
     system_data = system.json()
     assert system_data["summary"]["total"] == task_data["stats"]["total"]
@@ -44,22 +44,23 @@ def test_review_endpoints_follow_contract(tmp_path: Path, monkeypatch) -> None:
     assert skips
     for rule in skips:
         assert rule["skip_reason"]
-        assert client.get(f"/api/v1/tasks/{task_id}/rules/{rule['code']}").json()["skip_reason"] == rule["skip_reason"]
+        assert client.get(f"/api/v2/tasks/{task_id}/rules/{rule['code']}").json()["skip_reason"] == rule["skip_reason"]
 
     findings = [(rule, finding) for rule in system_data["rules"] for finding in rule["findings"]]
     assert findings
     for rule, finding in findings:
-        result = client.get(f"/api/v1/tasks/{task_id}/rules/{rule['code']}")
+        result = client.get(f"/api/v2/tasks/{task_id}/rules/{rule['code']}")
         assert result.status_code == 200
         remote = result.json()
         assert finding["source_file"]
         assert finding["evidence"]
+        assert finding["recommendation"]
         assert finding in remote["findings"]
 
-    hidden = client.get(f"/api/v1/tasks/{task_id}/rules/pkg.extract.main")
+    hidden = client.get(f"/api/v2/tasks/{task_id}/rules/pkg.extract.main")
     assert hidden.status_code == 404
 
-    report = client.get(f"/api/v1/tasks/{task_id}/report")
-    logs = client.get(f"/api/v1/tasks/{task_id}/logs")
+    report = client.get(f"/api/v2/tasks/{task_id}/report")
+    logs = client.get(f"/api/v2/tasks/{task_id}/logs")
     assert report.status_code == 200
     assert logs.status_code == 200

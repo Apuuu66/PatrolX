@@ -96,16 +96,16 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 2 的测试
 
-- [ ] T022 [P] [US2] 在 `tests/test_baseline_review.py` 中验证任务摘要、系统、规则结果和发现的接口下钻路径，并断言发现包含非空包相对 `source_file`、截断后的 `evidence` 与 `recommendation`。
-- [ ] T023 [US2] 在 `tests/test_baseline_review.py` 中验证跳过规则通过系统、单规则接口和报告暴露 `skip_reason`
-- [ ] T024 [US2] 在 `tests/test_baseline_report.py` 中补充报告与契约结果的对应关系：报告展示的发现/跳过状态必须来自契约 JSON
+- [x] T022 [P] [US2] 在 `tests/test_baseline_review.py` 中验证任务摘要、系统、规则结果和发现的接口下钻路径，并断言发现包含非空包相对 `source_file`、截断后的 `evidence` 与 `recommendation`。
+- [x] T023 [US2] 在 `tests/test_baseline_review.py` 中验证跳过规则通过系统、单规则接口和报告暴露 `skip_reason`
+- [x] T024 [US2] 在 `tests/test_baseline_report.py` 中补充报告与契约结果的对应关系：报告展示的发现/跳过状态必须来自契约 JSON
 
 ### 用户故事 2 的实现
 
-- [ ] T025 [US2] 在 `app/api/router.py` 中保证任务、系统、单规则接口返回基线审查所需字段；hidden 内部规则计入任务摘要但不出现在公开规则列表中，其成功结果不单独泄漏。
-- [ ] T026 [US2] 在 `app/reports/templates/report.html.j2` 中为发现的严重程度、来源、证据、建议和跳过原因提供统一可读展示
-- [ ] T027 [P] [US2] 在 `web/src/pages/TaskDetailPage.tsx`、`web/src/pages/RuleDetailPage.tsx` 和 `web/src/components/StatusBadge.tsx` 中核对下钻、状态徽标与 `skip_reason` 展示，仅修复缺失项
-- [ ] T028 [US2] 运行 `make web-build` 验证审查页面使用最新 `/api/v2` 生成客户端并保持可构建。
+- [x] T025 [US2] 在 `app/api/router.py` 中保证任务、系统、单规则接口返回基线审查所需字段；hidden 内部规则计入任务摘要但不出现在公开规则列表中，其成功结果不单独泄漏。
+- [x] T026 [US2] 在 `app/reports/templates/report.html.j2` 中为发现的严重程度、来源、证据、建议和跳过原因提供统一可读展示
+- [x] T027 [P] [US2] 在 `web/src/pages/TaskDetailPage.tsx`、`web/src/pages/RuleDetailPage.tsx` 和 `web/src/components/StatusBadge.tsx` 中核对下钻、状态徽标与 `skip_reason` 展示，仅修复缺失项
+- [x] T028 [US2] 运行 `make web-build` 验证审查页面使用最新 `/api/v2` 生成客户端并保持可构建。
 
 **检查点**：用户故事 1 和 2 均应独立可用
 
