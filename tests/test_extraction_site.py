@@ -86,6 +86,26 @@ def test_main_site_is_retained_and_nested_packages_are_finalized(tmp_path, monke
     assert not any(name.endswith((".zip", ".tar", ".tar.gz", ".tgz", ".log.gz")) for name in work_files)
 
 
+def test_nested_evidence_package_does_not_leave_category_tree(tmp_path, monkeypatch) -> None:
+    """主包内嵌套目录下的子包展开后，分类目录不保留空的原始路径树。"""
+    env: Env = setup_env(tmp_path, monkeypatch)
+    service_zip = env.uploads / "_build" / "ServiceLog_nested.zip"
+    _zip(
+        service_zip,
+        {"AppService/logs/node/app.log": "2026-09-01T10:00:00Z INFO  app\n"},
+    )
+    package = env.uploads / "nested-site.zip"
+    _zip(package, {"Problem scene/ServiceLog_nested.zip": service_zip.read_bytes()})
+
+    from app.cli import run_task
+
+    task = run_task(package, task_id="task-empty-site")
+    task_dir = env.task_dir(task.task_id)
+
+    assert (task_dir / "logs/ServiceLog_nested/AppService/logs/node/app.log").is_file()
+    assert not (task_dir / "logs/Problem scene").exists()
+
+
 def test_log_gz_conflict_and_failure_are_isolated(tmp_path, monkeypatch) -> None:
     """冲突和损坏 gzip 保留证据并记录状态，不阻断其他文件。"""
     env: Env = setup_env(tmp_path, monkeypatch)

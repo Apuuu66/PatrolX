@@ -56,7 +56,7 @@ output/<task_id>/.patrolx-extracted.json
 | `failed` | 解压失败；不阻断任务 |
 | `rejected` | 因安全预算、路径风险或不支持格式拒绝 |
 
-原始子压缩包在 `.main/` 内永久保留。分类工作现场中的中间子压缩包在成功展开后移除。
+原始子压缩包在 `.main/` 内永久保留。`subpackages[].target` 记录中间解压现场；成功展开后，成员移入最终分类落位，空工作目录及空父目录清理。失败、冲突或拒绝证据按状态说明保留在对应工作现场。
 
 ## LogGzipState
 

@@ -172,6 +172,30 @@ def _unique_work_path(root: Path, relative: Path, checksum: str) -> Path:
     return root / relative.with_name(f"{relative.name}-{checksum[:8]}")
 
 
+def _remove_empty_work_site(work_path: Path, category_root: Path) -> None:
+    """子包成员已移走后，自底向上清理空工作目录及其空父目录。"""
+    descendants = sorted(work_path.rglob("*"), key=lambda path: len(path.parts), reverse=True)
+    for path in descendants:
+        if not path.is_dir():
+            return
+        try:
+            path.rmdir()
+        except OSError:
+            return
+    try:
+        work_path.rmdir()
+    except OSError:
+        return
+    current = work_path.parent.resolve()
+    root = category_root.resolve()
+    while current != root and current.is_relative_to(root):
+        try:
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
+
+
 def _category_of(path: Path, parent_category: str) -> tuple[str, str]:
     category = classify_name(path.name) or classify_file(path)
     if category is not None:
@@ -359,6 +383,7 @@ def _extract_subpackage(
                 seen_checksums,
                 depth + 1,
             )
+        _remove_empty_work_site(work_path, data_dir / CATEGORY_DIRECTORIES[category])
     except ArchiveError as exc:
         shutil.rmtree(staging, ignore_errors=True)
         if work_path.exists():
