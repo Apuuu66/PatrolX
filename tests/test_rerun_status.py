@@ -5,7 +5,10 @@ import time
 from fastapi.testclient import TestClient
 from test_api import _upload, _wait
 
+from app.inspectors.base import Inspector, PrepareSpec
 from app.main import app
+from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
+from app.services.executor import Executor
 from app.services.tasks import task_service
 
 
@@ -50,3 +53,67 @@ def test_rerun_failure_updates_output_status(monkeypatch) -> None:
     assert task is not None
     assert task.status.value == "failed"
     assert task.completed_at is not None
+
+
+def test_single_rule_rerun_only_executes_target_prepare_and_inspect(tmp_path) -> None:
+    """单规则重跑只执行目标 prepare + inspect，不触发其他普通规则。"""
+    from test_prepare_pipeline import make_context, make_registry
+
+    registry, events = make_registry()
+
+    def target_prepare(_ctx) -> None:
+        events.append("prepare:rule.target")
+
+    def target_run(_ctx):
+        events.append("inspect:rule.target")
+        from app.services.executor import make_result
+
+        return make_result(
+            registry.get("rule.target"),
+            status=RuleStatus.PASS,
+            summary="ok",
+        )
+
+    def other_run(_ctx) -> None:
+        events.append("inspect:rule.other")
+        raise AssertionError("单规则重跑不应执行其他普通规则")
+
+    registry.register(
+        Inspector(
+            code="rule.target",
+            name="target",
+            category=RuleCategory.OTHER,
+            severity=Severity.LOW,
+            priority=Priority.P1,
+            rule_version="1.0.0",
+            description="测试目标规则",
+            recommendation="测试目标规则",
+            source_patterns=[r"^logs/.*\.log$"],
+            run=target_run,
+            prepare=PrepareSpec(
+                code="prepare.rule.target",
+                owner_code="rule.target",
+                run=target_prepare,
+            ),
+        )
+    )
+    registry.register(
+        Inspector(
+            code="rule.other",
+            name="other",
+            category=RuleCategory.OTHER,
+            severity=Severity.LOW,
+            priority=Priority.P1,
+            rule_version="1.0.0",
+            description="测试其他规则",
+            recommendation="测试其他规则",
+            source_patterns=[r"^other/.*$"],
+            run=other_run,
+        )
+    )
+    ctx = make_context(tmp_path, registry, events, {"logs/target.log": "ok"})
+
+    result = Executor(registry).run_rule_with_deps("rule.target", ctx)
+
+    assert events == ["prepare:rule.target", "inspect:rule.target"]
+    assert result.status == RuleStatus.PASS

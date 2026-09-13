@@ -70,7 +70,7 @@ class TaskService:
                     )
                     store.save_task_meta(settings.output, completed_task)
             else:
-                run_task(
+                executed = run_task(
                     package,
                     name=name,
                     customer=customer,
@@ -79,6 +79,10 @@ class TaskService:
                     mode=TaskMode.ONLINE,
                     trigger=TaskTrigger.API,
                 )
+                if executed.status == TaskStatus.FAILED:
+                    TASKS_DURATION.observe((NOW(UTC) - started).total_seconds())
+                    self._update_status(task_id, TaskStatus.FAILED, completed_at=NOW(UTC))
+                    return
             TASKS_DURATION.observe((NOW(UTC) - started).total_seconds())
             TASKS_TOTAL.labels(result="completed", mode="online").inc()
             self._update_status(task_id, TaskStatus.COMPLETED, completed_at=NOW(UTC))

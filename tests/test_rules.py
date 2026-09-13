@@ -34,7 +34,10 @@ def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
 
 def _run_rule(code: str, ctx: RuleContext):
     registry.load_all()
-    return registry.get(code).run(ctx)
+    rule = registry.get(code)
+    if rule.prepare is not None:
+        rule.prepare.run(ctx)
+    return rule.run(ctx)
 
 
 def test_kpi_threshold_warn(tmp_path: Path) -> None:

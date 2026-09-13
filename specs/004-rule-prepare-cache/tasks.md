@@ -17,8 +17,8 @@
 
 **目的**：建立可复用的测试上下文和失败注入工具，避免后续故事重复搭建环境
 
-- [ ] T001 [P] 在 `tests/test_prepare_cache.py` 中创建规则注册、临时任务目录、prepared 根目录和日志收集测试 helper
-- [ ] T002 [P] 在 `tests/test_prepare_pipeline.py` 中创建可注册假 extract / prepare / inspect 规则的 pipeline fixture
+- [x] T001 [P] 在 `tests/test_prepare_cache.py` 中创建规则注册、临时任务目录、prepared 根目录和日志收集测试 helper
+- [x] T002 [P] 在 `tests/test_prepare_pipeline.py` 中创建可注册假 extract / prepare / inspect 规则的 pipeline fixture
 
 **检查点**：两个测试文件可被 pytest 收集，且当前新增测试明确失败或被标记为待实现。
 
@@ -28,11 +28,11 @@
 
 **目的**：在修改执行器前把 prepare 语义、缓存边界、`source_patterns` 契约和任务级目录边界固化为正式约定；不迁移既有解压分类目录。
 
-- [ ] T003 在 `.specify/memory/constitution.md` 中新增规则私有 prepare、prepared 隔离、轻量缓存约束；明确 `source_patterns` 为 Python regex 且使用 `re.fullmatch()` 匹配 `output/<task_id>/` 相对路径，版本升级为 `2.2.0`
-- [ ] T004 [P] 在 `AGENTS.md` 中同步规则约定、`EXTRACT → PREPARE → INSPECT` 编排、prepared 目录、缓存自动刷新和单规则重跑语义
-- [ ] T005 [P] 在 `docs/architecture.md` 中同步三阶段流程、prepared 生命周期、缓存语义、失败隔离和任务级目录边界
-- [ ] T006 [P] 在 `docs/data-model.md` 中同步 `source_patterns` regex 语义、prepared 数据模型和任务级目录边界
-- [ ] T007 检查治理与架构文档不得引入 `system_id` 运行时目录或公共 `artifacts/inputs` 规则输入；不得将 `data/` 定义为解压根目录目标模型，允许保留“拒绝 `data/` 方案”的说明；确认 `source_patterns` 示例为 `^logs/...`、`^kpi/...`
+- [x] T003 在 `.specify/memory/constitution.md` 中新增规则私有 prepare、prepared 隔离、轻量缓存约束；明确 `source_patterns` 为 Python regex 且使用 `re.fullmatch()` 匹配 `output/<task_id>/` 相对路径，版本升级为 `2.2.0`
+- [x] T004 [P] 在 `AGENTS.md` 中同步规则约定、`EXTRACT → PREPARE → INSPECT` 编排、prepared 目录、缓存自动刷新和单规则重跑语义
+- [x] T005 [P] 在 `docs/architecture.md` 中同步三阶段流程、prepared 生命周期、缓存语义、失败隔离和任务级目录边界
+- [x] T006 [P] 在 `docs/data-model.md` 中同步 `source_patterns` regex 语义、prepared 数据模型和任务级目录边界
+- [x] T007 检查治理与架构文档不得引入 `system_id` 运行时目录或公共 `artifacts/inputs` 规则输入；不得将 `data/` 定义为解压根目录目标模型，允许保留“拒绝 `data/` 方案”的说明；确认 `source_patterns` 示例为 `^logs/...`、`^kpi/...`
 
 **检查点**：治理文档与功能规格一致；后续实现不得扩大目录迁移范围。
 
@@ -42,11 +42,11 @@
 
 **目的**：建立 prepare 契约、注册表和任务上下文，所有用户故事都依赖这些前置能力
 
-- [ ] T008 在 `app/inspectors/base.py` 中增加 `source_patterns: list[str]` 和 `PrepareSpec`；约束一个 owner 最多一个 prepare，prepare 只包含 `code`、`owner_code`、`run`，不声明 outputs
-- [ ] T009 在 `app/inspectors/registry.py` 中实现 prepare 注册、owner 唯一性校验、prepare code 唯一性校验和按 owner 查询的只读访问
-- [ ] T010 在 `app/services/executor.py` 的 `RuleContext` 中增加 `prepared_dir`，并在 `app/cli.py` 的 `_new_context` 注入 `output/<task_id>/prepared/`
-- [ ] T011 在 `app/services/prepare.py` 中创建 owner prepared 目录路径、marker 路径、当前规则 Python 文件路径解析和 md5 计算的纯函数 helper
-- [ ] T012 在 `app/inspectors/base.py` 或 `app/services/prepare.py` 中实现 `source_patterns` 匹配 helper：POSIX 相对路径、`re.fullmatch()`、防路径穿越
+- [x] T008 在 `app/inspectors/base.py` 中增加 `source_patterns: list[str]` 和 `PrepareSpec`；约束一个 owner 最多一个 prepare，prepare 只包含 `code`、`owner_code`、`run`，不声明 outputs
+- [x] T009 在 `app/inspectors/registry.py` 中实现 prepare 注册、owner 唯一性校验、prepare code 唯一性校验和按 owner 查询的只读访问
+- [x] T010 在 `app/services/executor.py` 的 `RuleContext` 中增加 `prepared_dir`，并在 `app/cli.py` 的 `_new_context` 注入 `output/<task_id>/prepared/`
+- [x] T011 在 `app/services/prepare.py` 中创建 owner prepared 目录路径、marker 路径、当前规则 Python 文件路径解析和 md5 计算的纯函数 helper
+- [x] T012 在 `app/inspectors/base.py` 或 `app/services/prepare.py` 中实现 `source_patterns` 匹配 helper：POSIX 相对路径、`re.fullmatch()`、防路径穿越
 
 **检查点**：基础层完成；未实现编排前，现有 `make lint` 和 `make test` 仍必须通过。
 
@@ -60,14 +60,14 @@
 
 ### 测试
 
-- [ ] T013 [US1] 在 `tests/test_prepare_pipeline.py` 中编写三阶段顺序、prepare 排序、inspect 排序和主包失败阻断的失败测试
+- [x] T013 [US1] 在 `tests/test_prepare_pipeline.py` 中编写三阶段顺序、prepare 排序、inspect 排序和主包失败阻断的失败测试
 
 ### 实现
 
-- [ ] T014 [US1] 在 `app/services/executor.py` 中实现 extract plan、prepare plan、inspect plan；prepare 排序为 `owner priority → owner code → prepare code`，inspect 排序为 `priority → code`
-- [ ] T015 [US1] 在 `app/services/executor.py` 中重写 `run_all`，实现 extract 全部终态后才执行 prepare、prepare 全部完成后才执行 inspect
-- [ ] T016 [US1] 在 `app/cli.py` 的 `run_task` 中处理主包解压失败：任务状态必须失败，不生成完成报告
-- [ ] T017 [US1] 在 `app/cli.py` 的 `_rebuild_system` 中改为只按 inspect plan 重建规则顺序，避免隐藏 prepare 进入报告
+- [x] T014 [US1] 在 `app/services/executor.py` 中实现 extract plan、prepare plan、inspect plan；prepare 排序为 `owner priority → owner code → prepare code`，inspect 排序为 `priority → code`
+- [x] T015 [US1] 在 `app/services/executor.py` 中重写 `run_all`，实现 extract 全部终态后才执行 prepare、prepare 全部完成后才执行 inspect
+- [x] T016 [US1] 在 `app/cli.py` 的 `run_task` 中处理主包解压失败：任务状态必须失败，不生成完成报告
+- [x] T017 [US1] 在 `app/cli.py` 的 `_rebuild_system` 中改为只按 inspect plan 重建规则顺序，避免隐藏 prepare 进入报告
 
 **检查点**：三阶段测试通过；普通任务执行结果与现有行为兼容。
 
@@ -81,13 +81,13 @@
 
 ### 测试
 
-- [ ] T018 [US2] 在 `tests/test_prepare_pipeline.py` 中编写两个 prepare 输出按 owner 隔离、owner inspect 使用私有数据的测试
+- [x] T018 [US2] 在 `tests/test_prepare_pipeline.py` 中编写两个 prepare 输出按 owner 隔离、owner inspect 使用私有数据的测试
 
 ### 实现
 
-- [ ] T019 [US2] 在 `app/inspectors/kpi/threshold.py` 中保留 `^kpi/...` source patterns，声明私有 prepare，生成 owner 私有 KPI 值数据，并让 inspect 读取该数据
-- [ ] T020 [P] [US2] 在 `app/inspectors/log/common.py` 中补充不依赖具体规则的日志归一化纯工具，供规则文件复用
-- [ ] T021 [US2] 在 `app/inspectors/log/app_service.py` 中保留 `^logs/...` source patterns，声明私有 prepare，生成 AppService 私有记录数据，并让 inspect 读取该数据
+- [x] T019 [US2] 在 `app/inspectors/kpi/threshold.py` 中保留 `^kpi/...` source patterns，声明私有 prepare，生成 owner 私有 KPI 值数据，并让 inspect 读取该数据
+- [x] T020 [P] [US2] 在 `app/inspectors/log/common.py` 中补充不依赖具体规则的日志归一化纯工具，供规则文件复用
+- [x] T021 [US2] 在 `app/inspectors/log/app_service.py` 中保留 `^logs/...` source patterns，声明私有 prepare，生成 AppService 私有记录数据，并让 inspect 读取该数据
 
 **检查点**：两条样例规则全流程通过；既有未迁移规则继续按原逻辑执行。
 
@@ -101,12 +101,12 @@
 
 ### 测试
 
-- [ ] T022 [US3] 在 `tests/test_prepare_cache.py` 中编写缓存命中、代码变化重建、目录删除重建和输出文件缺失不重建的失败测试；用例不得依赖刷新命令、环境变量或全局开关触发缓存刷新
+- [x] T022 [US3] 在 `tests/test_prepare_cache.py` 中编写缓存命中、代码变化重建、目录删除重建和输出文件缺失不重建的失败测试；用例不得依赖刷新命令、环境变量或全局开关触发缓存刷新
 
 ### 实现
 
-- [ ] T023 [US3] 在 `app/services/executor.py` 中实现 marker 不存在/不一致重建、一致复用；重建前清空 owner prepared 目录，成功后写 marker
-- [ ] T024 [US3] 在 `app/services/executor.py` 中输出 `prepare_cache_hit` 和 `prepare_cache_rebuild` 结构化日志，包含任务、owner 规则和 prepare 上下文
+- [x] T023 [US3] 在 `app/services/executor.py` 中实现 marker 不存在/不一致重建、一致复用；重建前清空 owner prepared 目录，成功后写 marker
+- [x] T024 [US3] 在 `app/services/executor.py` 中输出 `prepare_cache_hit` 和 `prepare_cache_rebuild` 结构化日志，包含任务、owner 规则和 prepare 上下文
 
 **检查点**：缓存测试通过；重复运行同一规则不重复执行 prepare 函数。
 
@@ -120,12 +120,12 @@
 
 ### 测试
 
-- [ ] T025 [US4] 在 `tests/test_rerun_status.py` 中编写单规则重跑只执行目标 prepare + inspect、其他普通规则不被执行的测试
+- [x] T025 [US4] 在 `tests/test_rerun_status.py` 中编写单规则重跑只执行目标 prepare + inspect、其他普通规则不被执行的测试
 
 ### 实现
 
-- [ ] T026 [US4] 在 `app/services/executor.py` 的 `run_rule_with_deps` 中加入目标 owner prepare 检查；无 prepare 规则保持现有行为
-- [ ] T027 [US4] 在 `app/cli.py` 和 `app/services/tasks.py` 中验证单规则重跑路径都注入同一 prepared root，并只更新目标规则 JSON、任务摘要和 HTML 报告
+- [x] T026 [US4] 在 `app/services/executor.py` 的 `run_rule_with_deps` 中加入目标 owner prepare 检查；无 prepare 规则保持现有行为
+- [x] T027 [US4] 在 `app/cli.py` 和 `app/services/tasks.py` 中验证单规则重跑路径都注入同一 prepared root，并只更新目标规则 JSON、任务摘要和 HTML 报告
 
 **检查点**：单规则重跑测试通过；在线 API 重跑和本地 CLI 行为一致。
 
@@ -139,13 +139,13 @@
 
 ### 测试
 
-- [ ] T028 [US5] 在 `tests/test_prepare_pipeline.py` 中编写 prepare 异常、prepare 无匹配输入、category 子包失败导致 owner skip、category 子包部分失败但仍有可用源文件时 owner 正常执行、其他规则继续执行的测试
+- [x] T028 [US5] 在 `tests/test_prepare_pipeline.py` 中编写 prepare 异常、prepare 无匹配输入、category 子包失败导致 owner skip、category 子包部分失败但仍有可用源文件时 owner 正常执行、其他规则继续执行的测试
 
 ### 实现
 
-- [ ] T029 [US5] 在 `app/services/executor.py` 中实现 prepare `SKIP` / `FAILED` 状态跟踪；category 子包部分失败时只向 prepare 提供可用源文件，prepare 未就绪时框架直接生成 owner `skip` 结果，不调用 owner inspect 函数
-- [ ] T030 [US5] 在 `app/services/executor.py` 中输出 `prepare_skip`、`prepare_error`、`inspect_skip_prepare_not_ready` 结构化日志
-- [ ] T031 [US5] 在 `app/services/prepare.py` 中保证 prepare 失败不写新 marker，且不会把失败结果误判为缓存命中
+- [x] T029 [US5] 在 `app/services/executor.py` 中实现 prepare `SKIP` / `FAILED` 状态跟踪；category 子包部分失败时只向 prepare 提供可用源文件，prepare 未就绪时框架直接生成 owner `skip` 结果，不调用 owner inspect 函数
+- [x] T030 [US5] 在 `app/services/executor.py` 中输出 `prepare_skip`、`prepare_error`、`inspect_skip_prepare_not_ready` 结构化日志
+- [x] T031 [US5] 在 `app/services/prepare.py` 中保证 prepare 失败不写新 marker，且不会把失败结果误判为缓存命中
 
 **检查点**：失败隔离测试通过；主包失败、子包失败和普通 prepare 失败语义都明确。
 
@@ -155,10 +155,10 @@
 
 **目的**：规则版本、契约检查和全量验证
 
-- [ ] T032 检查 `kpi.threshold`、`log.app_service` 的 `rule_version` 已因巡检逻辑变化递增；如未递增则在对应规则文件中修正
-- [ ] T033 在 `docs/api/openapi.yaml` 确认无接口变更；如发现新增公共字段或规则列表暴露 prepare，先停止实现并回溯 OpenAPI 契约
-- [ ] T034 运行 `make lint && make test`，修复所有回退
-- [ ] T035 运行 `make verify`，按 `specs/004-rule-prepare-cache/quickstart.md` 验证缓存命中、自动重建和失败隔离
+- [x] T032 检查 `kpi.threshold`、`log.app_service` 的 `rule_version` 已因巡检逻辑变化递增；如未递增则在对应规则文件中修正
+- [x] T033 在 `docs/api/openapi.yaml` 确认无接口变更；如发现新增公共字段或规则列表暴露 prepare，先停止实现并回溯 OpenAPI 契约
+- [x] T034 运行 `make lint && make test`，修复所有回退
+- [x] T035 运行 `make verify`，按 `specs/004-rule-prepare-cache/quickstart.md` 验证缓存命中、自动重建和失败隔离
 
 ---
 

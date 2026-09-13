@@ -5,12 +5,14 @@ import pkgutil
 import sys
 from pathlib import Path
 
-from app.inspectors.base import Inspector
+from app.inspectors.base import Inspector, PrepareSpec
 
 
 class RuleRegistry:
     def __init__(self) -> None:
         self._rules: dict[str, Inspector] = {}
+        self._prepares: dict[str, tuple[Inspector, PrepareSpec]] = {}
+        self._prepare_by_owner: dict[str, PrepareSpec] = {}
         self._loaded = False
 
     def register(self, inspector: Inspector) -> None:
@@ -18,6 +20,30 @@ class RuleRegistry:
         if inspector.code in self._rules:
             raise ValueError(f"规则 code 重复: {inspector.code}")
         self._rules[inspector.code] = inspector
+        if inspector.prepare is not None:
+            self._register_prepare(inspector, inspector.prepare)
+
+    def _register_prepare(self, owner: Inspector, prepare: PrepareSpec) -> None:
+        if owner.code in self._prepare_by_owner:
+            raise ValueError(f"规则 {owner.code} owner prepare 重复")
+        if prepare.code in self._prepares or prepare.code in self._rules:
+            raise ValueError(f"prepare code 重复: {prepare.code}")
+        self._prepares[prepare.code] = (owner, prepare)
+        self._prepare_by_owner[owner.code] = prepare
+
+    def prepare_for_owner(self, owner_code: str) -> PrepareSpec | None:
+        """按 owner 查询唯一私有 prepare；返回对象本身但注册表保持只读映射。"""
+        return self._prepare_by_owner.get(owner_code)
+
+    def prepare(self, code: str) -> PrepareSpec:
+        try:
+            return self._prepares[code][1]
+        except KeyError:
+            raise KeyError(f"prepare 未注册: {code}") from None
+
+    def prepares(self) -> list[tuple[Inspector, PrepareSpec]]:
+        """按 owner priority、owner code、prepare code 返回注册的 prepare。"""
+        return sorted(self._prepares.values(), key=lambda item: (item[0].priority, item[0].code, item[1].code))
 
     def get(self, code: str) -> Inspector:
         try:

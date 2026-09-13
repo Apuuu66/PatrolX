@@ -16,6 +16,15 @@ class OutputMetric:
 
 
 @dataclass(slots=True)
+class PrepareSpec:
+    """规则私有预处理契约；prepare 不产出公共规则结果。"""
+
+    code: str
+    owner_code: str
+    run: Any
+
+
+@dataclass(slots=True)
 class Inspector:
     """规则契约（RuleContract）。"""
 
@@ -32,6 +41,7 @@ class Inspector:
     outputs_metrics: list[OutputMetric] = field(default_factory=list)
     params: list[dict[str, Any]] = field(default_factory=list)
     run: Any = None
+    prepare: PrepareSpec | None = None
 
     def validate(self) -> None:
         if not self.code or not self.name:
@@ -44,6 +54,8 @@ class Inspector:
             raise ValueError(f"规则 {self.code} priority 非法")
         if self.run is None:
             raise ValueError(f"规则 {self.code} 缺少执行函数 run")
+        if self.prepare is not None:
+            self._validate_prepare()
         if self.hidden:
             if self.source_patterns is None:
                 return self
@@ -62,6 +74,21 @@ class Inspector:
         if len(metric_keys) != len(set(metric_keys)):
             raise ValueError(f"规则 {self.code} metrics key 重复")
         return self
+
+    def _validate_prepare(self) -> None:
+        prepare = self.prepare
+        if prepare is None:
+            return
+        if self.hidden:
+            raise ValueError(f"隐藏规则 {self.code} 不能声明私有 prepare")
+        if not self.source_patterns:
+            raise ValueError(f"规则 {self.code} 声明 prepare 时必须声明 source_patterns")
+        if not prepare.code:
+            raise ValueError(f"规则 {self.code} 的 prepare 缺少 code")
+        if prepare.owner_code != self.code:
+            raise ValueError(f"规则 {self.code} 的 prepare owner_code 必须等于自身 code")
+        if prepare.run is None:
+            raise ValueError(f"规则 {self.code} 的 prepare 缺少执行函数 run")
 
     def _validate_source_patterns(self) -> None:
         if self.source_patterns is None:

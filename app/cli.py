@@ -16,6 +16,7 @@ from app.inspectors.pkg import EXTRACT_MANIFEST
 from app.inspectors.registry import registry
 from app.models.schemas import (
     InspectionTask,
+    RuleStatus,
     SystemInspection,
     SystemStatus,
     TaskMode,
@@ -84,6 +85,7 @@ def _new_context(task_id: str, package: Path) -> RuleContext:
         log=_make_log_fn(task_id),
         package_path=package,
         result_dir=task_dir / "rules",
+        prepared_dir=task_dir / "prepared",
     )
 
 
@@ -94,7 +96,7 @@ def _rebuild_system(
     version: str | None,
 ) -> SystemInspection:
     """单规则重跑后重建 system.json（保持摘要一致）。"""
-    plan = Executor(registry).plan()
+    plan = Executor(registry).inspect_plan()
     results = [store.load_rule_result(settings.output, task_id, code) for code in plan]
     results = [result for result in results if result is not None and not registry.get(result.code).hidden]
     for index, result in enumerate(results):
@@ -142,6 +144,42 @@ def run_task(
     ctx = _new_context(task_id, package)
     executor = Executor(registry)
     results = executor.run_all(ctx)
+    main_result = results.get("pkg.extract.main")
+    if main_result is not None and main_result.status == RuleStatus.ERROR:
+        store.save_rule_result(settings.output, task_id, main_result)
+        summary = store.compute_summary([])
+        system = SystemInspection(
+            package_file=package.name,
+            status=SystemStatus.FAILED,
+            summary=summary,
+            rules=[],
+            customer=customer or {},
+            version=version,
+        )
+        stats = TaskStats(total=0, pass_=0, warn=0, fail=0, error=0, skip=0)
+        task = InspectionTask(
+            task_id=task_id,
+            name=name or package.name,
+            mode=mode,
+            status=TaskStatus.FAILED,
+            trigger=trigger,
+            created_at=_now(),
+            completed_at=_now(),
+            stats=stats,
+            system=system,
+        )
+        store.save_system(settings.output, task_id, system)
+        store.save_task_meta(settings.output, task)
+        store.append_log(
+            settings.output,
+            task_id,
+            "error",
+            "主包解压失败，任务失败",
+            error=main_result.summary,
+        )
+        TASKS_TOTAL.labels(result="failed", mode=mode.value).inc()
+        print(f"\n任务 {task_id} 失败：主包解压失败 | 日志: {settings.output / task_id / 'execution.log'}")
+        return task
     executor.assign_order(results)
     ordered = [results[code] for code in executor.plan() if code in results]
     for result in ordered:
