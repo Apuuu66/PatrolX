@@ -29,8 +29,13 @@ PatrolX 是离线巡检系统：
        │
        ▼
 ┌──────────────┐    ┌────────────────┐
+│ 规则私有准备 │───▶│ prepared/<rule>│
+└──────┬───────┘    └────────────────┘
+       │
+       ▼
+┌──────────────┐    ┌────────────────┐
 │ 规则执行器   │───▶│ rules/*.json   │
-│ P0/P1/P2    │    │ report.html    │
+│ P1/P2        │    │ report.html    │
 └──────┬───────┘    └────────────────┘
        │
        ▼
@@ -115,17 +120,23 @@ python run_online.py
 3. **安全解压与按类落位**
    - 主包由隐藏规则 `pkg.extract.main` 处理。
    - 文件按日志、KPI、话统、告警、配置、资源、其他分类落位。
-   - 嵌套包登记清单，由对应 `pkg.extract.{category}` 按需解压。
+   - 嵌套包登记清单，由对应 `pkg.extract.{category}` 在 `EXTRACT` 阶段完成解压。
    - 同一子包通过 checksum/manifest 去重，只解压一次。
+   - 主包解压失败时任务失败，不进入后续阶段。
 
-4. **规则执行**
-   - P0 准备规则先运行。
-   - P1 基础检查和 P2 综合分析按优先级顺序执行。
+4. **规则私有 prepare**
+   - 全部解压准备到达终态后，才执行 `PREPARE`。
+   - 普通规则可以声明至多一个私有 prepare；prepare 继承 owner 的 `source_patterns` 和优先级。
+   - prepared 数据写入 `prepared/<owner_code>/`，只有 owner 规则可读取。
+   - prepare 失败或无匹配输入时，owner inspect 显式 `skip`；其他规则继续。
+
+5. **普通规则 inspect**
+   - prepare 阶段完成后，P1 基础检查和 P2 综合分析按优先级顺序执行。
    - 每条普通规则只按自己的 `source_patterns` 匹配任务目录内相对路径。
    - 无匹配文件、格式不适用或解析失败时返回 `skip`，不静默通过。
    - 单规则可原地重跑，不自动补跑其他普通规则。
 
-5. **结果与报告**
+6. **结果与报告**
    - 规则结果写入 `rules/<rule_code>.json`。
    - 执行日志写入 `output/<task_id>/execution.log`。
    - 报告写入 `output/<task_id>/report.html`。
@@ -149,6 +160,8 @@ output/
     ├── config/
     ├── resource/
     ├── other/
+    ├── prepared/
+    │   └── <rule_code>/
     ├── rules/
     │   └── <rule_code>.json
     ├── report.html
@@ -162,6 +175,7 @@ output/
 | --- | --- |
 | `uploads/` | 原始包输入现场，长期保留，不修改 |
 | `output/` | 处理现场，包含解压数据、结果、日志、报告 |
+| `prepared/` | 规则私有中间数据，按 owner 规则隔离，不进入 API 契约 |
 | `rules/` | 规则契约结果，单规则单文件，支持原地更新 |
 
 生命周期：
@@ -204,7 +218,7 @@ deploy/config/classify_rules.yaml
 - 嵌套包按类别解压到 `<category>/<subpackage>/`。
 - 保留包内相对路径，便于 `Finding.source_file` 追溯。
 - 主包解压时只登记嵌套包，不立即解压。
-- 某类别规则首次需要数据时，执行对应 `pkg.extract.{category}`。
+- `EXTRACT` 阶段执行全部需要的 `pkg.extract.{category}`，并等待所有解压准备到达终态后才进入 `PREPARE`。
 - 解压清单为 `.patrolx-extracted.json`。
 - 清单记录 checksum、目标目录、文件数；同 checksum 或同路径已解压时复用。
 
@@ -259,12 +273,12 @@ docs/example/real-package-structure.md
 规则只声明：
 
 ```text
-source_patterns[]  匹配任务目录内相对路径的正则
+source_patterns[]  使用 re.fullmatch() 匹配任务目录内 POSIX 相对路径的正则
 outputs.metrics[]  声明的指标契约
+可选 prepare       规则私有预处理声明
 ```
 
-执行器不维护规则依赖图。普通规则只能读取自己的匹配文件；`pkg.extract.*` 是
-隐藏的基础设施规则，负责安全解压和按类落位，但不作为可审查规则暴露。
+执行器维护 `EXTRACT → PREPARE → INSPECT` 阶段屏障，但不维护普通规则依赖图。普通规则只能读取自己的匹配文件或自己的 prepared 数据；`pkg.extract.*` 是隐藏解压基础设施，prepare 是隐藏规则私有准备单元，都不作为普通规则展示。
 
 ### 7.3 Rule Contract
 
@@ -290,7 +304,18 @@ outputs.metrics[]  声明的指标契约
 - `pass` / `warn` / `fail` 必须满足输出契约。
 - `skip` / `error` 豁免输出契约校验，但必须有原因或异常信息。
 
-### 7.4 状态语义
+### 7.4 规则私有 prepare
+
+- 一个普通规则最多声明一个 prepare；prepare 代码必须唯一。
+- prepare 不声明 priority、severity、outputs 或公共 artifact。
+- prepared 路径固定为 `output/<task_id>/prepared/<owner_code>/`。
+- 缓存 marker 是 `.prepare.md5`，内容为当前 owner 规则 Python 文件内容的 md5。
+- marker 不存在或不一致时重建；一致时复用；prepare 失败不写 marker。
+- 不做输入 checksum、输出 manifest 或单个 prepared 文件缺失检查。
+- prepare 执行顺序为 `owner priority → owner code → prepare code`。
+- 第一版顺序执行 prepare；prepare 之间保持无依赖。
+
+### 7.5 状态语义
 
 | 状态 | 含义 | 展示 |
 | --- | --- | --- |
@@ -303,14 +328,15 @@ outputs.metrics[]  声明的指标契约
 `skip` 必须填写 `skip_reason`。无数据、格式不适用或解析失败时使用 `skip`，
 不得静默通过或抛出任务级异常。
 
-### 7.5 单规则重跑
+### 7.6 单规则重跑
 
-- 只执行目标规则，并按其 `source_patterns` 重新匹配文件。
+- 只执行目标规则私有 prepare或复用其缓存。
+- 再按目标规则 `source_patterns` 重新匹配文件并执行目标规则。
 - 只重写目标规则 JSON，再重建任务摘要和 HTML 报告。
 - 不自动补跑其他普通规则，不建立规则间依赖图。
 - 规则逻辑变化必须升级 `rule_version`。
 
-### 7.6 日志处理
+### 7.7 日志处理
 
 - 日志规则递归匹配 `.log` 和 `.log.gz`。
 - gzip 使用流式读取。

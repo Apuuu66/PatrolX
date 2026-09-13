@@ -39,6 +39,7 @@ Agent 修改代码前必须遵守：
 - MUST NOT 手写与 OpenAPI 不一致的前端 API 调用。
 - MUST NOT 破坏既有契约字段含义；破坏性 API 变更必须进入新版本。
 - MUST NOT 让规则导入、实例化或调用其他规则；普通规则只声明并匹配自己的 `source_patterns`。
+- MUST NOT 把 prepare作为普通规则展示，或让一条规则消费另一条规则的 prepared 数据。
 - MUST NOT 在核心调度器中硬编码业务规则。
 - MUST NOT 让单文件解析失败静默中断整个任务。
 - MUST NOT 修改原始上传包内容。
@@ -62,7 +63,7 @@ app/
 
 web/                     # React + TypeScript + Vite 前端
 uploads/                 # 原始包输入现场
-output/<task_id>/        # 解压数据、规则结果、日志、报告
+output/<task_id>/        # 解压数据、规则结果、prepared 数据、日志、报告
 deploy/                  # Docker 与配置
 docs/                    # 架构、契约、样例和路线图
 tests/                   # 单元测试、契约测试和 fixtures
@@ -89,7 +90,7 @@ make lint           # ruff check + format check
 cd web && npm run dev
 ```
 
-`make verify-one` 只执行目标规则：先保证任务解压完成，再按该规则的 `source_patterns` 匹配文件，最后只重写该规则 JSON、更新任务摘要和 HTML 报告；随后刷新前端即可查看最新结果。
+`make verify-one` 只执行目标规则：先保证任务解压完成，再执行或复用目标规则私有 prepare，最后按该规则的 `source_patterns` 匹配文件执行目标规则；随后只重写该规则 JSON、更新任务摘要和 HTML 报告，刷新前端即可查看最新结果。
 
 真实样例包结构见 [`docs/example/real-package-structure.md`](docs/example/real-package-structure.md)。
 
@@ -112,7 +113,8 @@ cd web && npm run dev
 - 继承并注册到 `Inspector` 机制。
 - 声明完整元数据：`code`、`name`、`category`、`severity`、`priority`、`rule_version`、
   `description`、`recommendation`。
-- 声明 `source_patterns[]` 和输出指标契约；正则匹配 `output/<task_id>/` 下的相对路径。
+- 声明 `source_patterns[]` 和输出指标契约；使用 Python regex 的 `re.fullmatch()` 匹配 `output/<task_id>/` 下以 `/` 归一化的相对路径。
+- 可选声明至多一个私有 prepare；prepare 继承 owner 的 `source_patterns` 和 priority，只把数据写入 `output/<task_id>/prepared/<owner_code>/`。
 - 不直接依赖其他规则实现。
 - 无匹配文件时返回 `skip`，不得静默通过。
 - 单个解析失败不影响任务。
@@ -131,11 +133,14 @@ cd web && npm run dev
 
 执行编排：
 
+- 固定顺序为 `EXTRACT → PREPARE → INSPECT`；主包解压失败时任务失败。
 - 解压是隐藏的 `pkg.extract.*` 内部前置规则，必须安全、幂等且只解压一次。
+- prepare 是隐藏的规则私有基础设施单元，按 owner priority 和规则代码排序，不进入普通规则结果。
 - P1 基础检查。
 - P2 综合分析。
-- 不建立规则间依赖图；每条普通规则只按自己的 `source_patterns` 读取匹配文件。
-- 单规则重跑只执行目标规则，不补跑其他普通规则。
+- 不建立规则间依赖图；每条普通规则只按自己的 `source_patterns` 读取匹配文件或自己的 prepared 数据。
+- 单规则重跑只执行目标规则私有 prepare/缓存检查和目标规则，不补跑其他普通规则。
+- prepare 缓存以当前 owner 规则 Python 文件内容 md5 做轻量校验；无手动刷新命令或全局开关。
 
 ## API 契约约定
 
