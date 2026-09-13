@@ -25,14 +25,16 @@ description: "系统基线功能实现任务列表"
 
 ---
 
-## 阶段 1：设置（共享基础设施）
+## 阶段 1：设置与契约同步（共享基础设施）
 
-**目的**：为基线验证准备可复用的测试工具和样例上下文
+**目的**：为基线验证准备可复用的测试工具、样例上下文和阻塞实现的基线契约
 
 - [ ] T001 在 `tests/baseline_helpers.py` 中创建基线测试助手，封装临时 `uploads/`、`output/` 与 SQLite 环境运行本地任务
 - [ ] T002 在 `tests/baseline_helpers.py` 中添加 `wait_for_task()`、`load_task()`、`load_rule()`、`strip_volatile()` 工具，统一忽略 `executed_at` 与 `duration_ms`
+- [ ] T002A [Contract] 在 `docs/api/openapi.yaml` 中新增 `/api/v2` 基线契约：任务、系统、规则、发现、报告、重跑与删除接口；任务现场唯一使用 `task_id`；规则元数据暴露 `severity`、`source_patterns`；`/api/v2` 模型不包含 `system_id`、`artifacts`、`inputs[]` 和 `outputs_artifacts`；任务创建接口必须定义同名同 checksum 复用语义和同名不同 checksum 的 `409 package_checksum_conflict` 错误响应；`/api/v2` 不得提供 `force` 或删除重建语义。迁移期不得删除或改变 `/api/v1` 既有字段含义。
+- [ ] T002B [Contract] 根据 T002A 运行 `make gen-web-api`，更新前端 API 客户端引用到 `/api/v2`；同步契约测试与前端构建检查，且不新增 `/api/v1` 消费者。
 
-**检查点**：后续测试可以稳定运行样例包并读取契约结果
+**检查点**：后续测试可以稳定运行样例包并读取契约结果；`/api/v2` 契约和生成客户端已作为实现门禁同步
 
 ---
 
@@ -42,18 +44,20 @@ description: "系统基线功能实现任务列表"
 
 **⚠️ 关键**：本阶段完成前不得开始任何用户故事工作
 
-- [ ] T003 在 `app/models/schemas.py` 中添加模型校验：`status=skip` 时 `skip_reason` 必须非空；发现必须提供非空 `source_file` 与 `evidence`
+- [ ] T003 在 `app/models/schemas.py` 中添加模型校验：`status=skip` 时 `skip_reason` 必须非空；发现必须提供非空包相对 `source_file` 与 `evidence`；`evidence` 超过安全展示上限时必须截断，`source_file` 仍保留完整相对路径。
 - [ ] T004 在 `app/models/schemas.py` 中添加摘要校验：任务摘要计数等于规则数量，且各状态计数之和等于总数
 - [ ] T005 在 `app/services/store.py` 中固化文件存储分层：在线 SQLite 只保存任务运行元数据；解压数据、规则 JSON、报告和执行日志保留在 `output/<task_id>/`，本地模式无需数据库
 - [ ] T006 [P] 在 `tests/test_baseline_storage.py` 中验证 `TaskRecord` 不承载巡检业务证据，规则结果、报告和日志落在 `output/<task_id>/`，不出现 `system_id` 目录层或 artifacts 目录
-- [ ] T007 [P] 在 `tests/test_baseline_schemas.py` 中覆盖 skip 原因、发现可追溯性和摘要一致性校验
+- [ ] T007 [P] 在 `tests/test_baseline_schemas.py` 中覆盖 skip 原因、发现可追溯性、摘要一致性校验，以及长 `evidence` 截断后 `source_file` 仍完整保留。
 - [ ] T008 在 `app/inspectors/base.py` 中为普通规则添加并校验 `source_patterns`：正则必须可编译、匹配任务目录内相对路径、禁止绝对路径和路径穿越
-- [ ] T009 在 `app/services/executor.py` 中校验 `pass`、`warn`、`fail` 结果的 metrics key/unit 与规则声明契约一致；不一致时记为 `error` 并写入结构化日志
-- [ ] T010 [P] 在 `tests/test_baseline_registry.py` 中覆盖非法注册元数据、空/非法 `source_patterns`、路径穿越模式和 metrics 契约不一致
+- [ ] T009 在 `app/services/executor.py` 中校验 `pass`、`warn`、`fail` 结果的 metrics key/unit 与规则声明契约一致；不一致时记为 `error` 并写入结构化日志。规则执行异常必须转换为显式 `error` 结果，不得中止任务；`error` 结果的 metrics 和 findings 可以为空。
+- [ ] T010 [P] 在 `tests/test_baseline_registry.py` 中覆盖完整注册元数据校验矩阵：规则代码命名、`name`、`category`、`severity`、`priority`、`rule_version`、`description`、`recommendation`、空/非法 `source_patterns`、路径穿越模式和 metrics 契约不一致。
 - [ ] T011 [P] 在 `tests/test_baseline_archive.py` 中补充文件数、单文件大小、总量预算、链接拒绝、路径穿越和深层嵌套限制测试
 - [ ] T012 在 `app/core/archive.py` 中根据 T011 修复安全解压缺口，确保超限或异常归档产生可记录的 `ArchiveError`
+- [ ] T002C 在基础层完成后，在 `app/api/router.py` 中实现 `/api/v2` 任务、系统、规则、发现、报告、重跑与删除路由；迁移完成前保持 `/api/v1` 行为不变。
+- [ ] T002D [Contract] 将前端、后端契约测试和集成测试的 API 调用迁移到 `/api/v2`；确认没有新增 `/api/v1` 消费者。
 
-**检查点**：单任务目录、源文件匹配契约、输出校验和解压安全约束已可作为用户故事的阻塞门禁
+**检查点**：单任务目录、源文件匹配契约、输出校验、解压安全约束、`/api/v2` 路由和消费者迁移已可作为用户故事的阻塞门禁
 
 ---
 
@@ -67,9 +71,11 @@ description: "系统基线功能实现任务列表"
 
 - [ ] T013 [P] [US1] 在 `tests/test_baseline_pipeline.py` 中验证单包生成单任务目录、类别目录、规则 JSON、`report.html` 与 `execution.log`
 - [ ] T014 [US1] 在 `tests/test_baseline_pipeline.py` 中验证唯一包名生成唯一 `task_id`；同一系统元数据下的不同包名必须形成不同任务，且任务结果互不合并
+- [ ] T014A [US1] 在 `tests/test_baseline_pipeline.py` 中验证同名同 checksum 包复用既有 `task_id` 与任务现场；同名不同 checksum 包返回冲突且不覆盖既有 `uploads/`、`output/`、规则结果、报告和日志；在线 API 断言错误码为 `package_checksum_conflict`。
 - [ ] T015 [P] [US1] 在 `tests/test_baseline_extraction.py` 中验证主包按类落位、嵌套子包 checksum 去重、重复执行不重复解压
 - [ ] T016 [US1] 在 `tests/test_baseline_extraction.py` 中验证格式错误或不可识别文件不中止任务，并在解压结果、执行日志或对应规则结果中可见
-- [ ] T017 [P] [US1] 在 `tests/test_baseline_report.py` 中验证报告包含状态计数、规则摘要、发现来源/证据/建议、跳过原因和执行时间
+- [ ] T016A [US1] 在 `tests/test_baseline_pipeline.py` 中注入运行时抛异常的规则样例，验证该规则结果为 `error`，结构化日志包含 `task_id` 与 `rule_code`，任务继续完成，其他规则结果保持可访问，并断言 `error` 结果的 metrics 与 findings 为空或显式为空集合。
+- [ ] T017 [P] [US1] 在 `tests/test_baseline_report.py` 中验证报告包含状态计数、规则摘要、发现来源/证据/建议、跳过原因和执行时间；发现按 `critical` → `high` → `medium` → `low` 排序，同级别按规则优先级和规则代码稳定排序。
 
 ### 用户故事 1 的实现
 
@@ -90,16 +96,16 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 2 的测试
 
-- [ ] T022 [P] [US2] 在 `tests/test_baseline_review.py` 中验证任务摘要、系统、规则结果和发现的接口下钻路径，并断言发现包含非空来源与证据
+- [ ] T022 [P] [US2] 在 `tests/test_baseline_review.py` 中验证任务摘要、系统、规则结果和发现的接口下钻路径，并断言发现包含非空包相对 `source_file`、截断后的 `evidence` 与 `recommendation`。
 - [ ] T023 [US2] 在 `tests/test_baseline_review.py` 中验证跳过规则通过系统、单规则接口和报告暴露 `skip_reason`
 - [ ] T024 [US2] 在 `tests/test_baseline_report.py` 中补充报告与契约结果的对应关系：报告展示的发现/跳过状态必须来自契约 JSON
 
 ### 用户故事 2 的实现
 
-- [ ] T025 [US2] 在 `app/api/router.py` 中保证任务、系统、单规则接口返回基线审查所需字段，且不泄漏 hidden 内部规则的成功结果
+- [ ] T025 [US2] 在 `app/api/router.py` 中保证任务、系统、单规则接口返回基线审查所需字段；hidden 内部规则计入任务摘要但不出现在公开规则列表中，其成功结果不单独泄漏。
 - [ ] T026 [US2] 在 `app/reports/templates/report.html.j2` 中为发现的严重程度、来源、证据、建议和跳过原因提供统一可读展示
 - [ ] T027 [P] [US2] 在 `web/src/pages/TaskDetailPage.tsx`、`web/src/pages/RuleDetailPage.tsx` 和 `web/src/components/StatusBadge.tsx` 中核对下钻、状态徽标与 `skip_reason` 展示，仅修复缺失项
-- [ ] T028 [US2] 运行 `make web-build` 验证审查页面和生成 API 客户端保持可构建
+- [ ] T028 [US2] 运行 `make web-build` 验证审查页面使用最新 `/api/v2` 生成客户端并保持可构建。
 
 **检查点**：用户故事 1 和 2 均应独立可用
 
@@ -153,6 +159,7 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 5 的测试
 
+- [ ] T036A [US5] 在 `tests/test_baseline_delete.py` 中先验证任务完成后、未请求删除前，`uploads/<task_id>/`、`output/<task_id>/`、任务契约、规则 JSON、报告和日志持续可访问。
 - [ ] T037 [P] [US5] 在 `tests/test_baseline_delete.py` 中验证删除 API 移除 SQLite 记录、任务契约 JSON、规则 JSON、报告、日志和 `uploads/<task_id>/` 原始包
 - [ ] T038 [US5] 在 `tests/test_baseline_delete.py` 中验证删除后再次查询任务、系统、规则、报告和日志均返回 404，重复删除返回 404
 
@@ -169,10 +176,13 @@ description: "系统基线功能实现任务列表"
 
 **目的**：验证完整基线，清理实现并同步文档
 
-- [ ] T041 检查 `docs/api/openapi.yaml` 与 `app/models/schemas.py`、`app/api/router.py` 的一致性；同步 `source_patterns`、单任务 ID 和移除 `system_id`/artifact 后的契约变更
+- [ ] T041 校验 `docs/api/openapi.yaml`、`app/models/schemas.py`、`app/api/router.py` 与 web 生成客户端全部使用 T002A 定义的 `/api/v2` 基线契约；确认 `/api/v1` 只处于迁移兼容状态且未被不兼容修改。
 - [ ] T042 [P] 在 `README.md`、`docs/architecture.md` 与 `specs/001-system-baseline/quickstart.md` 中核对基线命令、单任务目录布局和文档链接
 - [ ] T043 清理新增代码中的重复逻辑，保持规则互不引用、数据入口只通过 `source_patterns`
-- [ ] T044 运行 `make lint`、`make test`、`make contract`、`make verify` 和 `make web-build`
+- [ ] T043A 检查本功能中被修改执行或解析逻辑的巡检器；对每条逻辑变更的规则递增 `rule_version`，并在提交信息或变更记录中说明原因。
+- [ ] T043B 在 `/api/v2` 实现与消费者迁移完成后，将 `/api/v1` 在 OpenAPI 和文档中标记为 deprecated，并通过静态检查确认前端、测试和文档无 `/api/v1` 引用。
+- [ ] T043C 确认 `/api/v1` 已无消费者后，从 `docs/api/openapi.yaml`、`app/api/router.py`、`app/models/schemas.py`、测试和 web 生成客户端中删除 `/api/v1` 及其 OpenAPI 专属字段；更新架构与 API 文档，并确认运行时无 `/api/v1` 引用。`Inspector.inputs[]` 和 `outputs_artifacts` 的内部代码迁移仍按预处理优化 TODO 单独处理。
+- [ ] T044 在 T043C 通过后运行 `make lint`、`make test`、`make contract`、`make gen-web-api`、`make verify` 和 `make web-build`；前端目录存在测试脚本时执行 `npm test`。
 - [ ] T045 按 `specs/001-system-baseline/quickstart.md` 手工验证离线流程、重跑、本地/在线一致性和任务删除
 
 ---
@@ -204,7 +214,7 @@ description: "系统基线功能实现任务列表"
 ### 并行机会
 
 - 阶段 2 中 T006、T007、T010、T011 分属不同测试文件，可并行。
-- 阶段 3 中 T013–T017 可并行；实现任务按依赖串行。
+- 阶段 3 中仅 `[P]` 任务 T013、T015、T017 可并行；T014/T014A、T016/T016A 等同文件或依赖测试任务按顺序执行。实现任务按依赖串行。
 - 阶段 4 中 T022–T024 可并行；前端检查 T027 可与后端报告修正并行。
 - 阶段 5 中 T029–T030 可并行。
 - 阶段 6 中 T033–T034 可并行。
@@ -251,4 +261,6 @@ Task: "在 tests/test_baseline_report.py 中验证报告可审查内容"
 - 每个任务或逻辑组完成后提交。
 - 不改变既有字段含义；确需契约变更必须同步 `docs/api/openapi.yaml`、生成代码和测试。
 - 提交巡检规则逻辑变更时升级对应 `rule_version`；本地调试不需要额外缓存开关。
+- `/api/v1` 仅作为迁移期兼容入口；迁移完成后按 T043B/T043C 废弃并删除，`/api/v2` 是唯一公开 API 版本。
 - 不引入规则间依赖图、artifacts、并发执行、分布式调度、PDF 导出、报告下载、在线规则编辑或自动清理。
+- 待办：规则预处理文件优化完成后，评估并移除 `Inspector.inputs[]`、`outputs_artifacts` 及 OpenAPI/Schema 中对应旧字段；普通规则数据入口迁移到 `source_patterns[]`，输出迁移到 `outputs_metrics`。完成前不得基于旧字段新增普通规则数据入口。
