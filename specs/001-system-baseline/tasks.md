@@ -29,10 +29,10 @@ description: "系统基线功能实现任务列表"
 
 **目的**：为基线验证准备可复用的测试工具、样例上下文和阻塞实现的基线契约
 
-- [ ] T001 在 `tests/baseline_helpers.py` 中创建基线测试助手，封装临时 `uploads/`、`output/` 与 SQLite 环境运行本地任务
-- [ ] T002 在 `tests/baseline_helpers.py` 中添加 `wait_for_task()`、`load_task()`、`load_rule()`、`strip_volatile()` 工具，统一忽略 `executed_at` 与 `duration_ms`
-- [ ] T002A [Contract] 在 `docs/api/openapi.yaml` 中新增 `/api/v2` 基线契约：任务、系统、规则、发现、报告、重跑与删除接口；任务现场唯一使用 `task_id`；规则元数据暴露 `severity`、`source_patterns`；`/api/v2` 模型不包含 `system_id`、`artifacts`、`inputs[]` 和 `outputs_artifacts`；任务创建接口必须定义同名同 checksum 复用语义和同名不同 checksum 的 `409 package_checksum_conflict` 错误响应；`/api/v2` 不得提供 `force` 或删除重建语义。迁移期不得删除或改变 `/api/v1` 既有字段含义。
-- [ ] T002B [Contract] 根据 T002A 运行 `make gen-web-api`，更新前端 API 客户端引用到 `/api/v2`；同步契约测试与前端构建检查，且不新增 `/api/v1` 消费者。
+- [x] T001 在 `tests/baseline_helpers.py` 中创建基线测试助手，封装临时 `uploads/`、`output/` 与 SQLite 环境运行本地任务
+- [x] T002 在 `tests/baseline_helpers.py` 中添加 `wait_for_task()`、`load_task()`、`load_rule()`、`strip_volatile()` 工具，统一忽略 `executed_at` 与 `duration_ms`
+- [x] T002A [Contract] 在 `docs/api/openapi.yaml` 中新增 `/api/v2` 基线契约：任务、系统、规则、发现、报告、重跑与删除接口；任务现场唯一使用 `task_id`；规则元数据暴露 `severity`、`source_patterns`；`/api/v2` 模型不包含 `system_id`、`artifacts`、`inputs[]` 和 `outputs_artifacts`；任务创建接口必须定义同名同 checksum 复用语义和同名不同 checksum 的 `409 package_checksum_conflict` 错误响应；`/api/v2` 不得提供 `force` 或删除重建语义。迁移期不得删除或改变 `/api/v1` 既有字段含义。
+- [x] T002B [Contract] 根据 T002A 运行 `make gen-web-api`，更新前端 API 客户端引用到 `/api/v2`；同步契约测试与前端构建检查，且不新增 `/api/v1` 消费者。
 
 **检查点**：后续测试可以稳定运行样例包并读取契约结果；`/api/v2` 契约和生成客户端已作为实现门禁同步
 
@@ -44,17 +44,17 @@ description: "系统基线功能实现任务列表"
 
 **⚠️ 关键**：本阶段完成前不得开始任何用户故事工作
 
-- [ ] T003 在 `app/models/schemas.py` 中添加模型校验：`status=skip` 时 `skip_reason` 必须非空；发现必须提供非空包相对 `source_file` 与 `evidence`；`evidence` 超过安全展示上限时必须截断，`source_file` 仍保留完整相对路径。
-- [ ] T004 在 `app/models/schemas.py` 中添加摘要校验：任务摘要计数等于规则数量，且各状态计数之和等于总数
-- [ ] T005 在 `app/services/store.py` 中固化文件存储分层：在线 SQLite 只保存任务运行元数据；解压数据、规则 JSON、报告和执行日志保留在 `output/<task_id>/`，本地模式无需数据库
-- [ ] T006 [P] 在 `tests/test_baseline_storage.py` 中验证 `TaskRecord` 不承载巡检业务证据，规则结果、报告和日志落在 `output/<task_id>/`，不出现 `system_id` 目录层或 artifacts 目录
-- [ ] T007 [P] 在 `tests/test_baseline_schemas.py` 中覆盖 skip 原因、发现可追溯性、摘要一致性校验，以及长 `evidence` 截断后 `source_file` 仍完整保留。
-- [ ] T008 在 `app/inspectors/base.py` 中为普通规则添加并校验 `source_patterns`：正则必须可编译、匹配任务目录内相对路径、禁止绝对路径和路径穿越
-- [ ] T009 在 `app/services/executor.py` 中校验 `pass`、`warn`、`fail` 结果的 metrics key/unit 与规则声明契约一致；不一致时记为 `error` 并写入结构化日志。规则执行异常必须转换为显式 `error` 结果，不得中止任务；`error` 结果的 metrics 和 findings 可以为空。
-- [ ] T010 [P] 在 `tests/test_baseline_registry.py` 中覆盖完整注册元数据校验矩阵：规则代码命名、`name`、`category`、`severity`、`priority`、`rule_version`、`description`、`recommendation`、空/非法 `source_patterns`、路径穿越模式和 metrics 契约不一致。
-- [ ] T011 [P] 在 `tests/test_baseline_archive.py` 中补充文件数、单文件大小、总量预算、链接拒绝、路径穿越和深层嵌套限制测试
-- [ ] T012 在 `app/core/archive.py` 中根据 T011 修复安全解压缺口，确保超限或异常归档产生可记录的 `ArchiveError`
-- [ ] T002C 在基础层完成后，在 `app/api/router.py` 中实现 `/api/v2` 任务、系统、规则、发现、报告、重跑与删除路由；迁移完成前保持 `/api/v1` 行为不变。
+- [x] T003 在 `app/models/schemas.py` 中添加模型校验：`status=skip` 时 `skip_reason` 必须非空；发现必须提供非空包相对 `source_file` 与 `evidence`；`evidence` 超过安全展示上限时必须截断，`source_file` 仍保留完整相对路径。
+- [x] T004 在 `app/models/schemas.py` 中添加摘要校验：任务摘要计数等于规则数量，且各状态计数之和等于总数
+- [x] T005 在 `app/services/store.py` 中固化文件存储分层：在线 SQLite 只保存任务运行元数据；解压数据、规则 JSON、报告和执行日志保留在 `output/<task_id>/`，本地模式无需数据库
+- [x] T006 [P] 在 `tests/test_baseline_storage.py` 中验证 `TaskRecord` 不承载巡检业务证据，规则结果、报告和日志落在 `output/<task_id>/`，不出现 `system_id` 目录层或 artifacts 目录
+- [x] T007 [P] 在 `tests/test_baseline_schemas.py` 中覆盖 skip 原因、发现可追溯性、摘要一致性校验，以及长 `evidence` 截断后 `source_file` 仍完整保留。
+- [x] T008 在 `app/inspectors/base.py` 中为普通规则添加并校验 `source_patterns`：正则必须可编译、匹配任务目录内相对路径、禁止绝对路径和路径穿越
+- [x] T009 在 `app/services/executor.py` 中校验 `pass`、`warn`、`fail` 结果的 metrics key/unit 与规则声明契约一致；不一致时记为 `error` 并写入结构化日志。规则执行异常必须转换为显式 `error` 结果，不得中止任务；`error` 结果的 metrics 和 findings 可以为空。
+- [x] T010 [P] 在 `tests/test_baseline_registry.py` 中覆盖完整注册元数据校验矩阵：规则代码命名、`name`、`category`、`severity`、`priority`、`rule_version`、`description`、`recommendation`、空/非法 `source_patterns`、路径穿越模式和 metrics 契约不一致。
+- [x] T011 [P] 在 `tests/test_baseline_archive.py` 中补充文件数、单文件大小、总量预算、链接拒绝、路径穿越和深层嵌套限制测试
+- [x] T012 在 `app/core/archive.py` 中根据 T011 修复安全解压缺口，确保超限或异常归档产生可记录的 `ArchiveError`
+- [x] T002C 在基础层完成后，在 `app/api/router.py` 中实现 `/api/v2` 任务、系统、规则、发现、报告、重跑与删除路由；迁移完成前保持 `/api/v1` 行为不变。
 - [ ] T002D [Contract] 将前端、后端契约测试和集成测试的 API 调用迁移到 `/api/v2`；确认没有新增 `/api/v1` 消费者。
 
 **检查点**：单任务目录、源文件匹配契约、输出校验、解压安全约束、`/api/v2` 路由和消费者迁移已可作为用户故事的阻塞门禁

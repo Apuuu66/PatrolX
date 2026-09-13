@@ -227,6 +227,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 任务列表 */
+        get: operations["listTasksV2"];
+        put?: never;
+        /** 创建巡检任务（同名同 checksum 复用；同名不同 checksum 冲突） */
+        post: operations["createTaskV2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 任务摘要（不含全量规则结果） */
+        get: operations["getTaskV2"];
+        put?: never;
+        post?: never;
+        /** 删除任务（级联删除 uploads/ 与 output/ 现场数据） */
+        delete: operations["deleteTaskV2"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 增量重跑（全部或指定规则） */
+        post: operations["rerunTaskV2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 巡检报告（HTML 在线预览） */
+        get: operations["getReportV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 任务执行日志 */
+        get: operations["getTaskLogsV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 系统摘要与规则状态列表 */
+        get: operations["getSystemV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 单规则完整结果 */
+        get: operations["getRuleResultV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 全局巡检概览 */
+        get: operations["getOverviewV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inspectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 已注册规则元数据（只读） */
+        get: operations["listInspectorsV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/dicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 全部预制数据字典 */
+        get: operations["listDictsV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/dicts/{dict_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 维护字典项（纯内部开放） */
+        put: operations["updateDictV2"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -431,6 +620,212 @@ export interface components {
              * @enum {string}
              */
             code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal";
+            message: string;
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @enum {string} */
+        TaskStatusV2: "pending" | "running" | "completed" | "failed";
+        /** @enum {string} */
+        RuleStatusV2: "pass" | "warn" | "fail" | "error" | "skip";
+        /** @enum {string} */
+        SeverityV2: "low" | "medium" | "high" | "critical";
+        /**
+         * @description P0 数据准备 / P1 基础检查 / P2 综合分析
+         * @enum {integer}
+         */
+        PriorityV2: 0 | 1 | 2;
+        /** @enum {string} */
+        RuleCategoryV2: "log" | "kpi" | "traffic" | "alarm" | "config" | "resource" | "other";
+        /** @enum {string} */
+        TaskModeV2: "online" | "local";
+        /** @enum {string} */
+        TaskTriggerV2: "api" | "cli" | "rerun";
+        SummaryV2: {
+            total: number;
+            pass: number;
+            warn: number;
+            fail: number;
+            error: number;
+            skip: number;
+        };
+        TaskStatsV2: components["schemas"]["SummaryV2"] & {
+            systems?: number;
+        };
+        MetricV2: {
+            /** @description 契约级稳定标识，跨任务/系统不可变 */
+            key: string;
+            label: string;
+            value: number | string;
+            unit?: string;
+            threshold?: {
+                min?: number;
+                max?: number;
+            };
+            baseline?: number | string;
+            /** @description 趋势图数据 */
+            series?: {
+                /** @description 时间点或序号 */
+                t?: string;
+                v?: number | string;
+            }[];
+        };
+        FindingV2: {
+            finding_id: string;
+            title: string;
+            severity: components["schemas"]["SeverityV2"];
+            /** @description 结论来源文件（可定位原始数据） */
+            source_file?: string;
+            /** @description 证据片段（默认截断 2KB） */
+            evidence?: string;
+            details?: string;
+            recommendation?: string;
+            metrics?: components["schemas"]["MetricV2"][];
+        };
+        RuleResultV2: {
+            code: string;
+            name: string;
+            category: components["schemas"]["RuleCategoryV2"];
+            priority: components["schemas"]["PriorityV2"];
+            execution_order: number;
+            status: components["schemas"]["RuleStatusV2"];
+            severity: components["schemas"]["SeverityV2"];
+            summary?: string;
+            /** @description status=skip 时必填 */
+            skip_reason?: string;
+            /** Format: date-time */
+            executed_at?: string;
+            duration_ms?: number;
+            metrics?: components["schemas"]["MetricV2"][];
+            findings?: components["schemas"]["FindingV2"][];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        SystemInspectionV2: {
+            package_file: string;
+            package_checksum?: string;
+            version?: string;
+            /** @enum {string} */
+            status: "completed" | "failed";
+            summary: components["schemas"]["SummaryV2"];
+            rules: components["schemas"]["RuleResultV2"][];
+            customer?: {
+                [key: string]: unknown;
+            };
+        };
+        InspectionTaskV2: {
+            task_id: string;
+            name: string;
+            mode: components["schemas"]["TaskModeV2"];
+            status: components["schemas"]["TaskStatusV2"];
+            trigger: components["schemas"]["TaskTriggerV2"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            completed_at?: string;
+            stats: components["schemas"]["TaskStatsV2"];
+            system?: components["schemas"]["SystemInspectionV2"];
+        };
+        TaskCreatedV2: {
+            task_id: string;
+        };
+        TaskSummaryV2: components["schemas"]["InspectionTaskV2"] & {
+            system?: unknown;
+            /** @description 上传时选择的省份字典编码（可选） */
+            customer_province?: string;
+            /** @description 上传时选择的运营商字典编码（可选） */
+            customer_operator?: string;
+            /** @description 上传时选择的产品形态字典编码（可选） */
+            customer_product?: string;
+            /** @description 上传时选择的版本字典编码（可选） */
+            customer_version?: string;
+        };
+        TaskListResponseV2: {
+            items: components["schemas"]["TaskSummaryV2"][];
+            total: number;
+            page: number;
+            page_size: number;
+        };
+        OverviewSummaryV2: {
+            /** @description 任务总数 */
+            task_count: number;
+            /** @description 注册规则总数（包含 hidden 内部规则） */
+            registered_rule_count: number;
+            /** @description 全部任务的规则结果总数 */
+            rule_result_count: number;
+            /** @description 全部任务的发现问题总数（按 Finding 记录数，不去重） */
+            finding_count: number;
+            status_counts: components["schemas"]["SummaryV2"];
+        };
+        RerunRequestV2: {
+            /** @description 不填表示重跑该任务全部规则 */
+            rule_codes?: string[];
+        };
+        LogEntryV2: {
+            /** Format: date-time */
+            ts: string;
+            level: string;
+            message: string;
+            rule_code?: string;
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        TaskLogsV2: {
+            task_id: string;
+            entries: components["schemas"]["LogEntryV2"][];
+        };
+        InspectorInfoV2: {
+            code: string;
+            name: string;
+            category: components["schemas"]["RuleCategoryV2"];
+            severity: components["schemas"]["SeverityV2"];
+            priority: components["schemas"]["PriorityV2"];
+            rule_version: string;
+            hidden: boolean;
+            description?: string;
+            recommendation?: string;
+            /** @description 匹配任务目录内相对路径的正则 */
+            source_patterns: string[];
+            outputs: {
+                metrics?: {
+                    key?: string;
+                    label?: string;
+                    unit?: string;
+                    /** @enum {string} */
+                    type?: "number" | "string" | "trend";
+                }[];
+            };
+            params?: {
+                key?: string;
+                label?: string;
+                default?: string;
+            }[];
+        };
+        DictItemV2: {
+            /** @description 编码，仅小写字母/数字/下划线 */
+            code: string;
+            name: string;
+        };
+        DictsResponseV2: {
+            province: components["schemas"]["DictItemV2"][];
+            operator: components["schemas"]["DictItemV2"][];
+            product: components["schemas"]["DictItemV2"][];
+            version: components["schemas"]["DictItemV2"][];
+        };
+        DictUpdateRequestV2: {
+            code: string;
+            name: string;
+        };
+        /** @description 错误码（/api/v2 新增 package_checksum_conflict） */
+        ErrorV2: {
+            /**
+             * @description 错误码（新增时同步契约与实现）
+             * @enum {string}
+             */
+            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "package_checksum_conflict";
             message: string;
             detail?: {
                 [key: string]: unknown;
@@ -850,6 +1245,337 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DictItem"][];
+                };
+            };
+            400: components["responses"]["Error400"];
+        };
+    };
+    listTasksV2: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                status?: components["schemas"]["TaskStatusV2"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 任务摘要列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskListResponseV2"];
+                };
+            };
+        };
+    };
+    createTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description 数据压缩包（zip/tar.gz，默认上限 2GB）
+                     */
+                    package_file: string;
+                    /** @description 任务名称（可选） */
+                    name?: string;
+                    /** @description 版本字典编码（可选） */
+                    version?: string;
+                    /** @description 省份字典编码（可选） */
+                    province?: string;
+                    /** @description 运营商字典编码（可选） */
+                    operator?: string;
+                    /** @description 产品形态字典编码（可选） */
+                    product?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 任务已创建，异步执行 */
+            202: {
+                headers: {
+                    /** @example /api/v2/tasks/task-001 */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreatedV2"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            /** @description 同名包但 checksum 不同 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+            413: components["responses"]["Error413"];
+        };
+    };
+    getTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 任务摘要 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectionTaskV2"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    deleteTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    rerunTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RerunRequestV2"];
+            };
+        };
+        responses: {
+            /** @description 重跑任务已受理 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreatedV2"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    getReportV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HTML 报告 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    getTaskLogsV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 结构化执行日志 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskLogsV2"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    getSystemV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 系统巡检结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemInspectionV2"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    getRuleResultV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+                rule_code: components["parameters"]["RuleCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 规则结果（metrics/findings） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResultV2"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    getOverviewV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 任务、注册规则、规则结果与发现问题统计 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewSummaryV2"];
+                };
+            };
+        };
+    };
+    listInspectorsV2: {
+        parameters: {
+            query?: {
+                category?: components["schemas"]["RuleCategoryV2"];
+                include_hidden?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 规则元数据列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorInfoV2"][];
+                };
+            };
+        };
+    };
+    listDictsV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 字典 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictsResponseV2"];
+                };
+            };
+        };
+    };
+    updateDictV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dict_name: "province" | "operator" | "product" | "version";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DictUpdateRequestV2"];
+            };
+        };
+        responses: {
+            /** @description 更新后的字典 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictItemV2"][];
                 };
             };
             400: components["responses"]["Error400"];

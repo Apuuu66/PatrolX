@@ -1,19 +1,19 @@
 import type { components } from "./client";
 
-export type TaskStatus = components["schemas"]["TaskStatus"];
-export type TaskSummary = components["schemas"]["TaskSummary"];
-export type TaskStats = components["schemas"]["TaskStats"];
-export type SystemInspection = components["schemas"]["SystemInspection"];
-export type RuleResult = components["schemas"]["RuleResult"];
-export type RuleStatus = components["schemas"]["RuleStatus"];
-export type Severity = components["schemas"]["Severity"];
-export type InspectorInfo = components["schemas"]["InspectorInfo"];
-export type DictsResponse = components["schemas"]["DictsResponse"];
-export type OverviewSummary = components["schemas"]["OverviewSummary"];
-export type DictItem = components["schemas"]["DictItem"];
-export type LogEntry = components["schemas"]["LogEntry"];
+export type TaskStatus = components["schemas"]["TaskStatusV2"];
+export type TaskSummary = components["schemas"]["TaskSummaryV2"];
+export type TaskStats = components["schemas"]["TaskStatsV2"];
+export type SystemInspection = components["schemas"]["SystemInspectionV2"];
+export type RuleResult = components["schemas"]["RuleResultV2"];
+export type RuleStatus = components["schemas"]["RuleStatusV2"];
+export type Severity = components["schemas"]["SeverityV2"];
+export type InspectorInfo = components["schemas"]["InspectorInfoV2"];
+export type DictsResponse = components["schemas"]["DictsResponseV2"];
+export type OverviewSummary = components["schemas"]["OverviewSummaryV2"];
+export type DictItem = components["schemas"]["DictItemV2"];
+export type LogEntry = components["schemas"]["LogEntryV2"];
 
-const BASE = "/api/v1";
+const BASE = "/api/v2";
 
 export class ApiError extends Error {
   code: string;

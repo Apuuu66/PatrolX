@@ -49,7 +49,7 @@ const OVERVIEW_ITEMS = [
 ] as const;
 
 export function TaskListPage() {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const [items, setItems] = useState<TaskSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -92,7 +92,7 @@ export function TaskListPage() {
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
   usePolling(load, 2000, busy);
 
-  const submitUpload = async (force = false) => {
+  const submitUpload = async () => {
     if (!file) {
       message.warning("请选择数据压缩包");
       return;
@@ -107,7 +107,6 @@ export function TaskListPage() {
       if (values.operator) fd.append("operator", values.operator);
       if (values.product) fd.append("product", values.product);
       if (values.version) fd.append("version", values.version);
-      if (force) fd.append("force", "true");
       const created = await api.createTask(fd);
       message.success("任务已创建，开始执行");
       setOpen(false);
@@ -115,15 +114,8 @@ export function TaskListPage() {
       form.resetFields();
       navigate(`/tasks/${created.task_id}`);
     } catch (err) {
-      if (err instanceof ApiError && err.code === "duplicate_package") {
-        modal.confirm({
-          title: "任务已存在，是否覆盖？",
-          content: "覆盖后将删除旧任务的现场数据，并重新执行巡检。",
-          okText: "覆盖重跑",
-          okButtonProps: { danger: true },
-          cancelText: "取消",
-          onOk: () => submitUpload(true),
-        });
+      if (err instanceof ApiError && err.code === "package_checksum_conflict") {
+        message.error("同名任务已存在，但数据包 checksum 不同，请修改任务名称或删除旧任务");
       } else {
         message.error(err instanceof Error ? err.message : "创建失败");
       }

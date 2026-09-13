@@ -1,7 +1,10 @@
 """v1 路由实现（在线模式）。"""
 
+import hashlib
 import json
 import shutil
+import tempfile
+from pathlib import Path
 
 import yaml
 from fastapi import APIRouter, File, Form, UploadFile
@@ -31,6 +34,7 @@ from app.services.overview import build_overview
 from app.services.tasks import task_service
 
 router = APIRouter(prefix="/api/v1")
+v2_router = APIRouter(prefix="/api/v2")
 DICT_NAMES = ("province", "operator", "product", "version")
 
 
@@ -225,3 +229,152 @@ def update_dict(dict_name: str = PathParam(), body: DictUpdateRequest | None = N
     raw[dict_name] = items
     path.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return [DictItem(code=i["code"], name=i["name"]) for i in items]
+
+
+async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
+    """流式落盘上传包并计算 checksum，避免为比对而修改既有任务现场。"""
+    settings.uploads.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256()
+    size = 0
+    limit = settings.max_upload_mb * 1024 * 1024
+    fd, raw_name = tempfile.mkstemp(prefix=".upload-", suffix=".tmp", dir=settings.uploads)
+    temp_path = Path(raw_name)
+    try:
+        with temp_path.open("wb") as out:
+            while chunk := await package_file.read(1024 * 1024):
+                size += len(chunk)
+                if size > limit:
+                    raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
+                digest.update(chunk)
+                out.write(chunk)
+        return digest.hexdigest(), size, temp_path
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
+def _file_checksum(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+# ---- /api/v2 契约路由（迁移期与 /api/v1 并存，内部共用同一任务现场） ----
+
+
+@v2_router.post("/tasks", response_model=TaskCreated, status_code=202, operation_id="createTaskV2")
+async def create_task_v2(
+    response: Response,
+    package_file: UploadFile = File(...),
+    name: str | None = Form(None),
+    version: str | None = Form(None),
+    province: str | None = Form(None),
+    operator: str | None = Form(None),
+    product: str | None = Form(None),
+) -> TaskCreated:
+    filename = (package_file.filename or "package.zip").rsplit("/", 1)[-1]
+    if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
+        raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
+
+    task_id = generate_task_id(filename)
+    temp_path: Path | None = None
+    try:
+        checksum, size, temp_path = await _receive_upload(package_file)
+        if size > settings.max_upload_mb * 1024 * 1024:
+            raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
+
+        if task_service.exists(task_id):
+            existing = settings.uploads / task_id / filename
+            existing_checksum = _file_checksum(existing) if existing.exists() else None
+            if existing_checksum != checksum:
+                raise AppError(
+                    "package_checksum_conflict",
+                    "同名任务已存在，但数据包 checksum 不同",
+                    409,
+                )
+            response.headers["Location"] = f"/api/v2/tasks/{task_id}"
+            return TaskCreated(task_id=task_id)
+
+        created = task_service.reserve(
+            filename,
+            name,
+            province,
+            operator,
+            version,
+            product=product,
+        )
+        task_dir = settings.uploads / created.task_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(temp_path, task_dir / filename)
+        response.headers["Location"] = f"/api/v2/tasks/{created.task_id}"
+        task_service.submit(created.task_id)
+        return created
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+@v2_router.get("/overview", response_model=OverviewSummary, operation_id="getOverviewV2")
+def get_overview_v2() -> OverviewSummary:
+    return get_overview()
+
+
+@v2_router.get("/tasks", response_model=TaskListResponse, operation_id="listTasksV2")
+def list_tasks_v2(
+    page: int = 1,
+    page_size: int = 20,
+    status: str | None = None,
+) -> TaskListResponse:
+    return list_tasks(page=page, page_size=page_size, status=status)
+
+
+@v2_router.get("/tasks/{task_id}", response_model=InspectionTask, operation_id="getTaskV2")
+def get_task_v2(task_id: str = PathParam()) -> InspectionTask:
+    return get_task(task_id)
+
+
+@v2_router.delete("/tasks/{task_id}", status_code=204, operation_id="deleteTaskV2")
+def delete_task_v2(task_id: str = PathParam()) -> Response:
+    return delete_task(task_id)
+
+
+@v2_router.post("/tasks/{task_id}/rerun", response_model=TaskCreated, status_code=202, operation_id="rerunTaskV2")
+def rerun_task_v2(task_id: str = PathParam(), body: RerunRequest | None = None) -> TaskCreated:
+    return rerun_task(task_id, body)
+
+
+@v2_router.get("/tasks/{task_id}/report", response_class=HTMLResponse, operation_id="getReportV2")
+def get_report_v2(task_id: str = PathParam()) -> HTMLResponse:
+    return get_report(task_id)
+
+
+@v2_router.get("/tasks/{task_id}/logs", response_model=TaskLogs, operation_id="getTaskLogsV2")
+def get_task_logs_v2(task_id: str = PathParam()) -> TaskLogs:
+    return get_task_logs(task_id)
+
+
+@v2_router.get("/tasks/{task_id}/system", response_model=SystemInspection, operation_id="getSystemV2")
+def get_system_v2(task_id: str = PathParam()) -> SystemInspection:
+    return get_system(task_id)
+
+
+@v2_router.get("/tasks/{task_id}/rules/{rule_code}", response_model=RuleResult, operation_id="getRuleResultV2")
+def get_rule_result_v2(task_id: str = PathParam(), rule_code: str = PathParam()) -> RuleResult:
+    return get_rule_result(task_id, rule_code)
+
+
+@v2_router.get("/inspectors", response_model=list[InspectorInfo], operation_id="listInspectorsV2")
+def list_inspectors_v2(category: str | None = None, include_hidden: bool = False) -> list[InspectorInfo]:
+    return list_inspectors(category=category, include_hidden=include_hidden)
+
+
+@v2_router.get("/dicts", response_model=DictsResponse, operation_id="listDictsV2")
+def list_dicts_v2() -> DictsResponse:
+    return list_dicts()
+
+
+@v2_router.put("/dicts/{dict_name}", response_model=list[DictItem], operation_id="updateDictV2")
+def update_dict_v2(dict_name: str = PathParam(), body: DictUpdateRequest | None = None) -> list[DictItem]:
+    return update_dict(dict_name, body)

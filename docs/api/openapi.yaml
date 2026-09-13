@@ -1,18 +1,19 @@
 openapi: 3.0.3
 info:
   title: PatrolX API
-  version: 1.0.0
-  description: PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）
+  version: 2.0.0
+  description: PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）。 /api/v1 仅用于迁移期兼容，新实现使用 /api/v2。
 servers:
-  - url: /
+- url: /
 paths:
   /healthz:
     get:
       summary: 健康检查
       operationId: healthz
-      tags: [system]
+      tags:
+      - system
       responses:
-        "200":
+        '200':
           description: 服务健康
           content:
             application/json:
@@ -23,9 +24,10 @@ paths:
     get:
       summary: Prometheus 指标（内部可观测）
       operationId: metrics
-      tags: [system]
+      tags:
+      - system
       responses:
-        "200":
+        '200':
           description: Prometheus 文本格式指标
           content:
             text/plain:
@@ -41,7 +43,8 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [package_file]
+              required:
+              - package_file
               properties:
                 package_file:
                   type: string
@@ -67,7 +70,7 @@ paths:
                   default: false
                   description: 已存在同包任务时是否删除旧任务并重新创建
       responses:
-        "202":
+        '202':
           description: 任务已创建，异步执行
           headers:
             Location:
@@ -77,213 +80,473 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TaskCreated"
-        "400":
-          $ref: "#/components/responses/Error400"
-        "409":
+                $ref: '#/components/schemas/TaskCreated'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
           description: 已存在相同包的任务
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "413":
-          $ref: "#/components/responses/Error413"
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/Error413'
     get:
       summary: 任务列表
       operationId: listTasks
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
-        - name: status
-          in: query
-          schema:
-            $ref: "#/components/schemas/TaskStatus"
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: status
+        in: query
+        schema:
+          $ref: '#/components/schemas/TaskStatus'
       responses:
-        "200":
+        '200':
           description: 任务摘要列表
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TaskListResponse"
+                $ref: '#/components/schemas/TaskListResponse'
   /api/v1/tasks/{task_id}:
     get:
       summary: 任务摘要（不含全量规则结果）
       operationId: getTask
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+      - $ref: '#/components/parameters/TaskId'
       responses:
-        "200":
+        '200':
           description: 任务摘要
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InspectionTask"
-        "404":
-          $ref: "#/components/responses/Error404"
+                $ref: '#/components/schemas/InspectionTask'
+        '404':
+          $ref: '#/components/responses/Error404'
     delete:
       summary: 删除任务（级联删除 uploads/ 与 output/ 现场数据）
       operationId: deleteTask
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+      - $ref: '#/components/parameters/TaskId'
       responses:
-        "204":
+        '204':
           description: 已删除
-        "404":
-          $ref: "#/components/responses/Error404"
+        '404':
+          $ref: '#/components/responses/Error404'
   /api/v1/tasks/{task_id}/rerun:
     post:
       summary: 增量重跑（全部或指定规则）
       operationId: rerunTask
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+      - $ref: '#/components/parameters/TaskId'
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RerunRequest"
+              $ref: '#/components/schemas/RerunRequest'
       responses:
-        "202":
+        '202':
           description: 重跑任务已受理
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TaskCreated"
-        "404":
-          $ref: "#/components/responses/Error404"
+                $ref: '#/components/schemas/TaskCreated'
+        '404':
+          $ref: '#/components/responses/Error404'
   /api/v1/tasks/{task_id}/report:
     get:
       summary: 巡检报告（HTML 在线预览）
       operationId: getReport
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+      - $ref: '#/components/parameters/TaskId'
       responses:
-        "200":
+        '200':
           description: HTML 报告
           content:
             text/html:
               schema:
                 type: string
-        "404":
-          $ref: "#/components/responses/Error404"
+        '404':
+          $ref: '#/components/responses/Error404'
   /api/v1/tasks/{task_id}/logs:
     get:
       summary: 任务执行日志
       operationId: getTaskLogs
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+      - $ref: '#/components/parameters/TaskId'
       responses:
-        "200":
+        '200':
           description: 结构化执行日志
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TaskLogs"
-        "404":
-          $ref: "#/components/responses/Error404"
+                $ref: '#/components/schemas/TaskLogs'
+        '404':
+          $ref: '#/components/responses/Error404'
   /api/v1/tasks/{task_id}/system:
     get:
       summary: 系统摘要与规则状态列表
       operationId: getSystem
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+      - $ref: '#/components/parameters/TaskId'
       responses:
-        "200":
+        '200':
           description: 系统巡检结果
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SystemInspection"
-        "404":
-          $ref: "#/components/responses/Error404"
+                $ref: '#/components/schemas/SystemInspection'
+        '404':
+          $ref: '#/components/responses/Error404'
   /api/v1/tasks/{task_id}/rules/{rule_code}:
     get:
       summary: 单规则完整结果
       operationId: getRuleResult
       parameters:
-        - $ref: "#/components/parameters/TaskId"
-        - $ref: "#/components/parameters/RuleCode"
+      - $ref: '#/components/parameters/TaskId'
+      - $ref: '#/components/parameters/RuleCode'
       responses:
-        "200":
+        '200':
           description: 规则结果（metrics/findings）
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RuleResult"
-        "404":
-          $ref: "#/components/responses/Error404"
+                $ref: '#/components/schemas/RuleResult'
+        '404':
+          $ref: '#/components/responses/Error404'
   /api/v1/overview:
     get:
       summary: 全局巡检概览
       operationId: getOverview
       responses:
-        "200":
+        '200':
           description: 任务、注册规则、规则结果与发现问题统计
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OverviewSummary"
+                $ref: '#/components/schemas/OverviewSummary'
   /api/v1/inspectors:
     get:
       summary: 已注册规则元数据（只读）
       operationId: listInspectors
       parameters:
-        - name: category
-          in: query
-          schema:
-            $ref: "#/components/schemas/RuleCategory"
-        - name: include_hidden
-          in: query
-          schema:
-            type: boolean
-            default: false
+      - name: category
+        in: query
+        schema:
+          $ref: '#/components/schemas/RuleCategory'
+      - name: include_hidden
+        in: query
+        schema:
+          type: boolean
+          default: false
       responses:
-        "200":
+        '200':
           description: 规则元数据列表
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/InspectorInfo"
+                  $ref: '#/components/schemas/InspectorInfo'
   /api/v1/dicts:
     get:
       summary: 全部预制数据字典
       operationId: listDicts
       responses:
-        "200":
+        '200':
           description: 字典
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DictsResponse"
+                $ref: '#/components/schemas/DictsResponse'
   /api/v1/dicts/{dict_name}:
     put:
       summary: 维护字典项（纯内部开放）
       operationId: updateDict
       parameters:
-        - name: dict_name
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [province, operator, product, version]
+      - name: dict_name
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - province
+          - operator
+          - product
+          - version
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DictUpdateRequest"
+              $ref: '#/components/schemas/DictUpdateRequest'
       responses:
-        "200":
+        '200':
           description: 更新后的字典
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/DictItem"
-        "400":
-          $ref: "#/components/responses/Error400"
+                  $ref: '#/components/schemas/DictItem'
+        '400':
+          $ref: '#/components/responses/Error400'
+  /api/v2/tasks:
+    post:
+      summary: 创建巡检任务（同名同 checksum 复用；同名不同 checksum 冲突）
+      operationId: createTaskV2
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - package_file
+              properties:
+                package_file:
+                  type: string
+                  format: binary
+                  description: 数据压缩包（zip/tar.gz，默认上限 2GB）
+                name:
+                  type: string
+                  description: 任务名称（可选）
+                version:
+                  type: string
+                  description: 版本字典编码（可选）
+                province:
+                  type: string
+                  description: 省份字典编码（可选）
+                operator:
+                  type: string
+                  description: 运营商字典编码（可选）
+                product:
+                  type: string
+                  description: 产品形态字典编码（可选）
+      responses:
+        '202':
+          description: 任务已创建，异步执行
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /tasks/task-001
+              example: /api/v2/tasks/task-001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreatedV2'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
+          description: 同名包但 checksum 不同
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+        '413':
+          $ref: '#/components/responses/Error413'
+    get:
+      summary: 任务列表
+      operationId: listTasksV2
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: status
+        in: query
+        schema:
+          $ref: '#/components/schemas/TaskStatusV2'
+      responses:
+        '200':
+          description: 任务摘要列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponseV2'
+  /api/v2/tasks/{task_id}:
+    get:
+      summary: 任务摘要（不含全量规则结果）
+      operationId: getTaskV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: 任务摘要
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionTaskV2'
+        '404':
+          $ref: '#/components/responses/Error404'
+    delete:
+      summary: 删除任务（级联删除 uploads/ 与 output/ 现场数据）
+      operationId: deleteTaskV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      responses:
+        '204':
+          description: 已删除
+        '404':
+          $ref: '#/components/responses/Error404'
+  /api/v2/tasks/{task_id}/rerun:
+    post:
+      summary: 增量重跑（全部或指定规则）
+      operationId: rerunTaskV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RerunRequestV2'
+      responses:
+        '202':
+          description: 重跑任务已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreatedV2'
+        '404':
+          $ref: '#/components/responses/Error404'
+  /api/v2/tasks/{task_id}/report:
+    get:
+      summary: 巡检报告（HTML 在线预览）
+      operationId: getReportV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: HTML 报告
+          content:
+            text/html:
+              schema:
+                type: string
+          headers: {}
+        '404':
+          $ref: '#/components/responses/Error404'
+  /api/v2/tasks/{task_id}/logs:
+    get:
+      summary: 任务执行日志
+      operationId: getTaskLogsV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: 结构化执行日志
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogsV2'
+        '404':
+          $ref: '#/components/responses/Error404'
+  /api/v2/tasks/{task_id}/system:
+    get:
+      summary: 系统摘要与规则状态列表
+      operationId: getSystemV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: 系统巡检结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemInspectionV2'
+        '404':
+          $ref: '#/components/responses/Error404'
+  /api/v2/tasks/{task_id}/rules/{rule_code}:
+    get:
+      summary: 单规则完整结果
+      operationId: getRuleResultV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      - $ref: '#/components/parameters/RuleCode'
+      responses:
+        '200':
+          description: 规则结果（metrics/findings）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResultV2'
+        '404':
+          $ref: '#/components/responses/Error404'
+  /api/v2/overview:
+    get:
+      summary: 全局巡检概览
+      operationId: getOverviewV2
+      responses:
+        '200':
+          description: 任务、注册规则、规则结果与发现问题统计
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewSummaryV2'
+  /api/v2/inspectors:
+    get:
+      summary: 已注册规则元数据（只读）
+      operationId: listInspectorsV2
+      parameters:
+      - name: category
+        in: query
+        schema:
+          $ref: '#/components/schemas/RuleCategoryV2'
+      - name: include_hidden
+        in: query
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: 规则元数据列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InspectorInfoV2'
+  /api/v2/dicts:
+    get:
+      summary: 全部预制数据字典
+      operationId: listDictsV2
+      responses:
+        '200':
+          description: 字典
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictsResponseV2'
+  /api/v2/dicts/{dict_name}:
+    put:
+      summary: 维护字典项（纯内部开放）
+      operationId: updateDictV2
+      parameters:
+      - name: dict_name
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - province
+          - operator
+          - product
+          - version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DictUpdateRequestV2'
+      responses:
+        '200':
+          description: 更新后的字典
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DictItemV2'
+        '400':
+          $ref: '#/components/responses/Error400'
 components:
   parameters:
     TaskId:
@@ -318,45 +581,79 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
     Error404:
       description: 资源不存在
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
     Error413:
       description: 文件过大
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
   schemas:
     TaskStatus:
       type: string
-      enum: [pending, running, completed, failed]
+      enum:
+      - pending
+      - running
+      - completed
+      - failed
     RuleStatus:
       type: string
-      enum: [pass, warn, fail, error, skip]
+      enum:
+      - pass
+      - warn
+      - fail
+      - error
+      - skip
     Severity:
       type: string
-      enum: [low, medium, high, critical]
+      enum:
+      - low
+      - medium
+      - high
+      - critical
     Priority:
       type: integer
-      enum: [0, 1, 2]
+      enum:
+      - 0
+      - 1
+      - 2
       description: P0 数据准备 / P1 基础检查 / P2 综合分析
     RuleCategory:
       type: string
-      enum: [log, kpi, traffic, alarm, config, resource, other]
+      enum:
+      - log
+      - kpi
+      - traffic
+      - alarm
+      - config
+      - resource
+      - other
     TaskMode:
       type: string
-      enum: [online, local]
+      enum:
+      - online
+      - local
     TaskTrigger:
       type: string
-      enum: [api, cli, rerun]
+      enum:
+      - api
+      - cli
+      - rerun
     Summary:
       type: object
-      required: [total, pass, warn, fail, error, skip]
+      required:
+      - total
+      - pass
+      - warn
+      - fail
+      - error
+      - skip
       properties:
         total:
           type: integer
@@ -372,14 +669,17 @@ components:
           type: integer
     TaskStats:
       allOf:
-        - $ref: "#/components/schemas/Summary"
-        - type: object
-          properties:
-            systems:
-              type: integer
+      - $ref: '#/components/schemas/Summary'
+      - type: object
+        properties:
+          systems:
+            type: integer
     Metric:
       type: object
-      required: [key, label, value]
+      required:
+      - key
+      - label
+      - value
       properties:
         key:
           type: string
@@ -388,8 +688,8 @@ components:
           type: string
         value:
           oneOf:
-            - type: number
-            - type: string
+          - type: number
+          - type: string
         unit:
           type: string
         threshold:
@@ -401,8 +701,8 @@ components:
               type: number
         baseline:
           oneOf:
-            - type: number
-            - type: string
+          - type: number
+          - type: string
         series:
           type: array
           description: 趋势图数据
@@ -414,18 +714,21 @@ components:
                 description: 时间点或序号
               v:
                 oneOf:
-                  - type: number
-                  - type: string
+                - type: number
+                - type: string
     Finding:
       type: object
-      required: [finding_id, title, severity]
+      required:
+      - finding_id
+      - title
+      - severity
       properties:
         finding_id:
           type: string
         title:
           type: string
         severity:
-          $ref: "#/components/schemas/Severity"
+          $ref: '#/components/schemas/Severity'
         source_file:
           type: string
           description: 结论来源文件（可定位原始数据）
@@ -439,25 +742,32 @@ components:
         metrics:
           type: array
           items:
-            $ref: "#/components/schemas/Metric"
+            $ref: '#/components/schemas/Metric'
     RuleResult:
       type: object
-      required: [code, name, category, priority, execution_order, status, severity]
+      required:
+      - code
+      - name
+      - category
+      - priority
+      - execution_order
+      - status
+      - severity
       properties:
         code:
           type: string
         name:
           type: string
         category:
-          $ref: "#/components/schemas/RuleCategory"
+          $ref: '#/components/schemas/RuleCategory'
         priority:
-          $ref: "#/components/schemas/Priority"
+          $ref: '#/components/schemas/Priority'
         execution_order:
           type: integer
         status:
-          $ref: "#/components/schemas/RuleStatus"
+          $ref: '#/components/schemas/RuleStatus'
         severity:
-          $ref: "#/components/schemas/Severity"
+          $ref: '#/components/schemas/Severity'
         summary:
           type: string
         skip_reason:
@@ -471,17 +781,21 @@ components:
         metrics:
           type: array
           items:
-            $ref: "#/components/schemas/Metric"
+            $ref: '#/components/schemas/Metric'
         findings:
           type: array
           items:
-            $ref: "#/components/schemas/Finding"
+            $ref: '#/components/schemas/Finding'
         metadata:
           type: object
           additionalProperties: true
     SystemInspection:
       type: object
-      required: [package_file, status, summary, rules]
+      required:
+      - package_file
+      - status
+      - summary
+      - rules
       properties:
         package_file:
           type: string
@@ -491,30 +805,39 @@ components:
           type: string
         status:
           type: string
-          enum: [completed, failed]
+          enum:
+          - completed
+          - failed
         summary:
-          $ref: "#/components/schemas/Summary"
+          $ref: '#/components/schemas/Summary'
         rules:
           type: array
           items:
-            $ref: "#/components/schemas/RuleResult"
+            $ref: '#/components/schemas/RuleResult'
         customer:
           type: object
           additionalProperties: true
     InspectionTask:
       type: object
-      required: [task_id, name, mode, status, trigger, created_at, stats]
+      required:
+      - task_id
+      - name
+      - mode
+      - status
+      - trigger
+      - created_at
+      - stats
       properties:
         task_id:
           type: string
         name:
           type: string
         mode:
-          $ref: "#/components/schemas/TaskMode"
+          $ref: '#/components/schemas/TaskMode'
         status:
-          $ref: "#/components/schemas/TaskStatus"
+          $ref: '#/components/schemas/TaskStatus'
         trigger:
-          $ref: "#/components/schemas/TaskTrigger"
+          $ref: '#/components/schemas/TaskTrigger'
         created_at:
           type: string
           format: date-time
@@ -522,42 +845,47 @@ components:
           type: string
           format: date-time
         stats:
-          $ref: "#/components/schemas/TaskStats"
+          $ref: '#/components/schemas/TaskStats'
         system:
-          $ref: "#/components/schemas/SystemInspection"
+          $ref: '#/components/schemas/SystemInspection'
     TaskCreated:
       type: object
-      required: [task_id]
+      required:
+      - task_id
       properties:
         task_id:
           type: string
     TaskSummary:
       allOf:
-        - $ref: "#/components/schemas/InspectionTask"
-        - type: object
-          properties:
-            system:
-              nullable: true
-            customer_province:
-              type: string
-              description: 上传时选择的省份字典编码（可选）
-            customer_operator:
-              type: string
-              description: 上传时选择的运营商字典编码（可选）
-            customer_product:
-              type: string
-              description: 上传时选择的产品形态字典编码（可选）
-            customer_version:
-              type: string
-              description: 上传时选择的版本字典编码（可选）
+      - $ref: '#/components/schemas/InspectionTask'
+      - type: object
+        properties:
+          system:
+            nullable: true
+          customer_province:
+            type: string
+            description: 上传时选择的省份字典编码（可选）
+          customer_operator:
+            type: string
+            description: 上传时选择的运营商字典编码（可选）
+          customer_product:
+            type: string
+            description: 上传时选择的产品形态字典编码（可选）
+          customer_version:
+            type: string
+            description: 上传时选择的版本字典编码（可选）
     TaskListResponse:
       type: object
-      required: [items, total, page, page_size]
+      required:
+      - items
+      - total
+      - page
+      - page_size
       properties:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/TaskSummary"
+            $ref: '#/components/schemas/TaskSummary'
         total:
           type: integer
         page:
@@ -566,7 +894,12 @@ components:
           type: integer
     OverviewSummary:
       type: object
-      required: [task_count, registered_rule_count, rule_result_count, finding_count, status_counts]
+      required:
+      - task_count
+      - registered_rule_count
+      - rule_result_count
+      - finding_count
+      - status_counts
       properties:
         task_count:
           type: integer
@@ -581,7 +914,7 @@ components:
           type: integer
           description: 全部任务的发现问题总数（按 Finding 记录数，不去重）
         status_counts:
-          $ref: "#/components/schemas/Summary"
+          $ref: '#/components/schemas/Summary'
     RerunRequest:
       type: object
       properties:
@@ -592,7 +925,10 @@ components:
             type: string
     LogEntry:
       type: object
-      required: [ts, level, message]
+      required:
+      - ts
+      - level
+      - message
       properties:
         ts:
           type: string
@@ -608,28 +944,39 @@ components:
           additionalProperties: true
     TaskLogs:
       type: object
-      required: [task_id, entries]
+      required:
+      - task_id
+      - entries
       properties:
         task_id:
           type: string
         entries:
           type: array
           items:
-            $ref: "#/components/schemas/LogEntry"
+            $ref: '#/components/schemas/LogEntry'
     InspectorInfo:
       type: object
-      required: [code, name, category, severity, priority, rule_version, hidden, source_patterns, outputs]
+      required:
+      - code
+      - name
+      - category
+      - severity
+      - priority
+      - rule_version
+      - hidden
+      - source_patterns
+      - outputs
       properties:
         code:
           type: string
         name:
           type: string
         category:
-          $ref: "#/components/schemas/RuleCategory"
+          $ref: '#/components/schemas/RuleCategory'
         severity:
-          $ref: "#/components/schemas/Severity"
+          $ref: '#/components/schemas/Severity'
         priority:
-          $ref: "#/components/schemas/Priority"
+          $ref: '#/components/schemas/Priority'
         rule_version:
           type: string
         hidden:
@@ -659,7 +1006,10 @@ components:
                     type: string
                   type:
                     type: string
-                    enum: [number, string, trend]
+                    enum:
+                    - number
+                    - string
+                    - trend
         params:
           type: array
           items:
@@ -673,7 +1023,9 @@ components:
                 type: string
     DictItem:
       type: object
-      required: [code, name]
+      required:
+      - code
+      - name
       properties:
         code:
           type: string
@@ -682,27 +1034,33 @@ components:
           type: string
     DictsResponse:
       type: object
-      required: [province, operator, product, version]
+      required:
+      - province
+      - operator
+      - product
+      - version
       properties:
         province:
           type: array
           items:
-            $ref: "#/components/schemas/DictItem"
+            $ref: '#/components/schemas/DictItem'
         operator:
           type: array
           items:
-            $ref: "#/components/schemas/DictItem"
+            $ref: '#/components/schemas/DictItem'
         product:
           type: array
           items:
-            $ref: "#/components/schemas/DictItem"
+            $ref: '#/components/schemas/DictItem'
         version:
           type: array
           items:
-            $ref: "#/components/schemas/DictItem"
+            $ref: '#/components/schemas/DictItem'
     DictUpdateRequest:
       type: object
-      required: [code, name]
+      required:
+      - code
+      - name
       properties:
         code:
           type: string
@@ -710,14 +1068,518 @@ components:
           type: string
     Error:
       type: object
-      required: [code, message]
+      required:
+      - code
+      - message
       properties:
         code:
           type: string
-          enum: [invalid_package, package_too_large, invalid_dict, bad_request, unknown_rule, not_found, internal]
+          enum:
+          - invalid_package
+          - package_too_large
+          - invalid_dict
+          - bad_request
+          - unknown_rule
+          - not_found
+          - internal
           description: 错误码（新增时同步契约与实现）
         message:
           type: string
         detail:
           type: object
           additionalProperties: true
+    TaskStatusV2:
+      type: string
+      enum:
+      - pending
+      - running
+      - completed
+      - failed
+    RuleStatusV2:
+      type: string
+      enum:
+      - pass
+      - warn
+      - fail
+      - error
+      - skip
+    SeverityV2:
+      type: string
+      enum:
+      - low
+      - medium
+      - high
+      - critical
+    PriorityV2:
+      type: integer
+      enum:
+      - 0
+      - 1
+      - 2
+      description: P0 数据准备 / P1 基础检查 / P2 综合分析
+    RuleCategoryV2:
+      type: string
+      enum:
+      - log
+      - kpi
+      - traffic
+      - alarm
+      - config
+      - resource
+      - other
+    TaskModeV2:
+      type: string
+      enum:
+      - online
+      - local
+    TaskTriggerV2:
+      type: string
+      enum:
+      - api
+      - cli
+      - rerun
+    SummaryV2:
+      type: object
+      required:
+      - total
+      - pass
+      - warn
+      - fail
+      - error
+      - skip
+      properties:
+        total:
+          type: integer
+        pass:
+          type: integer
+        warn:
+          type: integer
+        fail:
+          type: integer
+        error:
+          type: integer
+        skip:
+          type: integer
+    TaskStatsV2:
+      allOf:
+      - $ref: '#/components/schemas/SummaryV2'
+      - type: object
+        properties:
+          systems:
+            type: integer
+    MetricV2:
+      type: object
+      required:
+      - key
+      - label
+      - value
+      properties:
+        key:
+          type: string
+          description: 契约级稳定标识，跨任务/系统不可变
+        label:
+          type: string
+        value:
+          oneOf:
+          - type: number
+          - type: string
+        unit:
+          type: string
+        threshold:
+          type: object
+          properties:
+            min:
+              type: number
+            max:
+              type: number
+        baseline:
+          oneOf:
+          - type: number
+          - type: string
+        series:
+          type: array
+          description: 趋势图数据
+          items:
+            type: object
+            properties:
+              t:
+                type: string
+                description: 时间点或序号
+              v:
+                oneOf:
+                - type: number
+                - type: string
+    FindingV2:
+      type: object
+      required:
+      - finding_id
+      - title
+      - severity
+      properties:
+        finding_id:
+          type: string
+        title:
+          type: string
+        severity:
+          $ref: '#/components/schemas/SeverityV2'
+        source_file:
+          type: string
+          description: 结论来源文件（可定位原始数据）
+        evidence:
+          type: string
+          description: 证据片段（默认截断 2KB）
+        details:
+          type: string
+        recommendation:
+          type: string
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricV2'
+    RuleResultV2:
+      type: object
+      required:
+      - code
+      - name
+      - category
+      - priority
+      - execution_order
+      - status
+      - severity
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/RuleCategoryV2'
+        priority:
+          $ref: '#/components/schemas/PriorityV2'
+        execution_order:
+          type: integer
+        status:
+          $ref: '#/components/schemas/RuleStatusV2'
+        severity:
+          $ref: '#/components/schemas/SeverityV2'
+        summary:
+          type: string
+        skip_reason:
+          type: string
+          description: status=skip 时必填
+        executed_at:
+          type: string
+          format: date-time
+        duration_ms:
+          type: integer
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricV2'
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/FindingV2'
+        metadata:
+          type: object
+          additionalProperties: true
+    SystemInspectionV2:
+      type: object
+      required:
+      - package_file
+      - status
+      - summary
+      - rules
+      properties:
+        package_file:
+          type: string
+        package_checksum:
+          type: string
+        version:
+          type: string
+        status:
+          type: string
+          enum:
+          - completed
+          - failed
+        summary:
+          $ref: '#/components/schemas/SummaryV2'
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleResultV2'
+        customer:
+          type: object
+          additionalProperties: true
+    InspectionTaskV2:
+      type: object
+      required:
+      - task_id
+      - name
+      - mode
+      - status
+      - trigger
+      - created_at
+      - stats
+      properties:
+        task_id:
+          type: string
+        name:
+          type: string
+        mode:
+          $ref: '#/components/schemas/TaskModeV2'
+        status:
+          $ref: '#/components/schemas/TaskStatusV2'
+        trigger:
+          $ref: '#/components/schemas/TaskTriggerV2'
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        stats:
+          $ref: '#/components/schemas/TaskStatsV2'
+        system:
+          $ref: '#/components/schemas/SystemInspectionV2'
+    TaskCreatedV2:
+      type: object
+      required:
+      - task_id
+      properties:
+        task_id:
+          type: string
+    TaskSummaryV2:
+      allOf:
+      - $ref: '#/components/schemas/InspectionTaskV2'
+      - type: object
+        properties:
+          system:
+            nullable: true
+          customer_province:
+            type: string
+            description: 上传时选择的省份字典编码（可选）
+          customer_operator:
+            type: string
+            description: 上传时选择的运营商字典编码（可选）
+          customer_product:
+            type: string
+            description: 上传时选择的产品形态字典编码（可选）
+          customer_version:
+            type: string
+            description: 上传时选择的版本字典编码（可选）
+    TaskListResponseV2:
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - page_size
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskSummaryV2'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+    OverviewSummaryV2:
+      type: object
+      required:
+      - task_count
+      - registered_rule_count
+      - rule_result_count
+      - finding_count
+      - status_counts
+      properties:
+        task_count:
+          type: integer
+          description: 任务总数
+        registered_rule_count:
+          type: integer
+          description: 注册规则总数（包含 hidden 内部规则）
+        rule_result_count:
+          type: integer
+          description: 全部任务的规则结果总数
+        finding_count:
+          type: integer
+          description: 全部任务的发现问题总数（按 Finding 记录数，不去重）
+        status_counts:
+          $ref: '#/components/schemas/SummaryV2'
+    RerunRequestV2:
+      type: object
+      properties:
+        rule_codes:
+          type: array
+          description: 不填表示重跑该任务全部规则
+          items:
+            type: string
+    LogEntryV2:
+      type: object
+      required:
+      - ts
+      - level
+      - message
+      properties:
+        ts:
+          type: string
+          format: date-time
+        level:
+          type: string
+        message:
+          type: string
+        rule_code:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
+    TaskLogsV2:
+      type: object
+      required:
+      - task_id
+      - entries
+      properties:
+        task_id:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogEntryV2'
+    InspectorInfoV2:
+      type: object
+      required:
+      - code
+      - name
+      - category
+      - severity
+      - priority
+      - rule_version
+      - hidden
+      - source_patterns
+      - outputs
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/RuleCategoryV2'
+        severity:
+          $ref: '#/components/schemas/SeverityV2'
+        priority:
+          $ref: '#/components/schemas/PriorityV2'
+        rule_version:
+          type: string
+        hidden:
+          type: boolean
+        description:
+          type: string
+        recommendation:
+          type: string
+        source_patterns:
+          type: array
+          description: 匹配任务目录内相对路径的正则
+          items:
+            type: string
+        outputs:
+          type: object
+          properties:
+            metrics:
+              type: array
+              items:
+                type: object
+                properties:
+                  key:
+                    type: string
+                  label:
+                    type: string
+                  unit:
+                    type: string
+                  type:
+                    type: string
+                    enum:
+                    - number
+                    - string
+                    - trend
+        params:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              default:
+                type: string
+    DictItemV2:
+      type: object
+      required:
+      - code
+      - name
+      properties:
+        code:
+          type: string
+          description: 编码，仅小写字母/数字/下划线
+        name:
+          type: string
+    DictsResponseV2:
+      type: object
+      required:
+      - province
+      - operator
+      - product
+      - version
+      properties:
+        province:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictItemV2'
+        operator:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictItemV2'
+        product:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictItemV2'
+        version:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictItemV2'
+    DictUpdateRequestV2:
+      type: object
+      required:
+      - code
+      - name
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+    ErrorV2:
+      type: object
+      required:
+      - code
+      - message
+      properties:
+        code:
+          type: string
+          enum:
+          - invalid_package
+          - package_too_large
+          - invalid_dict
+          - bad_request
+          - unknown_rule
+          - not_found
+          - internal
+          - package_checksum_conflict
+          description: 错误码（新增时同步契约与实现）
+        message:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
+      description: 错误码（/api/v2 新增 package_checksum_conflict）
