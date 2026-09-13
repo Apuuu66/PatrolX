@@ -119,13 +119,13 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 3 的测试
 
-- [ ] T029 [P] [US3] 在 `tests/test_baseline_consistency.py` 中比较本地与在线契约结果，忽略 `executed_at`、`duration_ms` 和运行标识，但比较规则状态、metrics 和 findings
-- [ ] T030 [US3] 在 `tests/test_baseline_consistency.py` 中验证两个任务携带相同系统元数据时仍保持任务目录、结果与日志隔离
+- [x] T029 [P] [US3] 在 `tests/test_baseline_consistency.py` 中比较本地与在线契约结果，忽略 `executed_at`、`duration_ms` 和运行标识，但比较规则状态、metrics 和 findings
+- [x] T030 [US3] 在 `tests/test_baseline_consistency.py` 中验证两个任务携带相同系统元数据时仍保持任务目录、结果与日志隔离
 
 ### 用户故事 3 的实现
 
-- [ ] T031 [US3] 在 `app/cli.py` 与 `app/services/tasks.py` 中消除本地/在线执行路径的业务分歧，共享 `Executor`、包名 `task_id`、单任务存储布局和报告生成入口
-- [ ] T032 [US3] 在 `app/services/store.py` 中确保任务和规则结果使用同一 UTC 序列化与别名规则，避免双模式字段语义漂移
+- [x] T031 [US3] 在 `app/cli.py` 与 `app/services/tasks.py` 中消除本地/在线执行路径的业务分歧，共享 `Executor`、包名 `task_id`、单任务存储布局和报告生成入口
+- [x] T032 [US3] 在 `app/services/store.py` 中确保任务和规则结果使用同一 UTC 序列化与别名规则，避免双模式字段语义漂移
 
 **检查点**：本地与在线结果一致性测试通过，模式同构约束得到回归保护
 
@@ -139,13 +139,13 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 4 的测试
 
-- [ ] T033 [P] [US4] 在 `tests/test_baseline_rerun.py` 中验证本地 CLI 与在线 API 单规则重跑后，目标规则 JSON、`task.json` 摘要和 `report.html` 更新，且无关规则结果不变
-- [ ] T034 [US4] 在 `tests/test_baseline_rerun.py` 中覆盖 `source_patterns` 匹配、无匹配文件时返回带原因的 `skip`，以及任务现场缺失时先幂等解压
+- [x] T033 [P] [US4] 在 `tests/test_baseline_rerun.py` 中验证本地 CLI 与在线 API 单规则重跑后，目标规则 JSON、`task.json` 摘要和 `report.html` 更新，且无关规则结果不变
+- [x] T034 [US4] 在 `tests/test_baseline_rerun.py` 中覆盖 `source_patterns` 匹配、无匹配文件时返回带原因的 `skip`，以及任务现场缺失时先幂等解压
 
 ### 用户故事 4 的实现
 
-- [ ] T035 [US4] 在 `app/services/executor.py` 中实现 `run_one()` 直接匹配目标规则 `source_patterns`、执行目标规则并替换目标结果；不实现规则间依赖图
-- [ ] T036 [US4] 在 `app/cli.py`、`app/services/tasks.py` 与规则文件内置运行入口中共用单规则重跑收尾：更新目标规则结果、任务摘要和 HTML 报告，保证前端 API 刷新后可读取最新结果
+- [x] T035 [US4] 在 `app/services/executor.py` 中实现 `run_one()` 直接匹配目标规则 `source_patterns`、执行目标规则并替换目标结果；不实现规则间依赖图
+- [x] T036 [US4] 在 `app/cli.py`、`app/services/tasks.py` 与规则文件内置运行入口中共用单规则重跑收尾：更新目标规则结果、任务摘要和 HTML 报告，保证前端 API 刷新后可读取最新结果
 
 **检查点**：规则开发者可以只重跑目标规则并看到无关结果保留
 
@@ -159,14 +159,14 @@ description: "系统基线功能实现任务列表"
 
 ### 用户故事 5 的测试
 
-- [ ] T036A [US5] 在 `tests/test_baseline_delete.py` 中先验证任务完成后、未请求删除前，`uploads/<task_id>/`、`output/<task_id>/`、任务契约、规则 JSON、报告和日志持续可访问。
-- [ ] T037 [P] [US5] 在 `tests/test_baseline_delete.py` 中验证删除 API 移除 SQLite 记录、任务契约 JSON、规则 JSON、报告、日志和 `uploads/<task_id>/` 原始包
-- [ ] T038 [US5] 在 `tests/test_baseline_delete.py` 中验证删除后再次查询任务、系统、规则、报告和日志均返回 404，重复删除返回 404
+- [x] T036A [US5] 在 `tests/test_baseline_delete.py` 中先验证任务完成后、未请求删除前，`uploads/<task_id>/`、`output/<task_id>/`、任务契约、规则 JSON、报告和日志持续可访问。
+- [x] T037 [P] [US5] 在 `tests/test_baseline_delete.py` 中验证删除 API 移除 SQLite 记录、任务契约 JSON、规则 JSON、报告、日志和 `uploads/<task_id>/` 原始包
+- [x] T038 [US5] 在 `tests/test_baseline_delete.py` 中验证删除后再次查询任务、系统、规则、报告和日志均返回 404，重复删除返回 404
 
 ### 用户故事 5 的实现
 
-- [ ] T039 [US5] 在 `app/services/tasks.py` 中显式清理任务级联目录，避免 `ignore_errors=True` 掩盖残留；无法完全删除时返回明确错误并记录日志
-- [ ] T040 [US5] 在 `app/api/router.py` 中保持删除接口 204/404 语义与 OpenAPI 契约一致
+- [x] T039 [US5] 在 `app/services/tasks.py` 中显式清理任务级联目录，避免 `ignore_errors=True` 掩盖残留；无法完全删除时返回明确错误并记录日志
+- [x] T040 [US5] 在 `app/api/router.py` 中保持删除接口 204/404 语义与 OpenAPI 契约一致
 
 **检查点**：所有用户故事均应独立可用
 

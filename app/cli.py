@@ -12,6 +12,7 @@ from pathlib import Path
 from app.core.archive import is_archive
 from app.core.config import settings
 from app.core.metrics import TASKS_TOTAL
+from app.inspectors.pkg import EXTRACT_MANIFEST
 from app.inspectors.registry import registry
 from app.models.schemas import (
     InspectionTask,
@@ -215,6 +216,9 @@ def run_single_rule(
     task_id = task_id or generate_task_id(package.name)
     ctx = _new_context(task_id, package)
     executor = Executor(registry)
+    if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
+        extraction = executor.run_rule("pkg.extract.main", ctx)
+        store.save_rule_result(settings.output, task_id, extraction)
     executor.run_rule(code, ctx)
     for result in executor.collected.values():
         store.save_rule_result(settings.output, task_id, result)
