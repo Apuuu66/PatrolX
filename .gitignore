@@ -40,3 +40,8 @@ web/smoke.tmp.mjs
 
 # Spec Kit 本地缓存
 .specify/integrations/.cache/
+
+# Playwright 产物
+web/test-results/
+web/playwright-report/
+web/e2e/.tmp/

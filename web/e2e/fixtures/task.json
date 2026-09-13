@@ -1,0 +1,42 @@
+{
+  "task_id": "task-legacy-e2e",
+  "name": "旧版本任务",
+  "mode": "local",
+  "status": "completed",
+  "trigger": "cli",
+  "created_at": "2026-09-13T00:00:00Z",
+  "completed_at": "2026-09-13T00:00:01Z",
+  "stats": {
+    "total": 1,
+    "pass": 1,
+    "warn": 0,
+    "fail": 0,
+    "error": 0,
+    "skip": 0,
+    "systems": 1
+  },
+  "system": {
+    "package_file": "legacy.zip",
+    "status": "completed",
+    "summary": {
+      "total": 1,
+      "pass": 1,
+      "warn": 0,
+      "fail": 0,
+      "error": 0,
+      "skip": 0
+    },
+    "rules": [
+      {
+        "code": "log.error_density",
+        "name": "日志错误密度",
+        "category": "log",
+        "priority": 0,
+        "execution_order": 0,
+        "status": "pass",
+        "severity": "low",
+        "summary": "无异常"
+      }
+    ]
+  }
+}

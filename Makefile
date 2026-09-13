@@ -1,4 +1,4 @@
-.PHONY: install offline online run verify verify-one contract gen-web-api test lint web-install web-dev web-build
+.PHONY: install offline online run verify verify-one contract gen-web-api test lint web-install web-dev web-build e2e-install e2e
 
 UV := UV_CACHE_DIR=.uv-cache uv
 PYTHON := $(UV) run --python 3.12 python
@@ -33,6 +33,13 @@ web-dev:
 
 web-build:
 	cd web && npm run build
+
+e2e-install:
+	cd web && npm install
+	cd web && npx playwright install chromium
+
+e2e:
+	cd web && npm run e2e
 
 test:
 	$(PYTHON) -m pytest

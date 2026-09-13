@@ -73,4 +73,4 @@ docker compose up --build -d    # 构建并启动（8000 端口；uploads/output
 
 ## 常用命令
 
-见 `Makefile`：`make contract`（导出 OpenAPI）、`make test`、`make lint`、`make verify`（本地全流程）等。
+见 `Makefile`：`make contract`（导出 OpenAPI）、`make test`、`make lint`、`make verify`（本地全流程）、`make e2e-install`（首次安装 E2E 浏览器）、`make e2e`（Playwright UI/API 端到端）等。
