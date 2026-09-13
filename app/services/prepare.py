@@ -1,11 +1,11 @@
 """规则私有预处理路径、缓存 marker 与 source_patterns 匹配 helper。"""
 
-import hashlib
 import inspect
 import re
 from pathlib import Path
 from typing import Protocol
 
+from app.core.checksum import sha256_file
 from app.inspectors.base import Inspector
 
 
@@ -16,7 +16,7 @@ class PrepareContext(Protocol):
     prepared_dir: Path
 
 
-MARKER_NAME = ".prepare.md5"
+MARKER_NAME = ".prepare.sha256"
 
 
 def prepared_dir(ctx: PrepareContext, owner_code: str) -> Path:
@@ -45,17 +45,9 @@ def rule_python_path(rule: Inspector) -> Path:
         raise ValueError(f"规则 {rule.code} 无法解析 Python 文件") from exc
 
 
-def rule_file_md5(rule: Inspector) -> str:
-    """计算当前规则 Python 文件的 md5。"""
-    return file_md5(rule_python_path(rule))
-
-
-def file_md5(path: Path) -> str:
-    digest = hashlib.md5(usedforsecurity=False)
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def rule_file_sha256(rule: Inspector) -> str:
+    """计算当前规则 Python 文件的 SHA-256。"""
+    return sha256_file(rule_python_path(rule))
 
 
 def match_relative_files(data_dir: Path, patterns: list[str]) -> list[Path]:

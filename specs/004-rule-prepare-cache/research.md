@@ -34,9 +34,9 @@
 
 ## 4. 缓存刷新依据
 
-**Decision**：使用当前规则代码文件内容的 md5 作为 marker。marker 不存在或不一致时重建；一致时复用。重建前清空 owner prepared 目录；成功后写入新 marker；失败不写入 marker。
+**Decision**：使用当前规则代码文件内容的 SHA-256 作为 marker。marker 不存在或不一致时重建；一致时复用。重建前清空 owner prepared 目录；成功后写入新 marker；失败不写入 marker。
 
-**Rationale**：开发过程中频繁改代码但未必升版本，内容 md5 能自动感知变化；不依赖命令、开关或人工版本维护。用户已确认接受“只看当前规则文件”的取舍。
+**Rationale**：开发过程中频繁改代码但未必升版本，内容 SHA-256 能自动感知变化；不依赖命令、开关或人工版本维护。用户已确认接受“只看当前规则文件”的取舍。
 
 **Alternatives considered**：
 

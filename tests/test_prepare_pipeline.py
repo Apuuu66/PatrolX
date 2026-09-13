@@ -305,7 +305,7 @@ def test_prepare_failure_and_missing_input_skip_owner_without_spread(tmp_path: P
     assert results["rule.missing"].status == RuleStatus.SKIP
     assert "未发现匹配源文件" in (results["rule.missing"].skip_reason or "")
     assert results["rule.ok"].status == RuleStatus.PASS
-    assert not (ctx.prepared_dir / "rule.failed" / ".prepare.md5").exists()
+    assert not (ctx.prepared_dir / "rule.failed" / ".prepare.sha256").exists()
     assert executor_prepare_states(ctx) == {
         "rule.failed": "FAILED",
         "rule.missing": "SKIP",
@@ -414,8 +414,8 @@ def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch)
     log_prepared = task_dir / "prepared" / "log.app_service" / "app_service_records.jsonl"
     assert kpi_prepared.is_file()
     assert log_prepared.is_file()
-    assert (task_dir / "prepared" / "kpi.threshold" / ".prepare.md5").is_file()
-    assert (task_dir / "prepared" / "log.app_service" / ".prepare.md5").is_file()
+    assert (task_dir / "prepared" / "kpi.threshold" / ".prepare.sha256").is_file()
+    assert (task_dir / "prepared" / "log.app_service" / ".prepare.sha256").is_file()
     assert not (task_dir / "prepared" / "log.app_service" / "kpi_values.json").exists()
     assert not (task_dir / "prepared" / "kpi.threshold" / "app_service_records.jsonl").exists()
     assert {result["code"] for result in load_task(env, task.task_id)["system"]["rules"]} >= {

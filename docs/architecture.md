@@ -309,7 +309,7 @@ outputs.metrics[]  声明的指标契约
 - 一个普通规则最多声明一个 prepare；prepare 代码必须唯一。
 - prepare 不声明 priority、severity、outputs 或公共 artifact。
 - prepared 路径固定为 `output/<task_id>/prepared/<owner_code>/`。
-- 缓存 marker 是 `.prepare.md5`，内容为当前 owner 规则 Python 文件内容的 md5。
+- 缓存 marker 是 `.prepare.sha256`，内容为当前 owner 规则 Python 文件内容的 SHA-256。
 - marker 不存在或不一致时重建；一致时复用；prepare 失败不写 marker。
 - 不做输入 checksum、输出 manifest 或单个 prepared 文件缺失检查。
 - prepare 执行顺序为 `owner priority → owner code → prepare code`。
