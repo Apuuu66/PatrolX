@@ -3,6 +3,7 @@
 import json
 import shutil
 from pathlib import Path
+from typing import Protocol
 
 from app.core.archive import ArchiveError, UnpackLimit, is_archive, unpack, unpack_gzip
 from app.core.checksum import sha256_file
@@ -22,6 +23,23 @@ CATEGORY_DIRECTORIES = {
     RuleCategory.OTHER.value: "other",
 }
 WORK_CATEGORIES = list(CATEGORY_DIRECTORIES.values())
+
+
+class ExtractionLogger(Protocol):
+    """解压过程日志回调；与规则上下文日志签名一致。"""
+
+    def __call__(self, level: str, message: str, **detail: object) -> None: ...
+
+
+def _log_extract(
+    log: ExtractionLogger | None,
+    level: str,
+    message: str,
+    **detail: object,
+) -> None:
+    """写入解压过程日志；未传入回调时保持静默。"""
+    if log is not None:
+        log(level, message, **detail)
 
 
 class ExtractionBudget:
@@ -248,6 +266,7 @@ def _extract_log_gzip(
     manifest: dict,
     budget: ExtractionBudget,
     depth: int,
+    log: ExtractionLogger | None = None,
 ) -> None:
     if category != RuleCategory.LOG.value:
         category = RuleCategory.LOG.value
@@ -291,6 +310,39 @@ def _extract_log_gzip(
                 category,
                 depth,
             )
+    task_id = data_dir.name
+    if state["status"] == "extracted":
+        _log_extract(
+            log,
+            "info",
+            "日志 gzip 解压完成",
+            task_id=task_id,
+            source=source_relative.as_posix(),
+            target=relative.as_posix(),
+            depth=depth,
+        )
+    elif state["status"] == "conflict":
+        _log_extract(
+            log,
+            "warn",
+            "日志 gzip 目标冲突",
+            task_id=task_id,
+            source=source_relative.as_posix(),
+            target=relative.as_posix(),
+            depth=depth,
+            error=state["error"],
+        )
+    else:
+        _log_extract(
+            log,
+            "error",
+            "日志 gzip 解压失败",
+            task_id=task_id,
+            source=source_relative.as_posix(),
+            target=relative.as_posix(),
+            depth=depth,
+            error=state["error"],
+        )
     manifest["log_gz"].append(state)
 
 
@@ -305,6 +357,7 @@ def _extract_subpackage(
     budget: ExtractionBudget,
     seen_checksums: set[str],
     depth: int,
+    log: ExtractionLogger | None = None,
 ) -> None:
     limit = UnpackLimit()
     checksum = sha256_file(source)
@@ -339,6 +392,16 @@ def _extract_subpackage(
         _register_rejected(manifest, source_relative.as_posix(), str(state["error"]), category, depth)
         if source_kind != "evidence":
             source.unlink(missing_ok=True)
+        _log_extract(
+            log,
+            "error",
+            "子包解压拒绝",
+            task_id=data_dir.name,
+            source=source_relative.as_posix(),
+            category=CATEGORY_DIRECTORIES[category],
+            depth=depth,
+            error=state["error"],
+        )
         return
     if checksum in seen_checksums:
         state["status"] = "duplicate"
@@ -346,6 +409,16 @@ def _extract_subpackage(
         manifest["subpackages"].append(state)
         if source_kind != "evidence":
             source.unlink(missing_ok=True)
+        _log_extract(
+            log,
+            "info",
+            "子包重复，跳过解压",
+            task_id=data_dir.name,
+            source=source_relative.as_posix(),
+            category=CATEGORY_DIRECTORIES[category],
+            depth=depth,
+            checksum=checksum,
+        )
         return
     seen_checksums.add(checksum)
 
@@ -382,6 +455,7 @@ def _extract_subpackage(
                 budget,
                 seen_checksums,
                 depth + 1,
+                log,
             )
         _remove_empty_work_site(work_path, data_dir / CATEGORY_DIRECTORIES[category])
     except ArchiveError as exc:
@@ -392,6 +466,29 @@ def _extract_subpackage(
         state["error"] = str(exc)
         if source_kind != "evidence":
             source.unlink(missing_ok=True)
+    task_id = data_dir.name
+    if state["status"] == "extracted":
+        _log_extract(
+            log,
+            "info",
+            "子包解压完成",
+            task_id=task_id,
+            source=source_relative.as_posix(),
+            target=state["target"],
+            category=state["category"],
+            depth=depth,
+        )
+    elif state["status"] != "duplicate":
+        _log_extract(
+            log,
+            "error",
+            "子包解压失败",
+            task_id=task_id,
+            source=source_relative.as_posix(),
+            category=state["category"],
+            depth=depth,
+            error=state["error"],
+        )
     manifest["subpackages"].append(state)
 
 
@@ -406,6 +503,7 @@ def _ingest_file(
     budget: ExtractionBudget,
     seen_checksums: set[str],
     depth: int,
+    log: ExtractionLogger | None = None,
 ) -> None:
     name = source.name.lower()
     if name.endswith(".log.gz"):
@@ -419,6 +517,7 @@ def _ingest_file(
             manifest,
             budget,
             depth,
+            log,
         )
         return
     if is_archive(source):
@@ -433,6 +532,7 @@ def _ingest_file(
             budget,
             seen_checksums,
             depth,
+            log,
         )
         return
 
@@ -444,12 +544,17 @@ def _ingest_file(
             budget.charge_file(target)
             return
         if target.exists():
-            _register_rejected(
-                manifest,
-                source_relative.as_posix(),
-                "目标文件已存在，未覆盖",
-                category,
-                depth,
+            reason = "目标文件已存在，未覆盖"
+            _register_rejected(manifest, source_relative.as_posix(), reason, category, depth)
+            _log_extract(
+                log,
+                "warn",
+                "普通文件目标冲突",
+                task_id=data_dir.name,
+                source=source_relative.as_posix(),
+                target=relative.as_posix(),
+                category=CATEGORY_DIRECTORIES[category],
+                depth=depth,
             )
             return
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -459,20 +564,60 @@ def _ingest_file(
             source.unlink(missing_ok=True)
     except ArchiveError as exc:
         _register_rejected(manifest, source_relative.as_posix(), str(exc), category, depth)
+        _log_extract(
+            log,
+            "error",
+            "普通文件处理失败",
+            task_id=data_dir.name,
+            source=source_relative.as_posix(),
+            target=relative.as_posix(),
+            category=CATEGORY_DIRECTORIES[category],
+            depth=depth,
+            error=str(exc),
+        )
 
 
-def extract_main_site(package: Path, data_dir: Path, checksum: str) -> dict:
+def extract_main_site(
+    package: Path,
+    data_dir: Path,
+    checksum: str,
+    log: ExtractionLogger | None = None,
+) -> dict:
     """保留主包证据现场并生成分类工作现场。"""
     existing = reusable_manifest(data_dir, checksum)
     if existing is not None:
+        _log_extract(
+            log,
+            "info",
+            "解压现场复用",
+            task_id=data_dir.name,
+            checksum=checksum,
+        )
         return existing
 
     staging = data_dir / ".main.staging"
     shutil.rmtree(staging, ignore_errors=True)
+    _log_extract(
+        log,
+        "info",
+        "主包解压开始",
+        task_id=data_dir.name,
+        package=package.name,
+        checksum=checksum,
+    )
     try:
         unpack(package, staging)
-    except ArchiveError:
+    except ArchiveError as exc:
         shutil.rmtree(staging, ignore_errors=True)
+        _log_extract(
+            log,
+            "error",
+            "主包解压失败",
+            task_id=data_dir.name,
+            package=package.name,
+            checksum=checksum,
+            error=str(exc),
+        )
         raise
 
     evidence = data_dir / MAIN_EVIDENCE_DIR
@@ -524,8 +669,21 @@ def extract_main_site(package: Path, data_dir: Path, checksum: str) -> dict:
             budget,
             seen_checksums,
             1,
+            log,
         )
     write_manifest(data_dir, manifest)
+    _log_extract(
+        log,
+        "info",
+        "主包解压完成",
+        task_id=data_dir.name,
+        package=package.name,
+        checksum=checksum,
+        count=int(manifest["main"]["count"]),
+        subpackages=len(manifest["subpackages"]),
+        log_gz=len(manifest["log_gz"]),
+        rejected=len(manifest["rejected"]),
+    )
     return manifest
 
 

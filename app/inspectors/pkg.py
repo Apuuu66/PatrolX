@@ -80,7 +80,7 @@ def _run_main(ctx: RuleContext) -> object:
         )
     checksum = sha256_file(ctx.package_path)
     try:
-        manifest = extraction.extract_main_site(ctx.package_path, ctx.data_dir, checksum)
+        manifest = extraction.extract_main_site(ctx.package_path, ctx.data_dir, checksum, log=ctx.log)
     except archive.ArchiveError as exc:
         ctx.log(
             "error",

@@ -106,6 +106,51 @@ def test_nested_evidence_package_does_not_leave_category_tree(tmp_path, monkeypa
     assert not (task_dir / "logs/Problem scene").exists()
 
 
+def test_extraction_process_is_logged(tmp_path, monkeypatch) -> None:
+    """主包、子包和日志 gzip 的关键解压过程写入执行日志。"""
+    from app.core.checksum import sha256_file
+    from app.services import extraction
+
+    env: Env = setup_env(tmp_path, monkeypatch)
+    package = _multi_level_package(env)
+    data_dir = env.task_dir("task-logs")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    logs: list[tuple[str, str, dict]] = []
+
+    def log(level: str, message: str, **detail: object) -> None:
+        logs.append((level, message, dict(detail)))
+
+    extraction.extract_main_site(package, data_dir, sha256_file(package), log=log)
+
+    messages = [message for _, message, _ in logs]
+    assert "主包解压开始" in messages
+    assert "主包解压完成" in messages
+    assert "子包解压完成" in messages
+    assert "日志 gzip 解压完成" in messages
+    assert logs[-1][2]["task_id"] == "task-logs"
+
+
+def test_run_task_writes_extraction_logs(tmp_path, monkeypatch) -> None:
+    """规则上下文将解压日志写入任务 execution.log。"""
+    import json
+
+    env: Env = setup_env(tmp_path, monkeypatch)
+    package = _multi_level_package(env)
+
+    from app.cli import run_task
+
+    task = run_task(package, task_id="task-log-file")
+    log_path = env.task_dir(task.task_id) / "execution.log"
+    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    messages = [entry["message"] for entry in entries]
+
+    assert "主包解压开始" in messages
+    assert "子包解压完成" in messages
+    assert "日志 gzip 解压完成" in messages
+    assert "主包解压完成" in messages
+    assert all("task_id" in entry for entry in entries if entry["message"].startswith("主包解压"))
+
+
 def test_log_gz_conflict_and_failure_are_isolated(tmp_path, monkeypatch) -> None:
     """冲突和损坏 gzip 保留证据并记录状态，不阻断其他文件。"""
     env: Env = setup_env(tmp_path, monkeypatch)
