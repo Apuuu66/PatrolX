@@ -199,9 +199,12 @@ def get_task_logs_v2(task_id: str = PathParam()) -> TaskLogs:
 
 def _load_system_json(task_id: str) -> SystemInspection:
     path = settings.output / task_id / "system.json"
-    if not path.exists():
-        raise AppError("not_found", "系统结果未生成", 404)
-    return SystemInspection.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    if path.exists():
+        return SystemInspection.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    task = task_service.get(task_id)
+    if task and task.system:
+        return task.system
+    raise AppError("not_found", "系统结果未生成", 404)
 
 
 @router.get("/tasks/{task_id}/system", response_model=SystemInspection, operation_id="getSystemV2")
