@@ -21,10 +21,10 @@ inspector = Inspector(
     category=RuleCategory.LOG,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.0.0",
+    rule_version="4.0.0",
     description="检查 AAAService 的认证失败和重试定时器超限",
     recommendation="检查认证服务可用性、账号锁定策略和重试定时器配置",
-    source_patterns=[r"^logs/.*\.(log|log\.gz)$"],
+    source_patterns=[r"^logs/.*\.log$"],
     outputs_metrics=[
         {"key": "error_count", "label": "错误条数", "unit": "条"},
         {"key": "auth_failure_count", "label": "认证失败条数", "unit": "条"},

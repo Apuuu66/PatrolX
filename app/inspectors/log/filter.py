@@ -20,10 +20,10 @@ inspector = Inspector(
     category=RuleCategory.LOG,
     severity=Severity.LOW,
     priority=Priority.P0,
-    rule_version="3.0.0",
+    rule_version="4.0.0",
     description="扫描 source_patterns 匹配的日志，统计服务、节点、保留级别与错误数量",
     recommendation="无日志类文件时跳过分析类规则",
-    source_patterns=[r"^logs/.*\.(log|log\.gz)$"],
+    source_patterns=[r"^logs/.*\.log$"],
     outputs_metrics=[
         {"key": "kept_lines", "label": "保留日志行", "unit": "行"},
         {"key": "total_lines", "label": "扫描日志行", "unit": "行"},

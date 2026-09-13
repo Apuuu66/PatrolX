@@ -1,51 +1,71 @@
-"""解压规则族（hidden P0）：主包按类落位 + 各类别嵌套子包安全解压。"""
-
-import json
-import shutil
-from pathlib import Path
+"""解压规则族（hidden P0）：统一调用安全解压现场服务。"""
 
 from app.core import archive
 from app.core.checksum import sha256_file
-from app.core.classify import final_category
 from app.inspectors.base import Inspector
 from app.inspectors.registry import registry
 from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
+from app.services import extraction
 from app.services.executor import RuleContext, make_result
 
-EXTRACT_MANIFEST = ".patrolx-extracted.json"
+EXTRACT_MANIFEST = extraction.MANIFEST_NAME
 CATEGORIES = ["logs", "kpi", "traffic", "alarm", "config", "resource", "other"]
-CATEGORY_DIRECTORIES = {"log": "logs", **{name: name for name in CATEGORIES if name != "log"}}
 
 
-def _manifest_path(ctx: RuleContext) -> Path:
-    return ctx.data_dir / EXTRACT_MANIFEST
+def _result_for_manifest(
+    inspector: Inspector,
+    manifest: dict,
+    *,
+    category: str | None = None,
+) -> object:
+    if category is None:
+        main = manifest.get("main") or {}
+        count = int(main.get("count", 0))
+        return make_result(
+            inspector,
+            status=RuleStatus.PASS,
+            summary=f"主包解压完成，保留现场并生成 {count} 个原始文件",
+            metadata={
+                "count": count,
+                "checksum": main.get("checksum"),
+                "evidence_path": main.get("evidence_path", extraction.MAIN_EVIDENCE_DIR),
+                "reused": bool(main.get("reused", False)),
+                "subpackages": len(manifest.get("subpackages", [])),
+                "log_gz": len(manifest.get("log_gz", [])),
+                "rejected": len(manifest.get("rejected", [])),
+            },
+        )
 
-
-def _load_manifest(ctx: RuleContext) -> dict:
-    path = _manifest_path(ctx)
-    if not path.exists():
-        return {"main": None, "subpackages": []}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _save_manifest(ctx: RuleContext, manifest: dict) -> None:
-    _manifest_path(ctx).write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _move_file(src: Path, dst: Path) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    src.replace(dst)
+    items = [item for item in manifest.get("subpackages", []) if item.get("category") == category]
+    failures = extraction.category_failures(manifest, category)
+    total = len(items)
+    if category == "logs":
+        total += len(manifest.get("log_gz", []))
+    failed = len(failures)
+    completed = total - failed
+    status = RuleStatus.PASS if failed == 0 else RuleStatus.WARN
+    return make_result(
+        inspector,
+        status=status,
+        summary=f"{category} 类解压 {completed}/{total}",
+        metadata={
+            "extracted": completed,
+            "total": total,
+            "failed": failed,
+            "failures": failures,
+        },
+    )
 
 
 main_inspector = Inspector(
     code="pkg.extract.main",
-    name="主包解压与按类落位",
+    name="主包解压与证据现场保留",
     category=RuleCategory.OTHER,
     severity=Severity.LOW,
     priority=Priority.P0,
-    rule_version="2.0.0",
+    rule_version="3.0.0",
     hidden=True,
-    description="安全解压主数据包，按分类规则按类落位，登记嵌套子包清单",
+    description="安全解压主数据包到 .main 证据现场，并递归生成分类工作现场",
     recommendation="主包无法解压时检查包格式与安全限制",
 )
 
@@ -58,77 +78,35 @@ def _run_main(ctx: RuleContext) -> object:
             summary="未找到数据包",
             metadata={"package": str(ctx.package_path) if ctx.package_path else None},
         )
-    task_dir = ctx.data_dir
-    for category in CATEGORIES:
-        (task_dir / category).mkdir(parents=True, exist_ok=True)
+    checksum = sha256_file(ctx.package_path)
     try:
-        tmp = task_dir / ".main"
-        shutil.rmtree(tmp, ignore_errors=True)
-        archive.unpack(ctx.package_path, tmp)
+        manifest = extraction.extract_main_site(ctx.package_path, ctx.data_dir, checksum)
     except archive.ArchiveError as exc:
+        ctx.log(
+            "error",
+            "主包解压失败",
+            task_id=ctx.task_id,
+            rule_code=main_inspector.code,
+            package=ctx.package_path.name,
+            checksum=checksum,
+            error=str(exc),
+        )
         return make_result(
             main_inspector,
             status=RuleStatus.ERROR,
             summary=f"主包解压失败: {exc}",
-            metadata={"package": ctx.package_path.name, "error": str(exc)},
+            metadata={"package": ctx.package_path.name, "checksum": checksum, "error": str(exc)},
         )
-
-    old_manifest = _load_manifest(ctx)
-    checksum = sha256_file(ctx.package_path)
-    if (old_manifest.get("main") or {}).get("checksum") == checksum:
-        shutil.rmtree(tmp, ignore_errors=True)
-        count = int(old_manifest.get("main", {}).get("count", 0))
-        ctx.log("info", "主包已解压，复用任务现场", checksum=checksum, count=count)
-        return make_result(
-            main_inspector,
-            status=RuleStatus.PASS,
-            summary=f"主包已解压，共 {count} 个文件",
-            metadata={"count": count, "checksum": checksum, "reused": True},
-        )
-
-    manifest: dict = {
-        "main": {"checksum": checksum, "count": 0},
-        "subpackages": [],
-        "rejected": [],
-    }
-    seen_checksums: set[str] = set()
-    for src in sorted(tmp.rglob("*")):
-        if src.is_dir():
-            continue
-        rel = src.relative_to(tmp)
-        category = final_category(rel.name, src)
-        directory = CATEGORY_DIRECTORIES[category.value]
-        dest = task_dir / directory / rel.name
-        if dest.exists() and sha256_file(dest) == sha256_file(src):
-            manifest["main"]["count"] += 1
-            continue
-        _move_file(src, dest)
-        if archive.is_archive(dest):
-            item = {
-                "name": rel.name,
-                "category": directory,
-                "checksum": sha256_file(dest),
-                "extracted": False,
-                "path": str(dest.relative_to(task_dir)),
-                "error": None,
-            }
-            if item["checksum"] in seen_checksums:
-                ctx.log("info", "嵌套子包 checksum 重复，跳过解压", package=item["name"], checksum=item["checksum"])
-                item["extracted"] = True
-                item["duplicate"] = True
-            else:
-                seen_checksums.add(item["checksum"])
-            manifest["subpackages"].append(item)
-        manifest["main"]["count"] += 1
-    shutil.rmtree(tmp, ignore_errors=True)
-    _save_manifest(ctx, manifest)
-    ctx.log("info", "主包解压完成", count=manifest["main"]["count"], package=ctx.package_path.name)
-    return make_result(
-        main_inspector,
-        status=RuleStatus.PASS,
-        summary=f"主包解压完成，共 {manifest['main']['count']} 个文件",
-        metadata={"count": manifest["main"]["count"], "checksum": checksum},
+    ctx.log(
+        "info",
+        "主包解压现场已就绪",
+        task_id=ctx.task_id,
+        rule_code=main_inspector.code,
+        checksum=checksum,
+        count=int((manifest.get("main") or {}).get("count", 0)),
+        reused=bool((manifest.get("main") or {}).get("reused", False)),
     )
+    return _result_for_manifest(main_inspector, manifest)
 
 
 main_inspector.run = _run_main
@@ -138,79 +116,36 @@ registry.register(main_inspector)
 def _make_category_inspector(category: str) -> Inspector:
     inspector = Inspector(
         code=f"pkg.extract.{category}",
-        name=f"{category} 类子包解压",
+        name=f"{category} 类解压状态检查",
         category=RuleCategory.OTHER,
         severity=Severity.LOW,
         priority=Priority.P0,
-        rule_version="2.0.0",
+        rule_version="3.0.0",
         hidden=True,
-        description=f"按需解压 {category} 类嵌套子包（checksum 去重、只解压一次）",
-        recommendation="子包解压失败时检查包完整性与安全限制",
+        description=f"汇总 {category} 类子包与日志 gzip 解压状态",
+        recommendation="解压失败或冲突时查看 manifest 与 .main 原始现场",
     )
 
     def run(ctx: RuleContext) -> object:
-        manifest = _load_manifest(ctx)
-        pending = [p for p in manifest.get("subpackages", []) if p["category"] == category]
-        if not pending:
-            return make_result(inspector, status=RuleStatus.PASS, summary=f"{category} 类无嵌套子包")
-        extracted = 0
-        failed = 0
-        failures: list[dict] = []
-        for item in pending:
-            if item.get("extracted"):
-                extracted += 1
-                continue
-            src = ctx.data_dir / item["path"]
-            target = ctx.data_dir / category / item["name"].rsplit(".", 1)[0]
-            item["target"] = str(target.relative_to(ctx.data_dir))
-            try:
-                archive.unpack(src, target)
-                item["extracted"] = True
-                item["error"] = None
-                item["target"] = str(target.relative_to(ctx.data_dir))
-                extracted += 1
-                ctx.log("info", "嵌套子包解压完成", package=item["name"], target=item["target"])
-            except archive.ArchiveError as exc:
-                item["extracted"] = False
-                item["error"] = str(exc)
-                failures.append(
-                    {
-                        "name": item["name"],
-                        "checksum": item.get("checksum"),
-                        "target": str(target.relative_to(ctx.data_dir)),
-                        "error": str(exc),
-                        "extracted": False,
-                    }
-                )
-                failed += 1
+        manifest = extraction.read_manifest(ctx.data_dir)
+        failures = extraction.category_failures(manifest, category)
+        if failures:
+            for failure in failures:
                 ctx.log(
                     "error",
-                    "嵌套子包解压失败",
+                    "分类解压项未成功",
                     task_id=ctx.task_id,
                     rule_code=inspector.code,
-                    package=item["name"],
-                    checksum=item.get("checksum"),
-                    target=str(target.relative_to(ctx.data_dir)),
-                    error=str(exc),
+                    category=category,
+                    target=failure.get("target"),
+                    error=failure.get("error"),
                 )
-        _save_manifest(ctx, manifest)
-        status = RuleStatus.PASS if failed == 0 else RuleStatus.WARN
-        return make_result(
-            inspector,
-            status=status,
-            summary=f"{category} 类嵌套子包解压 {extracted}/{len(pending)}",
-            metadata={
-                "extracted": extracted,
-                "total": len(pending),
-                "failed": failed,
-                "failures": failures,
-            },
-        )
+        return _result_for_manifest(inspector, manifest, category=category)
 
     inspector.run = run
     registry.register(inspector)
     return inspector
 
 
-for _cat in CATEGORIES:
-    _make_category_inspector(_cat)
+for _category in CATEGORIES:
+    _make_category_inspector(_category)

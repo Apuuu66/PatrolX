@@ -16,7 +16,9 @@ def test_sample_extraction_classifies_and_extracts_nested_package(tmp_path: Path
     manifest = (task_dir / ".patrolx-extracted.json").read_text(encoding="utf-8")
 
     assert '"category": "logs"' in manifest
-    assert (task_dir / "logs" / "ServiceLog_20260901011314.zip").is_file()
+    main_logs = list((task_dir / ".main").rglob("ServiceLog_20260901011314.zip"))
+    assert len(main_logs) == 1
+    assert not (task_dir / "logs" / "ServiceLog_20260901011314.zip").exists()
     extracted_logs = list((task_dir / "logs").glob("ServiceLog*/*"))
     assert extracted_logs, "嵌套日志子包未解压"
     assert load_rule(env, task.task_id, "pkg.extract.main")["status"] == "pass"
@@ -56,7 +58,7 @@ def test_invalid_nested_archive_does_not_abort_task(tmp_path: Path, monkeypatch)
     assert task.status == "completed"
     result = load_rule(env, task.task_id, "pkg.extract.logs")
     manifest = json.loads((env.task_dir(task.task_id) / ".patrolx-extracted.json").read_text(encoding="utf-8"))
-    failures = [item for item in manifest["subpackages"] if not item["extracted"]]
+    failures = [item for item in manifest["subpackages"] if item["status"] != "extracted"]
 
     assert result["status"] == "warn"
     assert result["metadata"]["failed"] == 1
@@ -66,11 +68,11 @@ def test_invalid_nested_archive_does_not_abort_task(tmp_path: Path, monkeypatch)
             "checksum": failures[0]["checksum"],
             "target": "logs/bad-service-log",
             "error": failures[0]["error"],
-            "extracted": False,
+            "status": failures[0]["status"],
         }
     ]
     assert failures[0]["checksum"]
     assert failures[0]["target"] == "logs/bad-service-log"
     assert failures[0]["error"]
-    assert any("嵌套子包解压失败" in entry["message"] for entry in logs)
+    assert any("分类解压项未成功" in entry["message"] for entry in logs)
     assert (env.task_dir(task.task_id) / ".patrolx-extracted.json").exists()

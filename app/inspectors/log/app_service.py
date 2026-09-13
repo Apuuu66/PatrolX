@@ -24,10 +24,10 @@ inspector = Inspector(
     category=RuleCategory.LOG,
     severity=Severity.HIGH,
     priority=Priority.P1,
-    rule_version="1.1.0",
+    rule_version="4.0.0",
     description="检查 AppService 的数据库连接池耗尽与 SCTP 链路错误",
     recommendation="优先检查数据库连接池配置、数据库负载和 SCTP 链路状态",
-    source_patterns=[r"^logs/.*\.(log|log\.gz)$"],
+    source_patterns=[r"^logs/.*\.log$"],
     outputs_metrics=[
         {"key": "error_count", "label": "错误条数", "unit": "条"},
         {"key": "pool_exhausted_count", "label": "连接池耗尽条数", "unit": "条"},

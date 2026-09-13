@@ -42,7 +42,7 @@ ZZapp01BCN_app_Problem_scene_333.zip
 | `KPI/` | `kpi_*.csv` | `kpi` | `kpi.threshold` |
 | `Resource/` | `pod_cpu_mem_*.txt` | `resource` | `resource.check` |
 | `Traffic/` | `call_stat_*.txt` | `traffic` | `traffic.stat` |
-| `Service Logs (Problem)/` | `ServiceLog_*.zip` | `log` | `pkg.extract.log` → `log.filter` → 日志分析规则 |
+| `Service Logs (Problem)/` | `ServiceLog_*.zip` | `log` | `pkg.extract.logs` 状态汇总 → `log.filter` → 日志分析规则 |
 
 分类依据要点：
 
@@ -52,7 +52,7 @@ ZZapp01BCN_app_Problem_scene_333.zip
 - `kpi_*.csv`：文件名含 `kpi`。
 - `pod_cpu_mem_*.txt`：文件名含 `pod` / `mem`。
 - `call_stat_*.txt`：文件名含 `call`。
-- `ServiceLog_*.zip`：文件名含 `service` / `log`，归日志子包，先登记清单，再按需懒解压。
+- `ServiceLog_*.zip`：文件名含 `service` / `log`，归日志子包，由递归解压服务展开为最终 `.log`。
 
 ## PatrolX 解压后的完整目录结构
 
@@ -60,6 +60,10 @@ ZZapp01BCN_app_Problem_scene_333.zip
 
 ```text
 output/<task_id>/
+├── .main/
+│   ├── ZZapp01BCN_app Problem scene_333.zip
+│   └── Service Logs (Problem)/
+│       └── ServiceLog_20260901011314.zip
 ├── alarm/
 │   └── ZZapp01BCN_app Problem scene_333/
 │       └── 333/
@@ -93,19 +97,18 @@ output/<task_id>/
 │               └── Traffic/
 │                   └── call_stat_202609010101137101.txt
 ├── logs/
-│   ├── ServiceLog_20260901011314.zip
 │   └── ServiceLog_20260901011314/
 │       ├── AAAService/
 │       │   └── logs/
 │       │       └── paas-192.168.2.2/
 │       │           ├── aaa_service_20260901011314.log
-│       │           └── aaa_service_history_20260901011314.log.gz
+│       │           └── aaa_service_history_20260901011314.log
 │       └── AppService/
 │           └── logs/
 │               └── paas-192.168.2.2/
 │                   ├── app_service_20260901011314.log
 │                   ├── app_service_error_20260901011314.log
-│                   └── app_service_history_20260901011314.log.gz
+│                   └── app_service_history_20260901011314.log
 ├── rules/
 ├── .patrolx-extracted.json
 ├── report.html
@@ -117,8 +120,11 @@ output/<task_id>/
 其中：
 
 - `report.html` 位于 `output/<task_id>/report.html`。
-- `.patrolx-extracted.json` 记录嵌套子包的 checksum、目标路径和是否已解压。
-- `rules/` 存放契约化规则结果；规则通过 `source_patterns` 直读任务现场文件。
+- `.main/` 保留主包解压原始现场和所有原始压缩包；普通规则不读取该目录。
+- 分类目录只保留最终解压结果；`logs/` 不保留子压缩包或已成功展开的 `.log.gz`。
+- 历史日志 `*.log.gz` 在 `logs/` 内展开为同名 `.log`。
+- `.patrolx-extracted.json` 使用 v3 结构记录主包现场、子包、`.log.gz`、失败和拒绝状态。
+- `rules/` 存放契约化规则结果；规则通过 `source_patterns` 直读任务工作现场。
 - 原始主包保留在 `uploads/<task_id>/` 下。
 
 ## 日志子包详细结构
@@ -131,13 +137,13 @@ ServiceLog_20260901011314.zip
 │   └── logs/
 │       └── paas-192.168.2.2/
 │           ├── aaa_service_20260901011314.log
-│           └── aaa_service_history_20260901011314.log.gz
+│           └── aaa_service_history_20260901011314.log
 └── AppService/
     └── logs/
         └── paas-192.168.2.2/
             ├── app_service_20260901011314.log
             ├── app_service_error_20260901011314.log
-            └── app_service_history_20260901011314.log.gz
+            └── app_service_history_20260901011314.log
 ```
 
 解析规则：
@@ -147,7 +153,7 @@ ServiceLog_20260901011314.zip
 - 服务名不限定固定枚举，应从目录结构动态识别。
 - `logs/` 之后的节点目录是节点名，例如 `paas-192.168.2.2`。
 - 同一服务的普通日志、错误日志和历史日志必须聚合到同一服务。
-- 必须递归检索 `*.log` 与 `*.log.gz`。
+- 解压服务先把 `*.log.gz` 展开为同名 `*.log`；日志规则递归检索最终 `*.log`。
 
 日志过滤规范化产物应包含：
 
@@ -155,7 +161,7 @@ ServiceLog_20260901011314.zip
 {
   "service": "AppService",
   "node": "paas-192.168.2.2",
-  "source_file": "log/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log",
+  "source_file": "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log",
   "line_no": 2,
   "timestamp": "2026-09-01T10:00:01Z",
   "level": "ERROR",
@@ -178,6 +184,6 @@ ServiceLog_20260901011314.zip
 
 1. 新增解析和规则时，优先兼容本基准结构，不假设源包目录名已经规范化。
 2. 分类规则应保持可配置；客户目录变化优先通过规则表适配。
-3. 日志规则必须识别服务与节点，并将 `.log`、`.log.gz` 聚合到同一服务。
+3. 日志规则必须识别服务与节点；解压后的 `.log.gz` 已成为同名 `.log`，规则只读取最终 `.log`。
 4. P1/P2 日志分析规则只消费 `log.filter` 产物，不重复读取原始日志。
 5. 如果出现新的真实包结构，应新增基准章节和对应测试样例，不应直接破坏本样例的兼容性。

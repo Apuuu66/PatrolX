@@ -20,9 +20,9 @@ description: "功能实现任务列表：保留主包解压现场并原地解压
 
 **目的**：建立可共享、可验证的解压状态与测试基础设施。
 
-- [ ] T001 [P] 在 `tests/test_extraction_site.py` 中创建归档工厂 helper，支持构造主包、KPI 子包、日志子包、`.log`、`.log.gz`、损坏 gzip、同名冲突、多级嵌套与超预算样例。
-- [ ] T002 在 `app/services/extraction.py` 中定义内部解压状态模型与 manifest v3 读写框架，覆盖 `main`、`subpackages`、`log_gz`、`rejected`、版本号和非 v3 manifest 的不信任重建路径。
-- [ ] T003 [P] 在 `tests/test_extraction_site.py` 中添加 manifest v3 结构、必填字段、非法路径防护与旧版本重建的单元测试。
+- [x] T001 [P] 在 `tests/test_extraction_site.py` 中创建归档工厂 helper，支持构造主包、KPI 子包、日志子包、`.log`、`.log.gz`、损坏 gzip、同名冲突、多级嵌套与超预算样例。
+- [x] T002 在 `app/services/extraction.py` 中定义内部解压状态模型与 manifest v3 读写框架，覆盖 `main`、`subpackages`、`log_gz`、`rejected`、版本号和非 v3 manifest 的不信任重建路径。
+- [x] T003 [P] 在 `tests/test_extraction_site.py` 中添加 manifest v3 结构、必填字段、非法路径防护与旧版本重建的单元测试。
 
 **检查点**：manifest 契约和测试工厂就绪，后续用户故事可以共享同一状态模型。
 
@@ -36,16 +36,16 @@ description: "功能实现任务列表：保留主包解压现场并原地解压
 
 ### 测试
 
-- [ ] T004 [P] [US1] 在 `tests/test_extraction_site.py` 中编写测试：`.main/` 保留上传包 100% 原始相对文件路径，分类工作目录生成对应最终文件，`uploads/` 原始包 checksum 不变。
-- [ ] T005 [P] [US1] 在 `tests/test_extraction_site.py` 中编写测试：普通规则文件匹配排除 `.main/`，同一内容不会同时从 `.main/` 与分类现场重复进入规则输入。
+- [x] T004 [P] [US1] 在 `tests/test_extraction_site.py` 中编写测试：`.main/` 保留上传包 100% 原始相对文件路径，分类工作目录生成对应最终文件，`uploads/` 原始包 checksum 不变。
+- [x] T005 [P] [US1] 在 `tests/test_extraction_site.py` 中编写测试：普通规则文件匹配排除 `.main/`，同一内容不会同时从 `.main/` 与分类现场重复进入规则输入。
 
 ### 实现
 
-- [ ] T006 [US1] 在 `app/services/extraction.py` 中实现主包安全解压到临时目录、checksum 校验、临时目录校验后原子替换/建立 `.main/` 的流程。
-- [ ] T007 [US1] 在 `app/services/extraction.py` 中实现“保留 `.main/`、复制到分类工作现场”的落位语义：非压缩文件复制到 `logs/`、`kpi/`、`traffic/`、`alarm/`、`config/`、`resource/`、`other/`，并保留 `.main/` 内相对目录结构。
-- [ ] T008 [US1] 重构 `app/inspectors/pkg.py` 的 `pkg.extract.main`，改为调用 `app/services/extraction.py`；主包失败仍阻断，成功时记录 manifest 的 checksum、文件数、证据路径与复用状态。
-- [ ] T009 [US1] 在 `app/services/prepare.py` 的普通规则匹配入口中显式排除 `.main/` 与 manifest 文件，防止路径模式误匹配证据现场。
-- [ ] T010 [US1] 运行 `pytest tests/test_extraction_site.py tests/test_baseline_extraction.py tests/test_baseline_pipeline.py`，确认主包现场保留且既有任务语义不回退。
+- [x] T006 [US1] 在 `app/services/extraction.py` 中实现主包安全解压到临时目录、checksum 校验、临时目录校验后原子替换/建立 `.main/` 的流程。
+- [x] T007 [US1] 在 `app/services/extraction.py` 中实现“保留 `.main/`、复制到分类工作现场”的落位语义：非压缩文件复制到 `logs/`、`kpi/`、`traffic/`、`alarm/`、`config/`、`resource/`、`other/`，并保留 `.main/` 内相对目录结构。
+- [x] T008 [US1] 重构 `app/inspectors/pkg.py` 的 `pkg.extract.main`，改为调用 `app/services/extraction.py`；主包失败仍阻断，成功时记录 manifest 的 checksum、文件数、证据路径与复用状态。
+- [x] T009 [US1] 在 `app/services/prepare.py` 的普通规则匹配入口中显式排除 `.main/` 与 manifest 文件，防止路径模式误匹配证据现场。
+- [x] T010 [US1] 运行 `pytest tests/test_extraction_site.py tests/test_baseline_extraction.py tests/test_baseline_pipeline.py`，确认主包现场保留且既有任务语义不回退。
 
 **检查点**：`.main/`、`uploads/` 和分类现场稳定保留，普通规则输入不包含证据现场。
 
@@ -59,17 +59,17 @@ description: "功能实现任务列表：保留主包解压现场并原地解压
 
 ### 测试
 
-- [ ] T011 [P] [US2] 在 `tests/test_extraction_site.py` 中编写测试：主包内日志子包展开后保留服务/节点目录层级，`app_history.log.gz` 生成同目录 `app_history.log`。
-- [ ] T012 [P] [US2] 在 `tests/test_extraction_site.py` 中编写测试：成功展开后 `logs/` 不存在 `.zip`、`.tar.gz`、`.tgz`、`.tar` 和已成功展开的 `.log.gz`，`.main/` 中对应原始文件仍存在。
-- [ ] T013 [P] [US2] 在 `tests/test_extraction_site.py` 中编写日志规则输入测试：日志规则只匹配最终 `.log`，不匹配 `.log.gz`，重复内容指标与单一文本日志一致。
+- [x] T011 [P] [US2] 在 `tests/test_extraction_site.py` 中编写测试：主包内日志子包展开后保留服务/节点目录层级，`app_history.log.gz` 生成同目录 `app_history.log`。
+- [x] T012 [P] [US2] 在 `tests/test_extraction_site.py` 中编写测试：成功展开后 `logs/` 不存在 `.zip`、`.tar.gz`、`.tgz`、`.tar` 和已成功展开的 `.log.gz`，`.main/` 中对应原始文件仍存在。
+- [x] T013 [P] [US2] 在 `tests/test_extraction_site.py` 中编写日志规则输入测试：日志规则只匹配最终 `.log`，不匹配 `.log.gz`，重复内容指标与单一文本日志一致。
 
 ### 实现
 
-- [ ] T014 [US2] 在 `app/core/archive.py` 中新增受控 gzip 流式展开能力，执行目标路径、单文件大小、任务累计字节数和输出路径校验，不引入新运行时依赖。
-- [ ] T015 [US2] 在 `app/services/extraction.py` 中实现 `.log.gz` 展开：同目录生成 `.log`，记录 `source_evidence`、`source_relative_path`、`target`、状态与错误；成功后从 `logs/` 移除 `.log.gz`。
-- [ ] T016 [US2] 将 `pkg.extract.logs` 改为调用共享展开服务，确保日志子包、普通日志文件与 `.log.gz` 在同一任务级状态机中处理。
-- [ ] T017 [US2] 检查并递增受输入语义影响的 `app/inspectors/log/*.py` 日志规则 `rule_version`；不修改业务统计口径。
-- [ ] T018 [US2] 运行 `pytest tests/test_extraction_site.py tests/test_rules.py tests/test_baseline_extraction.py`，确认日志展开、文件清理与日志规则输入符合规格。
+- [x] T014 [US2] 在 `app/core/archive.py` 中新增受控 gzip 流式展开能力，执行目标路径、单文件大小、任务累计字节数和输出路径校验，不引入新运行时依赖。
+- [x] T015 [US2] 在 `app/services/extraction.py` 中实现 `.log.gz` 展开：同目录生成 `.log`，记录 `source_evidence`、`source_relative_path`、`target`、状态与错误；成功后从 `logs/` 移除 `.log.gz`。
+- [x] T016 [US2] 将 `pkg.extract.logs` 改为调用共享展开服务，确保日志子包、普通日志文件与 `.log.gz` 在同一任务级状态机中处理。
+- [x] T017 [US2] 检查并递增受输入语义影响的 `app/inspectors/log/*.py` 日志规则 `rule_version`；不修改业务统计口径。
+- [x] T018 [US2] 运行 `pytest tests/test_extraction_site.py tests/test_rules.py tests/test_baseline_extraction.py`，确认日志展开、文件清理与日志规则输入符合规格。
 
 **检查点**：`logs/` 是干净的最终日志现场，历史日志可巡检且不会重复统计。
 
@@ -83,17 +83,17 @@ description: "功能实现任务列表：保留主包解压现场并原地解压
 
 ### 测试
 
-- [ ] T019 [P] [US3] 在 `tests/test_extraction_site.py` 中编写多级展开测试：KPI 子包内的 KPI 子包解压到 `kpi/`，KPI 子包内的日志子包解压到 `logs/`。
-- [ ] T020 [P] [US3] 在 `tests/test_extraction_site.py` 中编写分类依据测试：子包按自身文件名/内容优先分类，无法识别时继承父分类或进入可解释 `other/`，manifest 记录 `classification_reason`。
-- [ ] T021 [P] [US3] 在 `tests/test_extraction_site.py` 中编写安全预算测试：超深度、超文件数、超单文件大小或任务累计总大小的子包被拒绝并记录原因，不产生越界路径，不中断其他子包。
-- [ ] T022 [P] [US3] 在 `tests/test_extraction_site.py` 中编写 checksum 去重测试：同一子包 checksum 只展开一次，重复项记录 `duplicate`，不复制重复展开结果。
+- [x] T019 [P] [US3] 在 `tests/test_extraction_site.py` 中编写多级展开测试：KPI 子包内的 KPI 子包解压到 `kpi/`，KPI 子包内的日志子包解压到 `logs/`。
+- [x] T020 [P] [US3] 在 `tests/test_extraction_site.py` 中编写分类依据测试：子包按自身文件名/内容优先分类，无法识别时继承父分类或进入可解释 `other/`，manifest 记录 `classification_reason`。
+- [x] T021 [P] [US3] 在 `tests/test_extraction_site.py` 中编写安全预算测试：超深度、超文件数、超单文件大小或任务累计总大小的子包被拒绝并记录原因，不产生越界路径，不中断其他子包。
+- [x] T022 [P] [US3] 在 `tests/test_extraction_site.py` 中编写 checksum 去重测试：同一子包 checksum 只展开一次，重复项记录 `duplicate`，不复制重复展开结果。
 
 ### 实现
 
-- [ ] T023 [US3] 在 `app/services/extraction.py` 中实现通用递归展开队列：临时工作区解压、扫描子包、按自身特征分类、跨分类落位、成功后清理分类现场中的中间压缩包。
-- [ ] T024 [US3] 在 `app/services/extraction.py` 中加入任务级累计安全预算，聚合既有单包深度、文件数、单文件大小与总大小限制；拒绝项写入 `rejected` 或对应状态。
-- [ ] T025 [US3] 重构 `app/inspectors/pkg.py` 的全部 `pkg.extract.<category>` 隐藏规则，使其按 manifest 待处理项调用共享服务；保持隐藏规则名称、优先级和 P0 编排不变。
-- [ ] T026 [US3] 运行 `pytest tests/test_extraction_site.py tests/test_baseline_extraction.py tests/test_prepare_pipeline.py`，确认多级、跨分类、预算与去重行为符合规格。
+- [x] T023 [US3] 在 `app/services/extraction.py` 中实现通用递归展开队列：临时工作区解压、扫描子包、按自身特征分类、跨分类落位、成功后清理分类现场中的中间压缩包。
+- [x] T024 [US3] 在 `app/services/extraction.py` 中加入任务级累计安全预算，聚合既有单包深度、文件数、单文件大小与总大小限制；拒绝项写入 `rejected` 或对应状态。
+- [x] T025 [US3] 重构 `app/inspectors/pkg.py` 的全部 `pkg.extract.<category>` 隐藏规则，使其按 manifest 待处理项调用共享服务；保持隐藏规则名称、优先级和 P0 编排不变。
+- [x] T026 [US3] 运行 `pytest tests/test_extraction_site.py tests/test_baseline_extraction.py tests/test_prepare_pipeline.py`，确认多级、跨分类、预算与去重行为符合规格。
 
 **检查点**：递归展开不限于日志类别，KPI、日志和其他分类均可安全落位。
 
@@ -107,16 +107,16 @@ description: "功能实现任务列表：保留主包解压现场并原地解压
 
 ### 测试
 
-- [ ] T027 [P] [US4] 在 `tests/test_extraction_site.py` 中编写损坏 `.log.gz` 测试：不生成 `.log`、不保留失败中间文件、保留 `.log.gz` 原始证据、记录 `failed` 和原因、任务继续完成。
-- [ ] T028 [P] [US4] 在 `tests/test_extraction_site.py` 中编写同名冲突测试：已有 `.log` 不被覆盖、`.log.gz` 保留、记录 `conflict` 与原因、其他日志不受影响。
-- [ ] T029 [P] [US4] 在 `tests/test_extraction_site.py` 中编写重跑幂等测试：连续执行两次后文件集合、日志指标、成功状态一致，`.main/` 不被破坏，成功项不重复展开。
+- [x] T027 [P] [US4] 在 `tests/test_extraction_site.py` 中编写损坏 `.log.gz` 测试：不生成 `.log`、不保留失败中间文件、保留 `.log.gz` 原始证据、记录 `failed` 和原因、任务继续完成。
+- [x] T028 [P] [US4] 在 `tests/test_extraction_site.py` 中编写同名冲突测试：已有 `.log` 不被覆盖、`.log.gz` 保留、记录 `conflict` 与原因、其他日志不受影响。
+- [x] T029 [P] [US4] 在 `tests/test_extraction_site.py` 中编写重跑幂等测试：连续执行两次后文件集合、日志指标、成功状态一致，`.main/` 不被破坏，成功项不重复展开。
 
 ### 实现
 
-- [ ] T030 [US4] 在 `app/services/extraction.py` 中实现子包/gzip 单项异常隔离：临时工作区失败清理中间结果，原始证据保留，结构化日志记录任务、规则、来源、目标、状态与错误。
-- [ ] T031 [US4] 在 `app/services/extraction.py` 中实现幂等恢复逻辑：按 manifest 与文件 checksum 判断可复用现场；不覆盖既有结果；旧 manifest 或 checksum 变化时安全重建分类现场且只整体替换 `.main/`。
-- [ ] T032 [US4] 在 `app/inspectors/pkg.py` 中保持隐藏规则结果对失败/冲突可见，使用 `warn` 汇总失败数和失败明细，不将其显示为普通业务规则。
-- [ ] T033 [US4] 运行 `pytest tests/test_extraction_site.py tests/test_baseline_rerun.py tests/test_prepare_pipeline.py`，确认失败隔离和重跑幂等符合规格。
+- [x] T030 [US4] 在 `app/services/extraction.py` 中实现子包/gzip 单项异常隔离：临时工作区失败清理中间结果，原始证据保留，结构化日志记录任务、规则、来源、目标、状态与错误。
+- [x] T031 [US4] 在 `app/services/extraction.py` 中实现幂等恢复逻辑：按 manifest 与文件 checksum 判断可复用现场；不覆盖既有结果；旧 manifest 或 checksum 变化时安全重建分类现场且只整体替换 `.main/`。
+- [x] T032 [US4] 在 `app/inspectors/pkg.py` 中保持隐藏规则结果对失败/冲突可见，使用 `warn` 汇总失败数和失败明细，不将其显示为普通业务规则。
+- [x] T033 [US4] 运行 `pytest tests/test_extraction_site.py tests/test_baseline_rerun.py tests/test_prepare_pipeline.py`，确认失败隔离和重跑幂等符合规格。
 
 **检查点**：局部失败可追溯、不扩散；重跑不会重复统计或破坏现场。
 
@@ -126,9 +126,9 @@ description: "功能实现任务列表：保留主包解压现场并原地解压
 
 **目的**：完成文档一致性、契约确认和全流程验证。
 
-- [ ] T034 [P] 更新 `docs/architecture.md` 与 `docs/example/real-package-structure.md`，描述 `.main/` 证据现场、分类副本、递归子包、`.log.gz` 展开和 manifest v3。
-- [ ] T035 [P] 核对 `specs/005-main-log-gz-extract/contracts/extract-manifest.md` 与实现行为一致；不修改 `docs/api/openapi.yaml`，并运行 `make contract` 确认 HTTP 契约无意外差异。
-- [ ] T036 运行 `make lint`、`make test`、`make verify`，使用 `specs/005-main-log-gz-extract/quickstart.md` 场景验证真实样例、嵌套 KPI/日志、失败隔离与重跑幂等。
+- [x] T034 [P] 更新 `docs/architecture.md` 与 `docs/example/real-package-structure.md`，描述 `.main/` 证据现场、分类副本、递归子包、`.log.gz` 展开和 manifest v3。
+- [x] T035 [P] 核对 `specs/005-main-log-gz-extract/contracts/extract-manifest.md` 与实现行为一致；不修改 `docs/api/openapi.yaml`，并运行 `make contract` 确认 HTTP 契约无意外差异。
+- [x] T036 运行 `make lint`、`make test`、`make verify`，使用 `specs/005-main-log-gz-extract/quickstart.md` 场景验证真实样例、嵌套 KPI/日志、失败隔离与重跑幂等。
 
 ---
 

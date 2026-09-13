@@ -1,8 +1,10 @@
 """安全解压：路径穿越、符号链接与解压炸弹防护。"""
 
+import gzip
 import tarfile
 import zipfile
 import zlib
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -129,6 +131,32 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
     except (tarfile.TarError, OSError) as exc:
         raise ArchiveError(f"压缩包读取失败: {archive.name}") from exc
     return count
+
+
+def unpack_gzip(
+    archive: Path,
+    target: Path,
+    limit: UnpackLimit | None = None,
+    charge: Callable[[int], None] | None = None,
+) -> int:
+    """受控流式展开单个 gzip 文件，返回输出字节数。"""
+    limit = limit or UnpackLimit()
+    target = _safe_target(target.parent, target.name)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    total = 0
+    try:
+        with gzip.open(archive, "rb") as src, target.open("xb") as dst:
+            while chunk := src.read(1024 * 1024):
+                total += len(chunk)
+                if charge is not None:
+                    charge(len(chunk))
+                if total > limit.max_single_file:
+                    raise ArchiveError(f"解压单文件超限: {archive.name}")
+                dst.write(chunk)
+    except (OSError, EOFError, zlib.error) as exc:
+        target.unlink(missing_ok=True)
+        raise ArchiveError(f"gzip 解压失败: {archive.name}") from exc
+    return total
 
 
 def is_archive(path: Path) -> bool:

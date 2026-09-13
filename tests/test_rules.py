@@ -110,19 +110,17 @@ def test_alarm_stat_csv_created_and_cleared_time(tmp_path: Path) -> None:
     assert result.metadata["severity_distribution"] == {"CRITICAL": 1, "HIGH": 1}
 
 
-def test_log_filter_reads_plain_and_gzip_logs(tmp_path: Path) -> None:
+def test_log_filter_only_reads_final_plain_logs(tmp_path: Path) -> None:
     plain = "2026-09-01T10:00:00Z ERROR app db down\n"
-    ctx = _ctx(
-        tmp_path,
-        {
-            "logs/paas-192.168.2.2/app.log": plain,
-            "logs/paas-192.168.2.2/app_history.log.gz": plain,
-        },
-    )
+    ctx = _ctx(tmp_path, {"logs/paas-192.168.2.2/app.log": plain})
+    gz_path = ctx.data_dir / "logs/paas-192.168.2.2/app_history.log.gz"
+    gz_path.write_bytes(gzip.compress(plain.encode("utf-8")))
+
     result = _run_rule("log.filter", ctx)
+
     assert result.status == RuleStatus.PASS
-    assert result.metadata["files"] == 2
-    assert result.metrics[1].value == 2
+    assert result.metadata["files"] == 1
+    assert result.metrics[1].value == 1
 
 
 def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) -> None:
@@ -136,7 +134,7 @@ def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) 
         tmp_path,
         {
             "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz": aaa,
+            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
         },
     )
 
@@ -145,7 +143,7 @@ def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) 
     assert result.status == RuleStatus.PASS
     assert result.metadata["service_count"] == 2
     assert result.metadata["processed_files"] == [
-        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz",
+        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log",
         "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log",
     ]
     assert result.metadata["levels"] == {"ERROR": 2, "STACK": 1}
