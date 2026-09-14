@@ -11,6 +11,9 @@ uploads/*
 output/*
 !uploads/.gitkeep
 !output/.gitkeep
+# 轻量合成测试包：允许随仓库分发
+!uploads/CCC_DDD_sample_*.zip
+!uploads/ZZapp01BCN_app_Problem_scene_*.zip
 
 # 前端
 web/node_modules/

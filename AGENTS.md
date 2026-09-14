@@ -244,6 +244,8 @@ specify → review → plan → review → tasks → review → implement
 
 ### 实现与 Worktree
 
-tasks review 通过后创建实现分支，默认在主工作区检出并实现。只有用户要求隔离/并行，或延续已约定的 worktree 任务时使用 worktree；使用回合先执行 `git worktree list`。已有对应分支的 worktree 必须复用；已有实现分支但没有对应 worktree 时，将该分支检出到 worktree；没有实现分支时，从包含 Speckit 产物的基线分支创建实现分支和 worktree。不为了创建 worktree 切换主工作区分支。
+Speckit 实现禁止默认在主工作区进行。tasks review 通过后必须创建遵循分支命名的实现分支，先提交全部 Speckit 产物（`spec.md`、`plan.md`、`tasks.md` 及检查清单），再创建或复用对应 worktree；实现、测试、调试和提交都必须在该 worktree 内完成。使用回合必须先执行 `git worktree list`。
 
-目录固定为 `<repo-root>/.worktrees/<分支名，/ 替换为 ->`，必须保留在 `.gitignore` 中；同一分支最多一个 worktree。使用 worktree 时，实现、测试和提交都在该 worktree 内执行。回合结束报告路径、分支、变更和验证结果；合入并确认后清理。
+已有对应分支的 worktree 必须复用；已有实现分支但没有对应 worktree 时，将该分支检出到 worktree；没有实现分支时，从包含 Speckit 产物的基线分支创建实现分支和 worktree。禁止将未跟踪的 Speckit 产物复制到 worktree。
+
+目录固定为 `<repo-root>/.worktrees/<分支名，/ 替换为 ->`，必须保留在 `.gitignore` 中；同一分支最多一个 worktree。回合结束报告路径、分支、变更和验证结果；合入并确认后清理。
