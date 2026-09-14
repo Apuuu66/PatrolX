@@ -1,13 +1,14 @@
 """任务服务：output/ 为唯一数据源，SQLite 只保存在线任务元数据。"""
 
 import json
+import os
 import queue
 import shutil
 import threading
 import time
 from datetime import UTC, datetime
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from app.cli import generate_task_id, run_single_rule, run_task
 from app.core.checksum import sha256_file
@@ -23,12 +24,32 @@ logger = get_logger("patrolx.tasks")
 NOW = datetime.now
 
 
+def _extended_windows_path(directory: Path) -> str:
+    """返回 Windows 扩展长度路径；删除长路径时绕过 MAX_PATH。"""
+    raw = os.fspath(directory)
+    extended_prefix = "\\\\?\\"
+    unc_prefix = "\\\\?\\UNC\\"
+    if os.name != "nt" or raw.startswith(extended_prefix):
+        return raw
+    pure = PureWindowsPath(raw)
+    if not pure.is_absolute():
+        return raw
+    if pure.drive.startswith("\\"):
+        return unc_prefix + str(pure)[2:]
+    return extended_prefix + str(pure)
+
+
+def _path_exists(directory: Path) -> bool:
+    """按扩展长度路径判断存在性，避免长路径 exists 误报。"""
+    return os.path.lexists(_extended_windows_path(directory))
+
+
 def _remove_tree(directory: Path) -> None:
     """删除目录树；Windows 145 做短暂重试以吸收文件系统瞬时状态。"""
     last_error: OSError | None = None
     for attempt in range(4):
         try:
-            shutil.rmtree(directory)
+            shutil.rmtree(_extended_windows_path(directory))
             return
         except OSError as exc:
             if getattr(exc, "winerror", None) != 145:
@@ -313,11 +334,11 @@ class TaskService:
                     session.commit()
                     found = True
             for directory in (settings.output / task_id, settings.uploads / task_id):
-                if not directory.exists():
+                if not _path_exists(directory):
                     continue
                 found = True
                 _remove_tree(directory)
-                if directory.exists():
+                if _path_exists(directory):
                     raise OSError(f"任务目录删除失败: {directory}")
             if not found:
                 with self._state_lock:
