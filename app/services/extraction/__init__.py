@@ -8,10 +8,12 @@ from app.services.extraction.manifest import (
     manifest_path,
     read_manifest,
     reusable_manifest,
+    sync_policy_counters,
+    validate_manifest,
     write_manifest,
 )
 from app.services.extraction.nested import _extract_log_gzip, _extract_subpackage, _ingest_file
-from app.services.extraction.site import category_failures, extract_main_site
+from app.services.extraction.site import category_failures, extract_main_site, policy_skipped_summary
 
 __all__ = [
     "CATEGORY_DIRECTORIES",
@@ -24,10 +26,20 @@ __all__ = [
     "_extract_log_gzip",
     "_extract_subpackage",
     "_ingest_file",
+    "ExtractPolicyConfig",
+    "ExtractPolicyError",
+    "PolicyDecision",
     "category_failures",
     "extract_main_site",
+    "evaluate_extract_policy",
+    "load_extract_policy",
     "manifest_path",
+    "policy_fingerprint",
+    "policy_manifest_snapshot",
+    "policy_skipped_summary",
     "read_manifest",
     "reusable_manifest",
+    "sync_policy_counters",
+    "validate_manifest",
     "write_manifest",
 ]

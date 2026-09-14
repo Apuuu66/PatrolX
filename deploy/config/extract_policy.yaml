@@ -1,0 +1,8 @@
+version: 1
+nested:
+  skip_all: false
+  skip_paths: []
+whitelist:
+  paths: []
+  name_keywords:
+    - alarm

@@ -13,6 +13,7 @@ from app.services.extraction.manifest import (
     write_manifest,
 )
 from app.services.extraction.nested import _ingest_file
+from app.services.extraction.policy import ExtractPolicyConfig, load_extract_policy, policy_manifest_snapshot
 
 
 def extract_main_site(
@@ -20,6 +21,7 @@ def extract_main_site(
     data_dir: Path,
     checksum: str,
     log: ExtractionLogger | None = None,
+    policy_path: Path | None = None,
 ) -> dict:
     """保留主包证据现场并生成分类工作现场。"""
     existing = reusable_manifest(data_dir, checksum)
@@ -36,6 +38,7 @@ def extract_main_site(
             main["reused"] = True
         return existing
 
+    policy: ExtractPolicyConfig = load_extract_policy(policy_path)
     staging = data_dir / ".main.staging"
     shutil.rmtree(staging, ignore_errors=True)
     _log_extract(
@@ -93,6 +96,7 @@ def extract_main_site(
         "subpackages": [],
         "log_gz": [],
         "rejected": [],
+        "policy": policy_manifest_snapshot(policy),
     }
     budget = ExtractionBudget()
     seen_checksums: set[str] = set()
@@ -111,6 +115,7 @@ def extract_main_site(
             seen_checksums,
             1,
             log,
+            policy,
         )
     write_manifest(data_dir, manifest)
     _log_extract(
@@ -155,3 +160,30 @@ def category_failures(manifest: dict, category: str) -> list[dict]:
                     }
                 )
     return failures
+
+
+def policy_skipped_summary(manifest: dict, category: str) -> list[dict]:
+    """返回指定分类策略成功保留的压缩项摘要，仅供执行器组织可读提示。"""
+    summary: list[dict] = []
+    for key, source_key, name_source in (
+        ("subpackages", "source", "source"),
+        ("log_gz", "source_relative_path", "source_relative_path"),
+    ):
+        for item in manifest.get(key, []):
+            if item.get("category") != category:
+                continue
+            if item.get("status") != "skipped":
+                continue
+            decision = item.get("policy") or {}
+            source = item.get(source_key)
+            summary.append(
+                {
+                    "name": Path(str(name_source and item.get(name_source) or item.get("target", ""))).name,
+                    "source": source,
+                    "target": item.get("target"),
+                    "reason": decision.get("reason"),
+                    "scope": decision.get("scope"),
+                    "keyword": decision.get("keyword"),
+                }
+            )
+    return summary

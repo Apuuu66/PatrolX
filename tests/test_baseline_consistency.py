@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.extraction import read_manifest
 from tests.baseline_helpers import (
     SAMPLE,
     load_logs,
@@ -71,6 +72,12 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
     assert len(local_stripped["rules"]) == len(online_stripped["rules"])
     assert local_env.task_dir(task_id).is_dir()
     assert online_env.task_dir(task_id).is_dir()
+
+    local_manifest = read_manifest(local_env.task_dir(task_id))
+    online_manifest = read_manifest(online_env.task_dir(task_id))
+    assert local_manifest["policy"] == online_manifest["policy"]
+    assert local_manifest["subpackages"] == online_manifest["subpackages"]
+    assert local_manifest["log_gz"] == online_manifest["log_gz"]
 
 
 def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> None:

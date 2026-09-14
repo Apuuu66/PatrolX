@@ -305,3 +305,40 @@ def test_single_rule_rerun_hashes_package_once_per_context(tmp_path: Path, monke
     executor.run_rule_with_deps("rule.second", ctx)
 
     assert checksum_calls == [package]
+
+
+def test_no_match_skip_reason_reports_policy_skipped_items(tmp_path: Path) -> None:
+    """同分类存在策略保留项时，无匹配规则补充可读原因。"""
+    import json
+
+    manifest = {
+        "version": 3,
+        "main": {"checksum": "a", "count": 1, "evidence_path": ".main", "reused": False},
+        "subpackages": [
+            {
+                "source": ".main/0/a.zip",
+                "parent": None,
+                "category": "other",
+                "classification_reason": "policy:name",
+                "depth": 1,
+                "checksum": "a",
+                "target": "other/0/a.zip",
+                "status": "skipped",
+                "error": None,
+                "policy": {"action": "skip", "reason": "skip_path", "scope": "0/", "keyword": None},
+            }
+        ],
+        "log_gz": [],
+        "rejected": [],
+    }
+    (tmp_path / ".patrolx-extracted.json").write_text(json.dumps(manifest), encoding="utf-8")
+    registry = RuleRegistry()
+
+    def inspect(_ctx: RuleContext) -> object:
+        raise AssertionError("无匹配不应执行规则")
+
+    _rule(registry, "rule.none", inspect, source_patterns=[r"other/.*\.log"])
+    result = Executor(registry).run_all(_context(tmp_path))["rule.none"]
+
+    assert result.status == RuleStatus.SKIP
+    assert "项目级解压策略保留了压缩项: a.zip" in (result.skip_reason or "")
