@@ -267,7 +267,7 @@ docs/example/real-package-structure.md
 | 优先级 | 职责 | 示例 |
 | --- | --- | --- |
 | P0 | 数据准备、解析、过滤、标准化 | `pkg.extract.*`、`log.filter` |
-| P1 | 单维度阈值、统计、完整性检查 | `log.error_density`、`kpi.threshold` |
+| P1 | 单维度阈值、统计、完整性检查 | `log.error_density`、`kpi.api` |
 | P2 | 跨维度关联、趋势、根因分析 | `traffic.compare`、`resource.trend` |
 
 规则执行按优先级升序分组；组内按规则编码排序。
@@ -481,3 +481,23 @@ make gen-web-api
 - 契约测试：Pydantic/OpenAPI 一致性。
 - 双模式测试：CLI 与 API 结果一致性，除 id/时间戳外逐字段比对。
 - 前端构建：`make web-build` 或等效命令。
+
+### 7.8 KPI CSV 巡检
+
+KPI CSV 采用两行表头：第 1 行是测量集，第 2 行是
+`测量周期,开始时间,结束时间,指标...`，第 3 行起是周期数据。
+
+由三条普通规则分别处理，互不依赖：
+
+| 规则 | source pattern |
+| --- | --- |
+| `kpi.api` | `^kpi/(?:.*/)?kpi-api-(?:5\|15\|30\|60)\.csv$` |
+| `kpi.media` | `^kpi/(?:.*/)?kpi-media-(?:5\|15\|30\|60)\.csv$` |
+| `kpi.call` | `^kpi/(?:.*/)?kpi-call-(?:5\|15\|30\|60)\.csv$` |
+
+- 规则不使用私有 prepare，直接读取自己的 `source_patterns` 匹配文件。
+- 呼叫阈值、指标别名和解析预算配置在 `deploy/config/kpi_rules.yaml`。
+- `统计峰值`、`最大并发` 等容量指标只展示和追溯，不参与成功/失败率判断。
+- 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
+- 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。
+- 旧的通用 `kpi.threshold` 规则已下线，不再注册。

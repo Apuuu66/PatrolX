@@ -79,5 +79,5 @@ def test_inspectors_metadata() -> None:
     resp = client.get("/api/v2/inspectors")
     assert resp.status_code == 200
     codes = {item["code"] for item in resp.json()}
-    assert {"kpi.threshold", "alarm.stat", "resource.check"} <= codes
+    assert {"kpi.api", "alarm.stat", "resource.check"} <= codes
     assert all(item["description"] and item["recommendation"] for item in resp.json())

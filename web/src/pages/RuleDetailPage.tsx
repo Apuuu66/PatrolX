@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { App, Breadcrumb, Button, Card, Descriptions, Empty, List, Spin, Space, Tag, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult } from "../api/http";
+import { KpiDetailTable } from "../components/KpiDetailTable";
 import { MetricPanel } from "../components/MetricPanel";
 import { RuleStatusTag, SeverityTag } from "../components/StatusBadge";
 
@@ -86,6 +87,12 @@ export function RuleDetailPage() {
       <Card title="指标" style={{ marginBottom: 16 }}>
         <MetricPanel metrics={result.metrics ?? []} />
       </Card>
+
+      {Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "kpi_files") && (
+        <Card title="KPI 明细" style={{ marginBottom: 16 }}>
+          <KpiDetailTable metadata={result.metadata} />
+        </Card>
+      )}
 
       <Card title={`发现（${(result.findings ?? []).length}）`}>
         {(result.findings ?? []).length === 0 ? (

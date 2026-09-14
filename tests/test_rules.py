@@ -40,16 +40,19 @@ def _run_rule(code: str, ctx: RuleContext):
     return rule.run(ctx)
 
 
-def test_kpi_threshold_warn(tmp_path: Path) -> None:
-    ctx = _ctx(tmp_path, {"kpi/kpi.csv": "metric,value\ncall_success_rate,99.2\nattach_success_rate,96.5\n"})
-    result = _run_rule("kpi.threshold", ctx)
-    assert result.status == RuleStatus.WARN
-    assert result.findings and "attach_success_rate" in result.findings[0].finding_id
+def test_kpi_api_pass(tmp_path: Path) -> None:
+    content = (
+        "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,2026-09-01 10:00:00,2026-09-01 10:15:00,5000,4800\n"
+    )
+    ctx = _ctx(tmp_path, {"kpi/kpi-api-15.csv": content})
+    result = _run_rule("kpi.api", ctx)
+    assert result.status == RuleStatus.PASS
+    assert result.metrics[0].value == 1  # file_count
 
 
-def test_kpi_threshold_skip(tmp_path: Path) -> None:
+def test_kpi_api_skip(tmp_path: Path) -> None:
     ctx = _ctx(tmp_path, {})
-    result = _run_rule("kpi.threshold", ctx)
+    result = _run_rule("kpi.api", ctx)
     assert result.status == RuleStatus.SKIP
     assert result.skip_reason
 
@@ -367,3 +370,120 @@ def test_aaa_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
 
     assert result.status == RuleStatus.SKIP
     assert result.skip_reason == "未发现 AAAService 日志"
+
+
+def test_ccc_service_rule_passes_when_all_ten_nodes_start(tmp_path: Path) -> None:
+    files: dict[str, str] = {
+        "logs/ServiceLog_20260901011314/AppService/logs/paas-other/app_service.log": (
+            "2026-09-01T10:00:00Z ERROR app unrelated error\n"
+        )
+    }
+    for index in range(10):
+        node = f"paas-192.168.2.{index}"
+        files[f"logs/ServiceLog_20260901011314/CCC/logs/{node}/ccc_service.log"] = (
+            f"2026-09-01T10:00:{index:02d}Z INFO  CCC node {node} start success\n"
+        )
+    ctx = _ctx(tmp_path, files)
+
+    result = _run_rule("log.ccc_service", ctx)
+
+    assert result.status == RuleStatus.PASS
+    assert result.summary == "CCC 所有节点启动正常"
+    assert [(metric.key, metric.value) for metric in result.metrics] == [
+        ("node_count", 10),
+        ("startup_success_node_count", 10),
+        ("startup_failure_node_count", 0),
+    ]
+    assert result.findings == []
+    assert result.metadata["processed_files"] == [
+        f"logs/ServiceLog_20260901011314/CCC/logs/paas-192.168.2.{index}/ccc_service.log" for index in range(10)
+    ]
+
+
+def test_ccc_service_rule_fails_when_any_node_has_no_start_success(tmp_path: Path) -> None:
+    files: dict[str, str] = {}
+    for index in range(10):
+        node = f"paas-192.168.2.{index}"
+        message = (
+            f"2026-09-01T10:00:{index:02d}Z INFO  CCC node {node} start success"
+            if index != 7
+            else f"2026-09-01T10:00:{index:02d}Z ERROR CCC node {node} start failed"
+        )
+        files[f"logs/ServiceLog_20260901011314/CCC/logs/{node}/ccc_service.log"] = message + "\n"
+    ctx = _ctx(tmp_path, files)
+
+    result = _run_rule("log.ccc_service", ctx)
+
+    assert result.status == RuleStatus.FAIL
+    assert result.summary == "CCC 存在节点启动异常"
+    assert [(metric.key, metric.value) for metric in result.metrics] == [
+        ("node_count", 10),
+        ("startup_success_node_count", 9),
+        ("startup_failure_node_count", 1),
+    ]
+    assert [finding.details for finding in result.findings] == ["节点 paas-192.168.2.7 未出现 start success"]
+    assert result.findings[0].evidence == "CCC node paas-192.168.2.7 start failed"
+
+
+def test_ddd_service_rule_fails_on_ping_failures(tmp_path: Path) -> None:
+    files: dict[str, str] = {}
+    failed_nodes = {3, 7}
+    for index in range(10):
+        node = f"paas-192.168.2.{index}"
+        message = (
+            f"2026-09-01T10:00:{index:02d}Z ERROR DDD node {node} ping failed"
+            if index in failed_nodes
+            else f"2026-09-01T10:00:{index:02d}Z INFO  DDD node {node} ping success"
+        )
+        files[f"logs/ServiceLog_20260901011314/DDD/logs/{node}/ddd_service.log"] = message + "\n"
+    ctx = _ctx(tmp_path, files)
+
+    result = _run_rule("log.ddd_service", ctx)
+
+    assert result.status == RuleStatus.FAIL
+    assert result.summary == "DDD 存在 ping 失败"
+    assert [(metric.key, metric.value) for metric in result.metrics] == [
+        ("ping_failure_count", 2),
+        ("affected_node_count", 2),
+    ]
+    assert [finding.details for finding in result.findings] == [
+        "节点 paas-192.168.2.3 命中 1 条 ping 失败日志",
+        "节点 paas-192.168.2.7 命中 1 条 ping 失败日志",
+    ]
+
+
+def test_ddd_service_rule_passes_without_ping_failure(tmp_path: Path) -> None:
+    files: dict[str, str] = {}
+    for index in range(10):
+        node = f"paas-192.168.2.{index}"
+        files[f"logs/ServiceLog_20260901011314/DDD/logs/{node}/ddd_service.log"] = (
+            f"2026-09-01T10:00:{index:02d}Z INFO  DDD node {node} ping success\n"
+        )
+    ctx = _ctx(tmp_path, files)
+
+    result = _run_rule("log.ddd_service", ctx)
+
+    assert result.status == RuleStatus.PASS
+    assert result.summary == "DDD 未发现 ping 失败"
+    assert [(metric.key, metric.value) for metric in result.metrics] == [
+        ("ping_failure_count", 0),
+        ("affected_node_count", 0),
+    ]
+    assert result.findings == []
+
+
+def test_ccc_and_ddd_service_rules_skip_when_service_missing(tmp_path: Path) -> None:
+    files = {
+        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": (
+            "2026-09-01T10:00:00Z INFO  AAAService start success\n"
+        )
+    }
+    ctx = _ctx(tmp_path, files)
+
+    ccc = _run_rule("log.ccc_service", ctx)
+    ddd = _run_rule("log.ddd_service", ctx)
+
+    assert ccc.status == RuleStatus.SKIP
+    assert ccc.skip_reason == "未发现 CCC 日志"
+    assert ddd.status == RuleStatus.SKIP
+    assert ddd.skip_reason == "未发现 DDD 日志"

@@ -34,7 +34,10 @@ def test_review_endpoints_follow_contract(tmp_path: Path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     package = env.uploads / "partial.zip"
     with zipfile.ZipFile(package, "w") as archive:
-        archive.writestr("KPI/kpi.csv", "metric,value\ncall_success_rate,90\nattach_success_rate,96.5\n")
+        archive.writestr(
+            "KPI/kpi-api-15.csv",
+            "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,bad-time,2026-09-01 10:15:00,100,90\n",
+        )
     task_id = upload_package(
         env,
         client,

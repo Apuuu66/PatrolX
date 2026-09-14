@@ -410,16 +410,12 @@ def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch)
 
     task = run_task(SAMPLE, task_id="task-sample")
     task_dir = env.task_dir(task.task_id)
-    kpi_prepared = task_dir / "prepared" / "kpi.threshold" / "kpi_values.json"
     log_prepared = task_dir / "prepared" / "log.app_service" / "app_service_records.jsonl"
-    assert kpi_prepared.is_file()
     assert log_prepared.is_file()
-    assert (task_dir / "prepared" / "kpi.threshold" / ".prepare.sha256").is_file()
     assert (task_dir / "prepared" / "log.app_service" / ".prepare.sha256").is_file()
     assert not (task_dir / "prepared" / "log.app_service" / "kpi_values.json").exists()
-    assert not (task_dir / "prepared" / "kpi.threshold" / "app_service_records.jsonl").exists()
     assert {result["code"] for result in load_task(env, task.task_id)["system"]["rules"]} >= {
-        "kpi.threshold",
+        "kpi.api",
         "log.app_service",
     }
 

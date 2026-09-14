@@ -1,0 +1,46 @@
+version: 1
+input_timezone: "Asia/Shanghai"
+
+aliases:
+  call:
+    "呼叫请求": "call_attempts"
+    "请求成功": "call_success_count"
+    "请求失败": "call_failure_count"
+    "呼叫成功率": "call_success_rate"
+    "呼叫失败率": "call_failure_rate"
+
+capacity_metrics:
+  call:
+    "统计峰值":
+      metric: "stat_peak"
+      semantics: "peak"
+      status: "confirmed"
+    "最大并发":
+      metric: "max_concurrency"
+      semantics: "concurrency"
+      status: "confirmed"
+
+limits:
+  call:
+    call_success_rate:
+      label: "呼叫成功率"
+      direction: "min"
+      unit: "%"
+      default: 99.0
+      periods:
+        "5": 99.0
+        "15": 99.0
+        "30": 99.0
+        "60": 99.0
+    call_failure_rate:
+      label: "呼叫失败率"
+      direction: "max"
+      unit: "%"
+      default: 1.0
+
+budgets:
+  max_file_bytes: 67108864
+  max_rows_per_file: 100000
+  max_columns_per_file: 256
+  max_files_per_domain: 1000
+  max_records_per_domain: 200000
