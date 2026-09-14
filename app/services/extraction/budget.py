@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Protocol
 
-from app.core.archive import ArchiveError
+from app.core.archive import ArchiveError, format_bytes
 
 
 class ExtractionLogger(Protocol):
@@ -41,10 +41,16 @@ class ExtractionBudget:
         size = path.stat().st_size
         self.bytes += size
         if self.bytes > self.max_total_bytes:
-            raise ArchiveError("任务累计解压总量超限")
+            raise ArchiveError(
+                f"任务累计解压总量超限：单任务累计解压上限 {format_bytes(self.max_total_bytes)}，"
+                "请减少包内容或拆分数据包"
+            )
         return size
 
     def charge_gzip_chunk(self, size: int) -> None:
         self.bytes += size
         if self.bytes > self.max_total_bytes:
-            raise ArchiveError("任务累计解压总量超限")
+            raise ArchiveError(
+                f"任务累计解压总量超限：单任务累计解压上限 {format_bytes(self.max_total_bytes)}，"
+                "请减少包内容或拆分数据包"
+            )

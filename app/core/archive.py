@@ -22,9 +22,28 @@ class UnpackLimit:
     expansion_ratio: float = 20.0
 
 
+def format_bytes(size: int) -> str:
+    """将字节数格式化为用户可读的容量。"""
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} TB"
+
+
 def _expansion_budget(archive: Path, limit: UnpackLimit) -> int:
     """允许写入的最大总字节数：压缩包大小 × 膨胀系数。"""
     return int(archive.stat().st_size * limit.expansion_ratio)
+
+
+def _total_budget_error(archive: Path, limit: UnpackLimit, max_total: int) -> ArchiveError:
+    """生成包含预算、原因和处理建议的总量超限错误。"""
+    archive_size = format_bytes(archive.stat().st_size)
+    return ArchiveError(
+        f"解压总量超限：压缩包 {archive_size} × {limit.expansion_ratio:g}，"
+        f"允许解压总量 {format_bytes(max_total)}；请减少包内容或拆分数据包"
+    )
 
 
 def _safe_target(root: Path, member_path: str) -> Path:
@@ -101,7 +120,7 @@ def unpack_zip(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
                         if written > limit.max_single_file:
                             raise ArchiveError(f"解压单文件超限: {member.filename}")
                         if total_written > max_total:
-                            raise ArchiveError("解压总量超限")
+                            raise _total_budget_error(archive, limit, max_total)
                         dst.write(chunk)
                 count += 1
     except (zipfile.BadZipFile, zlib.error, OSError) as exc:
@@ -154,7 +173,7 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
                         if written > limit.max_single_file:
                             raise ArchiveError(f"解压单文件超限: {member.name}")
                         if total_written > max_total:
-                            raise ArchiveError("解压总量超限")
+                            raise _total_budget_error(archive, limit, max_total)
                         dst.write(chunk)
                 count += 1
     except (tarfile.TarError, OSError) as exc:

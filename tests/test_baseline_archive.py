@@ -69,8 +69,12 @@ def test_total_budget(tmp_path: Path, writer) -> None:
     value.max_files = 100
     value.max_single_file = 100_000
     value.expansion_ratio = 0.5
-    with pytest.raises(ArchiveError, match="总量超限"):
+    with pytest.raises(ArchiveError, match="总量超限") as excinfo:
         writer(archive, tmp_path / "out", value)
+
+    assert "允许解压总量" in str(excinfo.value)
+    assert "压缩包" in str(excinfo.value)
+    assert "请减少包内容或拆分数据包" in str(excinfo.value)
 
 
 @pytest.mark.parametrize("writer", [unpack_zip, unpack_tar])

@@ -348,13 +348,13 @@ def test_gzip_budget_failure_is_isolated_and_recorded(tmp_path, monkeypatch) -> 
     package = _budget_package(env)
     data_dir = env.task_dir("task-gzip-budget")
     data_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(extraction.ExtractionBudget, "max_total_bytes", 0)
+    monkeypatch.setattr(extraction.ExtractionBudget, "max_total_bytes", 1)
 
     manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
 
     assert len(manifest["log_gz"]) == 1
     assert manifest["log_gz"][0]["status"] == "failed"
-    assert manifest["log_gz"][0]["error"] == "任务累计解压总量超限"
-    assert any(item["reason"] == "任务累计解压总量超限" for item in manifest["rejected"])
+    assert manifest["log_gz"][0]["error"] == "任务累计解压总量超限：单任务累计解压上限 1.0 B，请减少包内容或拆分数据包"
+    assert any(item["reason"].startswith("任务累计解压总量超限") for item in manifest["rejected"])
     assert not (data_dir / "logs/node/app.log").exists()
     assert manifest["main"]["count"] == 3
