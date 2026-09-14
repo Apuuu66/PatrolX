@@ -70,3 +70,66 @@ def test_task_json_write_is_atomic_for_readers(tmp_path: Path) -> None:
     save_task_meta(tmp_path, task)
     assert json.loads(path.read_text(encoding="utf-8"))["task_id"] == task.task_id
     assert not any(item.name.startswith(".task.json.") for item in task_dir.iterdir())
+
+
+def test_init_db_rebuilds_legacy_database_without_system_id(tmp_path: Path, monkeypatch) -> None:
+    """旧版 SQLite 重建后不得保留 system_id，且任务元数据不丢失。"""
+    import sqlite3
+
+    from app.core.config import settings
+    from app.models.db import init_db
+
+    db_path = tmp_path / "legacy-patrolx.db"
+    monkeypatch.setattr(settings, "sqlite_path", db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE tasks (
+                task_id VARCHAR(64) PRIMARY KEY,
+                name VARCHAR(256) NOT NULL,
+                mode VARCHAR(16) NOT NULL,
+                status VARCHAR(16) NOT NULL,
+                trigger VARCHAR(16) NOT NULL,
+                system_id VARCHAR(128) NOT NULL,
+                package_file VARCHAR(512) NOT NULL,
+                customer JSON NOT NULL,
+                version VARCHAR(64),
+                stats JSON NOT NULL,
+                created_at DATETIME NOT NULL,
+                completed_at DATETIME
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO tasks (
+                task_id, name, mode, status, trigger, system_id, package_file,
+                customer, version, stats, created_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "task-legacy",
+                "旧版任务",
+                "online",
+                "completed",
+                "api",
+                "legacy-system",
+                "sample.zip",
+                "{}",
+                None,
+                "{}",
+                "2026-01-01 00:00:00.000000+00:00",
+                "2026-01-01 00:01:00.000000+00:00",
+            ),
+        )
+
+    init_db()
+
+    with sqlite3.connect(db_path) as connection:
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(tasks)")]
+        row = connection.execute(
+            "SELECT task_id, name, customer, stats FROM tasks WHERE task_id = 'task-legacy'"
+        ).fetchone()
+
+    assert "system_id" not in columns
+    assert row == ("task-legacy", "旧版任务", "{}", "{}")

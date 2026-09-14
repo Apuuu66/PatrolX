@@ -180,12 +180,12 @@ M5 主要能力已部分落地：
 
 目标：
 
-- 按 `system_id` 聚合历史任务。
+- 按任务元数据聚合历史任务。
 - 支持不同时间、版本下的 KPI、资源、告警和话统趋势。
 
 设计支撑：
 
-- `system_id` 跨任务稳定。
+- 任务元数据键跨任务稳定。
 - `metrics[].value` 数值化。
 - `metrics[].series[]` 支持趋势。
 - `SystemInspection.version` 承载版本。

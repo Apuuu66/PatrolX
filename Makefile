@@ -17,7 +17,7 @@ verify:
 	$(PYTHON) main.py
 
 verify-one:
-	$(PYTHON) -m app.cli run-one --rule $(RULE) $(if $(SYSTEM),--system-id $(SYSTEM),)
+	$(PYTHON) -m app.cli run-one --rule $(RULE)
 
 contract:
 	$(PYTHON) -m app.contract.export

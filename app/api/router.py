@@ -4,7 +4,7 @@ import hashlib
 import json
 import shutil
 import tempfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import yaml
 from fastapi import APIRouter, File, Form, UploadFile
@@ -81,7 +81,7 @@ async def create_task_v2(
     operator: str | None = Form(None),
     product: str | None = Form(None),
 ) -> TaskCreated:
-    filename = (package_file.filename or "package.zip").rsplit("/", 1)[-1]
+    filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
     if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
         raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
 

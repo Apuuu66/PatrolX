@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, String, create_engine
+from sqlalchemy import JSON, DateTime, Engine, String, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.core.config import settings
@@ -34,6 +34,27 @@ def session_factory() -> Session:
     return Session(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def _rebuild_legacy_tasks(engine: Engine) -> None:
+    """重建包含 system_id 的旧版任务表，并保留仍有效的元数据列。"""
+    legacy_columns = {column["name"] for column in inspect(engine).get_columns("tasks")}
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE tasks RENAME TO tasks_legacy"))
+
+    Base.metadata.create_all(engine)
+
+    columns = sorted(set(TaskRecord.__table__.columns.keys()) & legacy_columns)
+    with engine.begin() as connection:
+        if columns:
+            names = ", ".join(columns)
+            connection.execute(text(f"INSERT INTO tasks ({names}) SELECT {names} FROM tasks_legacy"))
+        connection.execute(text("DROP TABLE tasks_legacy"))
+
+
 def init_db() -> None:
     engine = create_engine(f"sqlite:///{settings.sqlite_path}", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(engine)
+    if inspect(engine).has_table("tasks") and "system_id" in {
+        column["name"] for column in inspect(engine).get_columns("tasks")
+    }:
+        _rebuild_legacy_tasks(engine)
+    else:
+        Base.metadata.create_all(engine)
