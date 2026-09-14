@@ -4,6 +4,7 @@ import json
 import queue
 import shutil
 import threading
+import time
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -20,6 +21,22 @@ from app.services.store import append_log, load_task_meta
 
 logger = get_logger("patrolx.tasks")
 NOW = datetime.now
+
+
+def _remove_tree(directory: Path) -> None:
+    """删除目录树；Windows 145 做短暂重试以吸收文件系统瞬时状态。"""
+    last_error: OSError | None = None
+    for attempt in range(4):
+        try:
+            shutil.rmtree(directory)
+            return
+        except OSError as exc:
+            if getattr(exc, "winerror", None) != 145:
+                raise
+            last_error = exc
+            time.sleep(0.05 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
 
 
 class DeleteResult(StrEnum):
@@ -299,7 +316,7 @@ class TaskService:
                 if not directory.exists():
                     continue
                 found = True
-                shutil.rmtree(directory)
+                _remove_tree(directory)
                 if directory.exists():
                     raise OSError(f"任务目录删除失败: {directory}")
             if not found:
