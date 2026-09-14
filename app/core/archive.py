@@ -1,11 +1,12 @@
 """安全解压：路径穿越、符号链接与解压炸弹防护。"""
 
 import gzip
+import stat
 import tarfile
 import zipfile
 import zlib
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 class ArchiveError(Exception):
@@ -27,6 +28,8 @@ def _expansion_budget(archive: Path, limit: UnpackLimit) -> int:
 
 
 def _safe_target(root: Path, member_path: str) -> Path:
+    if PureWindowsPath(member_path).is_absolute() or PurePosixPath(member_path).is_absolute():
+        raise ArchiveError(f"路径穿越被拒绝: {member_path}")
     target = (root / member_path).resolve()
     if not target.is_relative_to(root.resolve()):
         raise ArchiveError(f"路径穿越被拒绝: {member_path}")
@@ -39,13 +42,27 @@ def _is_link(name: str) -> bool:
 
 def _path_depth(member_path: str) -> int:
     """返回归一化前的成员路径深度，用于一致限制 zip/tar 嵌套层级。"""
-    return len([part for part in Path(member_path).parts if part not in {"", "."}])
+    return len([part for part in PureWindowsPath(member_path.replace("\\", "/")).parts if part not in {"", "."}])
+
+
+def _member_key(member_path: str) -> str:
+    """归一化 zip/tar 常见的 POSIX 与 Windows 分隔符，用于重复路径检测。"""
+    return PureWindowsPath(member_path.replace("\\", "/")).as_posix()
+
+
+def _ensure_target_paths(target: Path, member_path: str) -> None:
+    """拒绝压缩包内部同名与文件/目录位置冲突。"""
+    if target.exists():
+        raise ArchiveError(f"重复路径被拒绝: {member_path}")
+    if target.parent.exists() and not target.parent.is_dir():
+        raise ArchiveError(f"路径冲突被拒绝: {member_path}")
 
 
 def _validate_zip(member: zipfile.ZipInfo, limit: UnpackLimit) -> None:
     if member.is_dir():
         return
-    if _is_link(member.filename):
+    unix_mode = (member.external_attr >> 16) & 0xFFFF
+    if stat.S_ISLNK(unix_mode) or _is_link(member.filename):
         raise ArchiveError(f"链接文件被拒绝: {member.filename}")
     if member.file_size > limit.max_single_file:
         raise ArchiveError(f"单文件超限: {member.filename}")
@@ -63,12 +80,18 @@ def unpack_zip(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
             members = [m for m in zf.infolist() if not m.is_dir()]
             if len(members) > limit.max_files:
                 raise ArchiveError(f"文件数超限: {len(members)}")
+            member_names: set[str] = set()
             for member in members:
+                key = _member_key(member.filename)
+                if key in member_names:
+                    raise ArchiveError(f"重复路径被拒绝: {member.filename}")
+                member_names.add(key)
                 _validate_zip(member, limit)
                 depth = _path_depth(member.filename)
                 if depth > limit.max_depth:
                     raise ArchiveError(f"嵌套深度超限: {member.filename}")
                 target = _safe_target(root, member.filename)
+                _ensure_target_paths(target, member.filename)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with zf.open(member) as src, target.open("wb") as dst:
                     written = 0
@@ -107,12 +130,18 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
             members = [m for m in tf.getmembers() if not m.isdir()]
             if len(members) > limit.max_files:
                 raise ArchiveError(f"文件数超限: {len(members)}")
+            member_names: set[str] = set()
             for member in members:
+                key = _member_key(member.name)
+                if key in member_names:
+                    raise ArchiveError(f"重复路径被拒绝: {member.name}")
+                member_names.add(key)
                 _validate_tar(member, limit)
                 depth = _path_depth(member.name)
                 if depth > limit.max_depth:
                     raise ArchiveError(f"嵌套深度超限: {member.name}")
                 target = _safe_target(root, member.name)
+                _ensure_target_paths(target, member.name)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 src = tf.extractfile(member)
                 if src is None:

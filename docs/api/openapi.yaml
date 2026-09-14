@@ -49,7 +49,7 @@ paths:
                 package_file:
                   type: string
                   format: binary
-                  description: 数据压缩包（zip/tar.gz，默认上限 2GB）
+                  description: 数据压缩包（zip/tar.gz，非空，默认上限 2GB）
                 name:
                   type: string
                   description: 任务名称（可选）
@@ -316,6 +316,7 @@ components:
       schema:
         type: integer
         default: 20
+        minimum: 1
         maximum: 100
   responses:
     Error400:
@@ -1318,10 +1319,12 @@ components:
           - not_found
           - internal
           - package_checksum_conflict
+          - invalid_filename
+          - corrupt_data
           description: 错误码（新增时同步契约与实现）
         message:
           type: string
         detail:
           type: object
           additionalProperties: true
-      description: 错误码（/api/v2 新增 package_checksum_conflict）
+      description: 错误码（/api/v2 含包上传与损坏数据错误）

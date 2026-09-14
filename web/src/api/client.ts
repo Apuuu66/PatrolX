@@ -630,13 +630,13 @@ export interface components {
             code: string;
             name: string;
         };
-        /** @description 错误码（/api/v2 新增 package_checksum_conflict） */
+        /** @description 错误码（/api/v2 含包上传与损坏数据错误） */
         ErrorV2: {
             /**
              * @description 错误码（新增时同步契约与实现）
              * @enum {string}
              */
-            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "package_checksum_conflict";
+            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "package_checksum_conflict" | "invalid_filename" | "corrupt_data";
             message: string;
             detail?: {
                 [key: string]: unknown;
@@ -762,7 +762,7 @@ export interface operations {
                 "multipart/form-data": {
                     /**
                      * Format: binary
-                     * @description 数据压缩包（zip/tar.gz，默认上限 2GB）
+                     * @description 数据压缩包（zip/tar.gz，非空，默认上限 2GB）
                      */
                     package_file: string;
                     /** @description 任务名称（可选） */
