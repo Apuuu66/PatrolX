@@ -16,7 +16,7 @@ from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
 from app.models.db import TaskRecord, init_db, session_factory
 from app.models.schemas import InspectionTask, TaskCreated, TaskMode, TaskStatus, TaskSummary, TaskTrigger
-from app.services import store
+from app.services import preparation, store
 from app.services.store import append_log, load_task_meta
 
 logger = get_logger("patrolx.tasks")
@@ -219,7 +219,7 @@ class TaskService:
         """读取任务：优先 output/（唯一数据源），SQLite 兜底查状态。"""
         task = load_task_meta(settings.output, task_id)
         if task is not None:
-            return task
+            return task.model_copy(update={"preparation": preparation.load_preparation(settings.output / task_id)})
         with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record is None:
@@ -259,6 +259,7 @@ class TaskService:
                         created_at=task.created_at,
                         completed_at=task.completed_at,
                         stats=task.stats,
+                        preparation=preparation.load_preparation(task_file.parent),
                         system=None,
                         customer_province=customer.get("province"),
                         customer_operator=customer.get("operator"),

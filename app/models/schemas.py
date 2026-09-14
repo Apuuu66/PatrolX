@@ -61,6 +61,22 @@ class TaskTrigger(StrEnum):
     RERUN = "rerun"
 
 
+class PreparationStatus(StrEnum):
+    PASS = "pass"
+    WARN = "warn"
+    FAIL = "fail"
+    SKIP = "skip"
+    ERROR = "error"
+
+
+class PreparationIssueType(StrEnum):
+    CONFLICT = "conflict"
+    DUPLICATE = "duplicate"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+    REJECTED = "rejected"
+
+
 class Summary(BaseModel):
     total: int = Field(ge=0)
     pass_: int = Field(ge=0, alias="pass")
@@ -139,6 +155,37 @@ class SystemInspection(BaseModel):
     customer: dict[str, str] = Field(default_factory=dict)
 
 
+class PreparationIssue(BaseModel):
+    type: PreparationIssueType
+    source: str | None = None
+    target: str | None = None
+    reason: str
+    path_length: int | None = Field(default=None, ge=0)
+    path_limit: int | None = Field(default=None, ge=0)
+
+
+class PreparationItem(BaseModel):
+    code: str
+    name: str
+    category: str
+    status: PreparationStatus
+    summary: str
+    duration_ms: int | None = Field(default=None, ge=0)
+    extracted_count: int = Field(ge=0)
+    total_count: int = Field(ge=0)
+    issues: list[PreparationIssue] = Field(default_factory=list)
+
+
+class DataPreparation(BaseModel):
+    status: PreparationStatus
+    items: list[PreparationItem] = Field(min_length=1)
+    total: int = Field(ge=0)
+    success_count: int = Field(ge=0)
+    warning_count: int = Field(ge=0)
+    failure_count: int = Field(ge=0)
+    skip_count: int = Field(ge=0)
+
+
 class InspectionTask(BaseModel):
     task_id: str
     name: str
@@ -148,6 +195,7 @@ class InspectionTask(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
     stats: TaskStats
+    preparation: DataPreparation | None = None
     system: SystemInspection | None = None
 
     @model_validator(mode="after")

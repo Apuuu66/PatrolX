@@ -8,6 +8,7 @@ export type RuleResult = components["schemas"]["RuleResultV2"];
 export type RuleStatus = components["schemas"]["RuleStatusV2"];
 export type Severity = components["schemas"]["SeverityV2"];
 export type InspectorInfo = components["schemas"]["InspectorInfoV2"];
+export type DataPreparation = components["schemas"]["DataPreparationV2"];
 export type DictsResponse = components["schemas"]["DictsResponseV2"];
 export type OverviewSummary = components["schemas"]["OverviewSummaryV2"];
 export type DictItem = components["schemas"]["DictItemV2"];

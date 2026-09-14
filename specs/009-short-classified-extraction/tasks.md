@@ -99,18 +99,18 @@ description: "009 分类短路径解压、长路径防护与准备/删除状态�
 
 ### 用户故事 3 的契约与测试
 
-- [ ] T022 [US3] 按 `specs/009-short-classified-extraction/contracts/api.md` 更新 `docs/api/openapi.yaml`：新增 `PreparationStatusV2`、`PreparationIssueTypeV2`、`PreparationIssueV2`、`PreparationItemV2`、`DataPreparationV2`，并为 `InspectionTaskV2` 增加可选可空 `preparation`。
-- [ ] T023 [US3] 执行 `python build.py contract` 和 `python build.py gen-web-api`，同步 `tests/test_contract.py`、`tests/test_schemas.py` 和 `web/src/api/client.ts`。
-- [ ] T024 [US3] 在 `tests/test_api.py` 添加失败测试：`GET /api/v2/tasks` 和 `GET /api/v2/tasks/{task_id}` 返回 `preparation`；历史任务或无 manifest 任务可返回 `null`；`stats` 不变化。
+- [x] T022 [US3] 按 `specs/009-short-classified-extraction/contracts/api.md` 更新 `docs/api/openapi.yaml`：新增 `PreparationStatusV2`、`PreparationIssueTypeV2`、`PreparationIssueV2`、`PreparationItemV2`、`DataPreparationV2`，并为 `InspectionTaskV2` 增加可选可空 `preparation`。
+- [x] T023 [US3] 执行 `python build.py contract` 和 `python build.py gen-web-api`，同步 `tests/test_contract.py`、`tests/test_schemas.py` 和 `web/src/api/client.ts`。
+- [x] T024 [US3] 在 `tests/test_api.py` 添加失败测试：`GET /api/v2/tasks` 和 `GET /api/v2/tasks/{task_id}` 返回 `preparation`；历史任务或无 manifest 任务可返回 `null`；`stats` 不变化。
 
 ### 用户故事 3 的实现
 
-- [ ] T025 [US3] 在 `app/models/schemas.py` 新增数据准备契约模型，字段与 `docs/api/openapi.yaml` 严格一致；状态枚举为 `pass/warn/fail/skip/error`，问题类型为 `conflict/duplicate/skipped/failed/rejected`。
-- [ ] T026 [US3] 新建 `app/services/preparation.py`：读取 manifest v4 和 `rules/pkg.extract.*.json`，组装主包与七类分类准备项、耗时、数量和 issues；无来源分类返回 `skip`，冲突返回 `warn`，失败返回 `fail`，主包失败或 manifest 损坏返回 `error`。
-- [ ] T027 [US3] 修改 `app/services/tasks.py` 与 `app/api/router.py`：任务列表和详情响应挂载 `preparation`；读取失败返回 `null` 或结构化原因，不得改变任务统计和普通规则列表。
-- [ ] T028 [US3] 修改 `web/src/pages/TaskListPage.tsx`：在对应任务卡片内新增数据准备折叠区；默认摘要展示成功/警告/失败/跳过数量和分类 chips；点击标题或箭头在卡片内展开明细，不使用 Modal、Drawer 或独立页面。
-- [ ] T029 [US3] 修改 `web/src/pages/TaskListPage.tsx`：失败、冲突或长路径准备项默认展开，展示来源、目标、原因、`path_length` 和 `path_limit`；普通规则统计继续排除 hidden 准备项。
-- [ ] T030 [US3] 更新 `tests/test_api.py` 与 `web` 构建验证，运行 `python build.py contract`、`python build.py gen-web-api` 和 `python build.py test` 确认通过。
+- [x] T025 [US3] 在 `app/models/schemas.py` 新增数据准备契约模型，字段与 `docs/api/openapi.yaml` 严格一致；状态枚举为 `pass/warn/fail/skip/error`，问题类型为 `conflict/duplicate/skipped/failed/rejected`。
+- [x] T026 [US3] 新建 `app/services/preparation.py`：读取 manifest v4 和 `rules/pkg.extract.*.json`，组装主包与七类分类准备项、耗时、数量和 issues；无来源分类返回 `skip`，冲突返回 `warn`，失败返回 `fail`，主包失败或 manifest 损坏返回 `error`。
+- [x] T027 [US3] 修改 `app/services/tasks.py` 与 `app/api/router.py`：任务列表和详情响应挂载 `preparation`；读取失败返回 `null` 或结构化原因，不得改变任务统计和普通规则列表。
+- [x] T028 [US3] 修改 `web/src/pages/TaskListPage.tsx`：在对应任务卡片内新增数据准备折叠区；默认摘要展示成功/警告/失败/跳过数量和分类 chips；点击标题或箭头在卡片内展开明细，不使用 Modal、Drawer 或独立页面。
+- [x] T029 [US3] 修改 `web/src/pages/TaskListPage.tsx`：失败、冲突或长路径准备项默认展开，展示来源、目标、原因、`path_length` 和 `path_limit`；普通规则统计继续排除 hidden 准备项。
+- [x] T030 [US3] 更新 `tests/test_api.py` 与 `web` 构建验证，运行 `python build.py contract`、`python build.py gen-web-api` 和 `python build.py test` 确认通过。
 
 **检查点**：任务列表无需进入详情页即可识别准备失败；成功任务不放大噪音；契约、生成客户端和后端模型一致。
 

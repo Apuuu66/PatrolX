@@ -526,6 +526,41 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @enum {string} */
+        PreparationStatusV2: "pass" | "warn" | "fail" | "skip" | "error";
+        /** @enum {string} */
+        PreparationIssueTypeV2: "conflict" | "duplicate" | "skipped" | "failed" | "rejected";
+        PreparationIssueV2: {
+            type: components["schemas"]["PreparationIssueTypeV2"];
+            source?: string | null;
+            target?: string | null;
+            reason: string;
+            path_length?: number | null;
+            path_limit?: number | null;
+        };
+        PreparationItemV2: {
+            /** @example pkg.extract.kpi */
+            code: string;
+            /** @example KPI 分类解压 */
+            name: string;
+            /** @example kpi */
+            category: string;
+            status: components["schemas"]["PreparationStatusV2"];
+            summary: string;
+            duration_ms?: number | null;
+            extracted_count: number;
+            total_count: number;
+            issues: components["schemas"]["PreparationIssueV2"][];
+        };
+        DataPreparationV2: {
+            status: components["schemas"]["PreparationStatusV2"];
+            items: components["schemas"]["PreparationItemV2"][];
+            total: number;
+            success_count: number;
+            warning_count: number;
+            failure_count: number;
+            skip_count: number;
+        };
         InspectionTaskV2: {
             task_id: string;
             name: string;
@@ -537,6 +572,7 @@ export interface components {
             /** Format: date-time */
             completed_at?: string;
             stats: components["schemas"]["TaskStatsV2"];
+            preparation?: components["schemas"]["DataPreparationV2"] | null;
             system?: components["schemas"]["SystemInspectionV2"];
         };
         TaskCreatedV2: {

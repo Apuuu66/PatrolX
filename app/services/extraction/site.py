@@ -156,6 +156,22 @@ def category_failures(manifest: dict, category: str) -> list[dict]:
     """读取指定分类的子包和日志 gzip 异常明细，保留状态与路径限制上下文。"""
     failures: list[dict] = []
     statuses = {"conflict", "duplicate", "failed", "rejected"}
+    for item in manifest.get("files", []):
+        if item.get("category") != category or item.get("status") not in statuses:
+            continue
+        source = item.get("source")
+        failures.append(
+            {
+                "name": Path(str(source or "")).name,
+                "source": source,
+                "target": item.get("target"),
+                "error": item.get("error"),
+                "error_code": item.get("error_code"),
+                "status": item.get("status"),
+                "path_length": item.get("path_length"),
+                "path_limit": item.get("path_limit"),
+            }
+        )
     for item in manifest.get("subpackages", []):
         if item.get("category") != category or item.get("status") not in statuses:
             continue

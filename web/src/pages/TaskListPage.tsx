@@ -16,6 +16,8 @@ import {
   Upload,
 } from "antd";
 import {
+  CaretDownOutlined,
+  CaretRightOutlined,
   DeleteOutlined,
   PlusOutlined,
   RedoOutlined,
@@ -25,6 +27,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ApiError,
   api,
+  type DataPreparation,
   type DictsResponse,
   type OverviewSummary,
   type TaskStatus,
@@ -48,6 +51,107 @@ const OVERVIEW_ITEMS = [
   { key: "finding_count", label: "发现问题" },
 ] as const;
 
+
+const PREPARATION_EXCEPTION_STATUS = new Set(["warn", "fail", "error"]);
+
+const PREPARATION_LABELS: Record<string, string> = {
+  main: "主包",
+  logs: "日志",
+  kpi: "KPI",
+  traffic: "流量",
+  alarm: "告警",
+  config: "配置",
+  resource: "资源",
+  other: "其他",
+};
+
+const PREPARATION_STATUS_COLORS: Record<string, string> = {
+  pass: "#52c41a",
+  warn: "#faad14",
+  fail: "#ff4d4f",
+  skip: "#1677ff",
+  error: "#8c8c8c",
+};
+
+function PreparationPanel({
+  preparation,
+  taskId,
+  expanded,
+  onToggle,
+}: {
+  preparation: DataPreparation;
+  taskId: string;
+  expanded: boolean;
+  onToggle: (taskId: string) => void;
+}) {
+  const abnormalItems = preparation.items.filter((item) => PREPARATION_EXCEPTION_STATUS.has(item.status));
+  return (
+    <div style={{ marginTop: 12, borderTop: "1px solid #f0f0f0", paddingTop: 10 }}>
+      <Button type="text" size="small" onClick={() => onToggle(taskId)}>
+        <Flex align="center" gap={8}>
+          <Typography.Text strong>数据准备</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            成功 {preparation.success_count} · 警告 {preparation.warning_count} · 失败 {preparation.failure_count} · 跳过 {preparation.skip_count}
+          </Typography.Text>
+          <Typography.Text style={{ color: PREPARATION_STATUS_COLORS[preparation.status] }}>
+            {expanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+          </Typography.Text>
+        </Flex>
+      </Button>
+      {expanded && (
+        <div style={{ marginTop: 8 }}>
+          <Flex gap={6} wrap="wrap">
+            {preparation.items.map((item) => (
+              <Typography.Text
+                key={item.code}
+                code
+                style={{ fontSize: 12, color: PREPARATION_STATUS_COLORS[item.status] }}
+              >
+                {PREPARATION_LABELS[item.category] ?? item.category}
+                {item.total_count > 0 ? ` ${item.extracted_count}/${item.total_count}` : ""}
+              </Typography.Text>
+            ))}
+          </Flex>
+          <Flex vertical gap={8} style={{ marginTop: 10 }}>
+            {abnormalItems.map((item) => (
+              <div key={item.code} style={{ padding: 10, borderRadius: 8, background: "#fafafa" }}>
+                <Flex align="center" gap={8} wrap="wrap">
+                  <Typography.Text strong style={{ fontSize: 13 }}>
+                    {item.name}
+                  </Typography.Text>
+                  <Typography.Text style={{ fontSize: 12, color: PREPARATION_STATUS_COLORS[item.status] }}>
+                    {item.status.toUpperCase()}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {item.summary}
+                  </Typography.Text>
+                </Flex>
+                {item.issues.map((issue, index) => (
+                  <div key={`${issue.type}-${index}`} style={{ marginTop: 5 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {issue.type} · {issue.reason}
+                    </Typography.Text>
+                    <Typography.Paragraph style={{ margin: 0, fontSize: 12 }} code ellipsis>
+                      {issue.source || "-"} → {issue.target || "-"}
+                      {issue.path_length ? ` · 长度 ${issue.path_length}` : ""}
+                      {issue.path_limit ? ` · 上限 ${issue.path_limit}` : ""}
+                    </Typography.Paragraph>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {abnormalItems.length === 0 && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                各分类准备正常或暂无来源数据
+              </Typography.Text>
+            )}
+          </Flex>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TaskListPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
@@ -63,6 +167,7 @@ export function TaskListPage() {
   const [overview, setOverview] = useState<OverviewSummary | null>(null);
   const [form] = Form.useForm();
   const [file, setFile] = useState<File | null>(null);
+  const [preparationExpanded, setPreparationExpanded] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +195,13 @@ export function TaskListPage() {
   }, []);
 
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
+  const preparationOpen = (taskId: string, preparation: DataPreparation | null | undefined) =>
+    preparationExpanded[taskId] ?? Boolean(preparation && PREPARATION_EXCEPTION_STATUS.has(preparation.status));
+  const togglePreparation = (taskId: string) =>
+    setPreparationExpanded((current) => ({
+      ...current,
+      [taskId]: !preparationOpen(taskId, items.find((item) => item.task_id === taskId)?.preparation),
+    }));
   usePolling(load, 2000, busy);
 
   const submitUpload = async () => {
@@ -208,16 +320,16 @@ export function TaskListPage() {
             <Card
               key={record.task_id}
               hoverable
-              styles={{
-                body: {
-                  padding: 16,
+              styles={{ body: { padding: 16 } }}
+            >
+              <div
+                style={{
                   display: "grid",
                   gridTemplateColumns: "minmax(220px, 1.2fr) minmax(300px, 1fr) auto",
                   gap: 18,
                   alignItems: "center",
-                },
-              }}
-            >
+                }}
+              >
               <div>
                 <Typography.Link strong onClick={() => navigate(`/tasks/${record.task_id}`)}>
                   {record.name}
@@ -290,6 +402,16 @@ export function TaskListPage() {
                   </Popconfirm>
                 </Space>
               </Flex>
+              </div>
+
+              {record.preparation && (
+                <PreparationPanel
+                  preparation={record.preparation}
+                  taskId={record.task_id}
+                  expanded={preparationOpen(record.task_id, record.preparation)}
+                  onToggle={togglePreparation}
+                />
+              )}
             </Card>
           ))}
 
