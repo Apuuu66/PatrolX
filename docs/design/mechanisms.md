@@ -254,7 +254,43 @@ node    = paas-192.168.2.2
 | `log.aaa_service` | 有命中 | 任一模式 `>= 3` |
 | `log.app_service` | 有命中 | 连接池 `>= 2` 或 SCTP `>= 3` |
 
-## 10. 后续迁移建议
+## 10. 规则注册与展示一致性机制
+
+### 目标设计
+
+注册表是规则元数据的唯一来源；API 和前端展示不应手写规则列表，必须全部从注册表读取，保证"注册了什么就展示什么"。
+
+### 当前实现
+
+注册和展示的完整链路：
+
+```text
+app/inspectors/**  各模块文件末尾调用 registry.register(inspector)
+        │
+        ▼
+RuleRegistry       启动时 load_all() 自动扫描 app/inspectors/** 装载全部规则
+        │
+        ▼
+GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元数据
+        │
+        ▼
+前端 InspectorsPage       调用 api.listInspectors() 展示规则管理列表
+前端 TaskDetailPage       用 hidden 字段过滤任务结果中隐藏规则的展示
+```
+
+关键约束：
+
+- 注册表自动扫描 `app/inspectors/` 下所有 Python 模块；每个模块在文件末尾通过 `registry.register()` 注册。
+- 普通规则与隐藏规则（`pkg.extract.*` 解压族）统一注册；隐藏规则通过 `hidden=True` 区分。
+- `GET /api/v2/inspectors` 默认 `include_hidden=False`，只返回普通规则；传 `?include_hidden=true` 可返回全部。
+- 前端规则管理页（`InspectorsPage.tsx`）和任务详情页（`TaskDetailPage.tsx`）都通过 API 获取规则列表，不硬编码规则编码。
+- 任务详情页使用 `hidden` 字段构建隐藏集合，从任务结果中过滤隐藏规则后再展示。
+
+### 差异
+
+当前无已知差异。新增规则时只需在 `app/inspectors/` 下创建模块并调用 `registry.register()`，API 和前端展示自动生效，无需修改展示层代码。
+
+## 11. 后续迁移建议
 
 为了收敛机制，建议后续按以下方向处理：
 
