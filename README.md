@@ -12,7 +12,10 @@ PatrolX 是一个面向系统维护场景的**离线巡检系统**：不连接�
 # 首次安装：创建 .venv 并按 requirements-lock.txt 精确安装依赖
 python build.py install
 
-# 离线调试：把收集包放入 uploads/ 根目录后执行
+# 本地调试：把收集包放入 local_run/ 根目录后执行
+python main.py
+
+# 全流程验证：把收集包放入 uploads/ 根目录后执行
 python build.py verify
 
 # 在线预览：启动后端 API 和前端页面，按 Ctrl+C 停止

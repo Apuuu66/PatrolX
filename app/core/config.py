@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     base_dir: Path = Path(__file__).resolve().parents[2]
     uploads_dir: Path = Path("uploads")
+    local_run_dir: Path = Path("local_run")
     output_dir: Path = Path("output")
     config_dir: Path = Path("deploy/config")
 
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     @property
     def uploads(self) -> Path:
         return self.resolved(self.uploads_dir)
+
+    @property
+    def local_run(self) -> Path:
+        return self.resolved(self.local_run_dir)
 
     @property
     def output(self) -> Path:

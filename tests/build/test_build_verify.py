@@ -17,7 +17,7 @@ def test_verify_runs_main_with_venv_python(tmp_path: Path) -> None:
     runner = FakeRunner()
     context = make_context(tmp_path, runner)
     assert build.cmd_verify(context) == 0
-    assert runner.commands() == [[str(build.venv_python(tmp_path)), "main.py"]]
+    assert runner.commands() == [[str(build.venv_python(tmp_path)), "-m", "app.cli", "run"]]
 
 
 def test_verify_missing_venv_has_install_hint(tmp_path: Path) -> None:

@@ -1,6 +1,6 @@
 """PatrolX 统一入口。
 
-- 直接执行 `python main.py`：本地离线全流程（M1 落地）。
+- 直接执行 `python main.py`：运行 `local_run/` 目录下全部本地调试数据包。
 - 作为模块导入（`uvicorn app.main:app`）：FastAPI 在线服务。
 """
 
@@ -69,10 +69,10 @@ app = create_app()
 
 
 def main() -> int:
-    """本地离线全流程入口（M1 实现：扫描 uploads/ → 解压 → 运行全部规则 → 契约数据与报告）。"""
-    from app.cli import main as cli_main
+    """本地调试入口：扫描 local_run/ 并逐个执行全部数据包。"""
+    from app.local_run import run_local_packages
 
-    return cli_main()
+    return run_local_packages()
 
 
 if __name__ == "__main__":

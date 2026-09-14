@@ -23,7 +23,7 @@ def test_backend_command_mapping(tmp_path: Path) -> None:
     assert build.cmd_test(context) == 0
     assert build.cmd_lint(context) == 0
     assert runner.commands() == [
-        [python, "main.py"],
+        [python, "-m", "app.cli", "run"],
         [python, "-m", "app.cli", "run-one", "--rule", "R1"],
         [python, "-m", "app.contract.export"],
         [python, "-m", "pytest"],

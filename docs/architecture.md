@@ -69,18 +69,26 @@ core/         配置、注册表、安全解压、分类等基础能力
 
 ### 3.1 本地模式
 
-本地模式面向规则开发和快速自验，无数据库依赖。
+本地模式面向规则开发和快速自验，无数据库依赖。入口隔离细节见 [`docs/design/entrypoints.md`](design/entrypoints.md)。
 
 常用入口：
 
 ```bash
-python build.py verify                     # 全流程
+python main.py                             # 本地调试：执行 local_run/ 下全部压缩包
+python build.py verify                     # 全流程：执行 uploads/ 下全部压缩包
 python build.py verify-one --rule <code>   # 单规则重跑
 python build.py test
 python build.py lint
 ```
 
-默认行为：
+`python main.py` 是本地调试专用入口：
+
+- 只扫描 `local_run/` 根目录。
+- 执行其中全部压缩包，不做最新包选择。
+- 不使用 `uploads/`，也不需要命令行参数。
+- 每个包仍然生成独立的 `output/<task_id>/`。
+
+`python build.py verify` 的默认行为：
 
 - 扫描 `uploads/` 根目录下的压缩包。
 - 多个包顺序分析，每个包一个任务。
@@ -152,6 +160,9 @@ python run_online.py
 ## 5. 运行时目录
 
 ```text
+local_run/
+└── <本地调试压缩包>
+
 uploads/
 └── <task_id>/
     └── <原始压缩包>
@@ -184,6 +195,7 @@ output/
 
 | 目录 | 职责 |
 | --- | --- |
+| `local_run/` | 本地调试输入目录，直接执行 `python main.py` 时扫描 |
 | `uploads/` | 原始包输入现场，长期保留，不修改 |
 | `output/` | 处理现场，包含解压数据、结果、日志、报告 |
 | `data/` | 系统元数据库等非任务输出数据 |
