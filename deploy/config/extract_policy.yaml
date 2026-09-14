@@ -1,7 +1,8 @@
 version: 1
 nested:
   skip_all: false
-  skip_paths: []
+  skip_paths:
+    - "0"
 whitelist:
   paths: []
   name_keywords:

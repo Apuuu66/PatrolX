@@ -204,8 +204,11 @@ def evaluate_extract_policy(
     if policy.skip_all:
         return PolicyDecision("skip", "global_retain")
     for scope in policy.skip_paths:
-        if normalized.startswith(scope):
-            return PolicyDecision("skip", "skip_path", scope=scope)
+        scope_segments = scope.rstrip("/").split("/")
+        path_segments = normalized.split("/")
+        for i in range(len(path_segments) - len(scope_segments) + 1):
+            if path_segments[i : i + len(scope_segments)] == scope_segments:
+                return PolicyDecision("skip", "skip_path", scope=scope)
     return None
 
 

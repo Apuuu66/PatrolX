@@ -67,7 +67,7 @@ def test_invalid_config_does_not_fall_back(tmp_path: Path, data: dict) -> None:
 def test_delivered_initial_policy_only_contains_alarm_keyword() -> None:
     policy = load_extract_policy()
     assert policy.skip_all is False
-    assert policy.skip_paths == ()
+    assert policy.skip_paths == ("0/",)
     assert policy.whitelist_paths == ()
     assert policy.whitelist_keywords == ("alarm",)
 
