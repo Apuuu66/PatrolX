@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据准备状态 Demo</title>
+  <style>
+    :root {
+      --green: #52c41a;
+      --yellow: #faad14;
+      --red: #ff4d4f;
+      --blue: #1677ff;
+      --gray: #6b7280;
+      --border: #e5e7eb;
+      --bg: #f5f6f8;
+      --text: #111827;
+      --muted: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    }
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 650;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .metric {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      background: #fafafa;
+    }
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .metric-value {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+      font-weight: 650;
+      margin-top: 6px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 7px;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 22px;
+      white-space: nowrap;
+    }
+    .pass { background: var(--green); }
+    .warn { background: var(--yellow); }
+    .fail { background: var(--red); }
+    .skip { background: var(--blue); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border-top: 1px solid var(--border);
+      padding: 12px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      border-top: 0;
+      white-space: nowrap;
+    }
+    td.code, .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .name {
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+    .summary {
+      max-width: 520px;
+    }
+    .reason {
+      border-left: 3px solid var(--yellow);
+      background: #fffbeb;
+      color: #713f12;
+      padding: 8px 10px;
+      margin-top: 8px;
+      border-radius: 0 4px 4px 0;
+      font-size: 12px;
+    }
+    .reason.error {
+      border-left-color: var(--red);
+      background: #fff1f0;
+      color: #8c1c13;
+    }
+    .reason.skip {
+      border-left-color: var(--blue);
+      background: #f0f7ff;
+      color: #0958d9;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 4px 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .kv b {
+      color: #374151;
+      font-weight: 500;
+    }
+    .footnote {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+    .alert {
+      display: flex;
+      gap: 10px;
+      border: 1px solid #ffccc7;
+      background: #fff1f0;
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+    .alert-icon {
+      color: var(--red);
+      font-weight: 800;
+    }
+    .alert-title {
+      font-weight: 650;
+      color: #8c1c13;
+    }
+    .alert-body {
+      color: #8c1c13;
+      margin-top: 3px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <div class="title">数据准备</div>
+          <div class="subtitle">主包解压、分类解压与来源追溯；不作为普通巡检规则统计</div>
+        </div>
+        <span class="tag warn">部分成功</span>
+      </div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">主包解压</div>
+          <div class="metric-value"><span class="tag pass">PASS</span></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">分类准备</div>
+          <div class="metric-value">4 / 5</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">冲突</div>
+          <div class="metric-value">2</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">失败</div>
+          <div class="metric-value">1</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 240px;">准备项</th>
+            <th style="width: 78px;">状态</th>
+            <th style="width: 84px;">耗时</th>
+            <th>结果摘要</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="name">主包解压</div>
+              <div class="code">pkg.extract.main</div>
+            </td>
+            <td><span class="tag pass">PASS</span></td>
+            <td>2.3s</td>
+            <td class="summary">解压 128 个原始文件，分类现场已生成。</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="name">日志分类解压</div>
+              <div class="code">pkg.extract.logs</div>
+            </td>
+            <td><span class="tag warn">WARN</span></td>
+            <td>0.8s</td>
+            <td class="summary">
+              成功 5 个；冲突 2 个。目标路径冲突时保留第一个来源，后续来源未覆盖。
+              <div class="reason">
+                <strong>2 个目标路径冲突</strong>
+                <div class="kv">
+                  <span><b>目标</b></span><span class="mono">logs/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log</span>
+                  <span><b>保留</b></span><span class="mono">ServiceLog_20260901011314.zip</span>
+                  <span><b>跳过</b></span><span class="mono">ServiceLog_20260901011314_duplicate.zip</span>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="name">KPI 分类解压</div>
+              <div class="code">pkg.extract.kpi</div>
+            </td>
+            <td><span class="tag fail">FAIL</span></td>
+            <td>0.1s</td>
+            <td class="summary">
+              Windows 目标路径过长，写入前已拒绝；没有生成半成品文件。
+              <div class="reason error">
+                <strong>目标路径超过 Windows MAX_PATH：279 / 260</strong>
+                <div class="kv">
+                  <span><b>来源包</b></span><span class="mono">ZZapp01BCN_app Problem scene_333.zip</span>
+                  <span><b>目标</b></span><span class="mono">kpi/ZZapp01BCN_app Problem scene_333/333/app Problem scene/KPI/kpi_202609010101137101.csv</span>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="name">配置分类解压</div>
+              <div class="code">pkg.extract.config</div>
+            </td>
+            <td><span class="tag pass">PASS</span></td>
+            <td>0.2s</td>
+            <td class="summary">成功 4 个；无冲突。</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="name">资源分类解压</div>
+              <div class="code">pkg.extract.resource</div>
+            </td>
+            <td><span class="tag skip">SKIP</span></td>
+            <td>0.0s</td>
+            <td class="summary">
+              未发现资源类数据包。
+              <div class="reason skip">没有匹配 resource 分类的来源压缩包。</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="footnote">
+        该区域只展示数据准备过程；上方普通巡检规则的 PASS / WARN / FAIL / ERROR / SKIP 摘要不包含这些内部步骤。
+      </div>
+    </section>
+
+    <section class="alert">
+      <div class="alert-icon">!</div>
+      <div>
+        <div class="alert-title">主包解压失败时，后续巡检不会执行</div>
+        <div class="alert-body">
+          示例：目标路径超过 Windows MAX_PATH：279 / 260。普通巡检规则列表不展示、摘要不统计；仅数据准备区域提示失败原因。
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <div class="title">任务删除失败提示</div>
+          <div class="subtitle">完整提示展示 5 秒后收起；任务行保留“删除失败”状态并可重新展开</div>
+        </div>
+        <span class="tag fail">删除失败</span>
+      </div>
+      <div class="reason error" style="margin-top: 0;">
+        <strong>无法删除任务现场：目标路径超过 Windows MAX_PATH（279 / 260）</strong>
+        <div class="kv">
+          <span><b>任务</b></span><span class="mono">ZZapp01BCN_app Problem scene_333</span>
+          <span><b>任务 ID</b></span><span class="mono">task-zzapp01bcn_app_problem_scene_333</span>
+          <span><b>output 现场</b></span><span class="mono">output/task-zzapp01bcn_app_problem_scene_333/</span>
+          <span><b>uploads 现场</b></span><span class="mono">uploads/task-zzapp01bcn_app_problem_scene_333/</span>
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+          <button type="button" class="tag pass" style="border: 0; cursor: pointer;">重试删除</button>
+          <button type="button" class="tag skip" style="border: 0; cursor: pointer;">查看执行日志</button>
+        </div>
+      </div>
+      <div class="footnote">
+        删除失败时不提示“任务已删除”；完整错误展示 5 秒后自动收起，任务项保留“删除失败”状态，可重新展开并重试，直到删除成功。
+      </div>
+    </section>
+  </main>
+</body>
+</html>

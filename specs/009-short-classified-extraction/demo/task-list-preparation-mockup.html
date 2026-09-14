@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PatrolX 任务列表 · 数据准备效果图</title>
+<style>
+:root{
+  --green:#52c41a; --yellow:#faad14; --red:#ff4d4f; --blue:#1677ff;
+  --border:#e5e7eb; --bg:#f3f4f6; --text:#111827; --muted:#6b7280;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}
+.page{max-width:1180px;margin:0 auto;padding:28px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:750}
+.logo{width:32px;height:32px;border-radius:9px;background:#111827;color:#fff;display:grid;place-items:center;font-weight:800}
+.nav{display:flex;gap:18px;color:#4b5563}
+.nav span.active{color:#111827;font-weight:650}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer}
+.btn.primary{background:#1677ff;border-color:#1677ff;color:#fff;font-weight:600}
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.overview{padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:18px}
+.metrics{display:flex;gap:36px;flex-wrap:wrap}
+.metric .num{font-size:22px;font-weight:750}
+.metric .label{color:var(--muted);font-size:12px;margin-top:3px}
+.result-summary{display:flex;gap:14px}
+.result-box{min-width:72px;text-align:center;padding:8px 10px;border-radius:8px}
+.result-box b{display:block;font-size:18px}
+.result-box span{color:var(--muted);font-size:11px}
+.section{padding:18px 20px;margin-bottom:18px}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.title{font-size:16px;font-weight:700}
+.sub{color:var(--muted);font-size:12px;margin-left:8px}
+.filters{display:flex;gap:10px;align-items:center}
+.select{height:32px;min-width:130px;border:1px solid var(--border);border-radius:6px;background:#fff;color:#4b5563;padding:0 10px;display:flex;align-items:center;justify-content:space-between}
+.task{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;background:#fff}
+.task-main{padding:16px 18px;display:grid;grid-template-columns:minmax(260px,1.1fr) minmax(280px,1fr) auto;gap:18px;align-items:center}
+.task-name{font-weight:700;color:#1677ff}
+.task-meta{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12px;margin-top:6px;flex-wrap:wrap}
+.code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:#4b5563}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{border-radius:4px;padding:2px 6px;font-size:11px;color:#1677ff;background:#f0f7ff}
+.stat-grid{display:flex;gap:8px}
+.stat{flex:1;min-width:56px;border-radius:8px;padding:8px 6px;text-align:center}
+.stat b{display:block;font-size:16px}
+.stat span{color:var(--muted);font-size:11px}
+.status{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.actions{display:flex;gap:4px;color:#4b5563}
+.actions button{border:0;background:transparent;color:#4b5563;cursor:pointer;padding:2px 6px}
+.actions .danger{color:#ff4d4f}
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;font-size:12px;font-weight:650;color:#fff}
+.pass{background:var(--green)}.warn{background:var(--yellow)}.fail{background:var(--red)}.skip{background:var(--blue)}.neutral{background:#6b7280}
+.prep{border-top:1px solid var(--border);background:#fafafa}
+.prep-head{padding:12px 18px;display:flex;justify-content:space-between;align-items:center}
+.prep-title{display:flex;align-items:center;gap:8px;font-weight:650}
+.prep-summary{color:var(--muted);font-size:12px;margin-left:8px}
+.chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:3px 8px;font-size:11px;color:#4b5563}
+.collapse{width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:#fff;color:#6b7280;display:grid;place-items:center}
+.prep-body{padding:0 18px 16px}
+.prep-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.prep-table th,.prep-table td{padding:10px 12px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+.prep-table th{border-top:0;color:var(--muted);font-size:12px;font-weight:500;background:#fcfcfd;white-space:nowrap}
+.prep-table td.name{font-weight:600}
+.prep-table .small{color:var(--muted);font-size:12px}
+.alert{border:1px solid #ffccc7;background:#fff1f0;color:#8c1c13;border-radius:8px;padding:12px 14px;margin-top:12px}
+.alert-title{font-weight:650}
+.alert-kv{display:grid;grid-template-columns:78px minmax(0,1fr);gap:4px 8px;font-size:12px;margin-top:6px}
+.alert-kv b{font-weight:500;color:#a33}
+.delete-alert{margin-top:14px;padding:12px 14px;border:1px solid #ffccc7;background:#fff1f0;border-radius:8px;color:#8c1c13;display:flex;justify-content:space-between;gap:16px}
+.delete-alert .content{min-width:0}
+.delete-alert .actions{margin-top:8px;gap:8px}
+.delete-alert .btn{height:26px;font-size:12px}
+.footer{color:var(--muted);font-size:12px;text-align:center;margin-top:18px}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="topbar">
+    <div class="brand"><div class="logo">PX</div>PatrolX</div>
+    <nav class="nav"><span class="active">任务列表</span><span>规则</span><span>报告</span></nav>
+  </header>
+
+  <section class="card overview">
+    <div class="metrics">
+      <div class="metric"><div class="num">12</div><div class="label">巡检任务</div></div>
+      <div class="metric"><div class="num">36</div><div class="label">注册规则</div></div>
+      <div class="metric"><div class="num">418</div><div class="label">规则结果</div></div>
+      <div class="metric"><div class="num">23</div><div class="label">发现问题</div></div>
+    </div>
+    <div class="result-summary">
+      <div class="result-box" style="background:#f6ffed"><b style="color:#52c41a">291</b><span>Pass</span></div>
+      <div class="result-box" style="background:#fffbe6"><b style="color:#faad14">47</b><span>Warn</span></div>
+      <div class="result-box" style="background:#fff1f0"><b style="color:#ff4d4f">18</b><span>Fail</span></div>
+      <div class="result-box" style="background:#f5f5f5"><b style="color:#6b7280">31</b><span>Error</span></div>
+      <div class="result-box" style="background:#f0f7ff"><b style="color:#1677ff">31</b><span>Skip</span></div>
+    </div>
+  </section>
+
+  <section class="card section">
+    <div class="section-head">
+      <div><span class="title">任务列表</span><span class="sub">共 12 个任务</span></div>
+      <div class="filters">
+        <div class="select">状态筛选 <span>▾</span></div>
+        <button class="btn primary">＋ 上传数据包</button>
+      </div>
+    </div>
+
+    <!-- Expanded preparation inside task card -->
+    <article class="task">
+      <div class="task-main">
+        <div>
+          <div class="task-name">ZZapp01BCN_app Problem scene_333</div>
+          <div class="task-meta"><span class="code">task-zzapp01bcn_app_problem_scene_333</span><span>在线</span><span>2026-09-15 14:22</span></div>
+          <div class="tags"><span class="tag">广东</span><span class="tag">移动</span><span class="tag">核心网</span><span class="tag">V3.2.1</span></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat" style="background:#f6ffed"><b style="color:#52c41a">8</b><span>Pass</span></div>
+          <div class="stat" style="background:#fffbe6"><b style="color:#faad14">1</b><span>Warn</span></div>
+          <div class="stat" style="background:#fff1f0"><b style="color:#ff4d4f">0</b><span>Fail</span></div>
+          <div class="stat" style="background:#f0f7ff"><b style="color:#1677ff">2</b><span>Skip</span></div>
+        </div>
+        <div class="status">
+          <span class="pill pass">已完成</span>
+          <div class="actions"><button>详情</button><button>报告</button><button>重跑</button><button class="danger">删除</button></div>
+        </div>
+      </div>
+
+      <div class="prep">
+        <div class="prep-head">
+          <div class="prep-title">数据准备<span class="prep-summary">4 / 5 成功 · 1 失败</span></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="chip">主包 PASS</span><span class="chip">logs PASS</span><span class="chip" style="color:#ff4d4f;border-color:#ffccc7;background:#fff1f0">kpi FAIL</span><span class="chip">config PASS</span><span class="chip">resource SKIP</span>
+            <div class="collapse">▴</div>
+          </div>
+        </div>
+        <div class="prep-body">
+          <table class="prep-table">
+            <thead><tr><th>准备项</th><th>状态</th><th>耗时</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td class="name">主包解压<div class="code">pkg.extract.main</div></td><td><span class="pill pass">PASS</span></td><td>2.3s</td><td class="small">解压 128 个原始文件</td></tr>
+              <tr><td class="name">日志分类解压<div class="code">pkg.extract.logs</div></td><td><span class="pill pass">PASS</span></td><td>0.8s</td><td class="small">成功 5 个；无冲突</td></tr>
+              <tr><td class="name">KPI 分类解压<div class="code">pkg.extract.kpi</div></td><td><span class="pill fail">FAIL</span></td><td>0.1s</td><td class="small">Windows 目标路径过长，写入前已拒绝</td></tr>
+              <tr><td class="name">配置分类解压<div class="code">pkg.extract.config</div></td><td><span class="pill pass">PASS</span></td><td>0.2s</td><td class="small">成功 4 个；无冲突</td></tr>
+              <tr><td class="name">资源分类解压<div class="code">pkg.extract.resource</div></td><td><span class="pill skip">SKIP</span></td><td>0.0s</td><td class="small">未发现资源类数据包</td></tr>
+            </tbody>
+          </table>
+          <div class="alert">
+            <div class="alert-title">⛔ KPI 分类解压失败：目标路径超过 Windows MAX_PATH（279 / 260）</div>
+            <div class="alert-kv">
+              <b>来源包</b><span class="code">ZZapp01BCN_app Problem scene_333.zip</span>
+              <b>目标</b><span class="code">kpi/ZZapp01BCN_app Problem scene_333/333/app Problem scene/KPI/kpi_202609010101137101.csv</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Collapsed preparation -->
+    <article class="task">
+      <div class="task-main">
+        <div>
+          <div class="task-name">logs_AAAService_20260901</div>
+          <div class="task-meta"><span class="code">task-logs_aaaservice_20260901</span><span>本地</span><span>2026-09-15 13:48</span></div>
+          <div class="tags"><span class="tag">浙江</span><span class="tag">电信</span><span class="tag">AAA</span><span class="tag">V2.8.0</span></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat" style="background:#f6ffed"><b style="color:#52c41a">12</b><span>Pass</span></div>
+          <div class="stat" style="background:#fffbe6"><b style="color:#faad14">0</b><span>Warn</span></div>
+          <div class="stat" style="background:#fff1f0"><b style="color:#ff4d4f">0</b><span>Fail</span></div>
+          <div class="stat" style="background:#f0f7ff"><b style="color:#1677ff">1</b><span>Skip</span></div>
+        </div>
+        <div class="status">
+          <span class="pill pass">已完成</span>
+          <div class="actions"><button>详情</button><button>报告</button><button>重跑</button><button class="danger">删除</button></div>
+        </div>
+      </div>
+      <div class="prep">
+        <div class="prep-head">
+          <div class="prep-title">数据准备<span class="prep-summary">5 / 5 成功</span></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="chip">主包 PASS</span><span class="chip">logs PASS</span><span class="chip">config PASS</span><span class="chip">resource SKIP</span>
+            <div class="collapse">▾</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Delete failure persistent alert -->
+    <article class="task">
+      <div class="task-main">
+        <div>
+          <div class="task-name">kpi_long_path_20260901</div>
+          <div class="task-meta"><span class="code">task-kpi_long_path_20260901</span><span>本地</span><span>2026-09-15 11:20</span></div>
+          <div class="tags"><span class="tag">广东</span><span class="tag">联通</span><span class="tag">KPI</span></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat" style="background:#f6ffed"><b style="color:#52c41a">3</b><span>Pass</span></div>
+          <div class="stat" style="background:#fffbe6"><b style="color:#faad14">1</b><span>Warn</span></div>
+          <div class="stat" style="background:#fff1f0"><b style="color:#ff4d4f">1</b><span>Fail</span></div>
+          <div class="stat" style="background:#f0f7ff"><b style="color:#1677ff">0</b><span>Skip</span></div>
+        </div>
+        <div class="status">
+          <span class="pill warn">已完成</span>
+          <div class="actions"><button>详情</button><button>报告</button><button>重跑</button><button class="danger">删除</button></div>
+        </div>
+      </div>
+      <div class="delete-alert">
+        <div class="content">
+          <div class="alert-title">删除失败：目录不为空或路径过长</div>
+          <div class="alert-kv">
+            <b>任务</b><span class="code">kpi_long_path_20260901</span>
+            <b>现场</b><span class="code">output/task-kpi_long_path_20260901/</span>
+            <b>原因</b><span>Windows 目标路径过长（279 / 260），存在未清理文件。</span>
+          </div>
+        </div>
+        <div class="actions"><button class="btn primary">重试删除</button><button class="btn">查看详情</button></div>
+      </div>
+    </article>
+  </section>
+
+  <div class="footer">数据准备在任务卡片内展开，不使用弹窗；普通巡检规则摘要不包含内部准备项。</div>
+</main>
+</body>
+</html>
