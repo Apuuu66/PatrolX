@@ -28,6 +28,7 @@ class RuleContext:
         data_dir: Path,
         log: LogFn,
         package_path: Path | None = None,
+        package_checksum: str | None = None,
         result_dir: Path | None = None,
         prepared_dir: Path | None = None,
     ) -> None:
@@ -35,6 +36,7 @@ class RuleContext:
         self.data_dir = data_dir
         self._log = log
         self.package_path = package_path
+        self.package_checksum = package_checksum
         self.result_dir = result_dir
         self.prepared_dir = prepared_dir or data_dir / "prepared"
         self.files: list[Path] = []
@@ -43,6 +45,14 @@ class RuleContext:
 
     def log(self, level: str, message: str, **detail: object) -> None:
         self._log(level, message, detail)
+
+    def ensure_package_checksum(self) -> str:
+        """确保同一运行上下文内的主包 checksum 只计算一次。"""
+        if self.package_path is None:
+            raise ValueError("当前上下文未绑定数据包")
+        if self.package_checksum is None:
+            self.package_checksum = sha256_file(self.package_path)
+        return self.package_checksum
 
     def ensure_catalog(self) -> TaskFileCatalog:
         """确保解压终态后的任务文件清单只构建一次。"""
@@ -331,7 +341,7 @@ class Executor:
         """单规则重跑前确保主包解压现场与 manifest 可复用。"""
         if ctx.package_path is None or not ctx.package_path.exists():
             return
-        checksum = sha256_file(ctx.package_path)
+        checksum = ctx.ensure_package_checksum()
         if extraction.reusable_manifest(ctx.data_dir, checksum) is not None:
             return
         try:

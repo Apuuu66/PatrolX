@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from app.core.checksum import sha256_file
 from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
 from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
@@ -271,3 +272,36 @@ def test_prepare_pattern_rejection_is_logged_and_skips_owner(tmp_path: Path) -> 
     detail = next(detail for _level, message, detail in logs if message == "pattern_rejected")
     assert detail["rule_code"] == "rule.bad"
     assert ctx.prepare_states["rule.bad"] == "FAILED"
+
+
+def test_single_rule_rerun_hashes_package_once_per_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package = tmp_path / "package.zip"
+    package.write_bytes(b"package")
+    checksum_calls: list[Path] = []
+    original_sha256_file = sha256_file.__wrapped__ if hasattr(sha256_file, "__wrapped__") else sha256_file
+
+    def counting_sha256_file(path: Path) -> str:
+        checksum_calls.append(path)
+        return original_sha256_file(path)
+
+    monkeypatch.setattr("app.services.executor.sha256_file", counting_sha256_file)
+    monkeypatch.setattr(
+        "app.services.executor.extraction.reusable_manifest",
+        lambda _data_dir, checksum: {"main": {"checksum": checksum}},
+    )
+
+    registry = RuleRegistry()
+
+    def run(_ctx: RuleContext) -> object:
+        return make_result(registry.get("rule.first"), status=RuleStatus.PASS, summary="ok")
+
+    _rule(registry, "rule.first", run, source_patterns=[r"logs/.*"])
+    _rule(registry, "rule.second", run, source_patterns=[r"kpi/.*"])
+    ctx = _context(tmp_path)
+    ctx.package_path = package
+    executor = Executor(registry)
+
+    executor.run_rule_with_deps("rule.first", ctx)
+    executor.run_rule_with_deps("rule.second", ctx)
+
+    assert checksum_calls == [package]

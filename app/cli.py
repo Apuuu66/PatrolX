@@ -77,13 +77,14 @@ def _make_log_fn(task_id: str):
     return log
 
 
-def _new_context(task_id: str, package: Path) -> RuleContext:
+def _new_context(task_id: str, package: Path, package_checksum: str | None = None) -> RuleContext:
     task_dir = settings.output / task_id
     return RuleContext(
         task_id=task_id,
         data_dir=task_dir,
         log=_make_log_fn(task_id),
         package_path=package,
+        package_checksum=package_checksum,
         result_dir=task_dir / "rules",
         prepared_dir=task_dir / "prepared",
     )
@@ -240,11 +241,12 @@ def run_single_rule(
     code: str,
     package: Path | None = None,
     task_id: str | None = None,
+    package_checksum: str | None = None,
 ) -> None:
     registry.load_all()
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
-    ctx = _new_context(task_id, package)
+    ctx = _new_context(task_id, package, package_checksum)
     executor = Executor(registry)
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
