@@ -75,14 +75,14 @@ tests/                   # 单元测试、契约测试和 fixtures
 ## 本地运行与调试
 
 ```bash
-make install        # 安装后端依赖
-make verify         # 本地全流程，等价于 python main.py
-make verify-one RULE=<rule_code>  # 单规则重跑
-make run            # 当前通过 run_online.py 启动在线 API + Web
-make contract       # 导出/校验 OpenAPI
-make gen-web-api    # 生成前端 API 客户端
-make test           # pytest
-make lint           # ruff check + format check
+python build.py install             # 创建 .venv 并精确安装依赖
+python build.py verify              # 本地全流程
+python build.py verify-one --rule <rule_code>  # 单规则重跑
+python build.py run                 # 通过 run_online.py 启动在线 API + Web
+python build.py contract            # 导出/校验 OpenAPI
+python build.py gen-web-api         # 生成前端 API 客户端
+python build.py test                # pytest
+python build.py lint                # ruff check + format check
 ```
 
 前端开发：
@@ -91,7 +91,7 @@ make lint           # ruff check + format check
 cd web && npm run dev
 ```
 
-`make verify-one` 只执行目标规则：先保证任务解压完成，再执行或复用目标规则私有 prepare，最后按该规则的 `source_patterns` 匹配文件执行目标规则；随后只重写该规则 JSON、更新任务摘要和 HTML 报告，刷新前端即可查看最新结果。
+`python build.py verify-one --rule <rule_code>` 只执行目标规则：先保证任务解压完成，再执行或复用目标规则私有 prepare，最后按该规则的 `source_patterns` 匹配文件执行目标规则；随后只重写该规则 JSON、更新任务摘要和 HTML 报告，刷新前端即可查看最新结果。
 
 真实样例包结构见 [`docs/example/real-package-structure.md`](docs/example/real-package-structure.md)。
 
@@ -120,7 +120,7 @@ cd web && npm run dev
 - 无匹配文件时返回 `skip`，不得静默通过。
 - 单个解析失败不影响任务。
 - 提供单元测试和样例数据。
-- 本地可通过 `make verify-one` 或规则文件内 `__main__` 入口调试。
+- 本地可通过 `python build.py verify-one --rule <rule_code>` 或规则文件内 `__main__` 入口调试。
 
 规则状态：
 
@@ -168,21 +168,21 @@ cd web && npm run dev
 合入前至少执行：
 
 ```bash
-make lint
-make test
+python build.py lint
+python build.py test
 ```
 
 涉及本地全流程、解压、执行器或报告时执行：
 
 ```bash
-make verify
+python build.py verify
 ```
 
 涉及契约时执行：
 
 ```bash
-make contract
-make gen-web-api
+python build.py contract
+python build.py gen-web-api
 ```
 
 关键场景必须有测试：

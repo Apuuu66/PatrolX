@@ -22,9 +22,9 @@ description: "统一 Python 构建工具实现任务列表"
 
 **目的**：建立隔离实现环境和构建入口骨架
 
-- [ ] T001 创建实现分支 `feature/python-build-tooling` 和 worktree `.worktrees/feature-python-build-tooling`，先提交本目录全部 Speckit 产物
-- [ ] T002 [P] 在 `tests/build/test_build_entry.py` 中编写入口测试：覆盖 `--help`、命令注册、未知命令、缺参错误和 Python 版本检查
-- [ ] T003 在 `build.py` 中创建标准库 `argparse` 子命令骨架、命令注册表、帮助输出和非零错误路径；先让 T002 通过
+- [x] T001 创建实现分支 `feature/python-build-tooling` 和 worktree `.worktrees/feature-python-build-tooling`，先提交本目录全部 Speckit 产物
+- [x] T002 [P] 在 `tests/build/test_build_entry.py` 中编写入口测试：覆盖 `--help`、命令注册、未知命令、缺参错误和 Python 版本检查
+- [x] T003 在 `build.py` 中创建标准库 `argparse` 子命令骨架、命令注册表、帮助输出和非零错误路径；先让 T002 通过
 
 **检查点**：构建入口骨架可运行 `python build.py --help`，未知命令返回非零且提示可用命令
 
@@ -36,14 +36,14 @@ description: "统一 Python 构建工具实现任务列表"
 
 **⚠️ 关键**：本阶段完成前不得开始用户故事实现
 
-- [ ] T004 [P] 在 `tests/build/test_build_environment.py` 中编写环境测试：覆盖 `.venv` 缺失、平台解释器路径、Python 3.11+ 检查、锁文件安装参数和现有 uv 环境不兼容提示
-- [ ] T005 [P] 在 `tests/build/test_build_lock.py` 中编写锁维护测试：覆盖 `lock` 命令、精确版本行、平台环境标记和不使用 `uv.lock`
-- [ ] T006 在 `build.py` 中实现跨平台环境工具：后端解释器选择、Python 版本校验、`.venv` 健康检查、无 shell 参数列表执行器和可注入执行钩子
-- [ ] T007 在 `build.py` 中实现 `install`：使用官方 Python 标准能力创建/复用 `.venv`，按 `requirements-lock.txt` 安装依赖，并用 `--no-deps` 安装本地项目
-- [ ] T008 在 `build.py` 中实现 `lock`：从 `pyproject.toml` 解析依赖并刷新 `requirements-lock.txt`；生成结果必须包含直接与传递依赖精确版本及平台标记
-- [ ] T009 创建 `requirements-lock.txt`：锁定当前后端、pytest、Ruff 与传递依赖精确版本；为 Windows/macOS/Linux 差异加入环境标记
-- [ ] T010 在 `pyproject.toml` 中保留直接依赖声明并核对与 `requirements-lock.txt` 的范围一致；不引入 uv
-- [ ] T011 运行 `python build.py install`、`python build.py lock --check`（或等效只读校验）、`tests/build/test_build_environment.py` 和 `tests/build/test_build_lock.py`
+- [x] T004 [P] 在 `tests/build/test_build_environment.py` 中编写环境测试：覆盖 `.venv` 缺失、平台解释器路径、Python 3.11+ 检查、锁文件安装参数和现有 uv 环境不兼容提示
+- [x] T005 [P] 在 `tests/build/test_build_lock.py` 中编写锁维护测试：覆盖 `lock` 命令、精确版本行、平台环境标记和不使用 `uv.lock`
+- [x] T006 在 `build.py` 中实现跨平台环境工具：后端解释器选择、Python 版本校验、`.venv` 健康检查、无 shell 参数列表执行器和可注入执行钩子
+- [x] T007 在 `build.py` 中实现 `install`：使用官方 Python 标准能力创建/复用 `.venv`，按 `requirements-lock.txt` 安装依赖，并用 `--no-deps` 安装本地项目
+- [x] T008 在 `build.py` 中实现 `lock`：从 `pyproject.toml` 解析依赖并刷新 `requirements-lock.txt`；生成结果必须包含直接与传递依赖精确版本及平台标记
+- [x] T009 创建 `requirements-lock.txt`：锁定当前后端、pytest、Ruff 与传递依赖精确版本；为 Windows/macOS/Linux 差异加入环境标记
+- [x] T010 在 `pyproject.toml` 中保留直接依赖声明并核对与 `requirements-lock.txt` 的范围一致；不引入 uv
+- [x] T011 运行 `python build.py install`、`python build.py lock --check`（或等效只读校验）、`tests/build/test_build_environment.py` 和 `tests/build/test_build_lock.py`
 
 **检查点**：干净环境只需官方 Python 即可完成精确依赖安装；环境与锁行为有测试覆盖
 
@@ -57,14 +57,14 @@ description: "统一 Python 构建工具实现任务列表"
 
 ### 用户故事 1 的测试
 
-- [ ] T012 [P] [US1] 在 `tests/build/test_build_verify.py` 中编写测试：`verify` 调用 `.venv` 内 Python 执行 `main.py`；`.venv` 缺失时提示安装；不调用 Make/uv
-- [ ] T013 [P] [US1] 在 `tests/build/test_build_install.py` 中编写端到端级安装流程测试：精确锁参数、本地项目 `--no-deps`、Windows/macOS/Linux 路径和不使用 shell
+- [x] T012 [P] [US1] 在 `tests/build/test_build_verify.py` 中编写测试：`verify` 调用 `.venv` 内 Python 执行 `main.py`；`.venv` 缺失时提示安装；不调用 Make/uv
+- [x] T013 [P] [US1] 在 `tests/build/test_build_install.py` 中编写端到端级安装流程测试：精确锁参数、本地项目 `--no-deps`、Windows/macOS/Linux 路径和不使用 shell
 
 ### 用户故事 1 的实现
 
-- [ ] T014 [US1] 在 `build.py` 中实现 `verify` 子命令，调用现有本地全流程入口并透传环境变量；失败保留原始输出
-- [ ] T015 [US1] 完善 `build.py` 的 `install` 错误提示：缺锁、Python 版本不足、现有 `.venv` 不兼容和 pip 初始化失败分别给出下一步操作
-- [ ] T016 [US1] 更新 `README.md` 的快速开始和基础流程，统一使用 `python build.py install`、`python build.py verify`
+- [x] T014 [US1] 在 `build.py` 中实现 `verify` 子命令，调用现有本地全流程入口并透传环境变量；失败保留原始输出
+- [x] T015 [US1] 完善 `build.py` 的 `install` 错误提示：缺锁、Python 版本不足、现有 `.venv` 不兼容和 pip 初始化失败分别给出下一步操作
+- [x] T016 [US1] 更新 `README.md` 的快速开始和基础流程，统一使用 `python build.py install`、`python build.py verify`
 
 **检查点**：用户故事 1 可独立验证；README 基础流程不再要求 Make、uv 或 shell 包装
 
@@ -78,13 +78,13 @@ description: "统一 Python 构建工具实现任务列表"
 
 ### 用户故事 2 的测试
 
-- [ ] T017 [P] [US2] 在 `tests/build/test_build_quality.py` 中编写测试：`lint` 分别调用 Ruff check 和 format check；`test` 调用 pytest；环境缺失和子进程失败返回非零
+- [x] T017 [P] [US2] 在 `tests/build/test_build_quality.py` 中编写测试：`lint` 分别调用 Ruff check 和 format check；`test` 调用 pytest；环境缺失和子进程失败返回非零
 
 ### 用户故事 2 的实现
 
-- [ ] T018 [US2] 在 `build.py` 中实现 `lint` 子命令，复用现有 Ruff 配置并保持当前检查范围 `app tests`
-- [ ] T019 [US2] 在 `build.py` 中实现 `test` 子命令，调用 pytest 并保持现有 pytest 配置
-- [ ] T020 [US2] 在 `README.md` 和 `docs/architecture.md` 中更新质量门禁命令为 `python build.py lint` / `python build.py test`
+- [x] T018 [US2] 在 `build.py` 中实现 `lint` 子命令，复用现有 Ruff 配置并保持当前检查范围 `app tests`
+- [x] T019 [US2] 在 `build.py` 中实现 `test` 子命令，调用 pytest 并保持现有 pytest 配置
+- [x] T020 [US2] 在 `README.md` 和 `docs/architecture.md` 中更新质量门禁命令为 `python build.py lint` / `python build.py test`
 
 **检查点**：质量门禁可独立通过统一入口运行；通过和失败状态可被测试验证
 
@@ -98,15 +98,15 @@ description: "统一 Python 构建工具实现任务列表"
 
 ### 用户故事 3 的测试
 
-- [ ] T021 [P] [US3] 在 `tests/build/test_build_contract.py` 中编写测试：`contract` 调用现有 OpenAPI 导出模块；`gen-web-api` 在 `web/` 下调用 npm/npx 生成客户端
-- [ ] T022 [P] [US3] 在 `tests/build/test_build_verify_one.py` 中编写测试：`verify-one` 要求 `--rule`，正确透传到现有 CLI `run-one`，并复用 `.venv`
+- [x] T021 [P] [US3] 在 `tests/build/test_build_contract.py` 中编写测试：`contract` 调用现有 OpenAPI 导出模块；`gen-web-api` 在 `web/` 下调用 npm/npx 生成客户端
+- [x] T022 [P] [US3] 在 `tests/build/test_build_verify_one.py` 中编写测试：`verify-one` 要求 `--rule`，正确透传到现有 CLI `run-one`，并复用 `.venv`
 
 ### 用户故事 3 的实现
 
-- [ ] T023 [US3] 在 `build.py` 中实现 `contract` 子命令，保持校验/导出行为与现有模块一致
-- [ ] T024 [US3] 在 `build.py` 中实现 `gen-web-api` 子命令，跨平台发现 npm/npx 并以参数列表调用
-- [ ] T025 [US3] 在 `build.py` 中实现 `verify-one --rule <rule_code>` 子命令，调用现有单规则重跑逻辑并透传可选任务/输入参数
-- [ ] T026 [US3] 更新 `README.md`、`docs/architecture.md` 中的契约、客户端生成和单规则调试命令
+- [x] T023 [US3] 在 `build.py` 中实现 `contract` 子命令，保持校验/导出行为与现有模块一致
+- [x] T024 [US3] 在 `build.py` 中实现 `gen-web-api` 子命令，跨平台发现 npm/npx 并以参数列表调用
+- [x] T025 [US3] 在 `build.py` 中实现 `verify-one --rule <rule_code>` 子命令，调用现有单规则重跑逻辑并透传可选任务/输入参数
+- [x] T026 [US3] 更新 `README.md`、`docs/architecture.md` 中的契约、客户端生成和单规则调试命令
 
 **检查点**：契约、客户端和单规则流程可通过 `build.py` 独立使用；OpenAPI 与生成客户端语义不变
 
@@ -120,14 +120,14 @@ description: "统一 Python 构建工具实现任务列表"
 
 ### 用户故事 4 的测试
 
-- [ ] T027 [P] [US4] 在 `tests/build/test_build_run.py` 中编写测试：`run` 复用 `.venv` 调用在线启动器；不自动绕过精确锁安装；Node/npm 缺失时提示前置条件
-- [ ] T028 [P] [US4] 在 `tests/build/test_build_frontend.py` 中编写测试：`web-install`、`web-dev`、`web-build`、`e2e-install` 和 `e2e` 的命令映射、工作目录、Windows npm/npx 发现和失败传播
+- [x] T027 [P] [US4] 在 `tests/build/test_build_run.py` 中编写测试：`run` 复用 `.venv` 调用在线启动器；不自动绕过精确锁安装；Node/npm 缺失时提示前置条件
+- [x] T028 [P] [US4] 在 `tests/build/test_build_frontend.py` 中编写测试：`web-install`、`web-dev`、`web-build`、`e2e-install` 和 `e2e` 的命令映射、工作目录、Windows npm/npx 发现和失败传播
 
 ### 用户故事 4 的实现
 
-- [ ] T029 [US4] 在 `build.py` 中实现 `run` 子命令，启动现有在线 API + Web 流程；`.venv` 缺失时提示先安装
-- [ ] T030 [US4] 在 `build.py` 中实现 `web-install`、`web-dev`、`web-build`、`e2e-install` 和 `e2e` 子命令，保持现有 npm/Playwright 行为
-- [ ] T031 [US4] 更新 `README.md` 和 `docs/architecture.md` 中的在线服务、前端开发/构建、端到端命令
+- [x] T029 [US4] 在 `build.py` 中实现 `run` 子命令，启动现有在线 API + Web 流程；`.venv` 缺失时提示先安装
+- [x] T030 [US4] 在 `build.py` 中实现 `web-install`、`web-dev`、`web-build`、`e2e-install` 和 `e2e` 子命令，保持现有 npm/Playwright 行为
+- [x] T031 [US4] 更新 `README.md` 和 `docs/architecture.md` 中的在线服务、前端开发/构建、端到端命令
 
 **检查点**：在线、前端和端到端工作流均可由 `build.py` 独立发起；旧 Make 目标没有行为缺口
 
@@ -137,15 +137,22 @@ description: "统一 Python 构建工具实现任务列表"
 
 **目的**：删除旧入口、同步所有权威文档、完成等价性验证
 
-- [ ] T032 [P] 在 `tests/build/test_build_migration.py` 中编写迁移看护测试：断言根目录不存在 `Makefile`、`run-offline.sh`、`run-online.sh`、`uv.lock`，且活跃文档不推荐 `make` 或 uv
-- [ ] T033 删除 `Makefile`、`run-offline.sh`、`run-online.sh` 和 `uv.lock`
-- [ ] T034 更新 `.gitignore`：移除 `.uv/`、`.uv-cache/` 等 uv 专用忽略项，保留 `.venv/`
-- [ ] T035 删除 `requirements.txt`，更新 `Dockerfile` 使用 `requirements-lock.txt` 安装依赖，并保持现有 Python 3.12 slim 运行行为
-- [ ] T036 更新 `AGENTS.md`、`docs/architecture.md`、`docs/roadmap.md` 中所有当前工作流和交付门禁命令为 `python build.py`；不改写历史 Speckit 产物
-- [ ] T037 [P] 更新 `app/contract/export.py` 模块说明，将旧 `make contract` 表述改为 `python build.py contract`
-- [ ] T038 在 `tests/build/test_build_parity.py` 中添加等价性测试：验证 `contract`、`gen-web-api`、`test`、`lint`、`verify`、`verify-one` 与旧工作流的目标命令和参数映射一致，且巡检输出契约不变
+- [x] T032 [P] 在 `tests/build/test_build_migration.py` 中编写迁移看护测试：断言根目录不存在 `Makefile`、`run-offline.sh`、`run-online.sh`、`uv.lock`，且活跃文档不推荐 `make` 或 uv
+- [x] T033 删除 `Makefile`、`run-offline.sh`、`run-online.sh` 和 `uv.lock`
+- [x] T034 更新 `.gitignore`：移除 `.uv/`、`.uv-cache/` 等 uv 专用忽略项，保留 `.venv/`
+- [x] T035 删除 `requirements.txt`，更新 `Dockerfile` 使用 `requirements-lock.txt` 安装依赖，并保持现有 Python 3.12 slim 运行行为
+- [x] T036 更新 `AGENTS.md`、`docs/architecture.md`、`docs/roadmap.md` 中所有当前工作流和交付门禁命令为 `python build.py`；不改写历史 Speckit 产物
+- [x] T037 [P] 更新 `app/contract/export.py` 模块说明，将旧 `make contract` 表述改为 `python build.py contract`
+- [x] T038 在 `tests/build/test_build_parity.py` 中添加等价性测试：验证 `contract`、`gen-web-api`、`test`、`lint`、`verify`、`verify-one` 与旧工作流的目标命令和参数映射一致，且巡检输出契约不变
 - [ ] T039 运行 `specs/008-python-build-tooling/quickstart.md` 的 Windows、macOS 和 Linux 验证清单；至少在三个平台验证安装、lint、test，并记录结果
-- [ ] T040 运行完整验证：`python build.py lint`、`python build.py test`、`python build.py contract`、`python build.py gen-web-api`、`python build.py web-build`、`python build.py verify`
+- [x] T040 运行完整验证：`python build.py lint`、`python build.py test`、`python build.py contract`、`python build.py gen-web-api`、`python build.py web-build`、`python build.py verify`
+
+---
+
+## 执行记录
+
+- 2026-09-14：已在 macOS 完成 `install`、`lint`、`test`、`contract`、`gen-web-api`、`web-install`、`web-build`、`verify` 验证。
+- T039 保持未勾选：本次只完成 macOS 实测；Windows 和 Linux 人工验证仍未执行。
 
 ---
 

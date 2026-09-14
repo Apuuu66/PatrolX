@@ -49,16 +49,16 @@ M5 主要能力已部分落地：
 范围：
 
 - `app` / `web` / `deploy` / `docs` / `tests` 目录骨架。
-- README、`.gitignore`、`Makefile`、`pyproject.toml`。
+- README、`.gitignore`、`build.py`、`pyproject.toml`。
 - OpenAPI Schema 与接口定义。
 - Pydantic 模型对齐契约。
 - 数据字典种子数据。
 
 验收：
 
-- `make contract` 通过。
+- `python build.py contract` 通过。
 - 模型与契约一致性测试通过。
-- `make lint` / `make test` 通过。
+- `python build.py lint` / `python build.py test` 通过。
 
 ## M1 规则框架与本地全流程
 
@@ -85,7 +85,7 @@ M5 主要能力已部分落地：
 
 - 样例包全流程通过。
 - 单规则可独立运行。
-- `make verify` 通过。
+- `python build.py verify` 通过。
 
 ## M2 六类示例规则与报告
 
@@ -170,7 +170,7 @@ M5 主要能力已部分落地：
 
 验收：
 
-- `make test` / `make lint` 全绿。
+- `python build.py test` / `python build.py lint` 全绿。
 - Docker 环境一键启动验证通过。
 - 浏览器全流程回归通过。
 
