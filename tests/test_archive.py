@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.archive import ArchiveError, UnpackLimit, is_archive, unpack_tar, unpack_zip
+from app.core.archive import ArchiveError, UnpackLimit, _expansion_budget, is_archive, unpack_tar, unpack_zip
 
 
 def test_zip_slip_rejected(tmp_path: Path) -> None:
@@ -26,6 +26,14 @@ def test_unpack_zip_ok(tmp_path: Path) -> None:
     assert (tmp_path / "out" / "logs" / "a.log").read_text() == "hello"
 
 
+def test_main_budget_uses_absolute_3gb_limit(tmp_path: Path) -> None:
+    """主包解压预算只受 3GB 硬上限约束，不按压缩包大小放大。"""
+    archive = tmp_path / "small.zip"
+    archive.write_bytes(b"zip")
+
+    assert _expansion_budget(UnpackLimit()) == 3 * 1024 * 1024 * 1024
+
+
 def test_log_gzip_is_not_nested_archive(tmp_path: Path) -> None:
     path = tmp_path / "app_history.log.gz"
     path.write_bytes(b"plain")
@@ -37,7 +45,7 @@ def test_zip_expansion_budget_rejected(tmp_path: Path) -> None:
     with zipfile.ZipFile(archive, "w") as zf:
         zf.writestr("zeros.bin", "0" * 4096)
     limit = UnpackLimit()
-    limit.expansion_ratio = 0.5
+    limit.max_total_bytes = 4095
 
     with pytest.raises(ArchiveError, match="解压总量超限"):
         unpack_zip(archive, tmp_path / "out", limit)
@@ -52,7 +60,7 @@ def test_tar_expansion_budget_rejected(tmp_path: Path) -> None:
     with tarfile.open(archive, "w:gz") as tf:
         tf.add(payload, arcname="zeros.bin")
     limit = UnpackLimit()
-    limit.expansion_ratio = 0.5
+    limit.max_total_bytes = 4095
 
     with pytest.raises(ArchiveError, match="解压总量超限"):
         unpack_tar(archive, tmp_path / "out", limit)

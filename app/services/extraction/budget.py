@@ -27,7 +27,7 @@ class ExtractionBudget:
     """任务级累计解压预算；固定限额，避免单个安全包叠加耗尽资源。"""
 
     max_files = 200_000
-    max_total_bytes = 2 * 1024 * 1024 * 1024  # 2GB
+    max_total_bytes = 3 * 1024 * 1024 * 1024  # 3GB
     max_depth = 8
 
     def __init__(self) -> None:

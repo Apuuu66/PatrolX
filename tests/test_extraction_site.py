@@ -318,6 +318,13 @@ def _budget_package(env: Env) -> Path:
     return package
 
 
+def test_task_level_budget_allows_3gb() -> None:
+    """任务级累计解压预算应为 3GB。"""
+    from app.services.extraction.budget import ExtractionBudget
+
+    assert ExtractionBudget.max_total_bytes == 3 * 1024 * 1024 * 1024
+
+
 def test_task_level_budget_failures_are_isolated_and_recorded(tmp_path, monkeypatch) -> None:
     """任务级文件预算拒绝对应文件，记录 rejected，不中断后续 gzip 处理。"""
     from app.core.checksum import sha256_file
