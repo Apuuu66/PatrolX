@@ -1,11 +1,13 @@
 """压缩包安全解压的健壮性测试。"""
 
 import io
+import shutil
 import tarfile
 import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 from app.core.archive import ArchiveError, UnpackLimit, unpack_tar, unpack_zip
 
@@ -140,3 +142,146 @@ def test_empty_and_corrupt_archives_are_rejected(tmp_path: Path, extension: str)
         (unpack_zip if extension == "zip" else unpack_tar)(empty, tmp_path / "empty-out")
     with pytest.raises(ArchiveError, match="压缩包读取失败"):
         (unpack_zip if extension == "zip" else unpack_tar)(corrupt, tmp_path / "corrupt-out")
+
+
+def _policy_zip(path: Path, files: dict[str, str | bytes]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w") as zf:
+        for name, content in files.items():
+            zf.writestr(name, content)
+    return path
+
+
+def _setup_policy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, data: dict) -> None:
+    from app.core.config import settings
+    from tests.baseline_helpers import setup_env
+
+    setup_env(tmp_path, monkeypatch)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    shutil.copyfile(
+        Path(__file__).resolve().parents[1] / "deploy/config/classify_rules.yaml",
+        config_dir / "classify_rules.yaml",
+    )
+    (config_dir / "extract_policy.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    monkeypatch.setattr(settings, "config_dir", config_dir)
+
+
+@pytest.mark.parametrize("budget_field", ["max_files", "max_total_bytes"])
+def test_path_skip_retention_honors_task_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    budget_field: str,
+) -> None:
+    """跳过路径保留压缩项也计入任务预算，不能绕过资源防护。"""
+    from app.cli import run_task
+    from app.services.extraction import read_manifest
+    from app.services.extraction.budget import ExtractionBudget
+
+    _setup_policy_env(
+        tmp_path,
+        monkeypatch,
+        {"nested": {"skip_paths": ["/skip/"]}, "whitelist": {"name_keywords": []}},
+    )
+    monkeypatch.setattr(ExtractionBudget, budget_field, 0)
+    package = _policy_zip(
+        tmp_path / "uploads/budget.zip",
+        {
+            "skip/normal.zip": _policy_zip(tmp_path / "_build/normal.zip", {"normal": "normal"}).read_bytes(),
+            "ok.txt": "ok",
+        },
+    )
+
+    task = run_task(package, task_id="skip-budget")
+    manifest = read_manifest(tmp_path / "output" / task.task_id)
+
+    assert manifest["subpackages"][0]["status"] == "failed"
+    assert "超限" in str(manifest["subpackages"][0]["error"])
+    assert not (tmp_path / "output" / task.task_id / "other/skip/normal.zip").exists()
+
+
+@pytest.mark.parametrize(
+    ("limit_field", "expected"),
+    [
+        ("max_depth", "嵌套深度超限"),
+        ("max_files", "文件数超限"),
+        ("max_single_file", "单文件超限"),
+        ("max_total_bytes", "解压总量超限"),
+    ],
+)
+def test_whitelisted_archive_honors_unpack_limits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    limit_field: str,
+    expected: str,
+) -> None:
+    """白名单恢复的压缩项仍走深度、文件数、单文件和总量防护。"""
+    from app.cli import run_task
+    from app.services.extraction import read_manifest
+
+    _setup_policy_env(
+        tmp_path,
+        monkeypatch,
+        {"nested": {"skip_paths": ["/skip/"]}, "whitelist": {"name_keywords": ["alarm"]}},
+    )
+
+    class InnerLimit(UnpackLimit):
+        pass
+
+    setattr(InnerLimit, limit_field, 0)
+    monkeypatch.setattr(
+        "app.services.extraction.nested.UnpackLimit",
+        InnerLimit,
+    )
+    package = _policy_zip(
+        tmp_path / "uploads/whitelist-limit.zip",
+        {
+            "skip/alarm.zip": _policy_zip(tmp_path / "_build/alarm.zip", {"alarm.txt": "alarm"}).read_bytes(),
+            "ok.txt": "ok",
+        },
+    )
+
+    task = run_task(package, task_id="whitelist-limit")
+    manifest = read_manifest(tmp_path / "output" / task.task_id)
+
+    assert manifest["subpackages"][0]["status"] in {"failed", "rejected"}
+    assert expected in str(manifest["subpackages"][0]["error"])
+    assert not (tmp_path / "output" / task.task_id / "alarm/skip/alarm/alarm.txt").exists()
+
+
+@pytest.mark.parametrize(
+    ("members", "expected"),
+    [
+        ([_zip_info("/etc/escape.txt", b"boom")], "路径穿越被拒绝"),
+        ([_zip_info("link.txt", b"/etc/passwd", external_attr=0o120777 << 16)], "链接文件被拒绝"),
+    ],
+)
+def test_whitelisted_archive_safety_checks_are_not_bypassed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    members: list[tuple[zipfile.ZipInfo, bytes]],
+    expected: str,
+) -> None:
+    """白名单压缩包内越界和链接成员仍被安全解压层拒绝。"""
+    from app.cli import run_task
+    from app.services.extraction import read_manifest
+
+    _setup_policy_env(
+        tmp_path,
+        monkeypatch,
+        {"nested": {"skip_paths": ["/skip/"]}, "whitelist": {"name_keywords": ["alarm"]}},
+    )
+    inner = tmp_path / "_build/evil.zip"
+    inner.parent.mkdir(parents=True)
+    _write_zip(inner, members)
+    package = _policy_zip(
+        tmp_path / "uploads/whitelist-evil.zip",
+        {"skip/alarm.zip": inner.read_bytes(), "ok.txt": "ok"},
+    )
+
+    task = run_task(package, task_id="whitelist-evil")
+    manifest = read_manifest(tmp_path / "output" / task.task_id)
+
+    assert manifest["subpackages"][0]["status"] == "failed"
+    assert expected in str(manifest["subpackages"][0]["error"])
+    assert not (tmp_path / "escape.txt").exists()

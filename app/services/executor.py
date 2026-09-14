@@ -11,7 +11,7 @@ from app.core.checksum import sha256_file
 from app.core.metrics import RULES_TOTAL
 from app.inspectors.base import Inspector
 from app.inspectors.registry import RuleRegistry
-from app.models.schemas import RuleResult, RuleStatus
+from app.models.schemas import RuleCategory, RuleResult, RuleStatus
 from app.services import extraction
 from app.services.prepare import marker_path, rule_file_sha256
 from app.services.scanning import TaskFileCatalog, validate_patterns
@@ -242,11 +242,18 @@ class Executor:
             matched_files=[p.as_posix() for p in ctx.files],
         )
         if rule.source_patterns and not ctx.files:
+            skip_reason = f"source_patterns 未匹配到文件: {', '.join(rule.source_patterns)}"
+            category = "logs" if rule.category == RuleCategory.LOG else rule.category.value
+            manifest = extraction.read_manifest(ctx.data_dir)
+            skipped = extraction.policy_skipped_summary(manifest, category)
+            if skipped:
+                names = ", ".join(str(item["name"]) for item in skipped)
+                skip_reason += f"；项目级解压策略保留了压缩项: {names}"
             result = self._result(
                 rule,
                 status=RuleStatus.SKIP,
                 summary="未发现匹配源文件",
-                skip_reason=f"source_patterns 未匹配到文件: {', '.join(rule.source_patterns)}",
+                skip_reason=skip_reason,
                 duration_ms=int((time.monotonic() - started) * 1000),
             )
             ctx.log(

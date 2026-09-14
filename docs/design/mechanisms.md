@@ -23,6 +23,7 @@
 - 主包内容按类别落位，日志、KPI、话统、告警、配置、资源等分别进入对应目录。
 - 主包保留 `.main/` 原始解压现场；嵌套压缩包和 `.log.gz` 通过共享服务安全递归展开。
 - 解压必须具备路径穿越、链接和资源预算防护，并且同一子包只解压一次。
+- 部署侧可配置压缩项跳过与白名单；白名单优先于全局保留和路径跳过，主包本身不可跳过。
 
 ### 当前实现
 
@@ -36,6 +37,13 @@
   - 汇总 manifest 中对应分类的子包与 `.log.gz` 终态。
   - 失败或冲突时返回 `warn`，不阻断其他规则。
 - 解压规则均为 `hidden=true`，优先级为 `P0`。
+- 解压策略加载自 `deploy/config/extract_policy.yaml`：
+  - `whitelist.paths[]` 和 `whitelist.name_keywords[]` 命中后恢复既有解压流程。
+  - `nested.skip_all=true` 或 `nested.skip_paths[]` 命中的非白名单压缩项不读取成员，保留为最终文件。
+  - 路径前缀归一化后必须有目录边界；名称关键字按目录段和文件名忽略大小写匹配。
+  - 保留项计入任务预算；只有复制成功才是 `skipped`，冲突/失败/拒绝分别是 `conflict`、`failed`、`rejected`。
+  - manifest v3 的 `policy` 节保存快照、fingerprint、计数器和逐项决策；旧 manifest 没有 `policy` 仍可复用。
+- 策略是部署侧静态配置；没有在线修改 API、任务级覆盖或热更新契约。有效旧任务不因策略变化重建，现场缺失或损坏重建时使用当时配置。
 
 ### 差异
 
@@ -68,6 +76,8 @@
 - `TaskFileCatalog.match()` 委托 matcher，对每个相对路径执行 `re.fullmatch()`。
 - `RuleContext.resolved_files()` 通过 catalog 将相对路径解析到任务根内。
 - 单规则重跑先确保 manifest 和 `.main/` 可复用，必要时重建主包现场，再构建 catalog。
+- 策略跳过后的压缩项是 category 根下的最终文件，会进入 catalog；其内部成员不会进入 catalog。普通规则仍只依赖自身 `source_patterns[]`。
+- 普通规则无匹配时，执行器可根据同 category 的 manifest 审计补充可读 `skip_reason`；规则本身不读取 manifest、策略对象或其他规则数据。
 
 ### 差异
 

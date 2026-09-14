@@ -82,7 +82,7 @@ def _destination_relative(
 ) -> Path:
     if source_kind == "evidence":
         parts = source_relative.parts
-        if parts and parts[0] == CATEGORY_DIRECTORIES[category]:
+        if parts and len(parts) > 1 and parts[0] == CATEGORY_DIRECTORIES[category]:
             return Path(CATEGORY_DIRECTORIES[category]) / Path(*parts[1:])
         return Path(CATEGORY_DIRECTORIES[category]) / source_relative
     if group:

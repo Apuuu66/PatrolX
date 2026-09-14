@@ -123,11 +123,14 @@ python run_online.py
    - 文件按日志、KPI、话统、告警、配置、资源、其他分类落位；分类现场只保留最终规则输入。
    - `.log.gz` 在 `logs/` 内展开为同目录同名 `.log`，成功后移除工作现场的 `.log.gz`。
    - 同一子包通过 checksum/manifest 去重，只解压一次。
+   - 项目级 `extract_policy.yaml` 先判断白名单，再判断路径跳过/全局保留；主包本身始终解压。
+   - 命中跳过的嵌套压缩项和 `.log.gz` 不展开，作为 category 根下的最终文件保留；白名单命中仍走既有解压和安全流程。
    - 主包解压失败时任务失败，不进入后续阶段；子包或 gzip 局部失败保留原因并继续任务。
 
 4. **任务文件清单**
    - 全部解压隐藏规则到达终态后，执行器构建一次内存 `TaskFileCatalog`。
    - 清单只扫描 `logs/`、`kpi/`、`traffic/`、`alarm/`、`config/`、`resource/`、`other/` 七个 category 根。
+   - 策略跳过后的压缩项是 category 根下的最终文件，会进入清单；其内部成员不会进入清单。
    - `.main/`、manifest、`prepared/`、任务元数据、规则结果、报告和执行日志天然排除。
    - 清单返回 POSIX 相对路径，稳定排序、去重，并在发现链接或越界路径时拒绝。
 
@@ -234,9 +237,27 @@ deploy/config/classify_rules.yaml
 - `pkg.extract.{category}` 汇总对应分类的 manifest 终态，不再各自维护一套解压流程。
 - 解压清单为 `.patrolx-extracted.json`（manifest v3），记录主包现场、各级子包、`.log.gz`、失败和拒绝状态。
 - manifest 必须校验版本和结构；旧版本、损坏或不匹配 checksum 时整体安全重建现场。
-- 同 checksum 子包去重；任务级累计文件数、总字节数和嵌套深度构成固定安全预算。
+- manifest v3 新现场包含 `policy` 审计节，保存归一化策略快照、fingerprint 和计数器；007 旧 manifest 没有 `policy` 节仍可在有效 checksum 下复用。
+- 有效 manifest 按 checksum 复用现场，不因部署策略变化自动重建；现场缺失或损坏才按当时静态策略重建。
+- 同 checksum 子包去重；任务级累计文件数、总字节数和嵌套深度构成固定安全预算。策略跳过项复制/保留时同样计费。
 
-### 6.3 安全限制
+### 6.3 解压策略
+
+静态项目级配置位于：
+
+```text
+deploy/config/extract_policy.yaml
+```
+
+- 决策顺序：主包始终解压 → 普通文件保持既有分类拷贝 → 白名单路径 → 白名单名称关键字 → 全局保留 → 路径跳过 → 既有解压。
+- 路径作用域归一化为任务内 POSIX 目录前缀，`/0/`、`0/` 等价；`0/` 不匹配 `0a/file`。
+- 名称关键字对每个目录段和最终文件名做大小写无关子串匹配，只使用外部来源路径，不读取跳过压缩包内部。
+- 被跳过的压缩项复制到对应 category 根并保留相对路径；来源已在 category 子现场的项原地保留。
+- 复制成功记录 `skipped`；目标冲突、复制失败或预算拒绝记录局部 `failed` / `rejected`，不覆盖既有文件。
+- 执行器可在普通规则无匹配时，按同 category 的 manifest 审计补充可读 `skip_reason`；普通规则仍不读取 manifest 或策略对象。
+- 该文件是部署侧静态配置，不提供在线修改 API、任务级覆盖或热更新契约。
+
+### 6.4 安全限制
 
 所有解压必须防：
 
@@ -249,7 +270,7 @@ deploy/config/classify_rules.yaml
 
 超限或异常文件不应中断任务，应记录到解压规则结果或执行日志。
 
-### 6.4 真实样例
+### 6.5 真实样例
 
 真实包结构基准见：
 
