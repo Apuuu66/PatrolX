@@ -4,6 +4,7 @@ import {
   Breadcrumb,
   Button,
   Card,
+  Alert,
   Descriptions,
   Empty,
   Popconfirm,
@@ -20,6 +21,7 @@ import { api, type RuleResult, type RuleStatus, type SystemInspection, type Task
 import { RuleStatusTag, SeverityTag, TaskStatusTag } from "../components/StatusBadge";
 import { SummaryCards } from "../components/SummaryCards";
 import { usePolling } from "../hooks/usePolling";
+import { latestTaskFailure } from "../utils/taskFailure";
 import { countByStatus, filterByStatus, toggleStatusFilter, type StatusFilter } from "../utils/taskFilter";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -41,17 +43,20 @@ export function TaskDetailPage() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [t, s, inspectors] = await Promise.all([
+      const [t, s, inspectors, logs] = await Promise.all([
         api.getTask(taskId),
         api.getSystem(taskId).catch(() => null),
         api.listInspectors(undefined, true),
+        api.getTaskLogs(taskId).catch(() => null),
       ]);
       setTask(t);
       setSystem(s);
       setHidden(new Set(inspectors.filter((i) => i.hidden).map((i) => i.code)));
+      setFailure(latestTaskFailure(logs?.entries ?? []));
     } catch (err) {
       message.error(err instanceof Error ? err.message : "加载失败");
     } finally {
@@ -214,6 +219,10 @@ export function TaskDetailPage() {
           ]}
         />
       </Card>
+
+      {task.status === "failed" && failure && (
+        <Alert type="error" showIcon message="任务失败" description={failure} style={{ marginBottom: 16 }} />
+      )}
 
       {grouped.length === 0 && statusFilter !== null && (
         <Card style={{ marginBottom: 16 }}>
