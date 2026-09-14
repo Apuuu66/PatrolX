@@ -6,11 +6,15 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.core.archive import ArchiveError
+from app.core.checksum import sha256_file
 from app.core.metrics import RULES_TOTAL
 from app.inspectors.base import Inspector
 from app.inspectors.registry import RuleRegistry
 from app.models.schemas import RuleResult, RuleStatus
-from app.services.prepare import marker_path, match_relative_files, rule_file_sha256
+from app.services import extraction
+from app.services.prepare import marker_path, rule_file_sha256
+from app.services.scanning import TaskFileCatalog, validate_patterns
 
 LogFn = Callable[[str, str, dict], None]
 
@@ -34,13 +38,22 @@ class RuleContext:
         self.result_dir = result_dir
         self.prepared_dir = prepared_dir or data_dir / "prepared"
         self.files: list[Path] = []
+        self.catalog: TaskFileCatalog | None = None
         self.prepare_states: dict[str, str] = {}
 
     def log(self, level: str, message: str, **detail: object) -> None:
         self._log(level, message, detail)
 
+    def ensure_catalog(self) -> TaskFileCatalog:
+        """确保解压终态后的任务文件清单只构建一次。"""
+        if self.catalog is None:
+            self.catalog = TaskFileCatalog.build(self.data_dir)
+        return self.catalog
+
     def resolved_files(self) -> list[Path]:
         """将相对匹配路径解析为任务现场中的实际文件。"""
+        if self.catalog is not None:
+            return [self.catalog.resolve(ctx_file) for ctx_file in self.files]
         return [ctx_file if ctx_file.is_absolute() else self.data_dir / ctx_file for ctx_file in self.files]
 
 
@@ -77,9 +90,21 @@ class Executor:
     def _matched_files(self, rule: Inspector, ctx: RuleContext) -> list[Path]:
         if not rule.source_patterns:
             return []
-        files = match_relative_files(ctx.data_dir, rule.source_patterns)
-        prepared_root = ctx.prepared_dir.resolve()
-        return [path for path in files if not (ctx.data_dir / path).resolve().is_relative_to(prepared_root)]
+        catalog = ctx.ensure_catalog()
+        for pattern in rule.source_patterns:
+            try:
+                validate_patterns([pattern])
+            except ValueError as exc:
+                ctx.log(
+                    "error",
+                    "pattern_rejected",
+                    task_id=ctx.task_id,
+                    rule_code=rule.code,
+                    pattern=pattern,
+                    error=str(exc),
+                )
+                raise
+        return catalog.match(rule.source_patterns)
 
     @staticmethod
     def _validate_metrics(rule: Inspector, result: RuleResult) -> str | None:
@@ -98,7 +123,11 @@ class Executor:
         """执行或复用 owner 私有 prepare；状态不进入公共 RuleResult。"""
         owner_dir = ctx.prepared_dir / owner.code
         marker = marker_path(ctx, owner.code)
-        matched = self._matched_files(owner, ctx)
+        try:
+            matched = self._matched_files(owner, ctx)
+        except ValueError:
+            ctx.prepare_states[owner.code] = "FAILED"
+            return "FAILED"
         if not matched:
             ctx.prepare_states[owner.code] = "SKIP"
             ctx.log(
@@ -108,6 +137,7 @@ class Executor:
                 rule_code=owner.code,
                 prepare_code=prepare.code,
                 reason="未发现匹配源文件",
+                prepare_state="SKIP",
             )
             return "SKIP"
         expected_sha256 = rule_file_sha256(owner)
@@ -120,6 +150,7 @@ class Executor:
                 task_id=ctx.task_id,
                 rule_code=owner.code,
                 prepare_code=prepare.code,
+                prepare_state="HIT",
             )
             return "HIT"
 
@@ -136,6 +167,7 @@ class Executor:
                 task_id=ctx.task_id,
                 rule_code=owner.code,
                 prepare_code=prepare.code,
+                prepare_state="REBUILT",
             )
             return "REBUILT"
         except Exception as exc:  # noqa: BLE001 - prepare 失败必须隔离为 owner skip
@@ -147,6 +179,7 @@ class Executor:
                 rule_code=owner.code,
                 prepare_code=prepare.code,
                 error=str(exc),
+                prepare_state="FAILED",
             )
             return "FAILED"
 
@@ -177,7 +210,20 @@ class Executor:
             self.collected[rule.code] = result
             RULES_TOTAL.labels(rule=rule.code, status=result.status.value).inc()
             return result
-        ctx.files = self._matched_files(rule, ctx)
+        started = time.monotonic()
+        try:
+            ctx.files = self._matched_files(rule, ctx)
+        except ValueError as exc:
+            result = self._result(
+                rule,
+                status=RuleStatus.ERROR,
+                summary="source_patterns 执行异常",
+                duration_ms=int((time.monotonic() - started) * 1000),
+                metadata={"error": str(exc)},
+            )
+            self.collected[code] = result
+            RULES_TOTAL.labels(rule=code, status=result.status.value).inc()
+            return result
         ctx.log(
             "info",
             f"执行规则 {code}",
@@ -185,7 +231,6 @@ class Executor:
             version=rule.rule_version,
             matched_files=[p.as_posix() for p in ctx.files],
         )
-        started = time.monotonic()
         if rule.source_patterns and not ctx.files:
             result = self._result(
                 rule,
@@ -193,6 +238,13 @@ class Executor:
                 summary="未发现匹配源文件",
                 skip_reason=f"source_patterns 未匹配到文件: {', '.join(rule.source_patterns)}",
                 duration_ms=int((time.monotonic() - started) * 1000),
+            )
+            ctx.log(
+                "info",
+                "inspect_skip_no_match",
+                task_id=ctx.task_id,
+                rule_code=rule.code,
+                source_patterns=rule.source_patterns,
             )
             self.collected[code] = result
             RULES_TOTAL.labels(rule=code, status=result.status.value).inc()
@@ -262,6 +314,12 @@ class Executor:
                 )
                 return results
 
+        try:
+            ctx.ensure_catalog()
+        except Exception as exc:  # noqa: BLE001 - 构建清单异常必须保留原因并继续传播
+            ctx.log("error", "catalog_error", task_id=ctx.task_id, error=str(exc))
+            raise
+
         for owner, prepare in self.registry.prepares():
             self._run_prepare(owner, prepare, ctx)
 
@@ -269,9 +327,23 @@ class Executor:
             results[code] = self.run_one(code, ctx)
         return results
 
+    def _ensure_extraction_site(self, ctx: RuleContext) -> None:
+        """单规则重跑前确保主包解压现场与 manifest 可复用。"""
+        if ctx.package_path is None or not ctx.package_path.exists():
+            return
+        checksum = sha256_file(ctx.package_path)
+        if extraction.reusable_manifest(ctx.data_dir, checksum) is not None:
+            return
+        try:
+            extraction.extract_main_site(ctx.package_path, ctx.data_dir, checksum, log=ctx.log)
+        except ArchiveError as exc:
+            raise ValueError(f"单规则重跑前主包解压失败: {exc}") from exc
+
     def run_rule_with_deps(self, code: str, ctx: RuleContext) -> RuleResult:
-        """单规则重跑：先保证 owner prepare 就绪，再只执行目标 inspect。"""
+        """单规则重跑：先保证解压现场与 owner prepare 就绪，再只执行目标 inspect。"""
         rule = self.registry.get(code)
+        self._ensure_extraction_site(ctx)
+        ctx.ensure_catalog()
         if rule.prepare is not None:
             self._run_prepare(rule, rule.prepare, ctx)
         return self.run_one(code, ctx)

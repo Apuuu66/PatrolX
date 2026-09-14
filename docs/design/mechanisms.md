@@ -40,71 +40,59 @@
 ### 差异
 
 - 目前日志过滤通过 `source_patterns` 直读最终 `.log`；`.main/` 只作为证据现场，不进入规则匹配。
-- 文档和红线期望普通规则通过 `source_patterns` 匹配文件；当前部分规则仍以 artifact 依赖为主，尚未全面迁移。
+- 解压分类现场是普通规则的唯一磁盘输入来源；普通规则不再通过隐藏规则直接交换数据。
 
-## 2. Artifact 依赖机制
+## 2. TaskFileCatalog 机制
 
 ### 目标设计
 
-- 规则之间不直接导入、实例化或调用。
-- 规则可以通过显式 artifact 表达数据依赖。
-- artifact 必须记录生产者规则、生产者版本和路径。
-- artifact 只能由唯一规则生产。
-- 执行器负责在依赖缺失或版本过期时补跑生产者。
-- 依赖优先级必须保证生产者优先于消费者执行。
+- `EXTRACT` 是统一屏障；主包、嵌套子包和 `.log.gz` 全部先展开到终态。
+- 解压完成后构建一次任务级内存文件清单，不持久化、不复制文件。
+- 清单只扫描七个 category 根目录，返回稳定排序、去重的 POSIX 相对路径。
+- 链接、越界路径、非法 pattern 和路径穿越立即拒绝。
+- 普通规则和 owner 私有 prepare 的输入必须来自同一个 `TaskFileCatalog`。
 
 ### 当前实现
 
 实现位于：
 
+- `app/services/extraction/`
+- `app/services/scanning/catalog.py`
+- `app/services/scanning/matcher.py`
 - `app/services/executor.py`
-- `app/services/artifacts.py`
-- `app/inspectors/registry.py`
 
 关键机制：
 
-- `Inspector.outputs_artifacts[]` 声明产出。
-- `Inspector.inputs[]` 声明消费。
-- `ArtifactStore` 使用 `.artifacts.json` 记录 artifact 元数据。
-- `ArtifactStore.valid()` 校验：
-  - artifact 存在；
-  - producer rule code 一致；
-  - producer `rule_version` 一致。
-- `Executor.plan()` 按 priority 分组执行，并在同优先级内按依赖拓扑排序。
-- `Executor.run_rule_with_deps()` 会补跑缺失或版本过期的依赖。
+- `Executor.run_all()` 在 `EXTRACT` 主包屏障和其余解压规则完成后调用 `ctx.ensure_catalog()`。
+- `TaskFileCatalog.build()` 只扫描 `logs`、`kpi`、`traffic`、`alarm`、`config`、`resource`、`other`。
+- `TaskFileCatalog.match()` 委托 matcher，对每个相对路径执行 `re.fullmatch()`。
+- `RuleContext.resolved_files()` 通过 catalog 将相对路径解析到任务根内。
+- 单规则重跑先确保 manifest 和 `.main/` 可复用，必要时重建主包现场，再构建 catalog。
 
 ### 差异
 
-- artifact 机制已经落地，但和 AGENTS.md 中“规则只读取自己的 `source_patterns` 匹配文件”的模型并存，需要明确迁移边界。
-- 不应把普通规则间的 artifact 依赖当作长期设计；可保留基础设施规则产出数据的模式，普通规则之间的消费关系仍需收敛。
+当前核心路径已解耦；后续新增数据入口必须接入 catalog，不得恢复规则内遍历任务目录。
 
 ## 3. `source_patterns` 机制
 
 ### 目标设计
 
 - 普通规则声明 `source_patterns[]`。
-- pattern 使用正则语义，执行器用完整匹配匹配任务输出目录内的相对路径。
+- pattern 对 `TaskFileCatalog` 中的 POSIX 相对路径执行完整匹配。
 - 路径分隔符统一为 `/`。
 - 规则只能读取匹配到的文件，不得直接依赖其他规则实现。
 - 无匹配文件、格式不适用或解析失败时返回 `skip` 和非空 `skip_reason`。
 
 ### 当前实现
 
-- `Inspector` 数据类尚未定义 `source_patterns[]` 字段。
-- 当前日志规则主要通过 `log.filter` artifact 获取数据。
-- 解压规则通过分类目录和隐藏规则准备数据。
-- 测试中已有按类别目录构造输入的用例，但没有统一的 source pattern 执行路径。
+- `Inspector.source_patterns[]` 在注册时校验非空、无首尾空白、无绝对路径、无穿越和 `~`。
+- matcher 在运行时再次防御校验，拒绝非法正则、绝对路径、Windows 盘符、`~` 和路径穿越。
+- 执行器把匹配结果交给普通规则；owner prepare 使用同一机制接收自己的 source_patterns 输入。
+- 无匹配的普通规则返回 `skip`，prepare 状态为 `SKIP`。
 
 ### 差异
 
-这是当前最明显的机制差异：
-
-| 主题 | 期望 | 当前 |
-| --- | --- | --- |
-| 数据来源 | 规则声明 `source_patterns[]`，由执行器匹配 | 部分规则依赖前置规则 artifact |
-| 规则耦合 | 不依赖其他规则实现 | 下游日志规则依赖 `log.filter.artifacts.filtered_logs` |
-| 无匹配文件 | 返回 `skip` | 当前多数规则可以跳过，但匹配机制未统一 |
-| 路径边界 | 执行器统一控制 | 尚未完整落地 |
+核心路径已统一；新增规则不得引入规则间 artifact 或 prepare 依赖。
 
 ## 4. 日志过滤机制
 
@@ -112,52 +100,36 @@
 
 实现位于 `app/inspectors/log/filter.py`。
 
-`log.filter` 是 P0 日志规则，负责把原始日志转换为规范化 artifact。
+`log.filter` 是 P0 普通日志统计规则，不产出供其他规则消费的规范化 artifact。
 
 输入：
 
 ```text
-output/<task_id>/log/**/*.log
-output/<task_id>/log/**/*.log.gz
+TaskFileCatalog 中匹配 ^logs/.*\.log$ 的文件
 ```
 
 输出：
 
 ```text
-artifacts/log.filter/log.filter.artifacts.filtered_logs/
-├── filtered.jsonl
-├── filtered.log
-└── index.json
+output/<task_id>/rules/log.filter.json
 ```
 
 处理逻辑：
 
-1. 扫描 `ctx.data_dir / "log"` 下的 `.log` 和 `.log.gz` 文件。
+1. 通过 `TaskFileCatalog` 接收匹配到的最终 `.log` 文件。
 2. 按目录结构推导服务名和节点名：
    - 去掉 `ServiceLog_*` 前缀目录；
    - 忽略 `log` / `logs` 目录名；
-   - 如果没有目录信息，则用文件名去掉 `.log` / `.log.gz` 作为服务名。
-3. 使用正则解析标准日志行：
-
-   ```text
-   timestamp LEVEL message
-   ```
-
-4. 只保留 `WARN` / `WARNING` / `ERROR` / `FATAL` / `CRITICAL`。
+   - 如果没有目录信息，则用文件名推导服务名。
+3. 使用正则解析标准日志行：`timestamp LEVEL message`。
+4. 统计 `WARN` / `WARNING` / `ERROR` / `FATAL` / `CRITICAL` 保留行和总扫描行。
 5. 错误级日志后的无法独立解析的连续非空行标记为 `STACK`。
-6. 单个文件读取失败只记录 warn，不中断整个任务。
-7. 无日志文件时返回 `skip`。
+6. 无匹配日志或没有可解析记录时返回 `skip`；读取异常返回 `error`。
 
 ### 差异
 
-- `params` 中声明了 `min_level`，但实际使用硬编码：
-
-  ```python
-  MIN_LEVEL = 30
-  ```
-
-- `index.json` 的 `files[]` 来自扫描到的文件列表，不一定全部成功解析。
-- `filtered.jsonl` 是中间产物契约；长期是否保留需要结合 `source_patterns` 机制重新评审。
+- 过滤等级当前是模块常量 `MIN_LEVEL = 30`，阈值参数化是后续优化点。
+- 该规则只是统计入口；分析类日志规则同样直读各自匹配的源日志。
 
 ## 5. 日志服务与节点识别机制
 
@@ -166,7 +138,7 @@ artifacts/log.filter/log.filter.artifacts.filtered_logs/
 规则通过目录结构识别服务与节点：
 
 ```text
-log/ServiceLog_<timestamp>/<service>/logs/<node>/<file>.log.gz
+logs/ServiceLog_<timestamp>/<service>/logs/<node>/<file>.log
 ```
 
 处理策略：
@@ -180,7 +152,7 @@ log/ServiceLog_<timestamp>/<service>/logs/<node>/<file>.log.gz
 示例：
 
 ```text
-log/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log.gz
+logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log
 ```
 
 会被识别为：
@@ -204,8 +176,7 @@ node    = paas-192.168.2.2
   ```
 
 - 遇到下一个可解析的标准日志头时重新判断是否开启堆栈跟随。
-- `log.stacktrace` 会读取 `filtered.jsonl`：
-  - 统计 `STACK` 行；
+- `log.stacktrace` 通过共享解析结果统计 `STACK` 行：
   - 用正则识别异常类名，例如 `FooException`、`BarError`；
   - 按 `(service, exception_type)` 聚合。
 
@@ -248,7 +219,7 @@ node    = paas-192.168.2.2
 - `log.aaa_service` 只处理 `service == "AAAService"`。
 - `log.app_service` 只处理 `service == "AppService"`。
 
-这些规则仍然依赖 `log.filter` 的规范化 artifact。
+这些规则直接过滤 `TaskFileCatalog` 匹配到的源日志记录。
 
 | 规则 | 匹配方式 | 判定 |
 | --- | --- | --- |
@@ -265,7 +236,7 @@ node    = paas-192.168.2.2
 
 当前日志规则普遍遵循：
 
-- 无依赖 artifact：`skip`
+- 无匹配源文件或无可解析记录：`skip`
 - 无匹配服务日志：`skip`
 - 无错误或无命中：`pass`
 - 有轻微问题：`warn`
@@ -287,9 +258,7 @@ node    = paas-192.168.2.2
 
 为了收敛机制，建议后续按以下方向处理：
 
-1. 为 `Inspector` 增加 `source_patterns[]` 字段，并由执行器统一匹配文件。
-2. 明确 artifact 机制只允许基础设施或显式前置准备使用，避免普通规则之间形成实现级依赖。
-3. 将日志规则逐步迁移到 `source_patterns`，让规则只声明自己关心的日志文件。
-4. 如果保留 `log.filter`，应将其定位为显式的基础设施规则，而不是普通业务规则。
-5. 将阈值从代码常量迁移到可配置参数，并保持结果契约稳定。
-6. 补充日志量大时的流式处理和内存边界测试。
+1. 新增规则必须只通过 `TaskFileCatalog` 接收 source_patterns 匹配结果。
+2. 不为普通规则引入规则间 artifact 或 prepare 依赖。
+3. 阈值继续收敛到可配置参数，并保持结果契约稳定。
+4. 补充日志量大时的流式处理和内存边界测试。

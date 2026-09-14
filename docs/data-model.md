@@ -148,7 +148,7 @@ summary.total = pass + warn + fail + error + skip
 
 规则不消费中间产物契约，也不依赖其他规则实现。
 
-- `source_patterns[]` 是 Python regex，执行器使用 `re.fullmatch()` 匹配 `output/<task_id>/` 内以 `/` 归一化的相对路径。
+- `source_patterns[]` 是 Python regex，执行器对 `TaskFileCatalog` 中的 `/` 归一化相对路径执行 `re.fullmatch()`。
 - 路径分隔符统一为 `/`，模式不得造成路径穿越或逃逸任务目录。
 - 执行器把匹配到的相对路径交给规则；示例为 `^logs/.*\.(log|log\.gz)$`、`^kpi/.*$`。
 - 物理日志目录是 `logs/`，规则类别仍然是 `log`。
@@ -156,7 +156,17 @@ summary.total = pass + warn + fail + error + skip
 - prepared 数据只保存在 `output/<task_id>/prepared/<owner_code>/`，只有 owner 规则可读取，不写入规则契约，也不作为公共输入。
 - 无匹配文件、格式不适用或解析失败时必须返回 `skip` 和非空原因。
 
-## 8. 文件组织
+## 8. TaskFileCatalog
+
+`TaskFileCatalog` 是执行期内存清单，不属于 API、SQLite 或磁盘契约。
+
+- 构建时机：全部 `pkg.extract.*` 到达终态后；单规则重跑先确保解压现场可复用。
+- 扫描范围：`logs/`、`kpi/`、`traffic/`、`alarm/`、`config/`、`resource/`、`other/`。
+- 路径形式：相对 `output/<task_id>/` 的 POSIX 路径，去重并按字典序稳定排序。
+- 排除范围：`.main/`、manifest、`prepared/`、任务元数据、规则结果、报告和执行日志。
+- 安全约束：拒绝符号链接、越界路径、非法正则和路径穿越。
+
+## 9. 文件组织
 
 ```text
 output/<task_id>/
@@ -191,7 +201,7 @@ output/<task_id>/prepared/<owner_code>/
 
 该目录属于内部运行时数据，不进入公共 API 契约。
 
-## 9. 示例
+## 10. 示例
 
 ```json
 {
@@ -252,7 +262,7 @@ output/<task_id>/prepared/<owner_code>/
 }
 ```
 
-## 10. 扩展规则
+## 11. 扩展规则
 
 新增能力时：
 

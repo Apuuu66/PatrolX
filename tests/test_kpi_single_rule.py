@@ -8,7 +8,7 @@ from app.inspectors.kpi import common as kpi_common
 from app.inspectors.registry import registry
 from app.models.schemas import RuleStatus
 from app.services.executor import Executor, RuleContext
-from app.services.prepare import match_relative_files
+from app.services.scanning import match_paths
 
 
 def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
@@ -60,7 +60,7 @@ def test_kpi_source_patterns_match_only_own_domain_and_period(tmp_path: Path) ->
     registry.load_all()
     executor = Executor(registry)
 
-    assert [p.as_posix() for p in match_relative_files(ctx.data_dir, [r"^kpi/kpi-api-5\.csv$"])] == [
+    assert [p.as_posix() for p in match_paths([Path("kpi/kpi-api-5.csv")], [r"^kpi/kpi-api-5\.csv$"])] == [
         "kpi/kpi-api-5.csv"
     ]
     expected = {

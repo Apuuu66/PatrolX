@@ -255,13 +255,17 @@ def test_normal_rules_do_not_match_main_evidence(tmp_path, monkeypatch) -> None:
     env: Env = setup_env(tmp_path, monkeypatch)
     package = _multi_level_package(env)
     from app.cli import run_task
-    from app.services.prepare import match_relative_files
+    from app.services.scanning import TaskFileCatalog
 
     task = run_task(package, task_id="task-matching")
     task_dir = env.task_dir(task.task_id)
-    matched = match_relative_files(task_dir, [r"\.main/.*", r"kpi/.*\.csv", r"\.patrolx-extracted\.json"])
+    matched = TaskFileCatalog.build(task_dir).match([r".*"])
 
-    assert [path.as_posix() for path in matched] == ["kpi/kpi_data/kpi/inner_kpi.csv"]
+    posix_paths = [path.as_posix() for path in matched]
+
+    assert "kpi/kpi_data/kpi/inner_kpi.csv" in posix_paths
+    assert not any(path.startswith(".main/") for path in posix_paths)
+    assert ".patrolx-extracted.json" not in posix_paths
 
 
 def test_manifest_structure_and_old_version_are_not_reused(tmp_path, monkeypatch) -> None:

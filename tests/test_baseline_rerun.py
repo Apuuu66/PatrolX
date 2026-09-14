@@ -143,3 +143,29 @@ def test_kpi_rules_rerun_without_prepare_and_deterministically(tmp_path: Path, m
                 continue
             path = env.rules_dir(task_id) / f"{other}.json"
             assert path.stat().st_mtime_ns == mtimes[other]
+
+
+def test_single_rule_rerun_reuses_valid_manifest(tmp_path: Path, monkeypatch) -> None:
+    """manifest 与主包 checksum 一致时，单规则重跑不得重建解压现场。"""
+    env = setup_env(tmp_path, monkeypatch)
+    from app.cli import run_single_rule, run_task
+    from app.services import extraction
+
+    package = tmp_path / "reuse-manifest.zip"
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr(
+            "kpi/kpi-api-15.csv",
+            "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,2026-09-01 10:00:00,2026-09-01 10:15:00,100,90\n",
+        )
+    task_id = run_task(package).task_id
+    before = {path.relative_to(env.task_dir(task_id)).as_posix() for path in env.task_dir(task_id).rglob("*")}
+
+    def unexpected_extract(*args, **kwargs):
+        raise AssertionError("manifest 有效时单规则重跑不应重建解压现场")
+
+    monkeypatch.setattr(extraction, "extract_main_site", unexpected_extract)
+    run_single_rule("kpi.api", package=package, task_id=task_id)
+
+    after = {path.relative_to(env.task_dir(task_id)).as_posix() for path in env.task_dir(task_id).rglob("*")}
+    assert load_rule(env, task_id, "kpi.api")["status"] == "pass"
+    assert before == after

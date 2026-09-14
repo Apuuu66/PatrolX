@@ -10,6 +10,7 @@ from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry, registry
 from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext, make_result
+from app.services.scanning import match_paths
 
 
 def make_registry() -> tuple[RuleRegistry, list[str]]:
@@ -391,15 +392,12 @@ def test_registry_keeps_prepare_contracts_unique_and_queryable() -> None:
         )
 
 
-def test_prepare_context_matches_relative_files_safely(tmp_path: Path) -> None:
-    from app.services.prepare import match_relative_files
+def test_matcher_matches_relative_files_safely() -> None:
+    paths = [Path("logs/a.log"), Path("logs/b.txt")]
 
-    (tmp_path / "logs").mkdir()
-    (tmp_path / "logs/a.log").write_text("a", encoding="utf-8")
-    (tmp_path / "logs/b.txt").write_text("b", encoding="utf-8")
-    assert [p.as_posix() for p in match_relative_files(tmp_path, [r"^logs/.*\.log$"])] == ["logs/a.log"]
+    assert [p.as_posix() for p in match_paths(paths, [r"^logs/.*\.log$"])] == ["logs/a.log"]
     with pytest.raises(ValueError, match="禁止路径穿越"):
-        match_relative_files(tmp_path, [r"^\.\./.*$"])
+        match_paths(paths, [r"^\.\./.*$"])
 
 
 def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch) -> None:

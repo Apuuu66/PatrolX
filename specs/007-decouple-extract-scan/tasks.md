@@ -18,9 +18,9 @@
 
 **目的**：建立实现现场并锁定重构基线。
 
-- [ ] T001 执行 `git worktree list`，创建或复用 `feature/decouple-extract-scan` 的 worktree `.worktrees/feature-decouple-extract-scan/`；先提交 `specs/007-decouple-extract-scan/` 全部规划产物，再在 worktree 内实施。
-- [ ] T002 [P] 在 `tests/test_extraction_site.py` 中整理并保留现有主包、嵌套包、`.log.gz`、manifest v3 和安全拒绝回归场景；如存在缺口，先补充失败测试。
-- [ ] T003 [P] 在 `tests/test_baseline_pipeline.py`、`tests/test_baseline_consistency.py` 和 `tests/test_online_identity.py` 中确认现有任务结果、`RuleResult` 字段、CLI/API 语义和报告基线；不得修改公共期望字段。
+- [x] T001 执行 `git worktree list`，创建或复用 `feature/decouple-extract-scan` 的 worktree `.worktrees/feature-decouple-extract-scan/`；先提交 `specs/007-decouple-extract-scan/` 全部规划产物，再在 worktree 内实施。
+- [x] T002 [P] 在 `tests/test_extraction_site.py` 中整理并保留现有主包、嵌套包、`.log.gz`、manifest v3 和安全拒绝回归场景；如存在缺口，先补充失败测试。
+- [x] T003 [P] 在 `tests/test_baseline_pipeline.py`、`tests/test_baseline_consistency.py` 和 `tests/test_online_identity.py` 中确认现有任务结果、`RuleResult` 字段、CLI/API 语义和报告基线；不得修改公共期望字段。
 
 **检查点**：实现分支和 worktree 已就绪；现有回归基线明确。
 
@@ -30,11 +30,11 @@
 
 **目的**：先建立解压与扫描共同依赖的布局、预算、manifest 和测试夹具。
 
-- [ ] T004 在 `app/services/extraction/layout.py` 中创建分类目录常量、主证据目录常量、目标路径推导、路径穿越/符号链接防护和空目录清理 helper；由 `app/core/classify.py` 的分类结果驱动，不感知规则实现。
-- [ ] T005 [P] 在 `app/services/extraction/budget.py` 中迁移任务级 `ExtractionBudget`，保留任务累计最多 200,000 个文件、2GB 解压总量、最大递归深度 8 的固定预算，并协同 `app/core/archive.py` 的 `UnpackLimit`。
-- [ ] T006 在 `app/services/extraction/manifest.py` 中迁移 `manifest_path()`、`read_manifest()`、`write_manifest()`、`reusable_manifest()` 和 v3 最小结构校验；保持 `.patrolx-extracted.json`、`main`、`subpackages`、`log_gz`、`rejected` 语义不变。
-- [ ] T007 [P] 在 `tests/test_scanning_catalog.py` 中新增失败测试，覆盖七个 category 白名单、`.main/`、manifest、`prepared/`、任务元数据、规则结果、报告和执行日志排除、POSIX 路径排序、缺失 category 目录和链接/越界拒绝。
-- [ ] T008 [P] 在 `tests/test_scanning_matcher.py` 中新增失败测试，覆盖 `re.fullmatch()`、多模式并集去重、稳定排序、非法正则、空/首尾空白/绝对路径/路径穿越/`~` 拒绝。
+- [x] T004 在 `app/services/extraction/layout.py` 中创建分类目录常量、主证据目录常量、目标路径推导、路径穿越/符号链接防护和空目录清理 helper；由 `app/core/classify.py` 的分类结果驱动，不感知规则实现。
+- [x] T005 [P] 在 `app/services/extraction/budget.py` 中迁移任务级 `ExtractionBudget`，保留任务累计最多 200,000 个文件、2GB 解压总量、最大递归深度 8 的固定预算，并协同 `app/core/archive.py` 的 `UnpackLimit`。
+- [x] T006 在 `app/services/extraction/manifest.py` 中迁移 `manifest_path()`、`read_manifest()`、`write_manifest()`、`reusable_manifest()` 和 v3 最小结构校验；保持 `.patrolx-extracted.json`、`main`、`subpackages`、`log_gz`、`rejected` 语义不变。
+- [x] T007 [P] 在 `tests/test_scanning_catalog.py` 中新增失败测试，覆盖七个 category 白名单、`.main/`、manifest、`prepared/`、任务元数据、规则结果、报告和执行日志排除、POSIX 路径排序、缺失 category 目录和链接/越界拒绝。
+- [x] T008 [P] 在 `tests/test_scanning_matcher.py` 中新增失败测试，覆盖 `re.fullmatch()`、多模式并集去重、稳定排序、非法正则、空/首尾空白/绝对路径/路径穿越/`~` 拒绝。
 
 **检查点**：布局、预算和 manifest 的纯基础能力通过单元测试；catalog 与 matcher 的期望测试已失败。
 
@@ -46,11 +46,11 @@
 
 **独立测试**：执行包含嵌套包、`.log.gz` 和普通文件的大包，以及只含单一 category 的小包；检查 `.main/`、category 现场、manifest 状态、幂等复用、局部失败隔离和 prepare 不解压。
 
-- [ ] T009 [US1] 在 `tests/test_extraction_package.py` 中新增失败测试，分别覆盖大主包嵌套日志/KPI、小主包单 category、重复执行复用 manifest、checksum 损坏重建、主包失败阻断、子包/`.log.gz` 局部失败继续。
-- [ ] T010 [US1] 在 `app/services/extraction/nested.py` 中迁移子包与 `.log.gz` 有界递归展开；保留 staging、checksum 去重、冲突/失败/拒绝状态、来源关系和结构化日志。
-- [ ] T011 [US1] 在 `app/services/extraction/site.py` 中迁移 `extract_main_site()` 与 `category_failures()`；实现 `.main.staging/` → `.main/` 原子替换、`.main.previous/` 恢复、分类现场清理重建和 manifest 终态写入。
-- [ ] T012 [US1] 在 `app/services/extraction/__init__.py` 中提供兼容 facade，导出 `extract_main_site()`、`category_failures()`、manifest API、`ExtractionLogger`、`ExtractionBudget` 和常量；更新 `app/inspectors/pkg.py` 引用并保持隐藏规则行为。
-- [ ] T013 [US1] 运行 `pytest -q tests/test_extraction_site.py tests/test_extraction_package.py tests/test_baseline_extraction.py`，修复回归并确认同一包重复执行不重复解压、局部失败可追溯。
+- [x] T009 [US1] 在 `tests/test_extraction_package.py` 中新增失败测试，分别覆盖大主包嵌套日志/KPI、小主包单 category、重复执行复用 manifest、checksum 损坏重建、主包失败阻断、子包/`.log.gz` 局部失败继续。
+- [x] T010 [US1] 在 `app/services/extraction/nested.py` 中迁移子包与 `.log.gz` 有界递归展开；保留 staging、checksum 去重、冲突/失败/拒绝状态、来源关系和结构化日志。
+- [x] T011 [US1] 在 `app/services/extraction/site.py` 中迁移 `extract_main_site()` 与 `category_failures()`；实现 `.main.staging/` → `.main/` 原子替换、`.main.previous/` 恢复、分类现场清理重建和 manifest 终态写入。
+- [x] T012 [US1] 在 `app/services/extraction/__init__.py` 中提供兼容 facade，导出 `extract_main_site()`、`category_failures()`、manifest API、`ExtractionLogger`、`ExtractionBudget` 和常量；更新 `app/inspectors/pkg.py` 引用并保持隐藏规则行为。
+- [x] T013 [US1] 运行 `pytest -q tests/test_extraction_site.py tests/test_extraction_package.py tests/test_baseline_extraction.py`，修复回归并确认同一包重复执行不重复解压、局部失败可追溯。
 
 **检查点**：解压服务可独立演进；普通规则没有解压调用，prepare 没有通用解压。
 
@@ -62,12 +62,12 @@
 
 **独立测试**：对每个代表性规则，断言实际 `ctx.files` 等于 catalog 上 `source_patterns[]` 的 fullmatch 结果；无匹配返回 `skip`，非法模式被拒绝。
 
-- [ ] T014 [US2] 在 `app/services/scanning/catalog.py` 中实现 `TaskFileCatalog.build()`、`paths()`、`match()`、`resolve()`；清单不持久化，只保存并返回 `/` 归一化、去重且稳定排序的相对路径。
-- [ ] T015 [US2] 在 `app/services/scanning/matcher.py` 和 `app/services/scanning/__init__.py` 中实现模式防御校验与 `re.fullmatch()`；`matcher` 不做文件系统遍历，`catalog` 不修改文件系统。
-- [ ] T016 [US2] 在 `app/services/executor.py` 中为 `RuleContext` 注入 catalog，新增 `ensure_catalog()`；全量执行在 `EXTRACT` 屏障后构建一次，单规则重跑先确保解压现场就绪再构建。
-- [ ] T017 [US2] 更新 `app/services/prepare.py`：删除 `match_relative_files()`，只保留 `prepared_dir()`、`marker_path()`、`rule_python_path()`、`rule_file_sha256()`；更新 `app/services/executor.py` 与相关测试调用。
-- [ ] T018 [US2] 在 `tests/test_executor.py`、`tests/test_prepare_pipeline.py`、`tests/test_prepare_cache.py` 和 `tests/test_rerun_status.py` 中更新并补充失败测试，覆盖 catalog 注入、prepare 输入、缓存命中/重建、无匹配 `skip`、prepare 失败隔离和非法 pattern 拒绝。
-- [ ] T019 [US2] 运行 `pytest -q tests/test_scanning_catalog.py tests/test_scanning_matcher.py tests/test_executor.py tests/test_prepare_pipeline.py tests/test_prepare_cache.py tests/test_rerun_status.py`，修复回归并确认所有普通规则匹配来自同一 catalog。
+- [x] T014 [US2] 在 `app/services/scanning/catalog.py` 中实现 `TaskFileCatalog.build()`、`paths()`、`match()`、`resolve()`；清单不持久化，只保存并返回 `/` 归一化、去重且稳定排序的相对路径。
+- [x] T015 [US2] 在 `app/services/scanning/matcher.py` 和 `app/services/scanning/__init__.py` 中实现模式防御校验与 `re.fullmatch()`；`matcher` 不做文件系统遍历，`catalog` 不修改文件系统。
+- [x] T016 [US2] 在 `app/services/executor.py` 中为 `RuleContext` 注入 catalog，新增 `ensure_catalog()`；全量执行在 `EXTRACT` 屏障后构建一次，单规则重跑先确保解压现场就绪再构建。
+- [x] T017 [US2] 更新 `app/services/prepare.py`：删除 `match_relative_files()`，只保留 `prepared_dir()`、`marker_path()`、`rule_python_path()`、`rule_file_sha256()`；更新 `app/services/executor.py` 与相关测试调用。
+- [x] T018 [US2] 在 `tests/test_executor.py`、`tests/test_prepare_pipeline.py`、`tests/test_prepare_cache.py` 和 `tests/test_rerun_status.py` 中更新并补充失败测试，覆盖 catalog 注入、prepare 输入、缓存命中/重建、无匹配 `skip`、prepare 失败隔离和非法 pattern 拒绝。
+- [x] T019 [US2] 运行 `pytest -q tests/test_scanning_catalog.py tests/test_scanning_matcher.py tests/test_executor.py tests/test_prepare_pipeline.py tests/test_prepare_cache.py tests/test_rerun_status.py`，修复回归并确认所有普通规则匹配来自同一 catalog。
 
 **检查点**：普通规则不再遍历任务目录；prepare 不再拥有通用扫描函数。
 
@@ -79,10 +79,10 @@
 
 **独立测试**：静态边界测试确认依赖方向；仓库中没有旧的单文件混合入口和 prepare 通用扫描 helper。
 
-- [ ] T020 [US3] 删除旧 `app/services/extraction.py`；确认 `app/services/extraction/` facade 后，更新 `app/` 与 `tests/` 中所有 import。
-- [ ] T021 [US3] 清理 `app/services/prepare.py` 中扫描相关 import，确认 `app/services/scanning`、`app/services/prepare`、`app/services/extraction` 与 `app/inspectors` 遵守 `contracts/internal-extraction-scan.md` 的依赖规则。
-- [ ] T022 [P] [US3] 在 `tests/test_service_boundaries.py` 中新增静态边界测试，断言 extraction 不导入 scanning、scanning 不导入 prepare、prepare 不导入 scanning、普通规则不导入其他规则实现。
-- [ ] T023 [P] [US3] 更新 `docs/architecture.md`、`docs/design/mechanisms.md` 和 `docs/data-model.md`，描述统一 `EXTRACT`、`TaskFileCatalog`、matcher、prepare 边界和单规则重跑流程；不修改 OpenAPI 契约。
+- [x] T020 [US3] 删除旧 `app/services/extraction.py`；确认 `app/services/extraction/` facade 后，更新 `app/` 与 `tests/` 中所有 import。
+- [x] T021 [US3] 清理 `app/services/prepare.py` 中扫描相关 import，确认 `app/services/scanning`、`app/services/prepare`、`app/services/extraction` 与 `app/inspectors` 遵守 `contracts/internal-extraction-scan.md` 的依赖规则。
+- [x] T022 [P] [US3] 在 `tests/test_service_boundaries.py` 中新增静态边界测试，断言 extraction 不导入 scanning、scanning 不导入 prepare、prepare 不导入 scanning、普通规则不导入其他规则实现。
+- [x] T023 [P] [US3] 更新 `docs/architecture.md`、`docs/design/mechanisms.md` 和 `docs/data-model.md`，描述统一 `EXTRACT`、`TaskFileCatalog`、matcher、prepare 边界和单规则重跑流程；不修改 OpenAPI 契约。
 
 **检查点**：文件边界清晰、无跨职责循环依赖；文档与代码结构一致。
 
@@ -94,10 +94,10 @@
 
 **独立测试**：同一上传包分别通过 CLI/API 执行，除执行标识和时间戳外规则结果语义一致；单规则重跑只更新目标规则、摘要和报告。
 
-- [ ] T024 [P] [US4] 在 `tests/test_online_identity.py` 和 `tests/test_baseline_consistency.py` 中补充或收紧 CLI/API catalog 匹配路径、规则结果语义、执行顺序和来源路径一致性断言。
-- [ ] T025 [US4] 在 `tests/test_baseline_rerun.py` 和 `tests/test_rerun_status.py` 中验证单规则重跑：manifest 有效时复用现场，只执行目标 prepare/inspect，无关规则 JSON 不变，任务摘要与报告正确刷新。
-- [ ] T026 [US4] 运行 `make contract` 检查 OpenAPI 漂移；若出现差异，停止实现并回到 Speckit review，不得在任务内私自改契约。
-- [ ] T027 [US4] 运行 `pytest -q tests/test_baseline_rerun.py tests/test_rerun_status.py tests/test_baseline_consistency.py tests/test_online_identity.py tests/test_contract.py`，修复兼容性回归。
+- [x] T024 [P] [US4] 在 `tests/test_online_identity.py` 和 `tests/test_baseline_consistency.py` 中补充或收紧 CLI/API catalog 匹配路径、规则结果语义、执行顺序和来源路径一致性断言。
+- [x] T025 [US4] 在 `tests/test_baseline_rerun.py` 和 `tests/test_rerun_status.py` 中验证单规则重跑：manifest 有效时复用现场，只执行目标 prepare/inspect，无关规则 JSON 不变，任务摘要与报告正确刷新。
+- [x] T026 [US4] 运行 `make contract` 检查 OpenAPI 漂移；若出现差异，停止实现并回到 Speckit review，不得在任务内私自改契约。
+- [x] T027 [US4] 运行 `pytest -q tests/test_baseline_rerun.py tests/test_rerun_status.py tests/test_baseline_consistency.py tests/test_online_identity.py tests/test_contract.py`，修复兼容性回归。
 
 **检查点**：公共契约兼容；单规则重跑行为稳定；CLI/API 结果一致。
 
@@ -107,10 +107,10 @@
 
 **目的**：验证安全、可观测性和全流程质量门禁。
 
-- [ ] T028 在 `tests/test_archive.py`、`tests/test_extraction_package.py` 和 `tests/test_scanning_catalog.py` 中复核路径穿越、符号链接、深度、文件数、总量、checksum 去重和 catalog 越界拒绝均有断言。
-- [ ] T029 在 `tests/test_observability.py` 中确认主包、子包、`.log.gz`、catalog、pattern 拒绝、prepare 状态和 inspect 无匹配日志包含 `contracts/internal-extraction-scan.md` 要求的任务、规则、路径或原因上下文。
-- [ ] T030 [P] 按 `specs/007-decouple-extract-scan/quickstart.md` 手工执行大主包、小主包、单规则重跑和安全场景；记录任何有意行为优化。
-- [ ] T031 依次运行 `make lint`、`make test`、`make verify`；全部通过后更新 `specs/007-decouple-extract-scan/tasks.md` 复选框并在 worktree 内提交实现。
+- [x] T028 在 `tests/test_archive.py`、`tests/test_extraction_package.py` 和 `tests/test_scanning_catalog.py` 中复核路径穿越、符号链接、深度、文件数、总量、checksum 去重和 catalog 越界拒绝均有断言。
+- [x] T029 在 `tests/test_observability.py` 中确认主包、子包、`.log.gz`、catalog、pattern 拒绝、prepare 状态和 inspect 无匹配日志包含 `contracts/internal-extraction-scan.md` 要求的任务、规则、路径或原因上下文。
+- [x] T030 [P] 按 `specs/007-decouple-extract-scan/quickstart.md` 手工执行大主包、小主包、单规则重跑和安全场景；记录任何有意行为优化。
+- [x] T031 依次运行 `make lint`、`make test`、`make verify`；全部通过后更新 `specs/007-decouple-extract-scan/tasks.md` 复选框并在 worktree 内提交实现。
 
 ---
 
