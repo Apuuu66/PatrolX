@@ -37,12 +37,13 @@
 | `pip_available` | 可用于按锁文件安装依赖。 |
 | `lock_installed` | 环境依赖与 `requirements-lock.txt` 匹配。 |
 | `health` | `missing`、`ready`、`stale` 或 `incompatible`。 |
+| `state_marker` | 成功执行标准 `install` 后写入 `.venv/.patrolx-build-state.json`，记录 Python 主次版本和当前锁文件 SHA-256。 |
 
 ### 状态转换
 
 1. `missing → ready`：执行标准 `install` 成功。
 2. `ready → ready`：复用环境执行后端命令。
-3. `ready → stale/incompatible`：Python 版本、关键环境标记或锁内容不匹配。
+3. `ready → stale/incompatible`：Python 版本、关键环境标记、安装标记缺失/无效或锁内容不匹配。
 4. `stale/incompatible → ready`：按提示重建并重新执行 `install`。
 
 ## 后端依赖锁

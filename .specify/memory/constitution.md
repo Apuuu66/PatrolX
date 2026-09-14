@@ -82,13 +82,15 @@ OpenAPI 是在线 API 结构的唯一事实来源。后端接口变更前或变�
 
 ### 工具与工作流
 
+Python 构建入口 `build.py` 是构建、环境安装、锁维护、质量门禁、本地全流程和项目工作流的唯一权威入口；当前工作流不得引入或依赖 GNU Make、uv 或第二套构建入口。前端子命令仍由 `build.py` 统一调度，前端工具链语义不变。
+大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Speckit；小修复可以省略 Speckit。Speckit 是需求规格、实现方案和任务清单的唯一规划来源；规划产物在进入实现前提交，实现阶段只更新任务完成状态。Superpowers 只负责实现执行、调试、TDD 和完成前验证。
 大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Speckit；小修复可以省略 Speckit。Speckit 是需求规格、实现方案和任务清单的唯一规划来源；规划产物在进入实现前提交，实现阶段只更新任务完成状态。Speckit 必须按 `specify → clarify → review → plan → review → tasks → analyze → review → implement` 执行。`clarify` 用于在进入 review 和 plan 前消除 spec 歧义，并将结论回写 `spec.md`。`analyze` 在任务生成后、实现前以只读方式校验 `spec.md`、`plan.md` 和 `tasks.md` 的一致性；发现问题时必须先修正对应产物并重新 review，不得进入实现。Superpowers 只负责实现执行、调试、TDD 和完成前验证。
 Speckit 实现禁止默认在主工作区进行。tasks review 通过后必须创建实现分支，先提交全部 Speckit 产物（`spec.md`、`plan.md`、`tasks.md` 及检查清单），再创建或复用对应 worktree；实现、测试、调试和提交都必须在该 worktree 内完成。创建 worktree 前必须执行 `git worktree list`；禁止将未跟踪的规格产物复制到 worktree 中。
-合入主分支后，必须先在主分支上运行全部验证（`make lint`、`make test`，涉及前端变更时加 `npm test` 和 `npm run build`，涉及全流程时加 `make verify`），全部通过后才能删除 worktree 和实现分支。具体目录、复用和清理规则由 Agent 指南维护。
+合入主分支后，必须先在主分支上运行全部验证（`python build.py lint`、`python build.py test`，涉及前端变更时加 `python build.py e2e` 和 `python build.py web-build`，涉及全流程时加 `python build.py verify`），全部通过后才能删除 worktree 和实现分支。具体目录、复用和清理规则由 Agent 指南维护。
 
 ### 必须验证
 
-后端变更必须通过 `make lint` 和 `make test`。本地全流程变更必须通过 `make verify` 或等效入口。巡检规则变更必须通过本地规则执行验证，且必须具有单元测试和代表性样例数据。接口变更必须包含 OpenAPI 同步。改变逻辑的巡检器更新必须递增 `rule_version`。
+后端变更必须通过 `python build.py lint` 和 `python build.py test`。本地全流程变更必须通过 `python build.py verify`。巡检规则变更必须通过本地规则执行验证，且必须具有单元测试和代表性样例数据。接口变更必须包含 OpenAPI 同步。改变逻辑的巡检器更新必须递增 `rule_version`。
 
 ### 双模式兼容性
 

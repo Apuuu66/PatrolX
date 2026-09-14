@@ -8,12 +8,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt pyproject.toml ./
+COPY requirements-lock.txt pyproject.toml ./
 COPY app ./app
 COPY deploy ./deploy
 
 RUN pip install --no-cache-dir setuptools \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements-lock.txt \
+    && pip install --no-cache-dir --no-deps .
 
 EXPOSE 8000
 

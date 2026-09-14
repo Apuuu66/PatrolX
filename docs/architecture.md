@@ -74,10 +74,10 @@ core/         配置、注册表、安全解压、分类等基础能力
 常用入口：
 
 ```bash
-make verify                     # 等价于 python main.py，全流程
-make verify-one RULE=<code>     # 单规则重跑
-make test
-make lint
+python build.py verify                     # 全流程
+python build.py verify-one --rule <code>   # 单规则重跑
+python build.py test
+python build.py lint
 ```
 
 默认行为：
@@ -376,7 +376,7 @@ docs/api/openapi.yaml
 后端使用 Pydantic 和 FastAPI 保证契约一致；前端 API 客户端由 OpenAPI 生成：
 
 ```bash
-make gen-web-api
+python build.py gen-web-api
 ```
 
 禁止手写与契约不一致的调用代码。
@@ -463,21 +463,21 @@ InspectionTask
 最低质量门槛：
 
 ```bash
-make lint
-make test
+python build.py lint
+python build.py test
 ```
 
 本地流水线变更还需要：
 
 ```bash
-make verify
+python build.py verify
 ```
 
 契约变更：
 
 ```bash
-make contract
-make gen-web-api
+python build.py contract
+python build.py gen-web-api
 ```
 
 关键测试类型：
@@ -487,7 +487,7 @@ make gen-web-api
 - 安全测试：路径穿越、链接、解压炸弹防护。
 - 契约测试：Pydantic/OpenAPI 一致性。
 - 双模式测试：CLI 与 API 结果一致性，除 id/时间戳外逐字段比对。
-- 前端构建：`make web-build` 或等效命令。
+- 前端构建：`python build.py web-build` 或等效命令。
 
 ### 7.8 KPI CSV 巡检
 

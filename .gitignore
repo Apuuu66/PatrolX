@@ -20,10 +20,6 @@ web/node_modules/
 web/dist/
 web/.env.local
 
-# uv
-.uv/
-.uv-cache/
-
 # IDE
 .idea/
 .vscode/

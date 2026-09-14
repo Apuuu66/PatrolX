@@ -1,4 +1,4 @@
-"""make contract：由 FastAPI 生成 OpenAPI，与 docs/api/openapi.yaml 双向校验/导出。
+"""python build.py contract：由 FastAPI 生成 OpenAPI，与 docs/api/openapi.yaml 双向校验/导出。
 
 用法：
     python -m app.contract.export            # 校验模式：结构与契约一致则通过

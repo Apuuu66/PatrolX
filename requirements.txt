@@ -1,2 +1,0 @@
-# 运行时依赖（uv sync 或 pip install -r requirements.txt）
--e .
