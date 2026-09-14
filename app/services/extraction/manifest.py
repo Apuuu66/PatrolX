@@ -1,12 +1,16 @@
-"""解压清单 v3 的读写、校验与复用。"""
+"""解压清单 v4 的读写、校验与复用。"""
 
 import json
 from pathlib import Path
 
-from app.services.extraction.layout import MAIN_EVIDENCE_DIR, MANIFEST_NAME, MANIFEST_VERSION, WORK_CATEGORIES
+from app.services.extraction.layout import (
+    MAIN_EVIDENCE_DIR,
+    MANIFEST_NAME,
+    MANIFEST_VERSION,
+    WORK_CATEGORIES,
+)
 
-_SUBPACKAGE_STATUSES = {"extracted", "duplicate", "skipped", "failed", "rejected"}
-_LOG_GZ_STATUSES = {"extracted", "conflict", "skipped", "failed", "rejected"}
+_ITEM_STATUSES = {"extracted", "conflict", "duplicate", "skipped", "failed", "rejected"}
 _POLICY_REASONS = {"global_retain", "skip_path", "whitelist_path", "whitelist_keyword"}
 _POLICY_COUNTERS = {
     "skipped_subpackages",
@@ -15,6 +19,7 @@ _POLICY_COUNTERS = {
     "whitelisted_log_gz",
     "whitelisted_files",
 }
+_ERROR_CODES = {"path_too_long", "target_conflict", "duplicate", "budget_exceeded", "policy_skip"}
 
 
 def manifest_path(data_dir: Path) -> Path:
@@ -24,7 +29,14 @@ def manifest_path(data_dir: Path) -> Path:
 
 def read_manifest(data_dir: Path) -> dict:
     """读取 manifest；损坏时返回空结构。"""
-    empty: dict = {"version": MANIFEST_VERSION, "main": None, "subpackages": [], "log_gz": [], "rejected": []}
+    empty: dict = {
+        "version": MANIFEST_VERSION,
+        "main": None,
+        "files": [],
+        "subpackages": [],
+        "log_gz": [],
+        "rejected": [],
+    }
     path = manifest_path(data_dir)
     if not path.exists():
         return empty
@@ -37,6 +49,10 @@ def read_manifest(data_dir: Path) -> dict:
 
 def _is_nonnegative_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _is_optional_nonnegative_int(item: dict, key: str) -> bool:
+    return item.get(key) is None or _is_nonnegative_int(item.get(key))
 
 
 def _is_valid_policy_item(policy: object) -> bool:
@@ -78,6 +94,26 @@ def _is_valid_policy_snapshot(policy: object) -> bool:
         and set(counters) == _POLICY_COUNTERS
         and all(_is_nonnegative_int(counters.get(key)) for key in _POLICY_COUNTERS)
     )
+
+
+def _is_valid_path_limit(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"enabled", "limit", "fingerprint"}
+        and isinstance(value.get("enabled"), bool)
+        and (value.get("limit") is None or _is_nonnegative_int(value.get("limit")))
+        and isinstance(value.get("fingerprint"), str)
+        and len(value["fingerprint"]) == 64
+        and all(char in "0123456789abcdef" for char in value["fingerprint"])
+    )
+
+
+def _item_error_fields(item: dict) -> bool:
+    if item.get("error") is not None and not isinstance(item.get("error"), str):
+        return False
+    if item.get("error_code") is not None and item.get("error_code") not in _ERROR_CODES:
+        return False
+    return _is_optional_nonnegative_int(item, "path_length") and _is_optional_nonnegative_int(item, "path_limit")
 
 
 def _is_valid_policy_entry(item: dict, status: str) -> bool:
@@ -123,8 +159,60 @@ def sync_policy_counters(manifest: dict) -> dict[str, int]:
     return result
 
 
+def _validate_file(item: object) -> bool:
+    if not isinstance(item, dict):
+        return False
+    status = item.get("status")
+    if (
+        not isinstance(item.get("source"), str)
+        or not item["source"]
+        or not isinstance(item.get("target"), str)
+        or not item["target"]
+        or item.get("category") not in WORK_CATEGORIES
+        or status not in _ITEM_STATUSES
+        or (status not in {"extracted", "conflict", "skipped"} and not isinstance(item.get("error"), str))
+        or (status in {"extracted", "skipped"} and item.get("error") is not None)
+        or (status == "conflict" and not isinstance(item.get("error"), str))
+    ):
+        return False
+    return _item_error_fields(item)
+
+
+def _validate_subpackage(item: object) -> bool:
+    if not isinstance(item, dict):
+        return False
+    status = item.get("status")
+    if (
+        not isinstance(item.get("source"), str)
+        or not item["source"]
+        or item.get("category") not in WORK_CATEGORIES
+        or not _is_nonnegative_int(item.get("depth"))
+        or status not in _ITEM_STATUSES
+        or (status in {"failed", "rejected", "conflict"} and not isinstance(item.get("error"), str))
+        or (status == "extracted" and not isinstance(item.get("target"), str))
+    ):
+        return False
+    return _item_error_fields(item) and _is_valid_policy_entry(item, str(status))
+
+
+def _validate_log_gz(item: object) -> bool:
+    if not isinstance(item, dict):
+        return False
+    status = item.get("status")
+    if (
+        not isinstance(item.get("source_relative_path"), str)
+        or not item["source_relative_path"]
+        or not isinstance(item.get("target"), str)
+        or not _is_nonnegative_int(item.get("depth"))
+        or status not in _ITEM_STATUSES
+        or (status in {"conflict", "failed", "rejected"} and not isinstance(item.get("error"), str))
+    ):
+        return False
+    return _item_error_fields(item) and _is_valid_policy_entry(item, str(status))
+
+
 def validate_manifest(manifest: dict, *, require_policy: bool = False) -> bool:
-    """校验 manifest v3；旧 manifest 可无 policy，新 manifest 必须包含 policy。"""
+    """校验 manifest v4；新现场必须包含策略和路径限制上下文。"""
     main = manifest.get("main")
     if (
         manifest.get("version") != MANIFEST_VERSION
@@ -136,40 +224,17 @@ def validate_manifest(manifest: dict, *, require_policy: bool = False) -> bool:
         or not isinstance(main.get("reused"), bool)
     ):
         return False
-    for key in ("subpackages", "log_gz", "rejected"):
+    for key in ("files", "subpackages", "log_gz", "rejected"):
         if not isinstance(manifest.get(key), list):
             return False
-
-    for item in manifest["subpackages"]:
-        if not isinstance(item, dict):
-            return False
-        status = item.get("status")
-        if (
-            not isinstance(item.get("source"), str)
-            or item.get("category") not in WORK_CATEGORIES
-            or not _is_nonnegative_int(item.get("depth"))
-            or status not in _SUBPACKAGE_STATUSES
-            or (status in {"failed", "rejected"} and not isinstance(item.get("error"), str))
-            or (status == "extracted" and not isinstance(item.get("target"), str))
-        ):
-            return False
-        if not _is_valid_policy_entry(item, str(status)):
-            return False
-
-    for item in manifest["log_gz"]:
-        if not isinstance(item, dict):
-            return False
-        status = item.get("status")
-        if (
-            not isinstance(item.get("source_relative_path"), str)
-            or not isinstance(item.get("target"), str)
-            or not _is_nonnegative_int(item.get("depth"))
-            or status not in _LOG_GZ_STATUSES
-            or (status in {"conflict", "failed", "rejected"} and not isinstance(item.get("error"), str))
-        ):
-            return False
-        if not _is_valid_policy_entry(item, str(status)):
-            return False
+    if "path_limit" in manifest and not _is_valid_path_limit(manifest["path_limit"]):
+        return False
+    if not all(_validate_file(item) for item in manifest["files"]):
+        return False
+    if not all(_validate_subpackage(item) for item in manifest["subpackages"]):
+        return False
+    if not all(_validate_log_gz(item) for item in manifest["log_gz"]):
+        return False
 
     for item in manifest["rejected"]:
         if not isinstance(item, dict):
@@ -184,18 +249,20 @@ def validate_manifest(manifest: dict, *, require_policy: bool = False) -> bool:
 
     if "policy" in manifest and not _is_valid_policy_snapshot(manifest["policy"]):
         return False
-    return not require_policy or _is_valid_policy_snapshot(manifest.get("policy"))
+    return not require_policy or (
+        _is_valid_policy_snapshot(manifest.get("policy")) and _is_valid_path_limit(manifest.get("path_limit"))
+    )
 
 
 def _is_valid_manifest(manifest: dict) -> bool:
-    """兼容旧 manifest 的最小结构校验。"""
+    """manifest 复用前的完整结构校验。"""
     return validate_manifest(manifest, require_policy=False)
 
 
 def write_manifest(data_dir: Path, manifest: dict) -> None:
-    """写入新 manifest；新现场必须携带完整策略快照。"""
+    """写入新 manifest；新现场必须携带完整策略快照和路径限制上下文。"""
     if not validate_manifest(manifest, require_policy=True):
-        raise ValueError("manifest v3 缺少策略快照或包含无效策略状态")
+        raise ValueError("manifest v4 缺少策略快照、路径限制上下文或包含无效状态")
     sync_policy_counters(manifest)
     manifest_path(data_dir).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
@@ -204,7 +271,7 @@ def write_manifest(data_dir: Path, manifest: dict) -> None:
 
 
 def reusable_manifest(data_dir: Path, checksum: str) -> dict | None:
-    """校验 manifest v3 和证据现场是否可复用。"""
+    """校验 manifest v4、证据现场、checksum 和路径限制上下文是否可复用。"""
     manifest = read_manifest(data_dir)
     main = manifest.get("main")
     if (

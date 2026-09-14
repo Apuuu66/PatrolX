@@ -13,6 +13,16 @@ class ArchiveError(Exception):
     """压缩包解析错误。"""
 
 
+class PathTooLongError(ArchiveError):
+    """目标完整路径超过当前操作系统生效限制。"""
+
+    def __init__(self, path: str, length: int, limit: int) -> None:
+        self.path = path
+        self.length = length
+        self.limit = limit
+        super().__init__(f"目标路径长度 {length} 超过限制 {limit}: {path}")
+
+
 class UnpackLimit:
     """解压安全限制（默认值，固定不配置化）。"""
 
@@ -83,7 +93,12 @@ def _validate_zip(member: zipfile.ZipInfo, limit: UnpackLimit) -> None:
         raise ArchiveError(f"单文件超限: {member.filename}")
 
 
-def unpack_zip(archive: Path, root: Path, limit: UnpackLimit | None = None) -> int:
+def unpack_zip(
+    archive: Path,
+    root: Path,
+    limit: UnpackLimit | None = None,
+    path_limit_check: Callable[[Path, str], None] | None = None,
+) -> int:
     limit = limit or UnpackLimit()
     root = root.resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -106,6 +121,8 @@ def unpack_zip(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
                 if depth > limit.max_depth:
                     raise ArchiveError(f"嵌套深度超限: {member.filename}")
                 target = _safe_target(root, member.filename)
+                if path_limit_check is not None:
+                    path_limit_check(target, member.filename)
                 _ensure_target_paths(target, member.filename)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with zf.open(member) as src, target.open("wb") as dst:
@@ -133,7 +150,12 @@ def _validate_tar(member: tarfile.TarInfo, limit: UnpackLimit) -> None:
         raise ArchiveError(f"单文件超限: {member.name}")
 
 
-def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> int:
+def unpack_tar(
+    archive: Path,
+    root: Path,
+    limit: UnpackLimit | None = None,
+    path_limit_check: Callable[[Path, str], None] | None = None,
+) -> int:
     limit = limit or UnpackLimit()
     root = root.resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -156,6 +178,8 @@ def unpack_tar(archive: Path, root: Path, limit: UnpackLimit | None = None) -> i
                 if depth > limit.max_depth:
                     raise ArchiveError(f"嵌套深度超限: {member.name}")
                 target = _safe_target(root, member.name)
+                if path_limit_check is not None:
+                    path_limit_check(target, member.name)
                 _ensure_target_paths(target, member.name)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 src = tf.extractfile(member)
@@ -182,9 +206,12 @@ def unpack_gzip(
     target: Path,
     limit: UnpackLimit | None = None,
     charge: Callable[[int], None] | None = None,
+    path_limit_check: Callable[[Path, str], None] | None = None,
 ) -> int:
     """受控流式展开单个 gzip 文件，返回输出字节数。"""
     limit = limit or UnpackLimit()
+    if path_limit_check is not None:
+        path_limit_check(target, str(target))
     target = _safe_target(target.parent, target.name)
     target.parent.mkdir(parents=True, exist_ok=True)
     total = 0
@@ -210,12 +237,17 @@ def is_archive(path: Path) -> bool:
     return path.suffix.lower() in {".zip", ".tar", ".gz", ".tgz"} or name.endswith(".tar.gz")
 
 
-def unpack(archive: Path, root: Path, limit: UnpackLimit | None = None) -> int:
+def unpack(
+    archive: Path,
+    root: Path,
+    limit: UnpackLimit | None = None,
+    path_limit_check: Callable[[Path, str], None] | None = None,
+) -> int:
     name = archive.name.lower()
     if name.endswith(".zip"):
-        return unpack_zip(archive, root, limit)
+        return unpack_zip(archive, root, limit, path_limit_check)
     if name.endswith((".tar.gz", ".tgz", ".tar")):
-        return unpack_tar(archive, root, limit)
+        return unpack_tar(archive, root, limit, path_limit_check)
     raise ArchiveError(f"不支持的压缩格式: {archive.name}")
 
 

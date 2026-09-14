@@ -52,12 +52,12 @@ def test_large_main_package_expands_nested_log_and_kpi(tmp_path, monkeypatch) ->
     assert manifest["main"]["count"] == 3
     assert any(item["category"] == "kpi" for item in manifest["subpackages"])
     assert (data_dir / ".main/kpi_outer.zip").is_file()
-    assert (data_dir / "kpi/kpi_outer/kpi/inner.csv").is_file()
-    assert (data_dir / "logs/ServiceLog_inner/InnerService/logs/node/error.log").is_file()
+    assert (data_dir / "kpi/kpi/inner.csv").is_file()
+    assert (data_dir / "logs/InnerService/logs/node/error.log").is_file()
     assert {path.as_posix() for path in catalog.paths()} >= {
         "config/system.ini",
-        "kpi/kpi_outer/kpi/inner.csv",
-        "logs/ServiceLog_inner/InnerService/logs/node/error.log",
+        "kpi/kpi/inner.csv",
+        "logs/InnerService/logs/node/error.log",
     }
 
 
@@ -152,3 +152,27 @@ def test_nested_and_gzip_local_failures_continue(tmp_path, monkeypatch) -> None:
     assert any(item["status"] == "failed" for item in manifest["log_gz"])
     assert extraction.category_failures(manifest, "logs")
     assert TaskFileCatalog.build(data_dir).paths() == [Path("config/system.ini")]
+
+
+def test_nested_package_members_place_directly_in_category(tmp_path, monkeypatch) -> None:
+    """嵌套子包成员不再保留来源包目录层。"""
+    import hashlib
+
+    from app.core.checksum import sha256_file
+    from app.services import extraction
+
+    env: Env = setup_env(tmp_path, monkeypatch)
+    package = env.uploads / "kpi-nested-direct.zip"
+    _zip(package, {"kpi/nested/kpi-media.csv": "metric,value\nsuccess,99\n"})
+    before = package.read_bytes()
+    data_dir = env.task_dir("task-kpi-direct")
+
+    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
+
+    assert hashlib.sha256(package.read_bytes()).hexdigest() == hashlib.sha256(before).hexdigest()
+    assert (data_dir / "kpi/nested/kpi-media.csv").is_file()
+    assert not (data_dir / "kpi/kpi-nested-direct").exists()
+    assert any(
+        item["target"] == "kpi/nested/kpi-media.csv" and item["source"] == ".main/kpi/nested/kpi-media.csv"
+        for item in manifest["files"]
+    )

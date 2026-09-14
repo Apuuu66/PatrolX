@@ -3,20 +3,19 @@
 import shutil
 from pathlib import Path
 
-from app.core.archive import ArchiveError, UnpackLimit, is_archive, unpack, unpack_gzip
+from app.core.archive import ArchiveError, PathTooLongError, UnpackLimit, is_archive, unpack, unpack_gzip
 from app.core.checksum import sha256_file
 from app.models.schemas import RuleCategory
 from app.services.extraction.budget import ExtractionBudget, ExtractionLogger, _log_extract
 from app.services.extraction.layout import (
     CATEGORY_DIRECTORIES,
     MAIN_EVIDENCE_DIR,
+    PathLimitPolicy,
     _category_of,
     _destination_relative,
     _register_rejected,
     _relative_files,
-    _remove_empty_work_site,
     _safe_destination,
-    _unique_work_path,
 )
 from app.services.extraction.policy import ExtractPolicyConfig, PolicyDecision, evaluate_extract_policy
 
@@ -42,6 +41,21 @@ def _name_category(source: Path, parent_category: str) -> str:
     return parent_category or "other"
 
 
+def _source_display(source_relative: Path, source_kind: str) -> str:
+    if source_kind == "evidence":
+        return f"{MAIN_EVIDENCE_DIR}/{source_relative.as_posix()}"
+    return source_relative.as_posix()
+
+
+def _set_path_error(state: dict[str, object], exc: Exception) -> None:
+    state["status"] = "failed"
+    state["error"] = str(exc)
+    if isinstance(exc, PathTooLongError):
+        state["error_code"] = "path_too_long"
+        state["path_length"] = exc.length
+        state["path_limit"] = exc.limit
+
+
 def _retain_evidence(
     source: Path,
     source_relative: Path,
@@ -52,6 +66,7 @@ def _retain_evidence(
     depth: int,
     decision: PolicyDecision,
     log: ExtractionLogger | None,
+    path_policy: PathLimitPolicy | None = None,
 ) -> dict[str, object]:
     """把策略命中的压缩项按原文件保留到 category 现场。"""
     relative = _destination_relative(source_relative, "evidence", "", category)
@@ -59,10 +74,11 @@ def _retain_evidence(
         "target": relative.as_posix(),
         "status": "skipped",
         "error": None,
+        "error_code": "policy_skip",
         "policy": _policy_detail(decision),
     }
     try:
-        target = _safe_destination(data_dir, relative)
+        target = _safe_destination(data_dir, relative, path_policy)
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             raise ArchiveError("目标文件已存在，未覆盖")
@@ -84,8 +100,7 @@ def _retain_evidence(
         target = locals().get("target")
         if target is not None:
             target.unlink(missing_ok=True)
-        state["status"] = "failed"
-        state["error"] = str(exc)
+        _set_path_error(state, exc)
         _register_rejected(manifest, source_relative.as_posix(), str(exc), category, depth)
         _log_extract(
             log,
@@ -125,28 +140,38 @@ def _extract_log_gzip(
     depth: int,
     log: ExtractionLogger | None = None,
     policy: ExtractPolicyConfig | None = None,
+    path_policy: PathLimitPolicy | None = None,
 ) -> None:
     if category != RuleCategory.LOG.value:
         category = RuleCategory.LOG.value
     decision = _evidence_policy(source_relative, policy, True) if source_kind == "evidence" else None
     if decision is not None and decision.action == "skip":
         state = {
-            "source_evidence": f"{MAIN_EVIDENCE_DIR}/{source_relative.as_posix()}",
+            "source_evidence": _source_display(source_relative, source_kind),
             "source_relative_path": source_relative.as_posix(),
             "category": CATEGORY_DIRECTORIES[category],
             "depth": depth,
-            **_retain_evidence(source, source_relative, category, data_dir, manifest, budget, depth, decision, log),
+            **_retain_evidence(
+                source,
+                source_relative,
+                category,
+                data_dir,
+                manifest,
+                budget,
+                depth,
+                decision,
+                log,
+                path_policy,
+            ),
         }
         manifest["log_gz"].append(state)
         return
     relative = _destination_relative(source_relative.with_suffix(""), source_kind, group, category)
-    target = _safe_destination(data_dir, relative)
-    source_state = (
-        f"{MAIN_EVIDENCE_DIR}/{source_relative.as_posix()}" if source_kind == "evidence" else MAIN_EVIDENCE_DIR
-    )
+    source_state = _source_display(source_relative, source_kind)
     state: dict[str, object] = {
-        "source_evidence": source_state,
         "source_relative_path": source_relative.as_posix(),
+        "source": source_state,
+        "category": CATEGORY_DIRECTORIES[category],
         "target": relative.as_posix(),
         "depth": depth,
         "status": "extracted",
@@ -166,11 +191,13 @@ def _extract_log_gzip(
             scope=decision.scope,
             keyword=decision.keyword,
         )
-    if target.exists():
-        state["status"] = "conflict"
-        state["error"] = "目标日志已存在，未覆盖"
-    else:
-        try:
+    try:
+        target = _safe_destination(data_dir, relative, path_policy)
+        if target.exists():
+            state["status"] = "conflict"
+            state["error"] = "目标日志已存在，未覆盖"
+            state["error_code"] = "target_conflict"
+        else:
             budget.charge_gzip_chunk(0)
             unpack_gzip(
                 source,
@@ -182,17 +209,13 @@ def _extract_log_gzip(
                 raise ArchiveError("任务累计文件数超限")
             if source_kind != "evidence":
                 source.unlink(missing_ok=True)
-        except ArchiveError as exc:
+    except (ArchiveError, OSError) as exc:
+        target = locals().get("target")
+        if target is not None:
             target.unlink(missing_ok=True)
-            state["status"] = "failed"
-            state["error"] = str(exc)
-            _register_rejected(
-                manifest,
-                source_relative.as_posix(),
-                str(exc),
-                category,
-                depth,
-            )
+        _set_path_error(state, exc)
+        if state["status"] != "conflict":
+            _register_rejected(manifest, source_relative.as_posix(), str(exc), category, depth)
     task_id = data_dir.name
     if state["status"] == "extracted":
         _log_extract(
@@ -242,48 +265,45 @@ def _extract_subpackage(
     depth: int,
     log: ExtractionLogger | None = None,
     policy: ExtractPolicyConfig | None = None,
+    path_policy: PathLimitPolicy | None = None,
 ) -> None:
+    del group
     limit = UnpackLimit()
     checksum = sha256_file(source)
     decision = _evidence_policy(source_relative, policy, True) if source_kind == "evidence" else None
     if decision is not None and decision.action == "skip":
         category = _name_category(source, parent_category)
         state: dict[str, object] = {
-            "source": (
-                f"{MAIN_EVIDENCE_DIR}/{source_relative.as_posix()}"
-                if source_kind == "evidence"
-                else source_relative.as_posix()
-            ),
-            "parent": group or None,
+            "source": _source_display(source_relative, source_kind),
+            "parent": None,
             "category": CATEGORY_DIRECTORIES[category],
             "classification_reason": "policy:name",
             "depth": depth,
             "checksum": checksum,
-            **_retain_evidence(source, source_relative, category, data_dir, manifest, budget, depth, decision, log),
+            **_retain_evidence(
+                source,
+                source_relative,
+                category,
+                data_dir,
+                manifest,
+                budget,
+                depth,
+                decision,
+                log,
+                path_policy,
+            ),
         }
         manifest["subpackages"].append(state)
         return
     category, reason = _category_of(source, parent_category)
-    work_relative = source_relative.with_suffix("")
-    if source_kind == "evidence":
-        work_relative = _destination_relative(
-            work_relative,
-            source_kind,
-            "",
-            category,
-        ).relative_to(CATEGORY_DIRECTORIES[category])
     state: dict[str, object] = {
-        "source": (
-            f"{MAIN_EVIDENCE_DIR}/{source_relative.as_posix()}"
-            if source_kind == "evidence"
-            else source_relative.as_posix()
-        ),
-        "parent": group or None,
+        "source": _source_display(source_relative, source_kind),
+        "parent": None,
         "category": CATEGORY_DIRECTORIES[category],
         "classification_reason": reason,
         "depth": depth,
         "checksum": checksum,
-        "target": None,
+        "target": CATEGORY_DIRECTORIES[category],
         "status": "extracted",
         "error": None,
     }
@@ -310,6 +330,7 @@ def _extract_subpackage(
     if checksum in seen_checksums:
         state["status"] = "duplicate"
         state["error"] = "相同 checksum 子包已展开"
+        state["error_code"] = "duplicate"
         manifest["subpackages"].append(state)
         if source_kind != "evidence":
             source.unlink(missing_ok=True)
@@ -325,10 +346,7 @@ def _extract_subpackage(
         )
         return
     seen_checksums.add(checksum)
-
-    work_path = _unique_work_path(data_dir / CATEGORY_DIRECTORIES[category], work_relative, checksum)
-    target_relative = work_path.relative_to(data_dir)
-    state["target"] = target_relative.as_posix()
+    target_relative = CATEGORY_DIRECTORIES[category]
     staging = data_dir / f".extract-{checksum[:12]}"
     shutil.rmtree(staging, ignore_errors=True)
     if decision is not None and decision.action == "whitelist":
@@ -338,7 +356,7 @@ def _extract_subpackage(
             "压缩项按白名单恢复",
             task_id=data_dir.name,
             source=source_relative.as_posix(),
-            target=target_relative.as_posix(),
+            target=target_relative,
             reason=decision.reason,
             scope=decision.scope,
             keyword=decision.keyword,
@@ -349,7 +367,7 @@ def _extract_subpackage(
         "子包解压开始",
         task_id=data_dir.name,
         source=source_relative.as_posix(),
-        target=target_relative.as_posix(),
+        target=target_relative,
         category=state["category"],
         depth=depth,
         checksum=checksum,
@@ -357,25 +375,19 @@ def _extract_subpackage(
     try:
         if budget.files + 1 > budget.max_files:
             raise ArchiveError("任务累计文件数超限")
-        unpack(source, staging, limit)
+        unpack(source, staging, limit, path_policy.check if path_policy is not None else None)
         extracted_files = _relative_files(staging)
         if budget.files + len(extracted_files) > budget.max_files:
             raise ArchiveError("任务累计文件数超限")
         for extracted_file in extracted_files:
             budget.charge_file(extracted_file)
-        work_path.parent.mkdir(parents=True, exist_ok=True)
-        if work_path.exists():
-            shutil.rmtree(work_path)
-        staging.rename(work_path)
-        if source_kind != "evidence":
-            source.unlink(missing_ok=True)
-        for member in _relative_files(work_path):
-            member_relative = member.relative_to(work_path)
+        for member in extracted_files:
+            member_relative = member.relative_to(staging)
             _ingest_file(
                 member,
                 member_relative,
                 "work",
-                work_path.name,
+                "",
                 category,
                 data_dir,
                 manifest,
@@ -383,14 +395,15 @@ def _extract_subpackage(
                 seen_checksums,
                 depth + 1,
                 log,
+                policy,
+                path_policy,
             )
-        _remove_empty_work_site(work_path, data_dir / CATEGORY_DIRECTORIES[category])
-    except ArchiveError as exc:
         shutil.rmtree(staging, ignore_errors=True)
-        if work_path.exists():
-            shutil.rmtree(work_path, ignore_errors=True)
-        state["status"] = "failed"
-        state["error"] = str(exc)
+        if source_kind != "evidence":
+            source.unlink(missing_ok=True)
+    except (ArchiveError, OSError) as exc:
+        shutil.rmtree(staging, ignore_errors=True)
+        _set_path_error(state, exc)
         if source_kind != "evidence":
             source.unlink(missing_ok=True)
     task_id = data_dir.name
@@ -432,14 +445,16 @@ def _ingest_file(
     depth: int,
     log: ExtractionLogger | None = None,
     policy: ExtractPolicyConfig | None = None,
+    path_policy: PathLimitPolicy | None = None,
 ) -> None:
+    del group
     name = source.name.lower()
     if name.endswith(".log.gz"):
         _extract_log_gzip(
             source,
             source_relative,
             source_kind,
-            group,
+            "",
             parent_category,
             data_dir,
             manifest,
@@ -447,6 +462,7 @@ def _ingest_file(
             depth,
             log,
             policy,
+            path_policy,
         )
         return
     if is_archive(source):
@@ -454,7 +470,7 @@ def _ingest_file(
             source,
             source_relative,
             source_kind,
-            group,
+            "",
             parent_category,
             data_dir,
             manifest,
@@ -463,20 +479,33 @@ def _ingest_file(
             depth,
             log,
             policy,
+            path_policy,
         )
         return
 
     decision = _evidence_policy(source_relative, policy, False) if source_kind == "evidence" else None
     category, _ = _category_of(source, parent_category)
-    relative = _destination_relative(source_relative, source_kind, group, category)
-    target = _safe_destination(data_dir, relative)
+    relative = _destination_relative(source_relative, source_kind, "", category)
+    state: dict[str, object] = {
+        "source": _source_display(source_relative, source_kind),
+        "category": CATEGORY_DIRECTORIES[category],
+        "target": relative.as_posix(),
+        "depth": depth,
+        "status": "extracted",
+        "error": None,
+    }
     try:
+        target = _safe_destination(data_dir, relative, path_policy)
         if target == source.resolve():
             budget.charge_file(target)
             return
         if target.exists():
-            reason = "目标文件已存在，未覆盖"
-            _register_rejected(manifest, source_relative.as_posix(), reason, category, depth)
+            reason_text = "目标文件已存在，未覆盖"
+            state["status"] = "conflict"
+            state["error"] = reason_text
+            state["error_code"] = "target_conflict"
+            manifest["files"].append(state)
+            _register_rejected(manifest, source_relative.as_posix(), reason_text, category, depth)
             _log_extract(
                 log,
                 "warn",
@@ -487,28 +516,34 @@ def _ingest_file(
                 category=CATEGORY_DIRECTORIES[category],
                 depth=depth,
             )
-            return
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        budget.charge_file(target)
-        if source_kind == "work":
-            source.unlink(missing_ok=True)
-        if decision is not None and decision.action == "whitelist":
-            counters = (manifest.get("policy") or {}).setdefault("counters", {})
-            if isinstance(counters, dict):
-                counters["whitelisted_files"] = int(counters.get("whitelisted_files", 0)) + 1
-            _log_extract(
-                log,
-                "info",
-                "extract.policy.whitelist",
-                task_id=data_dir.name,
-                source=source_relative.as_posix(),
-                target=relative.as_posix(),
-                reason=decision.reason,
-                scope=decision.scope,
-                keyword=decision.keyword,
-            )
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            budget.charge_file(target)
+            if source_kind == "work":
+                source.unlink(missing_ok=True)
+            manifest["files"].append(state)
+            if decision is not None and decision.action == "whitelist":
+                counters = (manifest.get("policy") or {}).setdefault("counters", {})
+                if isinstance(counters, dict):
+                    counters["whitelisted_files"] = int(counters.get("whitelisted_files", 0)) + 1
+                _log_extract(
+                    log,
+                    "info",
+                    "extract.policy.whitelist",
+                    task_id=data_dir.name,
+                    source=source_relative.as_posix(),
+                    target=relative.as_posix(),
+                    reason=decision.reason,
+                    scope=decision.scope,
+                    keyword=decision.keyword,
+                )
     except (ArchiveError, OSError) as exc:
+        target = locals().get("target")
+        if target is not None and state["status"] == "extracted":
+            target.unlink(missing_ok=True)
+        _set_path_error(state, exc)
+        manifest["files"].append(state)
         _register_rejected(manifest, source_relative.as_posix(), str(exc), category, depth)
         _log_extract(
             log,

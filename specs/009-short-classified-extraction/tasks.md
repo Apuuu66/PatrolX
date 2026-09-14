@@ -24,9 +24,9 @@ description: "009 分类短路径解压、长路径防护与准备/删除状态�
 
 **目的**：隔离实现现场，固定基线，准备可复现样例。
 
-- [ ] T001 在仓库根目录确认 Speckit 产物已提交后，创建并检出 `feature/009-short-classified-extraction`，创建 `.worktrees/feature-009-short-classified-extraction`；实现只在该 worktree 内进行。
-- [ ] T002 在 worktree 根目录执行 `python build.py lint`、`python build.py test` 和 `python build.py verify`，记录实现前基线结果。
-- [ ] T003 [P] 在 `tests/test_extraction_package.py` 和 `tests/test_extraction_site.py` 中补充可复用的嵌套分类样例构造 helper，覆盖 `logs/`、`kpi/`、`config/`、`resource/` 和相同目标冲突来源。
+- [x] T001 在仓库根目录确认 Speckit 产物已提交后，创建并检出 `feature/009-short-classified-extraction`，创建 `.worktrees/feature-009-short-classified-extraction`；实现只在该 worktree 内进行。
+- [x] T002 在 worktree 根目录执行 `python build.py lint`、`python build.py test` 和 `python build.py verify`，记录实现前基线结果。
+- [x] T003 [P] 在 `tests/test_extraction_package.py` 和 `tests/test_extraction_site.py` 中补充可复用的嵌套分类样例构造 helper，覆盖 `logs/`、`kpi/`、`config/`、`resource/` 和相同目标冲突来源。
 
 **检查点**：实现分支和 worktree 就绪，基线命令结果已知，测试样例可以表达分类落位需求。
 
@@ -36,10 +36,10 @@ description: "009 分类短路径解压、长路径防护与准备/删除状态�
 
 **目的**：建立 manifest v4、路径限制抽象和契约基础，阻塞后续用户故事。
 
-- [ ] T004 在 `app/services/extraction/layout.py` 将 `MANIFEST_VERSION` 升级为 `4`，定义分类目录常量、安全目标解析、目标冲突记录结构和可注入的 `PathLimitPolicy` 抽象。
-- [ ] T005 在 `app/services/extraction/manifest.py` 实现 manifest v4 读写与最小校验，保留 `policy` 快照、fingerprint 校验和路径限制上下文，并允许 `files[]`、`subpackages[]`、`log_gz[]` 记录 `source`、`target`、`status`、`error`、`error_code`、`path_length`、`path_limit`。
-- [ ] T006 在 `tests/test_extraction_policy.py` 和 `tests/test_extract_policy.py` 中补充 manifest 版本、策略 fingerprint 或路径限制上下文变化时必须重建现场的测试；确认策略跳过与白名单行为不回退。
-- [ ] T007 在 `tests/test_extraction_site.py` 中为 manifest v4 缺失、损坏、版本不匹配场景添加失败测试，验证任务分类现场按新布局重建且 `.main/` 不作为普通规则输入。
+- [x] T004 在 `app/services/extraction/layout.py` 将 `MANIFEST_VERSION` 升级为 `4`，定义分类目录常量、安全目标解析、目标冲突记录结构和可注入的 `PathLimitPolicy` 抽象。
+- [x] T005 在 `app/services/extraction/manifest.py` 实现 manifest v4 读写与最小校验，保留 `policy` 快照、fingerprint 校验和路径限制上下文，并允许 `files[]`、`subpackages[]`、`log_gz[]` 记录 `source`、`target`、`status`、`error`、`error_code`、`path_length`、`path_limit`。
+- [x] T006 在 `tests/test_extraction_policy.py` 和 `tests/test_extract_policy.py` 中补充 manifest 版本、策略 fingerprint 或路径限制上下文变化时必须重建现场的测试；确认策略跳过与白名单行为不回退。
+- [x] T007 在 `tests/test_extraction_site.py` 中为 manifest v4 缺失、损坏、版本不匹配场景添加失败测试，验证任务分类现场按新布局重建且 `.main/` 不作为普通规则输入。
 
 **检查点**：manifest v4、策略快照与路径限制抽象就绪；新测试先失败，旧安全防护测试仍能表达目标行为。
 
@@ -53,17 +53,17 @@ description: "009 分类短路径解压、长路径防护与准备/删除状态�
 
 ### 用户故事 1 的测试
 
-- [ ] T008 [P] [US1] 在 `tests/test_extraction_site.py` 编写失败测试：顶层普通文件应落到 `<category>/<内部相对路径>`，`.log.gz` 应落到 `<category>/<内部相对去后缀路径>`，并断言原始上传包 checksum 与内容不变。
-- [ ] T009 [P] [US1] 在 `tests/test_extraction_package.py` 编写失败测试：嵌套分类子包展开后的成员直接进入分类根，不出现来源子包目录层；子包内部目录结构保留，且原始上传包 checksum 与内容不变。
-- [ ] T010 [P] [US1] 在 `tests/test_extraction_policy.py` 编写失败测试：两个来源命中同一目标时保留第一个、后续记录 `conflict`；相同 checksum 子包记录 `duplicate`；策略跳过记录 `skipped`。
+- [x] T008 [P] [US1] 在 `tests/test_extraction_site.py` 编写失败测试：顶层普通文件应落到 `<category>/<内部相对路径>`，`.log.gz` 应落到 `<category>/<内部相对去后缀路径>`，并断言原始上传包 checksum 与内容不变。
+- [x] T009 [P] [US1] 在 `tests/test_extraction_package.py` 编写失败测试：嵌套分类子包展开后的成员直接进入分类根，不出现来源子包目录层；子包内部目录结构保留，且原始上传包 checksum 与内容不变。
+- [x] T010 [P] [US1] 在 `tests/test_extraction_policy.py` 编写失败测试：两个来源命中同一目标时保留第一个、后续记录 `conflict`；相同 checksum 子包记录 `duplicate`；策略跳过记录 `skipped`。
 
 ### 用户故事 1 的实现
 
-- [ ] T011 [US1] 修改 `app/services/extraction/layout.py` 的 `_destination_relative()`：移除来源子包目录层，普通文件保留分类前缀加内部相对路径，工作来源不再拼接 `group`。
-- [ ] T012 [US1] 修改 `app/services/extraction/nested.py`：子压缩包、日志 gzip 和普通文件按分类根直接落位；目录冲突不覆盖、不生成 checksum 后缀目录，并写入 manifest 记录。
-- [ ] T013 [US1] 修改 `app/services/extraction/site.py`：主包证据展开后稳定遍历 `.main/`，清空并重建分类根，生成 manifest v4 的 `files[]` 成功记录；保留策略 fingerprint 快照。
-- [ ] T014 [US1] 调整 `app/inspectors/pkg.py` 与 `app/services/extraction/__init__.py` 的隐藏结果元数据，使 `pkg.extract.*` 汇总与 manifest v4 的来源、目标、状态一致；不把 hidden 规则加入普通规则结果。
-- [ ] T015 [US1] 更新 `tests/test_extraction_site.py`、`tests/test_extraction_package.py`、`tests/test_baseline_extraction.py` 中受旧目录层影响的断言，并运行目标测试确认通过。
+- [x] T011 [US1] 修改 `app/services/extraction/layout.py` 的 `_destination_relative()`：移除来源子包目录层，普通文件保留分类前缀加内部相对路径，工作来源不再拼接 `group`。
+- [x] T012 [US1] 修改 `app/services/extraction/nested.py`：子压缩包、日志 gzip 和普通文件按分类根直接落位；目录冲突不覆盖、不生成 checksum 后缀目录，并写入 manifest 记录。
+- [x] T013 [US1] 修改 `app/services/extraction/site.py`：主包证据展开后稳定遍历 `.main/`，清空并重建分类根，生成 manifest v4 的 `files[]` 成功记录；保留策略 fingerprint 快照。
+- [x] T014 [US1] 调整 `app/inspectors/pkg.py` 与 `app/services/extraction/__init__.py` 的隐藏结果元数据，使 `pkg.extract.*` 汇总与 manifest v4 的来源、目标、状态一致；不把 hidden 规则加入普通规则结果。
+- [x] T015 [US1] 更新 `tests/test_extraction_site.py`、`tests/test_extraction_package.py`、`tests/test_baseline_extraction.py` 中受旧目录层影响的断言，并运行目标测试确认通过。
 
 **检查点**：`python build.py verify` 可通过；分类现场路径缩短且结构可预期；冲突、重复、策略跳过记录稳定。
 
@@ -77,15 +77,15 @@ description: "009 分类短路径解压、长路径防护与准备/删除状态�
 
 ### 用户故事 2 的测试
 
-- [ ] T016 [P] [US2] 在 `tests/test_extraction_policy.py` 新增长路径策略单元测试：仅在 `enforce=true` 时拒绝，非 Windows 或长路径启用时不按 260 拒绝；路径长度按解析后的完整目标路径计算。
-- [ ] T017 [P] [US2] 在 `tests/test_extraction_site.py` 和 `tests/test_extraction_package.py` 添加失败测试：主包 `.main/` 证据目标、普通文件、`.log.gz`、子压缩包和子包成员在写入前命中 `path_too_long` 时不留下对应半成品；主包证据现场失败阻断后续执行。
+- [x] T016 [P] [US2] 在 `tests/test_extraction_policy.py` 新增长路径策略单元测试：仅在 `enforce=true` 时拒绝，非 Windows 或长路径启用时不按 260 拒绝；路径长度按解析后的完整目标路径计算。
+- [x] T017 [P] [US2] 在 `tests/test_extraction_site.py` 和 `tests/test_extraction_package.py` 添加失败测试：主包 `.main/` 证据目标、普通文件、`.log.gz`、子压缩包和子包成员在写入前命中 `path_too_long` 时不留下对应半成品；主包证据现场失败阻断后续执行。
 
 ### 用户故事 2 的实现
 
-- [ ] T018 [US2] 在 `app/services/extraction/layout.py` 实现 `PathLimitPolicy`：Windows 且长路径未启用时强制 260；注册表不可读时保守拒绝；非 Windows 默认不启用；提供可注入构造入口。
-- [ ] T019 [US2] 修改 `app/core/archive.py` 和 `app/services/extraction/nested.py`：在主包 `.main/` 证据目标、普通文件 copy、gzip 创建、子包目标创建和 staging 成员 rename 前调用路径检查；失败项清理 staging 或目标，并记录结构化错误。
-- [ ] T020 [US2] 修改 `app/services/extraction/site.py` 和 `app/inspectors/pkg.py`：传递路径策略，把 `path_too_long` 明细透传到 manifest 和 hidden 结果 metadata；不使用 `\\?\` 前缀改写。
-- [ ] T021 [US2] 在 `tests/test_extraction_policy.py`、`tests/test_extraction_site.py` 中确认失败项状态、来源、目标、路径长度和上限可追溯，并运行解压相关测试。
+- [x] T018 [US2] 在 `app/services/extraction/layout.py` 实现 `PathLimitPolicy`：Windows 且长路径未启用时强制 260；注册表不可读时保守拒绝；非 Windows 默认不启用；提供可注入构造入口。
+- [x] T019 [US2] 修改 `app/core/archive.py` 和 `app/services/extraction/nested.py`：在主包 `.main/` 证据目标、普通文件 copy、gzip 创建、子包目标创建和 staging 成员 rename 前调用路径检查；失败项清理 staging 或目标，并记录结构化错误。
+- [x] T020 [US2] 修改 `app/services/extraction/site.py` 和 `app/inspectors/pkg.py`：传递路径策略，把 `path_too_long` 明细透传到 manifest 和 hidden 结果 metadata；不使用 `\\?\` 前缀改写。
+- [x] T021 [US2] 在 `tests/test_extraction_policy.py`、`tests/test_extraction_site.py` 中确认失败项状态、来源、目标、路径长度和上限可追溯，并运行解压相关测试。
 
 **检查点**：注入长路径场景可稳定提前失败；真实 Windows 行为由策略分支控制；普通规则不会消费半成品现场。
 

@@ -129,7 +129,7 @@ def test_policy_extraction_logs_include_task_and_path_context(tmp_path, monkeypa
     )
     assert restored["task_id"] == task.task_id
     assert restored["source"] == "skip/service_ALARM.zip"
-    assert restored["target"] == "logs/skip/service_ALARM"
+    assert restored["target"] == "logs"
     assert restored["keyword"] == "alarm"
 
     hit = next(item for item in lines if item["message"] == "extract.policy.whitelist")
@@ -140,4 +140,4 @@ def test_policy_extraction_logs_include_task_and_path_context(tmp_path, monkeypa
     conflict = next(item for item in lines if item["message"] == "日志 gzip 目标冲突")
     assert conflict["task_id"] == task.task_id
     assert conflict["source"] == "conflict.log.gz"
-    assert conflict["target"] == "logs/conflict/conflict.log"
+    assert conflict["target"] == "logs/conflict.log"

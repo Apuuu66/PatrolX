@@ -134,7 +134,7 @@ def test_path_skip_retains_nested_archives_and_processes_outside(tmp_path, monke
     assert main_files == {"0/a.zip", "xx/0/deep.zip", "outside.zip"}
     assert (task_dir / "other/0/a.zip").read_bytes() == (task_dir / ".main/0/a.zip").read_bytes()
     assert (task_dir / "other/xx/0/deep.zip").read_bytes() == (task_dir / ".main/xx/0/deep.zip").read_bytes()
-    assert (task_dir / "other/outside/outside-inner.txt").read_text() == "outside"
+    assert (task_dir / "other/outside-inner.txt").read_text() == "outside"
     manifest = (task_dir / ".patrolx-extracted.json").read_text(encoding="utf-8")
     assert '"status": "skipped"' in manifest
     assert "0a/file.zip" not in _relative_set(task_dir / "other")
@@ -163,7 +163,7 @@ def test_path_prefix_boundary_only_matches_exact_directory(tmp_path, monkeypatch
     final_files = _relative_set(task_dir / "other")
     assert "0/a.zip" in final_files
     assert "xx/0/c.zip" in final_files
-    assert "b/b" in final_files
+    assert "b" in final_files
     assert not (task_dir / "other/0a/b.zip").exists()
 
 
@@ -220,12 +220,12 @@ def test_whitelist_has_priority_and_restores_normal_processing(tmp_path, monkeyp
     task_dir = tmp_path / "output" / task.task_id
     all_final = _relative_set(task_dir)
 
-    assert "other/keep/keep-inner.txt" in all_final
-    assert "logs/inner/inner.txt" in all_final
+    assert "other/keep-inner.txt" in all_final
+    assert "logs/inner.txt" in all_final
     assert "alarm/skip/alarm.txt" in all_final
     assert "other/skip/normal.zip" in all_final
-    assert "logs/service_ALARM/plain.txt" in all_final
-    assert "logs/inner/inner.zip" not in all_final
+    assert "logs/plain.txt" in all_final
+    assert "logs/inner.zip" not in all_final
     manifest = task_dir / ".patrolx-extracted.json"
     assert "whitelist_keyword" in manifest.read_text(encoding="utf-8")
 
@@ -255,6 +255,6 @@ def test_skip_all_retains_all_non_whitelisted_nested_items(tmp_path, monkeypatch
     assert "other/a.zip" in final_files
     assert "other/b.tar.gz" in final_files
     assert "logs/c.log.gz" in final_files
-    assert "alarm/alarm/alarm" in final_files
+    assert "alarm/alarm" in final_files
     assert "other/a" not in final_files
     assert "other/c.log" not in final_files
