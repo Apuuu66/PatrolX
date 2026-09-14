@@ -7,9 +7,10 @@ import tempfile
 from pathlib import Path, PureWindowsPath
 
 import yaml
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import HTMLResponse, Response
+from pydantic import ValidationError
 
 from app.cli import generate_task_id
 from app.core.checksum import sha256_file
@@ -82,6 +83,8 @@ async def create_task_v2(
     product: str | None = Form(None),
 ) -> TaskCreated:
     filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
+    if len(filename.encode("utf-8")) > 255:
+        raise AppError("invalid_filename", "数据包文件名过长，请限制在 255 字节内", 400)
     if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
         raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
 
@@ -89,6 +92,8 @@ async def create_task_v2(
     temp_path: Path | None = None
     try:
         checksum, size, temp_path = await _receive_upload(package_file)
+        if size == 0:
+            raise AppError("invalid_package", "数据包不能为空", 400)
         if size > settings.max_upload_mb * 1024 * 1024:
             raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
 
@@ -130,8 +135,8 @@ def get_overview_v2() -> OverviewSummary:
 
 @router.get("/tasks", response_model=TaskListResponse, operation_id="listTasksV2")
 def list_tasks_v2(
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
 ) -> TaskListResponse:
     items, total = task_service.list_tasks(page, page_size, status)
@@ -184,23 +189,30 @@ def get_task_logs_v2(task_id: str = PathParam()) -> TaskLogs:
     for line in log_file.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        raw = json.loads(line)
-        entries.append(
-            LogEntry(
-                ts=raw["ts"],
-                level=raw["level"],
-                message=raw["message"],
-                rule_code=raw.get("rule_code"),
-                detail={k: v for k, v in raw.items() if k not in ("ts", "level", "message", "rule_code")},
+        try:
+            raw = json.loads(line)
+            entries.append(
+                LogEntry(
+                    ts=raw["ts"],
+                    level=raw["level"],
+                    message=raw["message"],
+                    rule_code=raw.get("rule_code"),
+                    detail={k: v for k, v in raw.items() if k not in ("ts", "level", "message", "rule_code")},
+                )
             )
-        )
+        except (json.JSONDecodeError, KeyError, TypeError):
+            # 损坏的历史日志行不阻断任务诊断，API 返回仍可读取的日志前缀。
+            continue
     return TaskLogs(task_id=task_id, entries=entries)
 
 
 def _load_system_json(task_id: str) -> SystemInspection:
     path = settings.output / task_id / "system.json"
     if path.exists():
-        return SystemInspection.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        try:
+            return SystemInspection.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, OSError, ValidationError) as exc:
+            raise AppError("corrupt_data", "系统结果文件损坏或不可读，请重跑该任务", 503) from exc
     task = task_service.get(task_id)
     if task and task.system:
         return task.system

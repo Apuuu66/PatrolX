@@ -251,7 +251,11 @@ def run_single_rule(
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
         store.save_rule_result(settings.output, task_id, extraction)
-    old_result = store.load_rule_result(settings.output, task_id, code)
+    try:
+        old_result = store.load_rule_result(settings.output, task_id, code)
+    except (json.JSONDecodeError, OSError):
+        # 目标历史结果损坏时按缺失处理，立即重跑可自恢复；其他规则不受影响。
+        old_result = None
     executor.run_rule(code, ctx)
     for result in executor.collected.values():
         if old_result is not None:
