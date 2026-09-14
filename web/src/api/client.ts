@@ -666,13 +666,31 @@ export interface components {
             code: string;
             name: string;
         };
+        /** @description 任务删除失败错误（detail 携带重试上下文） */
+        TaskDeleteErrorV2: components["schemas"]["ErrorV2"] & {
+            detail?: components["schemas"]["TaskDeleteErrorDetailV2"];
+        };
+        TaskDeleteErrorDetailV2: {
+            /** @description 任务标识，禁止修改。 */
+            task_id: string;
+            /** @description 删除涉及的现场相对位置。 */
+            locations: string[];
+            /** @description 删除失败的具体路径。 */
+            failed_path: string;
+            /** @description 可读失败原因。 */
+            reason: string;
+            /** @description 路径长度；仅路径限制相关错误返回。 */
+            path_length?: number;
+            /** @description 路径长度上限；仅路径限制相关错误返回。 */
+            path_limit?: number;
+        };
         /** @description 错误码（/api/v2 含包上传与损坏数据错误） */
         ErrorV2: {
             /**
              * @description 错误码（新增时同步契约与实现）
              * @enum {string}
              */
-            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "package_checksum_conflict" | "invalid_filename" | "corrupt_data";
+            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "task_delete_failed" | "package_checksum_conflict" | "invalid_filename" | "corrupt_data";
             message: string;
             detail?: {
                 [key: string]: unknown;
@@ -888,6 +906,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+            /** @description 任务现场删除失败；任务记录与可恢复现场保持可见 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDeleteErrorV2"];
                 };
             };
         };

@@ -121,9 +121,9 @@ output/<task_id>/
 
 - `report.html` 位于 `output/<task_id>/report.html`。
 - `.main/` 保留主包解压原始现场和所有原始压缩包；普通规则不读取该目录。
-- 分类目录只保留最终解压结果；`logs/` 不保留子压缩包或已成功展开的 `.log.gz`。
+- 分类目录只保留最终解压结果；成员直落 `<category>/<压缩包内部相对路径>`，不再额外插入来源子包目录层。
 - 历史日志 `*.log.gz` 在 `logs/` 内展开为同名 `.log`。
-- `.patrolx-extracted.json` 使用 v3 结构记录主包现场、子包、`.log.gz`、失败和拒绝状态。
+- `.patrolx-extracted.json` 使用 v4 结构记录主包现场、子包、`.log.gz`、失败和拒绝状态，以及路径长度与路径上限上下文。
 - `rules/` 存放契约化规则结果；规则通过 `source_patterns` 直读任务工作现场。
 - 原始主包保留在 `uploads/<task_id>/` 下。
 

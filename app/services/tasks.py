@@ -1,6 +1,7 @@
 """任务服务：output/ 为唯一数据源，SQLite 只保存在线任务元数据。"""
 
 import json
+import os
 import queue
 import shutil
 import threading
@@ -17,26 +18,86 @@ from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
 from app.models.db import TaskRecord, init_db, session_factory
 from app.models.schemas import InspectionTask, TaskCreated, TaskMode, TaskStatus, TaskSummary, TaskTrigger
 from app.services import preparation, store
+from app.services.extraction.layout import PathLimitPolicy
 from app.services.store import append_log, load_task_meta
 
 logger = get_logger("patrolx.tasks")
 NOW = datetime.now
 
 
-def _remove_tree(directory: Path) -> None:
-    """删除目录树；Windows 145 做短暂重试以吸收文件系统瞬时状态。"""
+class TaskDeleteError(Exception):
+    """任务现场删除失败，携带前端恢复与重试所需的上下文。"""
+
+    def __init__(
+        self,
+        task_id: str,
+        locations: list[str],
+        failed_path: str,
+        reason: str,
+        path_length: int | None = None,
+        path_limit: int | None = None,
+    ) -> None:
+        self.task_id = task_id
+        self.locations = locations
+        self.failed_path = failed_path
+        self.reason = reason
+        self.path_length = path_length
+        self.path_limit = path_limit
+        super().__init__(reason)
+
+
+def _delete_error_details(path: Path, *, treat_as_too_long: bool = False) -> tuple[int | None, int | None]:
+    """仅在 Windows 传统 MAX_PATH 生效时返回可可靠判断的路径限制。"""
+    policy = PathLimitPolicy.current()
+    if not policy.enabled or policy.limit is None:
+        return None, None
+    length = len(os.path.abspath(os.fspath(path)))
+    return length, policy.limit if length >= policy.limit or treat_as_too_long else None
+
+
+def _remove_tree(directory: Path, task_id: str, locations: list[str]) -> None:
+    """删除目录树；Windows 145 做短暂重试，其他失败转为结构化上下文。"""
     last_error: OSError | None = None
     for attempt in range(4):
         try:
             shutil.rmtree(directory)
             return
         except OSError as exc:
-            if getattr(exc, "winerror", None) != 145:
-                raise
+            if (getattr(exc, "winerror", None) or exc.errno) != 145:
+                last_error = exc
+                break
             last_error = exc
             time.sleep(0.05 * (attempt + 1))
-    if last_error is not None:
-        raise last_error
+    assert last_error is not None
+    failed_path = Path(last_error.filename or directory)
+    winerror = getattr(last_error, "winerror", None) or last_error.errno
+    path_length, path_limit = _delete_error_details(failed_path, treat_as_too_long=winerror == 206)
+    if winerror == 206:
+        reason = "路径过长，无法删除任务现场"
+    elif winerror == 145:
+        reason = "目录不为空，任务现场删除失败"
+    else:
+        reason = str(last_error)
+    error_code = "path_too_long" if winerror == 206 else "delete_failed"
+    logger.error(
+        "task_delete_failed",
+        task_id=task_id,
+        locations=locations,
+        failed_path=os.path.abspath(os.fspath(failed_path)),
+        status="failed",
+        error_code=error_code,
+        reason=reason,
+        path_length=path_length,
+        path_limit=path_limit,
+    )
+    raise TaskDeleteError(
+        task_id=task_id,
+        locations=locations,
+        failed_path=os.path.abspath(os.fspath(failed_path)),
+        reason=reason,
+        path_length=path_length,
+        path_limit=path_limit,
+    ) from last_error
 
 
 class DeleteResult(StrEnum):
@@ -269,9 +330,8 @@ class TaskService:
                 )
                 seen_ids.add(task.task_id)
         with session_factory() as session:
-            query = session.query(TaskRecord).filter(
-                TaskRecord.status.in_([TaskStatus.PENDING.value, TaskStatus.RUNNING.value])
-            )
+            # output/task.json 部分删除失败时，完成态数据库记录仍要兜底返回。
+            query = session.query(TaskRecord)
             for record in query.all():
                 if record.task_id in seen_ids:
                     continue
@@ -294,39 +354,54 @@ class TaskService:
                         customer_version=record.version,
                     )
                 )
-        items.sort(key=lambda t: t.created_at or "", reverse=True)
+
+        def created_at_key(task: TaskSummary) -> datetime:
+            """SQLite 历史记录可能是 naive UTC；排序前统一为 aware UTC。"""
+            if task.created_at is None:
+                return datetime.min.replace(tzinfo=UTC)
+            return task.created_at if task.created_at.tzinfo else task.created_at.replace(tzinfo=UTC)
+
+        items.sort(key=created_at_key, reverse=True)
         total = len(items)
         start = (page - 1) * page_size
         return items[start : start + page_size], total
 
     def delete(self, task_id: str) -> DeleteResult:
-        """删除任务；运行中任务拒绝删除，排队任务标记取消后级联清理。"""
+        """删除任务；文件现场全部成功后才删除数据库记录。"""
         with self._state_lock:
             if self._active_task == task_id:
                 return DeleteResult.BUSY
             self._cancelled.add(task_id)
-        with self._lock:
-            found = False
-            with session_factory() as session:
-                record = session.get(TaskRecord, task_id)
-                if record:
-                    session.delete(record)
-                    session.commit()
+        try:
+            with self._lock:
+                task_file = settings.output / task_id / "task.json"
+                meta_bytes = task_file.read_bytes() if task_file.is_file() else None
+                with session_factory() as session:
+                    record_exists = session.get(TaskRecord, task_id) is not None
+                locations = [f"output/{task_id}", f"uploads/{task_id}"]
+                found = record_exists
+                for directory in (settings.output / task_id, settings.uploads / task_id):
+                    if not directory.exists():
+                        continue
                     found = True
-            for directory in (settings.output / task_id, settings.uploads / task_id):
-                if not directory.exists():
-                    continue
-                found = True
-                _remove_tree(directory)
-                if directory.exists():
-                    raise OSError(f"任务目录删除失败: {directory}")
-            if not found:
-                with self._state_lock:
-                    self._cancelled.discard(task_id)
-                return DeleteResult.NOT_FOUND
-        with self._state_lock:
-            self._cancelled.discard(task_id)
-        return DeleteResult.DELETED
+                    try:
+                        _remove_tree(directory, task_id, locations)
+                    except TaskDeleteError:
+                        if directory == settings.output / task_id and meta_bytes is not None and not task_file.exists():
+                            task_file.parent.mkdir(parents=True, exist_ok=True)
+                            task_file.write_bytes(meta_bytes)
+                        raise
+                if not found:
+                    return DeleteResult.NOT_FOUND
+                with session_factory() as session:
+                    record = session.get(TaskRecord, task_id)
+                    if record:
+                        session.delete(record)
+                        session.commit()
+            return DeleteResult.DELETED
+        finally:
+            with self._state_lock:
+                self._cancelled.discard(task_id)
 
     def rerun(self, task_id: str, rule_codes: list[str] | None) -> bool:
         """重跑：从 task.json 获取包信息，兼容在线和离线任务。"""

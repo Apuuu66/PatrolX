@@ -208,7 +208,8 @@ output/
 生命周期：
 
 - 任务和结果长期保留，不自动清理；`.main/` 在任务生命周期内永久保留。
-- 删除任务必须级联删除 `uploads/<task_id>/` 和 `output/<task_id>/`。
+- 删除任务必须级联删除 `uploads/<task_id>/` 和 `output/<task_id>/`；先删除文件现场，成功后再删除数据库记录。
+- 文件现场删除失败返回 `task_delete_failed`，携带任务标识、现场位置、失败路径、原因，以及可选的路径长度与上限；任务保持可列出并允许重试。
 
 ## 6. 包分类与解压
 
@@ -244,13 +245,13 @@ deploy/config/classify_rules.yaml
 
 - 主包先解压为 `.main/` 证据现场，原始子压缩包和原始 `.log.gz` 都保留在该现场。
 - 通用递归解压服务按子包自身文件名/内容分类；无法识别时继承父级分类，最后归入 `other/`。
-- 嵌套包展开到 `<category>/<subpackage>/`，KPI 包内的日志子包、日志包内的 KPI 子包都允许跨分类落位。
+- 成员展开到 `<category>/<压缩包内部相对路径>`，不再插入来源子包名目录层；KPI 包内的日志子包、日志包内的 KPI 子包都允许跨分类落位。
 - 分类工作现场只保留最终解压结果；中间压缩包和已成功展开的 `.log.gz` 会被移除。
 - `pkg.extract.{category}` 汇总对应分类的 manifest 终态，不再各自维护一套解压流程。
-- 解压清单为 `.patrolx-extracted.json`（manifest v3），记录主包现场、各级子包、`.log.gz`、失败和拒绝状态。
-- manifest 必须校验版本和结构；旧版本、损坏或不匹配 checksum 时整体安全重建现场。
-- manifest v3 新现场包含 `policy` 审计节，保存归一化策略快照、fingerprint 和计数器；007 旧 manifest 没有 `policy` 节仍可在有效 checksum 下复用。
-- 有效 manifest 按 checksum 复用现场，不因部署策略变化自动重建；现场缺失或损坏才按当时静态策略重建。
+- 解压清单为 `.patrolx-extracted.json`（manifest v4），记录主包现场、各级子包、`.log.gz`、失败和拒绝状态，以及逐项路径长度与路径上限。
+- manifest 必须校验版本和结构；旧版本、损坏或不匹配 checksum/path-limit 时整体安全重建现场。
+- manifest v4 新现场包含 `policy` 审计节，保存归一化策略快照、fingerprint、计数器和 path-limit 快照；v3 及更早清单不允许静默迁移，必须重建。
+- 有效 manifest 按 checksum、policy fingerprint 和 path-limit 快照复用现场；快照不匹配或现场缺失/损坏时按当前静态配置重建。
 - 同 checksum 子包去重；任务级累计文件数、总字节数和嵌套深度构成固定安全预算。策略跳过项复制/保留时同样计费。
 
 ### 6.3 解压策略

@@ -50,7 +50,7 @@ def create_app() -> FastAPI:
     async def app_error_handler(_request, exc: AppError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=Error(code=exc.code, message=exc.message).model_dump(),
+            content=Error(code=exc.code, message=exc.message, detail=exc.detail).model_dump(),
         )
 
     @app.get("/healthz", tags=["system"], operation_id="healthz")

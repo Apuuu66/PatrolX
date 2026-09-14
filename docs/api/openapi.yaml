@@ -136,6 +136,12 @@ paths:
                 $ref: '#/components/schemas/ErrorV2'
         '404':
           $ref: '#/components/responses/Error404'
+        '500':
+          description: 任务现场删除失败；任务记录与可恢复现场保持可见
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDeleteErrorV2'
   /api/v2/tasks/{task_id}/rerun:
     post:
       summary: 增量重跑（全部或指定规则）
@@ -1413,6 +1419,42 @@ components:
           type: string
         name:
           type: string
+    TaskDeleteErrorV2:
+      allOf:
+      - $ref: '#/components/schemas/ErrorV2'
+      - type: object
+        properties:
+          detail:
+            $ref: '#/components/schemas/TaskDeleteErrorDetailV2'
+      description: 任务删除失败错误（detail 携带重试上下文）
+    TaskDeleteErrorDetailV2:
+      type: object
+      required:
+      - task_id
+      - locations
+      - failed_path
+      - reason
+      properties:
+        task_id:
+          type: string
+          description: 任务标识，禁止修改。
+        locations:
+          type: array
+          description: 删除涉及的现场相对位置。
+          items:
+            type: string
+        failed_path:
+          type: string
+          description: 删除失败的具体路径。
+        reason:
+          type: string
+          description: 可读失败原因。
+        path_length:
+          type: integer
+          description: 路径长度；仅路径限制相关错误返回。
+        path_limit:
+          type: integer
+          description: 路径长度上限；仅路径限制相关错误返回。
     ErrorV2:
       type: object
       required:
@@ -1429,6 +1471,7 @@ components:
           - unknown_rule
           - not_found
           - internal
+          - task_delete_failed
           - package_checksum_conflict
           - invalid_filename
           - corrupt_data

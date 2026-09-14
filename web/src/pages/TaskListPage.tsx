@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -21,12 +22,14 @@ import {
   DeleteOutlined,
   PlusOutlined,
   RedoOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import {
   ApiError,
   api,
+  type TaskDeleteError,
   type DataPreparation,
   type DictsResponse,
   type OverviewSummary,
@@ -72,6 +75,69 @@ const PREPARATION_STATUS_COLORS: Record<string, string> = {
   skip: "#1677ff",
   error: "#8c8c8c",
 };
+
+function TaskDeletePanel({
+  taskId,
+  error,
+  collapsed,
+  retrying,
+  onToggle,
+  onRetry,
+}: {
+  taskId: string;
+  error: TaskDeleteError;
+  collapsed: boolean;
+  retrying: boolean;
+  onToggle: (taskId: string) => void;
+  onRetry: (taskId: string) => void;
+}) {
+  if (collapsed) {
+    return (
+      <Button type="text" size="small" danger onClick={() => onToggle(taskId)} style={{ marginTop: 10, paddingInline: 0 }}>
+        <Flex align="center" gap={6}>
+          删除失败
+          <CaretRightOutlined />
+        </Flex>
+      </Button>
+    );
+  }
+  return (
+    <Alert
+      type="error"
+      showIcon
+      style={{ marginTop: 12 }}
+      message={
+        <Flex align="center" gap={8} wrap="wrap">
+          <Typography.Text strong>删除任务失败</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {error.reason}
+          </Typography.Text>
+        </Flex>
+      }
+      description={
+        <Flex vertical gap={4}>
+          <Typography.Text code style={{ fontSize: 12 }}>
+            任务 {error.task_id || taskId}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            现场 {error.locations.join("、")}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }} code ellipsis>
+            {error.failed_path}
+            {error.path_length !== undefined && error.path_limit !== undefined
+              ? ` · 长度 ${error.path_length}/${error.path_limit}`
+              : ""}
+          </Typography.Text>
+        </Flex>
+      }
+      action={
+        <Button size="small" icon={<ReloadOutlined />} loading={retrying} onClick={() => onRetry(taskId)}>
+          重试删除
+        </Button>
+      }
+    />
+  );
+}
 
 function PreparationPanel({
   preparation,
@@ -168,6 +234,9 @@ export function TaskListPage() {
   const [form] = Form.useForm();
   const [file, setFile] = useState<File | null>(null);
   const [preparationExpanded, setPreparationExpanded] = useState<Record<string, boolean>>({});
+  const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
+  const [deleteCollapsed, setDeleteCollapsed] = useState<Record<string, boolean>>({});
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -246,15 +315,67 @@ export function TaskListPage() {
     }
   };
 
-  const remove = async (taskId: string) => {
-    try {
-      await api.deleteTask(taskId);
-      message.success("任务已删除");
-      await load();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "删除失败");
-    }
-  };
+  const remove = useCallback(
+    async (taskId: string) => {
+      setDeleting((current) => ({ ...current, [taskId]: true }));
+      try {
+        await api.deleteTask(taskId);
+        setDeleteErrors((current) => {
+          if (!(taskId in current)) return current;
+          const next = { ...current };
+          delete next[taskId];
+          return next;
+        });
+        setDeleteCollapsed((current) => {
+          if (!(taskId in current)) return current;
+          const next = { ...current };
+          delete next[taskId];
+          return next;
+        });
+        message.success("任务已删除");
+        await load();
+      } catch (err) {
+        const detail = err instanceof ApiError && err.code === "task_delete_failed" ? err.detail : undefined;
+        if (
+          detail &&
+          typeof detail === "object" &&
+          "task_id" in detail &&
+          "locations" in detail &&
+          "failed_path" in detail &&
+          "reason" in detail
+        ) {
+          const failure = detail as TaskDeleteError;
+          setDeleteErrors((current) => ({ ...current, [taskId]: failure }));
+          setDeleteCollapsed((current) => ({ ...current, [taskId]: false }));
+          return;
+        }
+        const fallback: TaskDeleteError = {
+          task_id: taskId,
+          locations: [`output/${taskId}`, `uploads/${taskId}`],
+          failed_path: "-",
+          reason: err instanceof Error ? err.message : "删除失败",
+        };
+        setDeleteErrors((current) => ({ ...current, [taskId]: fallback }));
+        setDeleteCollapsed((current) => ({ ...current, [taskId]: false }));
+      } finally {
+        setDeleting((current) => ({ ...current, [taskId]: false }));
+      }
+    },
+    [load, message],
+  );
+
+  useEffect(() => {
+    const expandedTaskIds = Object.keys(deleteErrors).filter((taskId) => !deleteCollapsed[taskId]);
+    if (expandedTaskIds.length === 0) return;
+    const timer = window.setTimeout(() => {
+      setDeleteCollapsed((current) => {
+        const next = { ...current };
+        for (const taskId of expandedTaskIds) next[taskId] = true;
+        return next;
+      });
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [deleteErrors, deleteCollapsed]);
 
   return (
     <Flex vertical gap={16}>
@@ -403,6 +524,19 @@ export function TaskListPage() {
                 </Space>
               </Flex>
               </div>
+
+              {deleteErrors[record.task_id] && (
+                <TaskDeletePanel
+                  taskId={record.task_id}
+                  error={deleteErrors[record.task_id]}
+                  collapsed={Boolean(deleteCollapsed[record.task_id])}
+                  retrying={Boolean(deleting[record.task_id])}
+                  onToggle={(id) =>
+                    setDeleteCollapsed((current) => ({ ...current, [id]: !current[id] }))
+                  }
+                  onRetry={(id) => void remove(id)}
+                />
+              )}
 
               {record.preparation && (
                 <PreparationPanel

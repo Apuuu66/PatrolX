@@ -13,17 +13,22 @@ export type DictsResponse = components["schemas"]["DictsResponseV2"];
 export type OverviewSummary = components["schemas"]["OverviewSummaryV2"];
 export type DictItem = components["schemas"]["DictItemV2"];
 export type LogEntry = components["schemas"]["LogEntryV2"];
+export type TaskDeleteError = TaskDeleteErrorDetail;
 
 const BASE = "/api/v2";
+
+export type TaskDeleteErrorDetail = components["schemas"]["TaskDeleteErrorDetailV2"];
 
 export class ApiError extends Error {
   code: string;
   status: number;
+  detail?: unknown;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(code: string, message: string, status: number, detail?: unknown) {
     super(message);
     this.code = code;
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -32,18 +37,22 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (!resp.ok) {
     let message = `请求失败（HTTP ${resp.status}）`;
     let code = "http_error";
+    let detail: unknown;
     try {
-      const body = (await resp.json()) as { code?: string; message?: string; detail?: string };
+      const body = (await resp.json()) as { code?: string; message?: string; detail?: unknown };
       if (body.code) {
         code = body.code;
         message = body.message ?? body.code;
-      } else if (body.detail) {
+      } else if (typeof body.detail === "string") {
         message = body.detail;
+      }
+      if (body.detail !== undefined) {
+        detail = body.detail;
       }
     } catch {
       /* 非 JSON 响应 */
     }
-    throw new ApiError(code, message, resp.status);
+    throw new ApiError(code, message, resp.status, detail);
   }
   if (resp.status === 204) return undefined as T;
   return (await resp.json()) as T;

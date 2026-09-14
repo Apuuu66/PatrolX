@@ -32,7 +32,7 @@
 - `pkg.extract.main`：
   - 解压主包到 `.main/` 证据现场。
   - 调用共享解压服务，按 `deploy/config/classify_rules.yaml` 和内容特征递归分类。
-  - 生成只包含最终文件的分类工作现场，并写入 `.patrolx-extracted.json` manifest v3。
+  - 生成只包含最终文件的分类工作现场，成员直落 `<category>/<压缩包内部相对路径>`，并写入 `.patrolx-extracted.json` manifest v4。
 - `pkg.extract.<category>`：
   - 汇总 manifest 中对应分类的子包与 `.log.gz` 终态。
   - 失败或冲突时返回 `warn`，不阻断其他规则。
@@ -42,7 +42,7 @@
   - `nested.skip_all=true` 或 `nested.skip_paths[]` 命中的非白名单压缩项不读取成员，保留为最终文件。
   - 路径前缀归一化后必须有目录边界；名称关键字按目录段和文件名忽略大小写匹配。
   - 保留项计入任务预算；只有复制成功才是 `skipped`，冲突/失败/拒绝分别是 `conflict`、`failed`、`rejected`。
-  - manifest v3 的 `policy` 节保存快照、fingerprint、计数器和逐项决策；旧 manifest 没有 `policy` 仍可复用。
+  - manifest v4 的 `policy` 节保存快照、fingerprint、计数器和逐项决策；path-limit 快照变化时重建现场，v3 及更早清单不允许静默迁移。
 - 策略是部署侧静态配置；没有在线修改 API、任务级覆盖或热更新契约。有效旧任务不因策略变化重建，现场缺失或损坏重建时使用当时配置。
 
 ### 差异

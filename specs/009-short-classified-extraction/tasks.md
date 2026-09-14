@@ -124,19 +124,19 @@ description: "009 分类短路径解压、长路径防护与准备/删除状态�
 
 ### 用户故事 4 的契约与测试
 
-- [ ] T031 [US4] 更新 `docs/api/openapi.yaml`：为 `DELETE /api/v2/tasks/{task_id}` 新增 `500 task_delete_failed` 响应，保持 `204`、`404`、`409 task_busy` 语义不变，并描述 `detail.task_id`、`locations`、`failed_path`、`path_length`、`path_limit`。
-- [ ] T032 [US4] 执行 `python build.py contract` 和 `python build.py gen-web-api`，更新 `web/src/api/http.ts` 的结构化 `detail` 解析类型与 `tests/test_contract.py`。
-- [ ] T033 [US4] 在 `tests/test_delete_race.py` 和 `tests/test_api.py` 添加失败测试：目录删除失败返回 500 与结构化 detail；在线任务数据库记录仍在，任务仍可从列表返回；本地任务失败后 `output/<task_id>/task.json` 可恢复读取。
+- [x] T031 [US4] 更新 `docs/api/openapi.yaml`：为 `DELETE /api/v2/tasks/{task_id}` 新增 `500 task_delete_failed` 响应，保持 `204`、`404`、`409 task_busy` 语义不变，并描述 `detail.task_id`、`locations`、`failed_path`、`path_length`、`path_limit`。
+- [x] T032 [US4] 执行 `python build.py contract` 和 `python build.py gen-web-api`，更新 `web/src/api/http.ts` 的结构化 `detail` 解析类型与 `tests/test_contract.py`。
+- [x] T033 [US4] 在 `tests/test_delete_race.py` 和 `tests/test_api.py` 添加失败测试：目录删除失败返回 500 与结构化 detail；在线任务数据库记录仍在，任务仍可从列表返回；本地任务失败后 `output/<task_id>/task.json` 可恢复读取。
 
 ### 用户故事 4 的实现
 
-- [ ] T034 [US4] 在 `app/services/tasks.py` 定义 `TaskDeleteError`，调整删除顺序：文件现场全部成功后才删除数据库记录；删除前读取本地 `task.json`，失败后若该文件缺失则恢复。
-- [ ] T035 [US4] 在 `app/services/tasks.py` 的 `_remove_tree()` 中识别长路径、目录占用、权限和其他 `OSError`，保留重试瞬时 WinError 145 的既有策略，并生成包含失败路径、可选路径长度和上限的上下文。
-- [ ] T036 [US4] 修改 `app/api/router.py`：捕获 `TaskDeleteError` 并映射为 500 `{code:"task_delete_failed", message, detail}`；不把失败响应表达为“任务已删除”。
-- [ ] T037 [US4] 修改 `app/services/tasks.py` 的任务列表 fallback：完成态在线任务在 output 部分删除但数据库记录仍存在时仍可返回；不改变正常任务排序和分页。
-- [ ] T038 [US4] 修改 `web/src/pages/TaskListPage.tsx`：维护按 `task_id` 隔离的删除失败状态；完整行内 Alert 展示 5 秒后收起，保留“删除失败”状态并支持重新展开；展示任务、现场位置、原因和可选长度信息。
-- [ ] T039 [US4] 修改 `web/src/pages/TaskListPage.tsx`：提供 loading 态“重试删除”；成功后清除该任务错误状态、刷新列表并移除任务；失败时更新同一任务的状态而不弹全局成功提示。
-- [ ] T040 [US4] 更新 `tests/test_delete_race.py`、`tests/test_api.py` 和前端构建验证，运行删除相关测试确认通过。
+- [x] T034 [US4] 在 `app/services/tasks.py` 定义 `TaskDeleteError`，调整删除顺序：文件现场全部成功后才删除数据库记录；删除前读取本地 `task.json`，失败后若该文件缺失则恢复。
+- [x] T035 [US4] 在 `app/services/tasks.py` 的 `_remove_tree()` 中识别长路径、目录占用、权限和其他 `OSError`，保留重试瞬时 WinError 145 的既有策略，并生成包含失败路径、可选路径长度和上限的上下文。
+- [x] T036 [US4] 修改 `app/api/router.py`：捕获 `TaskDeleteError` 并映射为 500 `{code:"task_delete_failed", message, detail}`；不把失败响应表达为“任务已删除”。
+- [x] T037 [US4] 修改 `app/services/tasks.py` 的任务列表 fallback：完成态在线任务在 output 部分删除但数据库记录仍存在时仍可返回；不改变正常任务排序和分页。
+- [x] T038 [US4] 修改 `web/src/pages/TaskListPage.tsx`：维护按 `task_id` 隔离的删除失败状态；完整行内 Alert 展示 5 秒后收起，保留“删除失败”状态并支持重新展开；展示任务、现场位置、原因和可选长度信息。
+- [x] T039 [US4] 修改 `web/src/pages/TaskListPage.tsx`：提供 loading 态“重试删除”；成功后清除该任务错误状态、刷新列表并移除任务；失败时更新同一任务的状态而不弹全局成功提示。
+- [x] T040 [US4] 更新 `tests/test_delete_race.py`、`tests/test_api.py` 和前端构建验证，运行删除相关测试确认通过。
 
 **检查点**：删除失败不再只是短暂 toast；任务保持可见且可重试；成功路径仍返回 204 并级联删除 uploads/output/数据库记录。
 
@@ -146,14 +146,14 @@ description: "009 分类短路径解压、长路径防护与准备/删除状态�
 
 **目的**：统一契约、文档、日志、安全和质量门禁。
 
-- [ ] T041 检查 `app/services/extraction/layout.py`、`app/services/extraction/nested.py`、`app/core/archive.py` 的安全防护：路径穿越、符号链接、重复路径、深度、文件数、单文件大小和总字节预算全部保留。
-- [ ] T042 [P] 在 `app/services/extraction/site.py`、`app/services/extraction/nested.py`、`app/services/tasks.py` 中确认 structlog 记录包含 `task_id`、规则或删除上下文、来源/目标、状态、错误码；不输出完整超长路径以外的敏感内容。
-- [ ] T043 [P] 更新 `docs/architecture.md`、`docs/design/mechanisms.md` 或相关设计文档中旧的分类路径、manifest 版本和删除错误说明；不修改无关章节。
-- [ ] T044 [P] 检查 `docs/example/real-package-structure.md` 与真实样例路径说明，补充分类现场不再包含来源包目录层、`.main/` 仍保留原始证据的说明。
-- [ ] T045 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和生成客户端无漂移。
-- [ ] T046 运行 `python build.py lint`、`python build.py test`、`python build.py verify`；随后在 `web/` 运行 `npm run build`。
-- [ ] T047 按 `specs/009-short-classified-extraction/quickstart.md` 用 `local_run/` 样例验证本地全流程、任务列表折叠状态和删除失败交互。
-- [ ] T048 汇总变更、验证结果和残留风险，准备实现分支 review；不得合并未经完整门禁验证的代码。
+- [x] T041 检查 `app/services/extraction/layout.py`、`app/services/extraction/nested.py`、`app/core/archive.py` 的安全防护：路径穿越、符号链接、重复路径、深度、文件数、单文件大小和总字节预算全部保留。
+- [x] T042 [P] 在 `app/services/extraction/site.py`、`app/services/extraction/nested.py`、`app/services/tasks.py` 中确认 structlog 记录包含 `task_id`、规则或删除上下文、来源/目标、状态、错误码；不输出完整超长路径以外的敏感内容。
+- [x] T043 [P] 更新 `docs/architecture.md`、`docs/design/mechanisms.md` 或相关设计文档中旧的分类路径、manifest 版本和删除错误说明；不修改无关章节。
+- [x] T044 [P] 检查 `docs/example/real-package-structure.md` 与真实样例路径说明，补充分类现场不再包含来源包目录层、`.main/` 仍保留原始证据的说明。
+- [x] T045 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和生成客户端无漂移。
+- [x] T046 运行 `python build.py lint`、`python build.py test`、`python build.py verify`；随后在 `web/` 运行 `npm run build`。
+- [x] T047 按 `specs/009-short-classified-extraction/quickstart.md` 用 `local_run/` 样例验证本地全流程、任务列表折叠状态和删除失败交互。
+- [x] T048 汇总变更、验证结果和残留风险，准备实现分支 review；不得合并未经完整门禁验证的代码。
 
 ---
 

@@ -34,18 +34,21 @@ from app.models.schemas import (
     TaskLogs,
 )
 from app.services.overview import build_overview
-from app.services.tasks import DeleteResult, task_service
+from app.services.tasks import DeleteResult, TaskDeleteError, task_service
 
 router = APIRouter(prefix="/api/v2")
 DICT_NAMES = ("province", "operator", "product", "version")
 
 
 class AppError(Exception):
-    def __init__(self, code: str, message: str, status_code: int = 400) -> None:
+    def __init__(
+        self, code: str, message: str, status_code: int = 400, detail: dict[str, object] | None = None
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.detail = detail
 
 
 async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
@@ -161,7 +164,21 @@ def get_task_v2(task_id: str = PathParam()) -> InspectionTask:
 
 @router.delete("/tasks/{task_id}", status_code=204, operation_id="deleteTaskV2")
 def delete_task_v2(task_id: str = PathParam()) -> Response:
-    result = task_service.delete(task_id)
+    try:
+        result = task_service.delete(task_id)
+    except TaskDeleteError as exc:
+        raise AppError(
+            "task_delete_failed",
+            f"任务删除失败: {exc.reason}",
+            500,
+            detail={
+                "task_id": exc.task_id,
+                "locations": exc.locations,
+                "failed_path": exc.failed_path,
+                "path_length": exc.path_length,
+                "path_limit": exc.path_limit,
+            },
+        ) from exc
     if result == DeleteResult.BUSY:
         raise AppError("task_busy", "任务正在排队或执行，不能删除", 409)
     if result == DeleteResult.NOT_FOUND:
