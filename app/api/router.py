@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path, PureWindowsPath
@@ -56,7 +57,7 @@ async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
     fd, raw_name = tempfile.mkstemp(prefix=".upload-", suffix=".tmp", dir=settings.uploads)
     temp_path = Path(raw_name)
     try:
-        with temp_path.open("wb") as out:
+        with os.fdopen(fd, "wb") as out:
             while chunk := await package_file.read(1024 * 1024):
                 size += len(chunk)
                 if size > limit:
@@ -90,6 +91,7 @@ async def create_task_v2(
 
     task_id = generate_task_id(filename)
     temp_path: Path | None = None
+    created: TaskCreated | None = None
     try:
         checksum, size, temp_path = await _receive_upload(package_file)
         if size == 0:
@@ -123,6 +125,12 @@ async def create_task_v2(
         response.headers["Location"] = f"/api/v2/tasks/{created.task_id}"
         task_service.submit(created.task_id)
         return created
+    except Exception:
+        if created is not None:
+            task_service.discard(created.task_id)
+            shutil.rmtree(settings.uploads / created.task_id, ignore_errors=True)
+            shutil.rmtree(settings.output / created.task_id, ignore_errors=True)
+        raise
     finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
