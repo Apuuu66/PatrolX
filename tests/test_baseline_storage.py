@@ -133,3 +133,27 @@ def test_init_db_rebuilds_legacy_database_without_system_id(tmp_path: Path, monk
 
     assert "system_id" not in columns
     assert row == ("task-legacy", "旧版任务", "{}", "{}")
+
+
+def test_init_db_creates_missing_sqlite_parent_directory(tmp_path: Path, monkeypatch) -> None:
+    """SQLite 父目录缺失时应自动创建，而不是让在线入口启动失败。"""
+    from app.core.config import settings
+    from app.models.db import init_db
+
+    db_path = tmp_path / "missing" / "nested" / "patrolx.db"
+    monkeypatch.setattr(settings, "sqlite_path", db_path)
+
+    init_db()
+
+    assert db_path.is_file()
+
+
+def test_default_sqlite_path_is_outside_output_root(monkeypatch) -> None:
+    """元数据库默认不与任务输出目录混放。"""
+    from app.core.config import Settings
+
+    monkeypatch.delenv("PATROLX_SQLITE_PATH", raising=False)
+    settings = Settings(_env_file=None)
+
+    assert settings.sqlite_path == Path("data") / "patrolx.db"
+    assert settings.output not in settings.resolved(settings.sqlite_path).parents

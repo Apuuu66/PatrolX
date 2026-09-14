@@ -67,7 +67,7 @@ python build.py gen-web-api    # 由 docs/api/openapi.yaml 重新生成 web/src/
 ## 容器化部署（Docker 可选）
 
 ```bash
-docker compose up --build -d    # 构建并启动（8000 端口；uploads/output 挂载持久卷）
+docker compose up --build -d    # 构建并启动（8000 端口；uploads/output/data 挂载持久卷）
 ```
 
 镜像基于 `python:3.12-slim`，默认以生产模式启动（`PATROLX_ENV=production`、JSON 日志）。已内置健康检查。

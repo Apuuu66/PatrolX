@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     # 上传限制（在线模式）
     max_upload_mb: int = 2048
 
-    # 在线模式元数据库
-    sqlite_path: Path = Path("output/patrolx.db")
+    # 在线模式元数据库，独立于任务输出目录
+    sqlite_path: Path = Path("data/patrolx.db")
 
     def resolved(self, p: Path) -> Path:
         return p if p.is_absolute() else self.base_dir / p

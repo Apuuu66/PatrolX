@@ -9,6 +9,7 @@ __pycache__/
 # 运行时数据（不入库、不提交）
 uploads/*
 output/*
+data/*
 !uploads/.gitkeep
 !output/.gitkeep
 # 轻量合成测试包：允许随仓库分发

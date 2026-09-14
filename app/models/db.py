@@ -1,6 +1,7 @@
 """SQLAlchemy 任务元数据模型（在线模式；结果数据仍在 output/ 文件）。"""
 
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy import JSON, DateTime, Engine, String, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -28,9 +29,14 @@ class TaskRecord(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+def _sqlite_path() -> Path:
+    """返回按项目根解析后的 SQLite 路径。"""
+    return settings.resolved(settings.sqlite_path)
+
+
 def session_factory() -> Session:
     """按当前 settings 创建会话，保证测试环境切换 SQLite 生效。"""
-    engine = create_engine(f"sqlite:///{settings.sqlite_path}", connect_args={"check_same_thread": False})
+    engine = create_engine(f"sqlite:///{_sqlite_path()}", connect_args={"check_same_thread": False})
     return Session(bind=engine, autoflush=False, expire_on_commit=False)
 
 
@@ -51,7 +57,9 @@ def _rebuild_legacy_tasks(engine: Engine) -> None:
 
 
 def init_db() -> None:
-    engine = create_engine(f"sqlite:///{settings.sqlite_path}", connect_args={"check_same_thread": False})
+    path = _sqlite_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False})
     if inspect(engine).has_table("tasks") and "system_id" in {
         column["name"] for column in inspect(engine).get_columns("tasks")
     }:
