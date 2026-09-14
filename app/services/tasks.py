@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.cli import generate_task_id, run_single_rule, run_task
+from app.core.checksum import sha256_file
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
@@ -60,8 +61,14 @@ class TaskService:
         try:
             plan = self._rerun_plan.pop(task_id, None)
             if plan:
+                package_checksum = sha256_file(package)
                 for code in plan:
-                    run_single_rule(code, package=package, task_id=task_id)
+                    run_single_rule(
+                        code,
+                        package=package,
+                        task_id=task_id,
+                        package_checksum=package_checksum,
+                    )
                 append_log(settings.output, task_id, "info", "重跑完成，报告已更新")
                 current = load_task_meta(settings.output, task_id)
                 if current:

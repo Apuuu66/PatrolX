@@ -125,19 +125,25 @@ python run_online.py
    - 同一子包通过 checksum/manifest 去重，只解压一次。
    - 主包解压失败时任务失败，不进入后续阶段；子包或 gzip 局部失败保留原因并继续任务。
 
-4. **规则私有 prepare**
+4. **任务文件清单**
+   - 全部解压隐藏规则到达终态后，执行器构建一次内存 `TaskFileCatalog`。
+   - 清单只扫描 `logs/`、`kpi/`、`traffic/`、`alarm/`、`config/`、`resource/`、`other/` 七个 category 根。
+   - `.main/`、manifest、`prepared/`、任务元数据、规则结果、报告和执行日志天然排除。
+   - 清单返回 POSIX 相对路径，稳定排序、去重，并在发现链接或越界路径时拒绝。
+
+5. **规则私有 prepare**
    - 全部解压准备到达终态后，才执行 `PREPARE`。
    - 普通规则可以声明至多一个私有 prepare；prepare 继承 owner 的 `source_patterns` 和优先级。
    - prepared 数据写入 `prepared/<owner_code>/`，只有 owner 规则可读取。
    - prepare 失败或无匹配输入时，owner inspect 显式 `skip`；其他规则继续。
 
-5. **普通规则 inspect**
+6. **普通规则 inspect**
    - prepare 阶段完成后，P1 基础检查和 P2 综合分析按优先级顺序执行。
-   - 每条普通规则只按自己的 `source_patterns` 匹配任务目录内相对路径。
+   - 每条普通规则只按自己的 `source_patterns` 从 `TaskFileCatalog` 匹配文件；matcher 执行 `re.fullmatch()`。
    - 无匹配文件、格式不适用或解析失败时返回 `skip`，不静默通过。
    - 单规则可原地重跑，不自动补跑其他普通规则。
 
-6. **结果与报告**
+7. **结果与报告**
    - 规则结果写入 `rules/<rule_code>.json`。
    - 执行日志写入 `output/<task_id>/execution.log`。
    - 报告写入 `output/<task_id>/report.html`。
@@ -277,7 +283,7 @@ docs/example/real-package-structure.md
 规则只声明：
 
 ```text
-source_patterns[]  使用 re.fullmatch() 匹配任务目录内 POSIX 相对路径的正则
+source_patterns[]  对 TaskFileCatalog 的 POSIX 相对路径执行 re.fullmatch() 的正则
 outputs.metrics[]  声明的指标契约
 可选 prepare       规则私有预处理声明
 ```
@@ -334,8 +340,9 @@ outputs.metrics[]  声明的指标契约
 
 ### 7.6 单规则重跑
 
-- 只执行目标规则私有 prepare或复用其缓存。
-- 再按目标规则 `source_patterns` 重新匹配文件并执行目标规则。
+- 先确保 manifest 与主包解压现场可复用；缺失或不可复用时执行主包解压。
+- 再构建 `TaskFileCatalog`，执行目标规则私有 prepare或复用其缓存。
+- 最后按目标规则 `source_patterns` 重新匹配文件并执行目标规则。
 - 只重写目标规则 JSON，再重建任务摘要和 HTML 报告。
 - 不自动补跑其他普通规则，不建立规则间依赖图。
 - 规则逻辑变化必须升级 `rule_version`。

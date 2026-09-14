@@ -117,3 +117,25 @@ def test_single_rule_rerun_only_executes_target_prepare_and_inspect(tmp_path) ->
 
     assert events == ["prepare:rule.target", "inspect:rule.target"]
     assert result.status == RuleStatus.PASS
+
+
+def test_multi_rule_rerun_reuses_one_package_checksum(monkeypatch) -> None:
+    """一次多规则重跑计划中的规则共享同一个主包 checksum。"""
+    task_id = _upload("multi-rerun-checksum.zip")
+    _wait(task_id)
+    calls: list[tuple[str, str | None]] = []
+
+    def record_run(code: str, **kwargs):
+        calls.append((code, kwargs.get("package_checksum")))
+
+    monkeypatch.setattr("app.services.tasks.run_single_rule", record_run)
+    task_service._rerun_plan[task_id] = ["log.error_density", "config.check"]
+    try:
+        task_service._execute(task_id)
+    finally:
+        task_service._rerun_plan.pop(task_id, None)
+
+    assert [code for code, _checksum in calls] == ["log.error_density", "config.check"]
+    checksums = {checksum for _code, checksum in calls}
+    assert len(checksums) == 1
+    assert next(iter(checksums)) is not None

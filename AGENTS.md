@@ -231,8 +231,10 @@ docs(architecture): 拆分 AGENTS.md
 ### Speckit
 
 ```text
-specify → review → plan → review → tasks → review → implement
+specify → clarify → review → plan → review → tasks → analyze → review → implement
 ```
+
+`clarify` 在 `spec` review 前消除需求歧义，并将结论回写 `spec.md`。`analyze` 在任务生成后、实现前只读校验 `spec.md`、`plan.md` 和 `tasks.md` 的一致性；发现问题必须先修正对应产物并重新 review。
 
 `spec.md`、`plan.md`、`tasks.md` 是唯一规划与任务来源。进入实现前必须提交这些产物；实现阶段可更新 `tasks.md` 复选框。修改 `spec.md` / `plan.md` 的需求、范围或方案语义时，必须回到 Speckit review，确认后更新并提交。
 
