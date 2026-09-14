@@ -845,6 +845,15 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error404"];
+            /** @description 任务正在排队或执行，禁止删除 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
         };
     };
     rerunTaskV2: {

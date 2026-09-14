@@ -1,13 +1,17 @@
 """重跑状态可见性回归测试。"""
 
 import time
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from test_api import _upload, _wait
 
+from app.core.config import settings
 from app.inspectors.base import Inspector, PrepareSpec
 from app.main import app
-from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
+from app.models.db import TaskRecord, session_factory
+from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity, TaskMode, TaskStatus, TaskTrigger
+from app.services import store
 from app.services.executor import Executor
 from app.services.tasks import task_service
 
@@ -139,3 +143,43 @@ def test_multi_rule_rerun_reuses_one_package_checksum(monkeypatch) -> None:
     checksums = {checksum for _code, checksum in calls}
     assert len(checksums) == 1
     assert next(iter(checksums)) is not None
+
+
+def test_local_task_full_rerun_completes_without_db_record(monkeypatch) -> None:
+    """本地任务没有 SQLite 记录时，也必须执行重跑并保持本地模式。"""
+    task_id = _upload("local-rerun.zip")
+    _wait(task_id)
+
+    with session_factory() as session:
+        record = session.get(TaskRecord, task_id)
+        assert record is not None
+        session.delete(record)
+        session.commit()
+
+    task = store.load_task_meta(settings.output, task_id)
+    assert task is not None
+    local_task = task.model_copy(update={"mode": TaskMode.LOCAL, "trigger": TaskTrigger.CLI})
+    store.save_task_meta(settings.output, local_task)
+
+    calls: list[dict] = []
+
+    def record_run(_package, **kwargs):
+        calls.append(kwargs)
+        completed = local_task.model_copy(update={"status": TaskStatus.COMPLETED, "completed_at": datetime.now(UTC)})
+        store.save_task_meta(settings.output, completed)
+        return completed
+
+    monkeypatch.setattr("app.services.tasks.run_task", record_run)
+    monkeypatch.setattr(task_service._queue, "put", lambda _task_id: None)
+
+    assert task_service.rerun(task_id, None) is True
+    task_service._execute(task_id)
+
+    task = task_service.get(task_id)
+    assert task is not None
+    assert task.status == TaskStatus.COMPLETED
+    assert task.mode == TaskMode.LOCAL
+    assert len(calls) == 1
+    assert calls[0]["mode"] == TaskMode.LOCAL
+    assert calls[0]["trigger"] == TaskTrigger.CLI
+    task_service._rerun_plan.pop(task_id, None)

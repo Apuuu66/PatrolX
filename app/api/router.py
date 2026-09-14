@@ -34,7 +34,7 @@ from app.models.schemas import (
     TaskLogs,
 )
 from app.services.overview import build_overview
-from app.services.tasks import task_service
+from app.services.tasks import DeleteResult, task_service
 
 router = APIRouter(prefix="/api/v2")
 DICT_NAMES = ("province", "operator", "product", "version")
@@ -161,7 +161,10 @@ def get_task_v2(task_id: str = PathParam()) -> InspectionTask:
 
 @router.delete("/tasks/{task_id}", status_code=204, operation_id="deleteTaskV2")
 def delete_task_v2(task_id: str = PathParam()) -> Response:
-    if not task_service.delete(task_id):
+    result = task_service.delete(task_id)
+    if result == DeleteResult.BUSY:
+        raise AppError("task_busy", "任务正在排队或执行，不能删除", 409)
+    if result == DeleteResult.NOT_FOUND:
         raise AppError("not_found", "任务不存在", 404)
     return Response(status_code=204)
 

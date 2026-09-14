@@ -5,6 +5,7 @@ import queue
 import shutil
 import threading
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 from app.cli import generate_task_id, run_single_rule, run_task
@@ -21,12 +22,21 @@ logger = get_logger("patrolx.tasks")
 NOW = datetime.now
 
 
+class DeleteResult(StrEnum):
+    DELETED = "deleted"
+    BUSY = "busy"
+    NOT_FOUND = "not_found"
+
+
 class TaskService:
     def __init__(self) -> None:
         init_db()
         self._lock = threading.Lock()
+        self._state_lock = threading.Lock()
         self._queue: queue.Queue[str] = queue.Queue()
         self._rerun_plan: dict[str, list[str] | None] = {}
+        self._active_task: str | None = None
+        self._cancelled: set[str] = set()
         self._worker = threading.Thread(target=self._worker_loop, name="patrolx-worker", daemon=True)
         self._worker.start()
 
@@ -36,8 +46,17 @@ class TaskService:
         while True:
             task_id = self._queue.get()
             try:
-                with self._lock:
-                    self._execute(task_id)
+                with self._state_lock:
+                    if task_id in self._cancelled:
+                        self._cancelled.discard(task_id)
+                        continue
+                    self._active_task = task_id
+                try:
+                    with self._lock:
+                        self._execute(task_id)
+                finally:
+                    with self._state_lock:
+                        self._active_task = None
             except Exception:  # noqa: BLE001
                 logger.exception("task_failed", task_id=task_id)
                 append_log(settings.output, task_id, "error", "任务执行失败")
@@ -53,7 +72,7 @@ class TaskService:
                 session.commit()
 
     def _execute(self, task_id: str) -> None:
-        package, customer, version, name = self._task_info(task_id)
+        package, customer, version, name, mode, trigger = self._task_info(task_id)
         if package is None:
             return
         self._update_status(task_id, TaskStatus.RUNNING)
@@ -83,8 +102,8 @@ class TaskService:
                     customer=customer,
                     version=version,
                     task_id=task_id,
-                    mode=TaskMode.ONLINE,
-                    trigger=TaskTrigger.API,
+                    mode=mode,
+                    trigger=trigger,
                 )
                 if executed.status == TaskStatus.FAILED:
                     TASKS_DURATION.observe((NOW(UTC) - started).total_seconds())
@@ -101,13 +120,28 @@ class TaskService:
             self._update_status(task_id, TaskStatus.FAILED, completed_at=NOW(UTC))
             raise
 
-    def _task_info(self, task_id: str) -> tuple[Path | None, dict, str | None, str | None]:
-        """从 SQLite 获取在线任务的执行信息。"""
+    def _task_info(self, task_id: str) -> tuple[Path | None, dict, str | None, str | None, TaskMode, TaskTrigger]:
+        """获取任务执行信息；本地任务从 output/ 元数据兜底。"""
         with session_factory() as session:
             record = session.get(TaskRecord, task_id)
-            if record is None:
-                return None, {}, None, None
-            return settings.uploads / task_id / record.package_file, record.customer or {}, record.version, record.name
+            if record is not None:
+                return (
+                    settings.uploads / task_id / record.package_file,
+                    record.customer or {},
+                    record.version,
+                    record.name,
+                    TaskMode(record.mode),
+                    TaskTrigger(record.trigger),
+                )
+
+        task = load_task_meta(settings.output, task_id)
+        if task is None or task.system is None:
+            return None, {}, None, None, TaskMode.LOCAL, TaskTrigger.CLI
+        package_file = task.system.package_file
+        package = settings.uploads / task_id / package_file
+        if not package.exists():
+            package = settings.uploads / package_file
+        return package, task.system.customer, task.system.version, task.name, task.mode, task.trigger
 
     # ---- 创建 / 查询 ----
 
@@ -247,23 +281,34 @@ class TaskService:
         start = (page - 1) * page_size
         return items[start : start + page_size], total
 
-    def delete(self, task_id: str) -> bool:
-        """删除任务：SQLite + output/ + uploads/ 级联清理。"""
-        found = False
-        with session_factory() as session:
-            record = session.get(TaskRecord, task_id)
-            if record:
-                session.delete(record)
-                session.commit()
+    def delete(self, task_id: str) -> DeleteResult:
+        """删除任务；运行中任务拒绝删除，排队任务标记取消后级联清理。"""
+        with self._state_lock:
+            if self._active_task == task_id:
+                return DeleteResult.BUSY
+            self._cancelled.add(task_id)
+        with self._lock:
+            found = False
+            with session_factory() as session:
+                record = session.get(TaskRecord, task_id)
+                if record:
+                    session.delete(record)
+                    session.commit()
+                    found = True
+            for directory in (settings.output / task_id, settings.uploads / task_id):
+                if not directory.exists():
+                    continue
                 found = True
-        for directory in (settings.output / task_id, settings.uploads / task_id):
-            if not directory.exists():
-                continue
-            found = True
-            shutil.rmtree(directory)
-            if directory.exists():
-                raise OSError(f"任务目录删除失败: {directory}")
-        return found
+                shutil.rmtree(directory)
+                if directory.exists():
+                    raise OSError(f"任务目录删除失败: {directory}")
+            if not found:
+                with self._state_lock:
+                    self._cancelled.discard(task_id)
+                return DeleteResult.NOT_FOUND
+        with self._state_lock:
+            self._cancelled.discard(task_id)
+        return DeleteResult.DELETED
 
     def rerun(self, task_id: str, rule_codes: list[str] | None) -> bool:
         """重跑：从 task.json 获取包信息，兼容在线和离线任务。"""
