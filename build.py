@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -25,12 +26,16 @@ ROOT = Path(__file__).resolve().parent
 IS_WINDOWS = os.name == "nt"
 VENV_REL_PYTHON = "Scripts/python.exe" if IS_WINDOWS else "bin/python"
 EXACT_LOCK_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+==[^\s;]+(?:\s*;\s*.+)?$")
+VENV_STATE_FILE = ".patrolx-build-state.json"
+PIPE_TARGETS: dict[str, tuple[str, str, str, str]] = {
+    "linux": ("linux", "posix", "Linux", "x86_64"),
+    "macos": ("darwin", "posix", "Darwin", "arm64"),
+    "windows": ("win32", "nt", "Windows", "AMD64"),
+}
 
 Runner = Callable[[list[str], Path | None], int]
 
-COMMANDS = OrderedDict[
-    str, str
-](
+COMMANDS = OrderedDict[str, str](
     [
         ("help", "显示可用命令"),
         ("install", "创建/校验 .venv 并按精确锁安装后端依赖"),
@@ -93,22 +98,72 @@ def _require_host_python() -> None:
         raise BuildError("需要 Python 3.11 或更高版本；请安装官方 Python 后重试。")
 
 
+def _venv_state_path(root: Path) -> Path:
+    """返回标准安装状态标记路径。"""
+    return root / ".venv" / VENV_STATE_FILE
+
+
+def _lock_fingerprint(root: Path) -> str:
+    """计算当前锁文件指纹；缺锁时用空内容参与校验。"""
+    path = lock_path(root)
+    return hashlib.sha256(path.read_bytes() if path.exists() else b"").hexdigest()
+
+
+def _write_venv_state(root: Path) -> None:
+    """标准安装成功后写入 Python 版本与锁文件指纹。"""
+    state = {
+        "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "lock_sha256": _lock_fingerprint(root),
+    }
+    _venv_state_path(root).write_text(json.dumps(state, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _validate_venv_base(root: Path) -> tuple[int, int]:
+    """校验 venv 结构、Python 版本，并拒绝 uv 接管环境。"""
+    config = root / ".venv" / "pyvenv.cfg"
+    if not config.exists():
+        raise BuildError("检测到不标准 .venv；请删除 .venv 后重新执行 python build.py install。")
+    content = config.read_text(encoding="utf-8")
+    if re.search(r"(?im)^uv\s*=", content):
+        raise BuildError("检测到由 uv 创建的 .venv；请删除 .venv 后重新执行 python build.py install。")
+    version_match = re.search(r"(?im)^version\s*=\s*(\d+)\.(\d+)", content)
+    if not version_match:
+        raise BuildError(".venv 缺少 Python 版本信息；请删除 .venv 后重新执行 python build.py install。")
+    python_version = tuple(map(int, version_match.groups()))
+    if python_version < (3, 11):
+        raise BuildError(".venv Python 版本低于 3.11；请删除 .venv 后重新执行 python build.py install。")
+    return python_version
+
+
+def _validate_standard_venv(root: Path, *, require_lock_match: bool = True) -> None:
+    """校验 venv 由标准 install 初始化；默认要求与当前锁一致。"""
+    python_version = _validate_venv_base(root)
+    state_path = _venv_state_path(root)
+    if not state_path.exists():
+        raise BuildError(".venv 缺少标准安装标记；请删除 .venv 后重新执行 python build.py install。")
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        recorded_version = tuple(map(int, str(state["python"]).split(".")))
+        recorded_lock = str(state["lock_sha256"])
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        raise BuildError(".venv 标准安装标记无效；请删除 .venv 后重新执行 python build.py install。") from None
+    if recorded_version != python_version:
+        raise BuildError(".venv 与当前 Python 版本不匹配；请删除 .venv 后重新执行 python build.py install。")
+    if require_lock_match and recorded_lock != _lock_fingerprint(root):
+        raise BuildError(".venv 与当前锁文件不匹配；请重新执行 python build.py install。")
+
+
 def ensure_venv(context: BuildContext) -> Path:
-    """确保使用官方 Python venv；已有 uv 环境必须显式重建。"""
+    """确保使用官方 Python venv；已有不标准或 uv 环境必须显式重建。"""
     venv_dir = context.root / ".venv"
     python = venv_python(context.root)
-    config = venv_dir / "pyvenv.cfg"
-    if config.exists():
-        content = config.read_text(encoding="utf-8")
-        if re.search(r"(?im)^uv\s*=", content):
-            raise BuildError(
-                "检测到由 uv 创建的 .venv；请删除 .venv 后重新执行 python build.py install。"
-            )
-    if not python.exists():
-        _require_host_python()
-        code = context.run([sys.executable, "-m", "venv", str(venv_dir)], context.root)
-        if code != 0:
-            raise BuildError(f"创建 .venv 失败，退出码 {code}。")
+    if python.exists():
+        _validate_venv_base(context.root)
+        return python
+    _require_host_python()
+    code = context.run([sys.executable, "-m", "venv", str(venv_dir)], context.root)
+    if code != 0:
+        raise BuildError(f"创建 .venv 失败，退出码 {code}。")
     return python
 
 
@@ -117,10 +172,11 @@ def ensure_lock(context: BuildContext) -> None:
         raise BuildError("缺少 requirements-lock.txt；无法执行精确依赖安装。")
 
 
-def require_existing_venv(context: BuildContext) -> Path:
+def require_existing_venv(context: BuildContext, *, lock_match: bool = True) -> Path:
     python = venv_python(context.root)
     if not python.exists():
         raise BuildError("缺少 .venv；请先执行 python build.py install。")
+    _validate_standard_venv(context.root, require_lock_match=lock_match)
     return python
 
 
@@ -142,6 +198,7 @@ def cmd_install(context: BuildContext) -> int:
     local_code = context.run(_pip_command(python, "--no-deps", "-e", "."), context.root)
     if local_code != 0:
         raise BuildError(f"本地项目安装失败，退出码 {local_code}。")
+    _write_venv_state(context.root)
     print("后端环境安装完成: .venv")
     return 0
 
@@ -162,16 +219,70 @@ def _requirement_marker(requires_dist: list[str], target: str) -> str | None:
     return None
 
 
+def _strip_extra_marker(marker: str) -> str:
+    """去除锁标记中的 extra 条件，保留目标平台和 Python 版本条件。"""
+    depth = 0
+    start = 0
+    clauses: list[tuple[str, str]] = []
+    operator = ""
+    for index, char in enumerate(marker + " "):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif depth == 0 and char in " \t":
+            word_start = index + 1
+            match = re.match(r"\s*(and|or)\s*", marker[word_start:])
+            if match:
+                clause = marker[start:index].strip()
+                if clause:
+                    clauses.append((operator, clause))
+                operator = match.group(1)
+                start = word_start + match.end()
+
+    tail = marker[start:].strip()
+    if tail:
+        clauses.append((operator, tail))
+
+    if not clauses:
+        return marker.strip()
+
+    kept: list[str] = []
+    for operator, clause in clauses:
+        if "extra" in clause:
+            continue
+        if not kept:
+            kept.append(clause)
+        else:
+            kept.append(f"{operator} {clause}")
+    return " ".join(kept)
+
+
 def _read_pip_report(path: Path) -> dict[str, tuple[str, str | None]]:
     report = json.loads(path.read_text(encoding="utf-8"))
     items = [item.get("metadata", {}) for item in report.get("install", [])]
-    incoming_markers: dict[str, str] = {}
+    incoming_markers: dict[str, tuple[bool, str | None]] = {}
+
+    def record_marker(key: str, marker: str | None, *, has_extra: bool) -> None:
+        current = incoming_markers.get(key)
+        if current is None or (current[0] and not has_extra):
+            incoming_markers[key] = (has_extra, marker)
+
     for metadata in items:
         for requirement in metadata.get("requires_dist", []):
             name_match = re.match(r"^[A-Za-z0-9_.-]+", requirement)
             marker_match = re.match(r"^[A-Za-z0-9_.-]+(?:\[[^]]+\])?[^;]+;\s*(.+)$", requirement)
-            if name_match and marker_match:
-                incoming_markers[_canonical_name(name_match.group(0))] = marker_match.group(1).strip()
+            if not name_match:
+                continue
+            key = _canonical_name(name_match.group(0))
+            if not marker_match:
+                record_marker(key, None, has_extra=False)
+                continue
+            marker = marker_match.group(1).strip()
+            has_extra = re.search(r"(?:^|\s)extra\s*==", marker) is not None
+            if has_extra:
+                marker = _strip_extra_marker(marker) or None
+            record_marker(key, marker, has_extra=has_extra)
 
     resolved: dict[str, tuple[str, str | None]] = {}
     for metadata in items:
@@ -182,7 +293,7 @@ def _read_pip_report(path: Path) -> dict[str, tuple[str, str | None]]:
         key = _canonical_name(name)
         if key in resolved and resolved[key][0] != version:
             raise BuildError(f"平台解析结果冲突: {name} {resolved[key][0]} / {version}")
-        resolved[key] = (version, incoming_markers.get(key))
+        resolved[key] = (version, incoming_markers.get(key, (False, None))[1])
     return resolved
 
 
@@ -200,16 +311,31 @@ def _generate_lock(context: BuildContext, python: Path) -> None:
     requirements = _project_requirements()
     platforms: dict[str, list[str]] = {
         "linux": [
-            "--python-version", "3.12", "--implementation", "cp",
-            "--platform", "manylinux2014_x86_64", "--only-binary=:all:",
+            "--python-version",
+            "3.12",
+            "--implementation",
+            "cp",
+            "--platform",
+            "manylinux2014_x86_64",
+            "--only-binary=:all:",
         ],
         "macos": [
-            "--python-version", "3.12", "--implementation", "cp",
-            "--platform", "macosx_11_0_arm64", "--only-binary=:all:",
+            "--python-version",
+            "3.12",
+            "--implementation",
+            "cp",
+            "--platform",
+            "macosx_11_0_arm64",
+            "--only-binary=:all:",
         ],
         "windows": [
-            "--python-version", "3.12", "--implementation", "cp",
-            "--platform", "win_amd64", "--only-binary=:all:",
+            "--python-version",
+            "3.12",
+            "--implementation",
+            "cp",
+            "--platform",
+            "win_amd64",
+            "--only-binary=:all:",
         ],
     }
     resolved: dict[str, tuple[str, str | None]] = {}
@@ -218,9 +344,13 @@ def _generate_lock(context: BuildContext, python: Path) -> None:
     os.close(fd)
     try:
         for platform_name, platform_arguments in platforms.items():
-            command = _pip_command(
+            command = _pip_resolution_command(
                 python,
-                "--dry-run", "--ignore-installed", "--report", str(report_path),
+                platform_name,
+                "--dry-run",
+                "--ignore-installed",
+                "--report",
+                str(report_path),
                 *platform_arguments,
                 *requirements,
             )
@@ -242,6 +372,34 @@ def _generate_lock(context: BuildContext, python: Path) -> None:
     lock_path(context.root).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _pip_resolution_command(python: Path, platform_name: str, *arguments: str) -> list[str]:
+    """构造按目标平台评估环境标记的 pip 解析命令。"""
+    target = PIPE_TARGETS[platform_name]
+    sys_platform, target_os_name, system, machine = target
+    target_environment = {
+        "implementation_name": "cpython",
+        "implementation_version": "3.12.0",
+        "os_name": target_os_name,
+        "platform_machine": machine,
+        "platform_release": "",
+        "platform_system": system,
+        "platform_version": "",
+        "python_full_version": "3.12.0",
+        "platform_python_implementation": "CPython",
+        "python_version": "3.12",
+        "sys_platform": sys_platform,
+    }
+    bootstrap = (
+        "import pip._internal.cli.main as pip_main\n"
+        "import pip._vendor.packaging.markers as markers\n"
+        "import sys\n"
+        f"markers.default_environment = lambda: {target_environment!r}\n"
+        "sys.argv = ['pip', 'install', *sys.argv[1:]]\n"
+        "raise SystemExit(pip_main.main())\n"
+    )
+    return [str(python), "-c", bootstrap, *arguments]
+
+
 def cmd_lock(context: BuildContext, *, check: bool = False) -> int:
     """维护或校验跨平台精确依赖锁。"""
     if check:
@@ -255,7 +413,7 @@ def cmd_lock(context: BuildContext, *, check: bool = False) -> int:
                 raise BuildError(f"requirements-lock.txt 第 {line_number} 行不是精确版本: {line}")
         print("requirements-lock.txt 精确版本校验通过")
         return 0
-    python = require_existing_venv(context)
+    python = require_existing_venv(context, lock_match=False)
     _generate_lock(context, python)
     print("已刷新 requirements-lock.txt")
     return 0

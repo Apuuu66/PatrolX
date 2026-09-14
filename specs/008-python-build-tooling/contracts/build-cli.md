@@ -13,14 +13,15 @@ python build.py <command> [arguments]
 - 前端命令由入口发现 npm/npx 并透传参数。
 - 未知命令或参数错误返回非零，并显示可用命令或正确用法。
 - 前置条件缺失返回非零，并给出可执行下一步，例如 `python build.py install` 或 `python build.py e2e-install`。
+- 后端命令必须校验标准安装标记 `.venv/.patrolx-build-state.json`；锁文件变更后必须重新 `install` 才能继续执行后端工作流。
 
 ## 命令列表
 
 | 命令 | 用途 | 前置条件 | 成功结果 |
 |---|---|---|---|
 | `help` | 显示可用命令和用法 | 无 | 显示命令列表。 |
-| `install` | 创建/校验 `.venv` 并精确安装后端依赖 | Python 3.11+、`requirements-lock.txt` | `.venv` 可用于后端命令。 |
-| `lock` | 从依赖声明刷新精确锁 | Python 3.11+、pip | `requirements-lock.txt` 更新，diff 可审查。 |
+| `install` | 创建/校验 `.venv` 并精确安装后端依赖 | Python 3.11+、`requirements-lock.txt` | `.venv` 可用于后端命令，并写入 `.venv/.patrolx-build-state.json`。 |
+| `lock` | 从依赖声明刷新精确锁 | Python 3.11+、标准 `install` 创建的 pip | `requirements-lock.txt` 更新，diff 可审查。 |
 | `verify` | 运行本地全流程巡检 | `.venv` 和后端依赖、输入数据包 | 任务、规则结果、日志和报告按现有契约生成。 |
 | `verify-one --rule <rule_code>` | 只重跑目标规则 | `.venv`、后端依赖、任务输入 | 仅目标规则结果刷新，摘要与报告同步。 |
 | `run` | 启动在线 API + Web 开发服务 | `.venv`、后端依赖、Node/npm | 后端与前端按现有地址启动。 |

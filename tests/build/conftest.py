@@ -45,7 +45,14 @@ class FakeRunner:
 
 
 def make_context(tmp_path: Path, runner: FakeRunner | None = None) -> build.BuildContext:
+    """创建通过基础健康检查的标准 venv 替身。"""
     context = build.BuildContext(root=tmp_path, runner=runner or FakeRunner())
-    context.venv_python(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+    venv_dir = tmp_path / ".venv"
+    (venv_dir / "bin").mkdir(parents=True, exist_ok=True)
     context.venv_python(tmp_path).touch()
+    (venv_dir / "pyvenv.cfg").write_text("version = 3.12.0\n", encoding="utf-8")
+    (venv_dir / build.VENV_STATE_FILE).write_text(
+        '{"python": "3.12", "lock_sha256": "' + build._lock_fingerprint(tmp_path) + '"}\n',
+        encoding="utf-8",
+    )
     return context

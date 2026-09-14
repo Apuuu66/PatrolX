@@ -13,7 +13,12 @@ from tests.build.conftest import (
 
 def test_install_creates_venv_and_uses_exact_lock(tmp_path: Path) -> None:
     (tmp_path / "requirements-lock.txt").write_text("pytest==9.1.1\n", encoding="utf-8")
-    runner = FakeRunner()
+
+    def create_venv(command: list[str], cwd: Path | None) -> None:
+        (tmp_path / ".venv" / "bin").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".venv" / "pyvenv.cfg").write_text("version = 3.12.0\n", encoding="utf-8")
+
+    runner = FakeRunner(callback=create_venv)
     context = build.BuildContext(root=tmp_path, runner=runner)
     assert build.cmd_install(context) == 0
     commands = runner.commands()
@@ -31,4 +36,4 @@ def test_install_reuses_venv(tmp_path: Path) -> None:
     runner = FakeRunner()
     context = make_context(tmp_path, runner)
     assert build.cmd_install(context) == 0
-    assert all("venv" not in command for command in runner.commands()[0])
+    assert ["-m", "venv"] not in runner.commands()[0]

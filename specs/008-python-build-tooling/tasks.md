@@ -105,7 +105,7 @@ description: "统一 Python 构建工具实现任务列表"
 
 - [x] T023 [US3] 在 `build.py` 中实现 `contract` 子命令，保持校验/导出行为与现有模块一致
 - [x] T024 [US3] 在 `build.py` 中实现 `gen-web-api` 子命令，跨平台发现 npm/npx 并以参数列表调用
-- [x] T025 [US3] 在 `build.py` 中实现 `verify-one --rule <rule_code>` 子命令，调用现有单规则重跑逻辑并透传可选任务/输入参数
+- [x] T025 [US3] 在 `build.py` 中实现 `verify-one --rule <rule_code>` 子命令，调用现有单规则重跑逻辑
 - [x] T026 [US3] 更新 `README.md`、`docs/architecture.md` 中的契约、客户端生成和单规则调试命令
 
 **检查点**：契约、客户端和单规则流程可通过 `build.py` 独立使用；OpenAPI 与生成客户端语义不变
@@ -152,6 +152,7 @@ description: "统一 Python 构建工具实现任务列表"
 ## 执行记录
 
 - 2026-09-14：已在 macOS 完成 `install`、`lint`、`test`、`contract`、`gen-web-api`、`web-install`、`web-build`、`verify` 验证。
+- 2026-09-14：根据 Speckit 分析修复 `.venv` 标准安装健康标记；`lock` 改为在 pip 内覆盖目标平台 marker 环境，并从 `pyproject.toml` 重新生成精确锁；同步修正 T025 表述。本次修复后重新执行 macOS `install`、`lock --check`、构建测试、lint。
 - T039 保持未勾选：本次只完成 macOS 实测；Windows 和 Linux 人工验证仍未执行。
 
 ---
