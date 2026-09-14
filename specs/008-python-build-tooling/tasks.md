@@ -155,6 +155,16 @@ description: "统一 Python 构建工具实现任务列表"
 - 2026-09-14：根据 Speckit 分析修复 `.venv` 标准安装健康标记；`lock` 改为在 pip 内覆盖目标平台 marker 环境，并从 `pyproject.toml` 重新生成精确锁；同步修正 T025 表述。本次修复后重新执行 macOS `install`、`lock --check`、构建测试、lint。
 - T039 保持未勾选：本次只完成 macOS 实测；Windows 和 Linux 人工验证仍未执行。
 
+### T039 验证记录
+
+| 平台 | 环境 | `install` | `lint` | `test` | 结果说明 |
+|---|---|---|---|---|---|
+| macOS | 本机实测 | PASS | PASS | PASS | 与上方执行记录一致。 |
+| Windows | 待执行 | PENDING | PENDING | PENDING | 需在真实 Windows 或受控 Windows 环境记录 Python 版本与退出码。 |
+| Linux | 待执行 | PENDING | PENDING | PENDING | 本机暂无 Docker/Podman/虚拟机；需在真实 Linux 或受控 Linux 环境记录 Python 版本与退出码。 |
+
+补录每项结果时使用 `PASS` / `FAIL` 替换 `PENDING`，并在“结果说明”中记录 Python 版本、环境来源和关键输出；三项均为 `PASS` 后才能勾选 T039。
+
 ---
 
 ## 依赖与执行顺序
