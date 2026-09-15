@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Col, Empty, Input, Row, Select, Space, Typography } from "antd";
 
-import type { KpiDisplayStatus } from "./kpiCatalogModel";
+import type { KpiCatalogItem, KpiDisplayStatus } from "./kpiCatalogModel";
 import {
   buildKpiMetricGroups,
   filterKpiMetricGroups,
@@ -9,6 +9,7 @@ import {
   summarizeKpiMetadata,
 } from "./kpiCatalogModel";
 import { KpiMetricCard } from "./KpiMetricCard";
+import { KpiMetricDrawer } from "./KpiMetricDrawer";
 
 interface Props {
   metadata: unknown;
@@ -18,6 +19,7 @@ export function KpiMetricCatalog({ metadata }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<KpiDisplayStatus | undefined>();
   const [threshold, setThreshold] = useState<"with" | "without" | undefined>();
+  const [selected, setSelected] = useState<KpiCatalogItem | null>(null);
 
   const groups = useMemo(() => buildKpiMetricGroups(metadata), [metadata]);
   const filtered = useMemo(() => filterKpiMetricGroups(metadata, { query, status, threshold }), [metadata, query, status, threshold]);
@@ -77,13 +79,19 @@ export function KpiMetricCatalog({ metadata }: Props) {
             <Row gutter={[12, 12]}>
               {group.items.map((item) => (
                 <Col key={item.definition.key} xs={24} sm={12} lg={8} xl={6}>
-                  <KpiMetricCard item={item} variant={item.definition.display_role as never} />
+                  <KpiMetricCard
+                    item={item}
+                    variant={item.definition.display_role as never}
+                    onClick={() => setSelected(item)}
+                  />
                 </Col>
               ))}
             </Row>
           </div>
         ))
       )}
+
+      <KpiMetricDrawer item={selected} open={Boolean(selected)} onClose={() => setSelected(null)} />
     </div>
   );
 }

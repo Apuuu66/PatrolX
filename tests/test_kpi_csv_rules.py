@@ -311,7 +311,7 @@ def test_unknown_capacity_semantics_is_display_only(tmp_path: Path) -> None:
     assert not parsed.records[0].errors
 
 
-def test_derive_rates_explicit_rates_priority_and_zero_denominator() -> None:
+def test_derive_rates_formula_priority_and_zero_denominator() -> None:
     from app.inspectors.kpi.call import _derive_rates
 
     alias = {
@@ -331,13 +331,42 @@ def test_derive_rates_explicit_rates_priority_and_zero_denominator() -> None:
     _derive_rates(record, alias)
     assert record.derived == {"call_count_difference": 0}
 
+    record.values |= {"呼叫请求次数": 100, "呼叫请求成功次数": 90, "呼叫请求失败次数": 10}
     record.values |= {"呼叫成功率": 97.5, "呼叫失败率": 2.5}
     _derive_rates(record, alias)
     assert record.derived == {
         "call_count_difference": 0,
-        "call_success_rate": 97.5,
-        "call_failure_rate": 2.5,
+        "call_success_rate": 90.0,
+        "call_failure_rate": 10.0,
     }
+
+
+def test_direct_rate_columns_are_cross_reference_only(tmp_path: Path) -> None:
+    from app.inspectors.registry import registry
+    from app.services.executor import RuleContext
+
+    content = _content(
+        [
+            "呼叫请求次数",
+            "呼叫请求成功次数",
+            "呼叫请求失败次数",
+            "呼叫成功率",
+            "呼叫失败率",
+        ],
+        [[5, "2026-09-01 10:00:00", "2026-09-01 10:05:00", 100, 90, 10, 99.9, 0.1]],
+    )
+    _write(tmp_path, "kpi/kpi-call-5.csv", content)
+    ctx = RuleContext(task_id="kpi-direct-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
+    ctx.files = [Path("kpi/kpi-call-5.csv")]
+    result = registry.get("kpi.call").run(ctx)
+    metadata = result.metadata
+    rate = next(item for item in metadata["kpi_results"] if item["key"] == "call_success_rate")
+
+    assert rate["main_value"] == 90.0
+    assert rate["series"][0]["value"] == 90.0
+    cross_reference = rate["provenance"]["direct_cross_reference"]
+    assert cross_reference == [{"source_name": "呼叫成功率", "source_file": "kpi/kpi-call-5.csv", "value": 99.9}]
+    assert next(item for item in result.metrics if item.key == "success_rate_min").value == 90.0
 
 
 def test_parse_csv_file_reads_metadata_and_flexible_real_header(tmp_path: Path) -> None:

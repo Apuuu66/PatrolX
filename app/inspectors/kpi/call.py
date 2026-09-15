@@ -60,18 +60,10 @@ def _derive_rates(record: KpiRecord, alias: dict[str, str]) -> None:
     if attempts is not None and success is not None and failure is not None:
         derived["call_count_difference"] = success + failure - attempts
 
-    # 成功率
-    explicit_sr = record.values.get(source_names.get("call_success_rate", ""), None)
-    if explicit_sr is not None:
-        derived["call_success_rate"] = explicit_sr
-    elif attempts is not None and success is not None and attempts > 0:
+    # 派生率公式优先；同语义直接列只保留在 record.values 中作为证据。
+    if attempts is not None and success is not None and attempts > 0:
         derived["call_success_rate"] = success / attempts * 100
-
-    # 失败率
-    explicit_fr = record.values.get(source_names.get("call_failure_rate", ""), None)
-    if explicit_fr is not None:
-        derived["call_failure_rate"] = explicit_fr
-    elif attempts is not None and failure is not None and attempts > 0:
+    if attempts is not None and failure is not None and attempts > 0:
         derived["call_failure_rate"] = failure / attempts * 100
 
     record.derived = derived or None
@@ -221,7 +213,7 @@ def _run(ctx: RuleContext) -> object:
                             title="呼叫 KPI 阈值越限",
                             severity=Severity.MEDIUM,
                             source_file=f.path,
-                            evidence=f"行 {r.line_number}: {'；'.join(breaches)}；来源: deploy/config/kpi_rules.yaml",
+                            evidence=f"行 {r.line_number}: {'；'.join(breaches)}；来源: deploy/config/kpi",
                             recommendation=inspector.recommendation,
                         )
                     )

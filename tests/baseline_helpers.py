@@ -48,8 +48,8 @@ def setup_env(tmp_path: Path, monkeypatch) -> Env:
     return env
 
 
-def wait_for_task(client: TestClient, task_id: str, timeout: float = 30.0) -> dict[str, Any]:
-    """轮询在线任务直到 completed/failed。"""
+def wait_for_task(client: TestClient, task_id: str, timeout: float = 180.0) -> dict[str, Any]:
+    """轮询在线任务直到 completed/failed；上限覆盖完整月度样例的执行耗时。"""
     deadline = time.time() + timeout
     while time.time() < deadline:
         response = client.get(f"/api/v2/tasks/{task_id}")

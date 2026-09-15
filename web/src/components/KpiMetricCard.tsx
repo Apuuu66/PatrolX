@@ -7,16 +7,22 @@ type KpiMetricCardVariant = "highlight" | "context" | "diagnostic" | "catalog";
 interface Props {
   item: KpiCatalogItem;
   variant?: KpiMetricCardVariant;
+  onClick?: () => void;
 }
 
-export function KpiMetricCard({ item, variant = "catalog" }: Props) {
+export function KpiMetricCard({ item, variant = "catalog", onClick }: Props) {
   const view = getKpiMetricCardView(item);
   const valueSize = variant === "highlight" ? 26 : 21;
   const borderColor =
     view.statusColor === "#ff4d4f" ? "#ffccc7" : view.statusColor === "#faad14" ? "#ffe58f" : "#f0f0f0";
 
   return (
-    <Card size="small" style={{ height: "100%", borderColor }} variant="outlined">
+    <Card
+      size="small"
+      style={{ height: "100%", borderColor, cursor: onClick ? "pointer" : undefined }}
+      variant="outlined"
+      onClick={onClick}
+    >
       <Typography.Text type="secondary">{view.subtitle}</Typography.Text>
       <div style={{ fontWeight: 600, marginTop: 2 }}>{view.title}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 8 }}>

@@ -254,7 +254,11 @@ def build_kpi_metadata(
                     if definition.key in stable_values:
                         direct_cross_reference.append(
                             {
-                                "name": definition.key,
+                                "source_name": next(
+                                    name
+                                    for name in record.values
+                                    if domain_config.alias_index.get(normalize_metric_name(name)) == definition.key
+                                ),
                                 "source_file": kpi_file.path,
                                 "value": stable_values[definition.key],
                             }

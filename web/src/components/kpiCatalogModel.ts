@@ -296,3 +296,154 @@ export function getKpiMetricCardView(item: {
     breachText: breachCount > 0 ? `越限 ${breachCount}` : "",
   };
 }
+
+export type KpiMetricInputRow = {
+  key: string;
+  value: number | string | null;
+  valueText: string;
+  aggregation: string;
+};
+
+export type KpiMetricCrossReferenceRow = {
+  sourceName: string;
+  sourceFile: string;
+  value: number | string | null;
+  valueText: string;
+};
+
+export type KpiMetricDetailView = {
+  title: string;
+  subtitle: string;
+  description: string;
+  mainValueText: string;
+  unitText: string;
+  statusLabel: string;
+  statusColor: string;
+  thresholdText: string;
+  formulaText: string;
+  inputRows: KpiMetricInputRow[];
+  crossReferenceRows: KpiMetricCrossReferenceRow[];
+  missingInputs: string[];
+  unavailableReasonText: string;
+  sourceFiles: string[];
+  fallbackUsed: boolean;
+  denominatorZero: boolean;
+};
+
+function valueText(value: number | string | null): string {
+  return value === null || value === undefined || value === "" ? "-" : String(value);
+}
+
+function humanizeUnavailableReason(reason: string | null | undefined): string {
+  if (!reason) return "-";
+  if (reason.startsWith("missing_input:")) return `缺失输入：${reason.slice("missing_input:".length).trim()}`;
+  if (reason === "denominator_zero") return "分母为零";
+  if (reason === "no_records") return "暂无记录";
+  if (reason === "formula_not_configured") return "未配置公式";
+  return reason;
+}
+
+function formatFormula(definition: Record<string, unknown>, provenance: Record<string, unknown>): string {
+  const provenanceFormula = readString(provenance.formula);
+  if (provenanceFormula) return provenanceFormula;
+  const formula = readRecord(definition.formula);
+  const numerator = readString(formula.numerator);
+  const denominator = readString(formula.denominator);
+  if (!numerator || !denominator) return "-";
+  const scale = readNumber(formula.scale) ?? 1;
+  const base = `${numerator} / ${denominator}`;
+  return scale === 1 ? base : `${base} * ${scale}`;
+}
+
+export function getKpiMetricDetailView(item: { definition: unknown; result?: unknown }): KpiMetricDetailView {
+  const definition = readRecord(item.definition);
+  const result = readRecord(item.result);
+  const provenance = readRecord(result.provenance);
+  const key = readString(definition.key, "-");
+  const nameZh = readString(definition.name_zh, key);
+  const nameEn = readString(definition.name_en, key);
+  const unit = typeof result.unit === "string" ? result.unit : typeof definition.unit === "string" ? definition.unit : "";
+  const status = readString(result.display_status, "neutral") as KpiDisplayStatus;
+  const meta = STATUS_META[STATUS_META[status] ? status : "neutral"];
+  const mainValue = result.value_available === true && (typeof result.main_value === "number" || typeof result.main_value === "string")
+    ? result.main_value
+    : null;
+  const inputRows = asArray(provenance.inputs)
+    .map((value) => readRecord(value))
+    .filter((value) => readString(value.key))
+    .map((value) => {
+      const inputValue = typeof value.value === "number" || typeof value.value === "string" ? value.value : null;
+      return {
+        key: readString(value.key),
+        value: inputValue,
+        valueText: valueText(inputValue),
+        aggregation: readString(value.aggregation, "-"),
+      };
+    });
+  const crossReferenceRows = asArray(provenance.direct_cross_reference)
+    .map((value) => readRecord(value))
+    .filter((value) => readString(value.source_name))
+    .map((value) => {
+      const directValue = typeof value.value === "number" || typeof value.value === "string" ? value.value : null;
+      return {
+        sourceName: readString(value.source_name),
+        sourceFile: readString(value.source_file),
+        value: directValue,
+        valueText: valueText(directValue),
+      };
+    });
+  const threshold = readRecord(result.threshold);
+  const direction = readString(threshold.direction);
+  const limit = readNumber(threshold.default);
+  const thresholdUnit = typeof threshold.unit === "string" ? threshold.unit : unit;
+  const thresholdText = !Object.keys(threshold).length
+    ? "无阈值"
+    : direction === "min" && limit !== null
+      ? `阈值 ≥ ${limit}${thresholdUnit}`
+      : direction === "max" && limit !== null
+        ? `阈值 ≤ ${limit}${thresholdUnit}`
+        : "已配置阈值";
+
+  return {
+    title: nameZh,
+    subtitle: nameEn,
+    description: `${nameEn} · ${readString(definition.metric_type, "-")} · ${readString(definition.source_type, "-")}`,
+    mainValueText: valueText(mainValue),
+    unitText: unit,
+    statusLabel: meta.label,
+    statusColor: meta.color,
+    thresholdText,
+    formulaText: formatFormula(definition, provenance),
+    inputRows,
+    crossReferenceRows,
+    missingInputs: asArray(provenance.missing_inputs).map((value) => readString(value)).filter(Boolean),
+    unavailableReasonText: humanizeUnavailableReason(
+      typeof result.unavailable_reason === "string" ? result.unavailable_reason : null,
+    ),
+    sourceFiles: asArray(result.source_files).map((value) => readString(value)).filter(Boolean),
+    fallbackUsed: provenance.fallback_used === true,
+    denominatorZero: provenance.denominator_zero === true,
+  };
+}
+
+export type KpiTrendPoint = {
+  x: string;
+  y: number;
+  value: number;
+  status: KpiDisplayStatus;
+};
+
+export function getKpiMetricTrendView(result: unknown): { points: KpiTrendPoint[]; emptyText: string } {
+  const series = asArray(readRecord(result).series)
+    .map((point) => readRecord(point))
+    .map((point) => ({
+      x: readString(point.start_at),
+      y: readNumber(point.value),
+      value: readNumber(point.value) ?? 0,
+      status: readString(point.status, "neutral") as KpiDisplayStatus,
+    }))
+    .filter((point): point is KpiTrendPoint => Boolean(point.x) && point.y !== null);
+  if (!asArray(readRecord(result).series).length) return { points: [], emptyText: "暂无可用序列" };
+  if (!series.length) return { points: [], emptyText: "序列值不可用" };
+  return { points: series, emptyText: "" };
+}

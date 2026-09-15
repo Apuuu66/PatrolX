@@ -224,7 +224,7 @@ def test_kpi_call_passes_when_rates_are_not_derivable(tmp_path: Path) -> None:
     assert values["capacity_metric_count"] == 2
 
 
-def test_kpi_call_explicit_rates_have_priority_and_keep_raw_counts(tmp_path: Path) -> None:
+def test_kpi_call_formula_has_priority_and_rates_are_cross_reference_only(tmp_path: Path) -> None:
     content = _kpi_content(
         ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "呼叫成功率", "呼叫失败率"],
         [[*_CALL_ROW, 100, 90, 10, 80, 20]],
@@ -235,8 +235,8 @@ def test_kpi_call_explicit_rates_have_priority_and_keep_raw_counts(tmp_path: Pat
     assert result.status == RuleStatus.FAIL
     record = result.metadata["kpi_files"][0]["records"][0]
     assert record["values"]["呼叫成功率"] == 80.0
-    assert record["derived"]["call_success_rate"] == 80.0
-    assert record["derived"]["call_failure_rate"] == 20.0
+    assert record["derived"]["call_success_rate"] == 90.0
+    assert record["derived"]["call_failure_rate"] == 10.0
 
 
 def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> None:

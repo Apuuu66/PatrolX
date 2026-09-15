@@ -103,16 +103,16 @@
 
 ### US3 测试
 
-- [ ] T032 [P] [US3] 在 `tests/test_kpi_catalog_aggregation.py` 添加公式优先、声明式分母兜底、输入缺失、分母为零和直接列仅交叉参考失败测试。
-- [ ] T033 [P] [US3] 在 `web/src/components/KpiMetricDrawer.test.ts` 添加定义、公式、输入、交叉参考、不可用原因和阈值信息测试。
+- [x] T032 [P] [US3] 在 `tests/test_kpi_catalog_aggregation.py` 添加公式优先、声明式分母兜底、输入缺失、分母为零和直接列仅交叉参考失败测试。
+- [x] T033 [P] [US3] 在 `web/src/components/KpiMetricDrawer.test.ts` 添加定义、公式、输入、交叉参考、不可用原因和阈值信息测试。
 
 ### US3 实现
 
-- [ ] T034 [US3] 在 `app/inspectors/kpi/catalog.py` 实现声明式 `ratio` 公式、缩放、依赖校验和 provenance。
-- [ ] T035 [US3] 在 `app/inspectors/kpi/common.py` 将直接成功率/失败率列保留为证据，不得覆盖公式主值。
-- [ ] T036 [US3] 在 `web/src/components/KpiMetricDrawer.tsx` 实现指标详情、公式解释、序列、来源文件和原始记录入口。
-- [ ] T037 [US3] 在 `web/src/components/KpiMetricTrend.tsx` 用 ECharts 渲染统计周期序列，不可用序列显示原因。
-- [ ] T038 [US3] 运行 KPI 后端测试和前端组件测试。
+- [x] T034 [US3] 在 `app/inspectors/kpi/catalog.py` 实现声明式 `ratio` 公式、缩放、依赖校验和 provenance。
+- [x] T035 [US3] 在 `app/inspectors/kpi/common.py` 将直接成功率/失败率列保留为证据，不得覆盖公式主值。
+- [x] T036 [US3] 在 `web/src/components/KpiMetricDrawer.tsx` 实现指标详情、公式解释、序列、来源文件和原始记录入口。
+- [x] T037 [US3] 在 `web/src/components/KpiMetricTrend.tsx` 用 ECharts 渲染统计周期序列，不可用序列显示原因。
+- [x] T038 [US3] 运行 KPI 后端测试和前端组件测试。
 
 **检查点**：派生指标结果可审计。
 
