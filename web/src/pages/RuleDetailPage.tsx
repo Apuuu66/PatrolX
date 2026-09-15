@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { App, Breadcrumb, Button, Card, Descriptions, Empty, List, Spin, Space, Tag, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult } from "../api/http";
-import { KpiDetailTable } from "../components/KpiDetailTable";
+import { KpiInspectionPanel } from "../components/KpiInspectionPanel";
 import { MetricPanel } from "../components/MetricPanel";
 import { RuleStatusTag, SeverityTag } from "../components/StatusBadge";
 
@@ -18,7 +18,7 @@ export function RuleDetailPage() {
     void (async () => {
       try {
         const [r, inspectors] = await Promise.all([
-          api.getRuleResult(taskId, ruleCode),
+          api.getRuleResult(taskId, ruleCode, true),
           api.listInspectors(undefined, true),
         ]);
         setResult(r);
@@ -89,8 +89,8 @@ export function RuleDetailPage() {
       </Card>
 
       {Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "kpi_files") && (
-        <Card title="KPI 明细" style={{ marginBottom: 16 }}>
-          <KpiDetailTable metadata={result.metadata} />
+        <Card title="KPI 巡检" style={{ marginBottom: 16 }}>
+          <KpiInspectionPanel metadata={result.metadata} />
         </Card>
       )}
 

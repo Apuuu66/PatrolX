@@ -101,8 +101,10 @@ export const api = {
 
   getSystem: (taskId: string) => request<SystemInspection>(`${BASE}/tasks/${encodeURIComponent(taskId)}/system`),
 
-  getRuleResult: (taskId: string, ruleCode: string) =>
-    request<RuleResult>(`${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}`),
+  getRuleResult: (taskId: string, ruleCode: string, excludeRecords = false) => {
+    const query = excludeRecords ? "?exclude_records=true" : "";
+    return request<RuleResult>(`${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}${query}`);
+  },
 
   listInspectors: (category?: string, includeHidden = false) => {
     const params = new URLSearchParams();

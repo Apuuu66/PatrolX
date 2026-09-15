@@ -80,16 +80,16 @@
 
 ### US2 测试
 
-- [ ] T025 [P] [US2] 在 `web/src/components/KpiMetricCatalog.test.ts` 添加分组、状态筛选、阈值可用性筛选、中英文/稳定 key 搜索和无阈值中性展示测试。
-- [ ] T026 [P] [US2] 在 `web/src/components/KpiMetricCard.test.ts` 添加主值、单位、阈值方向、状态色、不可用与中性标识测试。
+- [x] T025 [P] [US2] 在 `web/src/components/KpiMetricCatalog.test.ts` 添加分组、状态筛选、阈值可用性筛选、中英文/稳定 key 搜索和无阈值中性展示测试。
+- [x] T026 [P] [US2] 在 `web/src/components/KpiMetricCard.test.ts` 添加主值、单位、阈值方向、状态色、不可用与中性标识测试。
 
 ### US2 实现
 
-- [ ] T027 [US2] 在 `web/src/components/KpiInspectionPanel.tsx` 编排 `RuleResult.metadata` 的 KPI 面板、汇总卡和分区；旧结果回退到 `KpiDetailTable`。
-- [ ] T028 [US2] 在 `web/src/components/KpiMetricCard.tsx` 实现重点/上下文/诊断/目录指标卡片与克制状态样式。
-- [ ] T029 [US2] 在 `web/src/components/KpiMetricCatalog.tsx` 实现语义分组、状态筛选、搜索和空态。
-- [ ] T030 [US2] 在 `web/src/pages/RuleDetailPage.tsx` 对新 KPI 结果使用 `exclude_records=true`，并渲染 KPI 面板。
-- [ ] T031 [US2] 运行 `cd web && npm run test -- KpiMetricCatalog.test.ts KpiMetricCard.test.ts && npm run build`。
+- [x] T027 [US2] 在 `web/src/components/KpiInspectionPanel.tsx` 编排 `RuleResult.metadata` 的 KPI 面板、汇总卡和分区；旧结果回退到 `KpiDetailTable`。
+- [x] T028 [US2] 在 `web/src/components/KpiMetricCard.tsx` 实现重点/上下文/诊断/目录指标卡片与克制状态样式。
+- [x] T029 [US2] 在 `web/src/components/KpiMetricCatalog.tsx` 实现语义分组、状态筛选、搜索和空态。
+- [x] T030 [US2] 在 `web/src/pages/RuleDetailPage.tsx` 对新 KPI 结果使用 `exclude_records=true`，并渲染 KPI 面板。
+- [x] T031 [US2] 运行 `cd web && npm run test -- KpiMetricCatalog.test.ts KpiMetricCard.test.ts && npm run build`。
 
 **检查点**：大量 KPI 可按分组和筛选快速定位。
 
