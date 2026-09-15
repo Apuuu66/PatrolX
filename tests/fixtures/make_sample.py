@@ -3,13 +3,104 @@
 import gzip
 import io
 import json
+import math
 import zipfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
 SAMPLE_DIR = Path(__file__).resolve().parent / "sample"
 OUTPUT = SAMPLE_DIR / "sample.zip"
 
 BASE = "ZZapp01BCN_app_Problem_scene_333/333/app Problem scene"
+
+
+def _call_kpi_5_csv() -> str:
+    """生成 7 天 × 4 个服务实例的完整呼叫 KPI 样例，固定数据便于测试复核。"""
+    lines = [
+        "设备类型：XXX",
+        "测量单元名称：呼叫会话统计",
+        "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),"
+        "呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数,呼叫成功率,呼叫失败率,"
+        "统计峰值,最大并发,x业务请求次数,x业务请求成功次数,x业务请求失败次数",
+    ]
+    services = [
+        ("IMS-Core", "ims-node-01", 1.00, 1.00),
+        ("IMS-Core", "ims-node-02", 0.88, 0.82),
+        ("Access-GW", "access-node-01", 1.16, 1.22),
+        ("Access-GW", "access-node-02", 1.31, 1.08),
+    ]
+    base = datetime(2026, 9, 8)
+    for slot in range(7 * 288):
+        start_at = base + timedelta(minutes=slot * 5)
+        end_at = start_at + timedelta(minutes=5)
+        start_text = start_at.strftime("%Y-%m-%d %H:%M:%S")
+        end_text = end_at.strftime("%Y-%m-%d %H:%M:%S")
+        minute_of_day = slot * 5 % 1440
+        is_weekend = start_at.weekday() >= 5
+
+        for service_idx, (service, instance, load_factor, quality_factor) in enumerate(services):
+            requests = int(
+                1250
+                + 640
+                * math.sin(2 * math.pi * (minute_of_day - 475) / 1440)
+                * load_factor
+                * (0.64 if is_weekend else 1.0)
+                + 95 * math.sin(2 * math.pi * minute_of_day / 91)
+                + service_idx * 73
+                + (slot % 11) * 9
+            )
+            requests = max(160, requests)
+
+            failure_rate = 0.004 + 0.0022 * abs(math.sin(2 * math.pi * minute_of_day / 175))
+            # 每天设置早晚两个异常窗口，不同实例严重度不同，便于展示趋势和越限明细。
+            morning_breach = 8 * 60 + 12 <= minute_of_day < 8 * 60 + 34
+            evening_breach = 20 * 60 + 27 <= minute_of_day < 20 * 60 + 58
+            if morning_breach or evening_breach:
+                burst = 0.031 if morning_breach else 0.027
+                failure_rate = burst + service_idx * 0.0037 + (slot % 4) * 0.0022
+            failure_rate *= quality_factor
+            failures = min(requests, max(1, round(requests * failure_rate)))
+            successes = requests - failures
+            success_rate = round(successes / requests * 100, 2)
+            actual_failure_rate = round(failures / requests * 100, 2)
+
+            peak = int(
+                235
+                + 124
+                * math.sin(2 * math.pi * (minute_of_day - 497) / 1440)
+                * load_factor
+                * (0.61 if is_weekend else 1.0)
+                + service_idx * 18
+                + (slot % 17) * 4
+            )
+            concurrency = int(
+                158
+                + 86
+                * math.sin(2 * math.pi * (minute_of_day - 512) / 1440)
+                * load_factor
+                * (0.58 if is_weekend else 1.0)
+                + service_idx * 12
+                + (slot % 13) * 3
+            )
+            x_requests = int(requests * 0.58 + service_idx * 23 + (slot % 7) * 11)
+            x_failures = min(x_requests, 1 + (slot + service_idx * 3) % 6)
+            x_successes = x_requests - x_failures
+
+            trusted = True
+            untrusted_reason = ""
+            if service_idx == 3 and minute_of_day % 120 == 55:
+                trusted = False
+                untrusted_reason = "采样窗口部分回补"
+
+            reliability = "可信" if trusted else "不可信"
+            lines.append(
+                f"{service},{instance},{reliability},{untrusted_reason},"
+                f"{start_text},{end_text},5,"
+                f"{requests},{successes},{failures},{success_rate:.2f},{actual_failure_rate:.2f}"
+                f",{peak},{concurrency},{x_requests},{x_successes},{x_failures}"
+            )
+    return "\n".join(lines) + "\n"
+
 
 FILES: dict[str, str] = {
     f"{BASE}/Alarm Information/alarm_history_202609010101137101.csv": (
@@ -44,7 +135,27 @@ FILES: dict[str, str] = {
         "pod-app-1 cpu 890m mem 768Mi\npod-app-2 cpu 430m mem 1200Mi\npod-aaa-1 cpu 210m mem 512Mi\n"
     ),
     f"{BASE}/Traffic/call_stat_202609010101137101.txt": ("total_calls 12345\nanswer_rate 93.8\n"),
+    "kpi/kpi-call-5.csv": _call_kpi_5_csv(),
 }
+
+# 保留样例包中原有的其他 KPI 文件，便于比较不同格式和解析容错。
+FILES.update(
+    {
+        f"{BASE}/KPI/kpi-call-15.csv": (
+            "呼叫会话统计\n"
+            "测量周期,开始时间,结束时间,呼叫请求,请求成功,请求失败,统计峰值,最大并发\n"
+            "15,2026-09-01 10:00:00,2026-09-01 10:15:00,1200,1170,30,100,88\n"
+            "15,2026-09-01 10:15:00,2026-09-01 10:30:00,1350,1300,50,105,92\n"
+            "15,2026-09-01 10:30:00,2026-09-01 10:45:00,1500,1440,60,120,98\n"
+        ),
+        f"{BASE}/KPI/kpi-api-15.csv": (
+            "API 统计\n"
+            "测量周期,开始时间,结束时间,请求总数,成功数\n"
+            "15,2026-09-01 10:00:00,2026-09-01 10:15:00,5000,4800\n"
+            "15,bad-time,2026-09-01 10:30:00,5200,4950\n"
+        ),
+    }
+)
 
 AAA_CURRENT = (
     "2026-09-01T10:05:00Z ERROR aaa auth failure count 1\n"
