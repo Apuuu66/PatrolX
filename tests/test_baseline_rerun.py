@@ -76,7 +76,9 @@ def test_single_rule_rerun_rebuilds_missing_task_site(tmp_path: Path, monkeypatc
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr(
             "kpi/kpi-api-15.csv",
-            "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,2026-09-01 10:00:00,2026-09-01 10:15:00,100,90\n",
+            "设备类型：XXX\n测量单元名称：API 统计\n"
+            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),请求总数,成功数\n"
+            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,90\n",
         )
     task_id = run_task(package).task_id
     shutil.rmtree(env.task_dir(task_id))
@@ -111,16 +113,21 @@ def test_kpi_rules_rerun_without_prepare_and_deterministically(tmp_path: Path, m
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr(
             "kpi/kpi-api-15.csv",
-            "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,2026-09-01 10:00:00,2026-09-01 10:15:00,100,99\n",
+            "设备类型：XXX\n测量单元名称：API 统计\n"
+            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),请求总数,成功数\n"
+            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,99\n",
         )
         archive.writestr(
             "kpi/kpi-media-15.csv",
-            "媒体统计\n测量周期,开始时间,结束时间,媒体请求\n15,2026-09-01 10:00:00,2026-09-01 10:15:00,88\n",
+            "设备类型：XXX\n测量单元名称：媒体统计\n"
+            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),媒体请求\n"
+            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,88\n",
         )
         call_content = (
-            "呼叫会话统计\n"
-            "测量周期,开始时间,结束时间,呼叫请求,请求成功,请求失败\n"
-            "15,2026-09-01 10:00:00,2026-09-01 10:15:00,100,99,1\n"
+            "设备类型：XXX\n"
+            "测量单元名称：呼叫会话统计\n"
+            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数\n"
+            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,99,1\n"
         )
         archive.writestr("kpi/kpi-call-15.csv", call_content)
     task_id = run_task(package).task_id
@@ -155,7 +162,9 @@ def test_single_rule_rerun_reuses_valid_manifest(tmp_path: Path, monkeypatch) ->
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr(
             "kpi/kpi-api-15.csv",
-            "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,2026-09-01 10:00:00,2026-09-01 10:15:00,100,90\n",
+            "设备类型：XXX\n测量单元名称：API 统计\n"
+            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),请求总数,成功数\n"
+            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,90\n",
         )
     task_id = run_task(package).task_id
     before = {path.relative_to(env.task_dir(task_id)).as_posix() for path in env.task_dir(task_id).rglob("*")}

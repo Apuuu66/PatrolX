@@ -24,7 +24,7 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.0.0",
+    rule_version="1.1.0",
     description="解析呼叫 KPI CSV 文件，执行成功率/失败率阈值检查、请求关联一致性检查和容量指标展示",
     recommendation="检查阈值越限、数据自洽异常和容量趋势",
     source_patterns=[r"^kpi/(?:.*/)?kpi-call-(?:5|15|30|60)\.csv$"],
@@ -111,6 +111,7 @@ def _run(ctx: RuleContext) -> object:
     alias = config.aliases.get("call", {})
     sr_threshold = config.limits.get("call", {}).get("call_success_rate")
     fr_threshold = config.limits.get("call", {}).get("call_failure_rate")
+    source_names = {stable: source for source, stable in alias.items()}
 
     file_count = len(files)
     record_count = sum(f.record_count for f in files)
@@ -153,6 +154,9 @@ def _run(ctx: RuleContext) -> object:
 
     sr_min: int | float | str = min(success_rates) if success_rates else NA
     fr_max: int | float | str = max(failure_rates) if failure_rates else NA
+    attempts_name = source_names.get("call_attempts", "")
+    success_count_name = source_names.get("call_success_count", "")
+    failure_count_name = source_names.get("call_failure_count", "")
 
     # 构建 findings
     findings: list[Finding] = []
@@ -185,9 +189,9 @@ def _run(ctx: RuleContext) -> object:
                             severity=Severity.MEDIUM,
                             source_file=f.path,
                             evidence=(
-                                f"行 {r.line_number}: 请求成功({r.values.get('请求成功')}) "
-                                f"+ 请求失败({r.values.get('请求失败')}) "
-                                f"!= 呼叫请求({r.values.get('呼叫请求')})，差值 {diff}"
+                                f"行 {r.line_number}: 呼叫请求成功次数({r.values.get(success_count_name)}) "
+                                f"+ 呼叫请求失败次数({r.values.get(failure_count_name)}) "
+                                f"!= 呼叫请求次数({r.values.get(attempts_name)})，差值 {diff}"
                             ),
                             recommendation=inspector.recommendation,
                         )

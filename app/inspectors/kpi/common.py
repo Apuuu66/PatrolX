@@ -264,7 +264,13 @@ def load_kpi_config(config_path: Path | None = None) -> KpiConfig:
         budgets[key] = val
 
     call_aliases = aliases.get("call", {})
-    required_aliases = {"呼叫请求", "请求成功", "请求失败", "呼叫成功率", "呼叫失败率"}
+    required_aliases = {
+        "呼叫请求次数",
+        "呼叫请求成功次数",
+        "呼叫请求失败次数",
+        "呼叫成功率",
+        "呼叫失败率",
+    }
     missing_aliases = required_aliases - set(call_aliases)
     if missing_aliases:
         raise KpiConfigError(f"aliases.call 缺少必需映射: {sorted(missing_aliases)}")
@@ -405,13 +411,43 @@ def parse_csv_file(
         )
         return kpi_file
 
-    # 第 1 行：测量集名称
-    measurement_set = rows[0][0].strip() if rows[0] else ""
+    # 真实导出文件允许在表头前出现元数据行；表头按列名定位，不依赖固定行号。
+    metadata: dict[str, str] = {}
+    header_row_idx: int | None = None
+    required_header_columns = {"测量开始时间", "测量结束时间", "周期(分钟)"}
+    for row_idx, row in enumerate(rows):
+        if required_header_columns.issubset({cell.strip() for cell in row}):
+            header_row_idx = row_idx
+            break
+
+        non_empty_cells = [cell.strip() for cell in row if cell.strip()]
+        if not non_empty_cells:
+            continue
+        metadata_cell = non_empty_cells[0]
+        has_fullwidth_separator = "：" in metadata_cell
+        if len(non_empty_cells) == 1 and any(sep in metadata_cell for sep in (":", "：")):
+            separator = "：" if has_fullwidth_separator else ":"
+            key, value = metadata_cell.split(separator, 1)
+            metadata[key.strip()] = value.strip()
+
+    if header_row_idx is None:
+        kpi_file.status = "failed"
+        kpi_file.errors.append(
+            KpiError(
+                code="invalid_header",
+                message="缺少 KPI 表头，表头必须包含 测量开始时间/测量结束时间/周期(分钟)",
+                path=relative_path,
+            )
+        )
+        return kpi_file
+
+    header_row_number = header_row_idx + 1
+    measurement_set = metadata.get("测量单元名称", "").strip()
     if not measurement_set:
         kpi_file.errors.append(
             KpiError(
                 code="missing_measurement_set",
-                message="第 1 行测量集名称为空",
+                message="缺少测量单元名称元数据",
                 line_number=1,
                 path=relative_path,
             )
@@ -419,44 +455,36 @@ def parse_csv_file(
         kpi_file.status = "failed"
     kpi_file.measurement_set = measurement_set or None
 
-    # 第 2 行：测量对象
-    if len(rows) < 2:
-        kpi_file.status = "failed"
-        kpi_file.errors.append(
-            KpiError(
-                code="missing_object_row",
-                message="缺少第 2 行测量对象",
-                path=relative_path,
-            )
-        )
-        return kpi_file
-
-    header = [cell.strip() for cell in rows[1]]
+    header = [cell.strip() for cell in rows[header_row_idx]]
     if len(header) < 4:
         kpi_file.status = "failed"
         kpi_file.errors.append(
             KpiError(
                 code="column_count_mismatch",
-                message=f"测量对象行列数不足（{len(header)} < 4）",
-                line_number=2,
+                message=f"表头行列数不足（{len(header)} < 4）",
+                line_number=header_row_number,
                 path=relative_path,
             )
         )
         return kpi_file
 
-    if header[:3] != ["测量周期", "开始时间", "结束时间"]:
+    try:
+        start_idx = header.index("测量开始时间")
+        end_idx = header.index("测量结束时间")
+        period_idx = header.index("周期(分钟)")
+    except ValueError:
         kpi_file.status = "failed"
         kpi_file.errors.append(
             KpiError(
                 code="invalid_header",
-                message="测量对象行前 3 列必须为 测量周期/开始时间/结束时间",
-                line_number=2,
+                message="表头必须包含 测量开始时间/测量结束时间/周期(分钟)",
+                line_number=header_row_number,
                 path=relative_path,
             )
         )
         return kpi_file
 
-    objects = header[3:]
+    objects = header[period_idx + 1 :]
     if len(objects) != len(set(objects)):
         seen: set[str] = set()
         duplicates: list[str] = []
@@ -469,7 +497,7 @@ def parse_csv_file(
             KpiError(
                 code="duplicate_object",
                 message=f"测量对象存在重复名称: {duplicates}",
-                line_number=2,
+                line_number=header_row_number,
                 path=relative_path,
             )
         )
@@ -480,8 +508,8 @@ def parse_csv_file(
         kpi_file.errors.append(
             KpiError(
                 code="resource_limit_exceeded",
-                message=f"列数 {len(objects) + 3} 超过预算 {budgets['max_columns_per_file']}",
-                line_number=2,
+                message=f"列数 {len(header)} 超过预算 {budgets['max_columns_per_file']}",
+                line_number=header_row_number,
                 path=relative_path,
             )
         )
@@ -492,9 +520,9 @@ def parse_csv_file(
     # 获取容量配置和别名
     cap_cfg = config.capacity_metrics.get(domain, {})
 
-    # 第 3 行起：数据行
+    # 表头之后均为数据行；表头之前的列（如服务名、实例、可信度）不作为指标。
     total_records = 0
-    for line_idx, row in enumerate(rows[2:], start=3):
+    for line_idx, row in enumerate(rows[header_row_idx + 1 :], start=header_row_number + 1):
         if not row or all(not cell.strip() for cell in row):
             continue  # 跳过空行
 
@@ -531,7 +559,7 @@ def parse_csv_file(
             continue
 
         # 解析周期
-        period_text = row[0].strip()
+        period_text = row[period_idx].strip()
         try:
             row_period = int(period_text)
         except ValueError:
@@ -546,7 +574,7 @@ def parse_csv_file(
                             code="invalid_period",
                             message=f"周期值不可解析: {period_text}",
                             line_number=line_idx,
-                            column="测量周期",
+                            column="周期(分钟)",
                             value=period_text,
                             path=relative_path,
                         )
@@ -568,7 +596,7 @@ def parse_csv_file(
                             code="period_mismatch",
                             message=f"行周期 {row_period} 与文件名周期 {period_minutes} 不一致",
                             line_number=line_idx,
-                            column="测量周期",
+                            column="周期(分钟)",
                             value=row_period,
                             path=relative_path,
                         )
@@ -583,28 +611,28 @@ def parse_csv_file(
         start_at: datetime | None = None
         end_at: datetime | None = None
         try:
-            start_at = parse_time(row[1], tz)
+            start_at = parse_time(row[start_idx], tz)
         except ValueError as exc:
             record_errors.append(
                 KpiError(
                     code="invalid_time",
                     message=str(exc),
                     line_number=line_idx,
-                    column="开始时间",
-                    value=row[1],
+                    column="测量开始时间",
+                    value=row[start_idx],
                     path=relative_path,
                 )
             )
         try:
-            end_at = parse_time(row[2], tz)
+            end_at = parse_time(row[end_idx], tz)
         except ValueError as exc:
             record_errors.append(
                 KpiError(
                     code="invalid_time",
                     message=str(exc),
                     line_number=line_idx,
-                    column="结束时间",
-                    value=row[2],
+                    column="测量结束时间",
+                    value=row[end_idx],
                     path=relative_path,
                 )
             )
@@ -617,7 +645,7 @@ def parse_csv_file(
                         code="time_range_mismatch",
                         message=f"结束时间 {end_at.isoformat()} 不等于开始时间 + {period_minutes} 分钟",
                         line_number=line_idx,
-                        column="结束时间",
+                        column="测量结束时间",
                         path=relative_path,
                     )
                 )
@@ -630,7 +658,7 @@ def parse_csv_file(
         # 解析指标值
         values: dict[str, float] = {}
         for col_idx, obj_name in enumerate(objects):
-            cell = row[3 + col_idx].strip()
+            cell = row[period_idx + 1 + col_idx].strip()
             if not cell:
                 record_errors.append(
                     KpiError(

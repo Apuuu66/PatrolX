@@ -61,7 +61,7 @@
 | --- | --- | --- |
 | `call_success_rate` | `float` | 百分比 |
 | `call_failure_rate` | `float` | 百分比 |
-| `call_count_difference` | `float` | `请求成功 + 请求失败 - 呼叫请求`，仅三项都存在时输出 |
+| `call_count_difference` | `float` | `呼叫请求成功次数 + 呼叫请求失败次数 - 呼叫请求次数`，仅三项都存在时输出 |
 
 派生值不是新增公共 API 字段，只保存在规则结果 `metadata`。
 
@@ -74,9 +74,9 @@ version: 1
 input_timezone: "Asia/Shanghai"
 aliases:
   call:
-    "呼叫请求": "call_attempts"
-    "请求成功": "call_success_count"
-    "请求失败": "call_failure_count"
+    "呼叫请求次数": "call_attempts"
+    "呼叫请求成功次数": "call_success_count"
+    "呼叫请求失败次数": "call_failure_count"
     "呼叫成功率": "call_success_rate"
     "呼叫失败率": "call_failure_rate"
 capacity_metrics:
@@ -119,7 +119,7 @@ budgets:
 | 字段 | 约束 |
 | --- | --- |
 | `aliases.<domain>` | `dict[str, str]`；原始指标名到稳定 key 的映射；稳定 key 只能使用小写英文、数字和下划线 |
-| `aliases.call` | 必须包含呼叫请求、请求成功、请求失败、呼叫成功率、呼叫失败率第一版别名 |
+| `aliases.call` | 必须包含呼叫请求次数、呼叫请求成功次数、呼叫请求失败次数、呼叫成功率、呼叫失败率第一版别名 |
 
 ### KpiCapacityConfig
 
@@ -186,31 +186,31 @@ budgets:
 
 ```json
 {
-  "path": "kpi/kpi-call-15.csv",
+  "path": "kpi/kpi-call-5.csv",
   "domain": "call",
-  "period_minutes": 15,
+  "period_minutes": 5,
   "measurement_set": "呼叫会话统计",
   "status": "ok",
   "objects": [
-    "呼叫请求",
-    "请求成功",
-    "请求失败",
+    "呼叫请求次数",
+    "呼叫请求成功次数",
+    "呼叫请求失败次数",
     "统计峰值",
     "最大并发"
   ],
-  "record_count": 5,
+  "record_count": 1,
   "parse_error_count": 0,
   "errors": [],
   "records": [
     {
-      "line_number": 3,
-      "period_minutes": 15,
+      "line_number": 4,
+      "period_minutes": 5,
       "start_at": "2026-09-14T02:00:00Z",
-      "end_at": "2026-09-14T02:15:00Z",
+      "end_at": "2026-09-14T02:05:00Z",
       "values": {
-        "呼叫请求": 1200,
-        "请求成功": 1170,
-        "请求失败": 30,
+        "呼叫请求次数": 100,
+        "呼叫请求成功次数": 100,
+        "呼叫请求失败次数": 0,
         "统计峰值": 100,
         "最大并发": 88
       },

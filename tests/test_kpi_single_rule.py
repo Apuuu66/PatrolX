@@ -34,14 +34,31 @@ def _run_rule(code: str, ctx: RuleContext):
 
 
 def _kpi_content(objects: list[str], rows: list[list[object]], measurement: str) -> str:
-    lines = [measurement, "测量周期,开始时间,结束时间," + ",".join(objects)]
-    lines.extend(",".join(str(value) for value in row) for row in rows)
+    header = [
+        "服务名",
+        "实例",
+        "可信度",
+        "不可信原因",
+        "测量开始时间",
+        "测量结束时间",
+        "周期(分钟)",
+        *objects,
+    ]
+    lines = [
+        "设备类型：XXX",
+        f"测量单元名称：{measurement}",
+        ",".join(header),
+    ]
+    for row in rows:
+        period, start_at, end_at, *values = row
+        data = ["BasicKpi", "", "可信", "", str(start_at), str(end_at), str(period), *values]
+        lines.append(",".join(str(value) for value in data))
     return "\n".join(lines) + "\n"
 
 
 _CALL_ROW = [15, "2026-09-01 10:00:00", "2026-09-01 10:15:00"]
 _GOOD_CALL = _kpi_content(
-    ["呼叫请求", "请求成功", "请求失败", "统计峰值", "最大并发"],
+    ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "统计峰值", "最大并发"],
     [[*_CALL_ROW, 1200, 1195, 5, 100, 88]],
     "呼叫会话统计",
 )
@@ -124,7 +141,7 @@ def test_kpi_api_aggregates_files_and_isolates_bad_file(tmp_path: Path) -> None:
         "API 统计",
     )
     bad = _kpi_content(["请求总数"], [], "API 统计")
-    bad += "15,2026-09-01 10:00:00,2026-09-01 10:15:00\n"
+    bad += "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15\n"
     ctx = _ctx(
         tmp_path,
         {"kpi/kpi-api-15.csv": good, "kpi/sub/kpi-api-15.csv": bad},
@@ -209,7 +226,7 @@ def test_kpi_call_passes_when_rates_are_not_derivable(tmp_path: Path) -> None:
 
 def test_kpi_call_explicit_rates_have_priority_and_keep_raw_counts(tmp_path: Path) -> None:
     content = _kpi_content(
-        ["呼叫请求", "请求成功", "请求失败", "呼叫成功率", "呼叫失败率"],
+        ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "呼叫成功率", "呼叫失败率"],
         [[*_CALL_ROW, 100, 90, 10, 80, 20]],
         "呼叫会话统计",
     )
@@ -224,11 +241,11 @@ def test_kpi_call_explicit_rates_have_priority_and_keep_raw_counts(tmp_path: Pat
 
 def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> None:
     inconsistent = _kpi_content(
-        ["呼叫请求", "请求成功", "请求失败"],
+        ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数"],
         [[*_CALL_ROW, 100, 99, 1]],
         "呼叫会话统计",
     ).replace("100,99,1", "100,98,1")
-    broken = _kpi_content(["呼叫请求"], [[*_CALL_ROW, "bad"]], "呼叫会话统计")
+    broken = _kpi_content(["呼叫请求次数"], [[*_CALL_ROW, "bad"]], "呼叫会话统计")
     ctx = _ctx(
         tmp_path,
         {"kpi/kpi-call-15.csv": inconsistent, "kpi/sub/kpi-call-15.csv": broken},
@@ -241,6 +258,8 @@ def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> 
     kinds = {finding.title for finding in result.findings}
     assert "呼叫数量自洽异常" in kinds
     assert "KPI 数据解析错误" in kinds
+    consistency_finding = next(f for f in result.findings if f.title == "呼叫数量自洽异常")
+    assert "呼叫请求成功次数" in consistency_finding.evidence
 
 
 def test_kpi_call_config_error_is_not_silently_skipped(tmp_path: Path, monkeypatch) -> None:
@@ -270,8 +289,9 @@ def test_kpi_domains_remain_isolated(tmp_path: Path) -> None:
 
 def test_kpi_domain_errors_do_not_change_other_domain_results(tmp_path: Path) -> None:
     broken_api = _kpi_content(["请求总数"], [], "API 统计")
-    broken_api += "15,2026-09-01 10:00:00\n"
-    broken_media = "媒体统计\n测量周期,开始时间,结束时间\n"
+    broken_api += "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15\n"
+    broken_media = _kpi_content(["媒体请求"], [], "媒体统计")
+    broken_media += "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15\n"
     files = {
         "kpi/kpi-api-15.csv": broken_api,
         "kpi/kpi-media-15.csv": broken_media,
@@ -307,3 +327,9 @@ def test_all_kpi_domains_skip_without_any_kpi_files(tmp_path: Path) -> None:
         result = _run_rule(code, ctx)
         assert result.status == RuleStatus.SKIP
         assert result.skip_reason
+
+
+@pytest.mark.parametrize("code", ["kpi.api", "kpi.media", "kpi.call"])
+def test_kpi_rule_version_bumped_for_real_csv_format(code: str) -> None:
+    registry.load_all()
+    assert registry.get(code).rule_version == "1.1.0"

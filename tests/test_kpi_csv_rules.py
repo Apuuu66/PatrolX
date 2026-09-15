@@ -15,9 +15,25 @@ from app.inspectors.kpi.common import (
 
 
 def _content(objects: list[str], rows: list[list[object]], measurement: str = "呼叫会话统计") -> str:
-    lines = [measurement, "测量周期,开始时间,结束时间," + ",".join(objects)]
+    header = [
+        "服务名",
+        "实例",
+        "可信度",
+        "不可信原因",
+        "测量开始时间",
+        "测量结束时间",
+        "周期(分钟)",
+        *objects,
+    ]
+    lines = [
+        "设备类型：XXX",
+        f"测量单元名称：{measurement}",
+        ",".join(header),
+    ]
     for row in rows:
-        lines.append(",".join(str(value) for value in row))
+        period, start_at, end_at, *values = row
+        data = ["BasicKpi", "", "可信", "", str(start_at), str(end_at), str(period), *values]
+        lines.append(",".join(str(value) for value in data))
     return "\n".join(lines) + "\n"
 
 
@@ -57,7 +73,7 @@ def test_parse_kpi_path_rejects_unknown_names(name: str) -> None:
 
 
 @pytest.mark.parametrize("period", [5, 15, 30, 60])
-def test_parse_csv_file_reads_two_row_header_and_normalizes_utc_time(tmp_path: Path, period: int) -> None:
+def test_parse_csv_file_reads_metadata_flexible_header_and_normalizes_utc_time(tmp_path: Path, period: int) -> None:
     end_hour = 10 + period // 60
     end_minute = period % 60
     content = _content(
@@ -70,13 +86,24 @@ def test_parse_csv_file_reads_two_row_header_and_normalizes_utc_time(tmp_path: P
     assert parsed.objects == ["呼叫请求", "请求成功", "请求失败"]
     assert parsed.record_count == 1
     record = parsed.records[0]
-    assert record.line_number == 3
+    assert record.line_number == 4
     assert record.period_minutes == period
     assert record.start_at.isoformat() == "2026-09-01T02:00:00+00:00"
     assert record.end_at.isoformat() == (f"2026-09-01T{end_hour - 8:02d}:{end_minute:02d}:00+00:00")
     assert record.values == {"呼叫请求": 100.0, "请求成功": 99.0, "请求失败": 1.0}
     assert not record.errors
     assert not parsed.errors
+
+
+def test_parse_csv_file_skips_blank_metadata_rows(tmp_path: Path) -> None:
+    content = _content(
+        ["呼叫请求"],
+        [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100]],
+    ).replace("设备类型：XXX\n", "设备类型：XXX\n\n")
+    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    assert parsed.status == "ok"
+    assert parsed.measurement_set == "呼叫会话统计"
+    assert parsed.record_count == 1
 
 
 def test_parse_csv_file_preserves_nested_relative_path(tmp_path: Path) -> None:
@@ -118,7 +145,7 @@ def test_parse_csv_file_reports_invalid_time_and_continues_next_row(tmp_path: Pa
 
 def test_parse_csv_file_reports_column_count_mismatch(tmp_path: Path) -> None:
     content = _content(["呼叫请求", "请求成功"], [])
-    content += "15,2026-09-01 10:00:00,2026-09-01 10:15:00,100\n"
+    content += "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100\n"
     parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
     assert parsed.status == "failed"
     assert parsed.records[0].errors[0].code == "column_count_mismatch"
@@ -157,7 +184,7 @@ def test_parse_csv_file_reports_duplicate_objects(tmp_path: Path) -> None:
 def test_parse_csv_file_reports_row_count_limit(tmp_path: Path) -> None:
     config_path = Path("deploy/config/kpi_rules.yaml")
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    raw["budgets"]["max_rows_per_file"] = 2
+    raw["budgets"]["max_rows_per_file"] = 4
     config_file = tmp_path / "kpi_rules.yaml"
     config_file.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
     config = load_kpi_config(config_file)
@@ -165,6 +192,7 @@ def test_parse_csv_file_reports_row_count_limit(tmp_path: Path) -> None:
         ["呼叫请求"],
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100]],
     )
+    content += "BasicKpi,,可信,,2026-09-01 10:15:00,2026-09-01 10:30:00,15,101\n"
     path = _write(tmp_path, "kpi/kpi-call-15.csv", content)
     parsed = parse_csv_file(path, "kpi/kpi-call-15.csv", "call", 15, config)
     assert parsed.status == "failed"
@@ -173,7 +201,7 @@ def test_parse_csv_file_reports_row_count_limit(tmp_path: Path) -> None:
 
 def test_config_requires_complete_call_aliases_and_limits(tmp_path: Path) -> None:
     raw = yaml.safe_load(Path("deploy/config/kpi_rules.yaml").read_text(encoding="utf-8"))
-    del raw["aliases"]["call"]["请求成功"]
+    del raw["aliases"]["call"]["呼叫请求成功次数"]
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
     with pytest.raises(KpiConfigError, match="缺少必需映射"):
@@ -198,7 +226,7 @@ def test_config_rejects_alias_and_capacity_key_conflict(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("path", "match"),
     [
-        (["aliases", "call", "呼叫请求"], "非法"),
+        (["aliases", "call", "呼叫请求次数"], "非法"),
         (["capacity_metrics", "call", "统计峰值", "status"], "status 非法"),
         (["limits", "call", "call_success_rate", "direction"], "direction 非法"),
         (["budgets", "max_file_bytes"], "必须为正整数"),
@@ -249,9 +277,9 @@ def test_derive_rates_explicit_rates_priority_and_zero_denominator() -> None:
     from app.inspectors.kpi.call import _derive_rates
 
     alias = {
-        "呼叫请求": "call_attempts",
-        "请求成功": "call_success_count",
-        "请求失败": "call_failure_count",
+        "呼叫请求次数": "call_attempts",
+        "呼叫请求成功次数": "call_success_count",
+        "呼叫请求失败次数": "call_failure_count",
         "呼叫成功率": "call_success_rate",
         "呼叫失败率": "call_failure_rate",
     }
@@ -260,7 +288,7 @@ def test_derive_rates_explicit_rates_priority_and_zero_denominator() -> None:
         period_minutes=15,
         start_at=__import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").UTC),
         end_at=__import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").UTC),
-        values={"呼叫请求": 0, "请求成功": 0, "请求失败": 0},
+        values={"呼叫请求次数": 0, "呼叫请求成功次数": 0, "呼叫请求失败次数": 0},
     )
     _derive_rates(record, alias)
     assert record.derived == {"call_count_difference": 0}
@@ -271,4 +299,27 @@ def test_derive_rates_explicit_rates_priority_and_zero_denominator() -> None:
         "call_count_difference": 0,
         "call_success_rate": 97.5,
         "call_failure_rate": 2.5,
+    }
+
+
+def test_parse_csv_file_reads_metadata_and_flexible_real_header(tmp_path: Path) -> None:
+    content = """设备类型：XXX
+测量单元名称：呼叫会话统计
+服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数
+BasicKpi,,可信,,2026-09-14 10:00:00,2026-09-14 10:05:00,5,100,100,0
+"""
+    parsed = _parse(tmp_path, "kpi/kpi-call-5.csv", content)
+    assert parsed.status == "ok"
+    assert parsed.measurement_set == "呼叫会话统计"
+    assert parsed.objects == ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数"]
+    assert parsed.record_count == 1
+    record = parsed.records[0]
+    assert record.line_number == 4
+    assert record.period_minutes == 5
+    assert record.start_at.isoformat() == "2026-09-14T02:00:00+00:00"
+    assert record.end_at.isoformat() == "2026-09-14T02:05:00+00:00"
+    assert record.values == {
+        "呼叫请求次数": 100.0,
+        "呼叫请求成功次数": 100.0,
+        "呼叫请求失败次数": 0.0,
     }

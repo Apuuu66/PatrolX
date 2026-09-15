@@ -11,9 +11,9 @@ version: 1
 input_timezone: "Asia/Shanghai"
 aliases:
   call:
-    "呼叫请求": "call_attempts"
-    "请求成功": "call_success_count"
-    "请求失败": "call_failure_count"
+    "呼叫请求次数": "call_attempts"
+    "呼叫请求成功次数": "call_success_count"
+    "呼叫请求失败次数": "call_failure_count"
     "呼叫成功率": "call_success_rate"
     "呼叫失败率": "call_failure_rate"
 capacity_metrics:

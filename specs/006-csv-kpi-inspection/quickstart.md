@@ -5,28 +5,25 @@
 创建一个 zip 包，包含以下文件：
 
 ```text
-kpi/kpi-call-15.csv
+kpi/kpi-call-5.csv
 kpi/kpi-api-15.csv
 kpi/kpi-media-15.csv
 ```
 
-`kpi-call-15.csv` 可使用本功能样例：
+`kpi-call-5.csv` 可使用本功能样例：
 
 ```csv
-呼叫会话统计
-测量周期,开始时间,结束时间,呼叫请求,请求成功,请求失败,统计峰值,最大并发
-15,2026-09-14 10:00:00,2026-09-14 10:15:00,1200,1170,30,100,88
-15,2026-09-14 10:15:00,2026-09-14 10:30:00,1350,1300,50,105,92
-15,2026-09-14 10:30:00,2026-09-14 10:45:00,1500,1440,60,120,98
-15,2026-09-14 10:45:00,2026-09-14 11:00:00,1300,1270,30,95,84
-15,2026-09-14 11:00:00,2026-09-14 11:15:00,1100,1080,20,85,76
+设备类型：XXX
+测量单元名称：呼叫会话统计
+服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数
+BasicKpi,,可信,,2026-09-14 10:00:00,2026-09-14 10:05:00,5,100,100,0
 ```
 
 `kpi-api-15.csv` 和 `kpi-media-15.csv` 使用相同三段布局即可；第一版不要求 API/媒体指标阈值。
 
 ## 2. 预期识别
 
-- `kpi/kpi-call-15.csv` → 规则 `kpi.call`，周期 15 分钟。
+- `kpi/kpi-call-5.csv` → 规则 `kpi.call`，周期 5 分钟。
 - `kpi/kpi-api-15.csv` → 规则 `kpi.api`，周期 15 分钟。
 - `kpi/kpi-media-15.csv` → 规则 `kpi.media`，周期 15 分钟。
 - 缺少任一领域文件时，对应规则返回 `skip` 和明确原因。
@@ -67,13 +64,13 @@ output/<task_id>/rules/kpi.call.json
 对上面样例，`kpi.call` 应满足：
 
 - `file_count = 1`
-- `record_count = 5`
+- `record_count = 1`
 - `parse_error_count = 0`
 - `consistency_error_count = 0`
-- `success_breach_count = 5`（样例成功率均低于 99%）
-- `failure_breach_count = 5`
+- `success_breach_count = 0`（样例成功率为 100%）
+- `failure_breach_count = 0`
 - 结果状态为 `fail`
-- finding 的 `source_file` 为 `kpi/kpi-call-15.csv`
+- finding 的 `source_file` 为 `kpi/kpi-call-5.csv`
 - evidence 中可见原始请求/成功/失败值、派生率、99% 阈值和配置来源
 
 `统计峰值`、`最大并发` 只出现在记录值展示中；不出现其成功率/失败率，也不产生容量阈值告警。
