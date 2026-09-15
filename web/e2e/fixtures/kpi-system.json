@@ -1,0 +1,199 @@
+{
+  "package_file": "kpi.zip",
+  "status": "completed",
+  "summary": {
+    "total": 1,
+    "pass": 0,
+    "warn": 0,
+    "fail": 1,
+    "error": 0,
+    "skip": 0
+  },
+  "rules": [
+    {
+      "code": "kpi.call",
+      "name": "呼叫 KPI 检查",
+      "category": "kpi",
+      "priority": 1,
+      "execution_order": 1,
+      "status": "fail",
+      "severity": "medium",
+      "summary": "呼叫 KPI 检查完成：2 文件，2 记录，1 成功率越限",
+      "executed_at": "2026-09-16T00:00:00Z",
+      "duration_ms": 8,
+      "metrics": [],
+      "findings": [],
+      "metadata": {
+        "version": 2,
+        "domain": "call",
+        "config_source": "deploy/config/kpi",
+        "input_timezone": "Asia/Shanghai",
+        "metric_catalog": [
+          {
+            "key": "call_success_rate",
+            "name_zh": "呼叫成功率",
+            "name_en": "Call Success Rate",
+            "aliases": [
+              {
+                "language": "zh",
+                "value": "接通率"
+              }
+            ],
+            "metric_type": "rate",
+            "semantic_group": "quality",
+            "display_role": "highlight",
+            "unit": "%",
+            "source_type": "derived",
+            "aggregation": {
+              "kind": "ratio_from_inputs"
+            },
+            "formula": {
+              "kind": "ratio",
+              "numerator": "call_success_count",
+              "denominator": "call_attempts",
+              "scale": 100
+            }
+          },
+          {
+            "key": "call_attempts",
+            "name_zh": "呼叫请求次数",
+            "name_en": "Call Attempts",
+            "aliases": [],
+            "metric_type": "count",
+            "semantic_group": "traffic",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {
+              "kind": "sum"
+            }
+          }
+        ],
+        "kpi_results": [
+          {
+            "key": "call_success_rate",
+            "main_value": 90,
+            "value_available": true,
+            "display_status": "fail",
+            "unit": "%",
+            "aggregation": "ratio_from_inputs",
+            "threshold": {
+              "direction": "min",
+              "default": 99,
+              "unit": "%"
+            },
+            "breach_count": 1,
+            "series": [],
+            "source_files": [
+              "kpi/kpi-call-5.csv"
+            ],
+            "provenance": {
+              "formula": "call_success_count / call_attempts * 100",
+              "inputs": [
+                {
+                  "key": "call_success_count",
+                  "aggregation": "sum",
+                  "value": 90
+                },
+                {
+                  "key": "call_attempts",
+                  "aggregation": "sum",
+                  "value": 100
+                }
+              ],
+              "direct_cross_reference": [
+                {
+                  "source_name": "呼叫成功率",
+                  "source_file": "kpi/kpi-call-5.csv",
+                  "value": 99.9
+                }
+              ],
+              "missing_inputs": [],
+              "denominator_zero": false,
+              "fallback_used": false
+            }
+          },
+          {
+            "key": "call_attempts",
+            "main_value": 100,
+            "value_available": true,
+            "display_status": "neutral",
+            "unit": "次",
+            "aggregation": "sum",
+            "threshold": null,
+            "breach_count": 0,
+            "series": [],
+            "source_files": [
+              "kpi/kpi-call-5.csv"
+            ],
+            "provenance": {}
+          }
+        ],
+        "unclassified_metrics": [
+          {
+            "source_name": "自定义业务指标",
+            "source_files": [
+              "kpi/kpi-call-5.csv"
+            ],
+            "record_count": 1,
+            "sample_values": [
+              88
+            ],
+            "reason": "metric_not_registered"
+          }
+        ],
+        "kpi_files": [
+          {
+            "path": "kpi/kpi-call-5.csv",
+            "domain": "call",
+            "period_minutes": 5,
+            "measurement_set": "呼叫会话统计",
+            "status": "ok",
+            "objects": [
+              "呼叫请求次数",
+              "呼叫请求成功次数",
+              "呼叫成功率"
+            ],
+            "record_count": 2,
+            "parse_error_count": 0,
+            "errors": [],
+            "records": [
+              {
+                "line_number": 4,
+                "period_minutes": 5,
+                "start_at": "2026-09-01T02:00:00Z",
+                "end_at": "2026-09-01T02:05:00Z",
+                "values": {
+                  "呼叫请求次数": 80,
+                  "呼叫请求成功次数": 76,
+                  "呼叫成功率": 99.2
+                },
+                "derived": {
+                  "call_success_rate": 95.0
+                },
+                "capacity_values": [],
+                "errors": []
+              },
+              {
+                "line_number": 5,
+                "period_minutes": 5,
+                "start_at": "2026-09-01T02:05:00Z",
+                "end_at": "2026-09-01T02:10:00Z",
+                "values": {
+                  "呼叫请求次数": 20,
+                  "呼叫请求成功次数": 14,
+                  "呼叫成功率": 98.0
+                },
+                "derived": {
+                  "call_success_rate": 70.0
+                },
+                "capacity_values": [],
+                "errors": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

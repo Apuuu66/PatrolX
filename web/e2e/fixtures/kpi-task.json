@@ -1,0 +1,42 @@
+{
+  "task_id": "task-kpi-e2e",
+  "name": "KPI 目录任务",
+  "mode": "local",
+  "status": "completed",
+  "trigger": "cli",
+  "created_at": "2026-09-16T00:00:00Z",
+  "completed_at": "2026-09-16T00:00:01Z",
+  "stats": {
+    "total": 1,
+    "pass": 0,
+    "warn": 0,
+    "fail": 1,
+    "error": 0,
+    "skip": 0,
+    "systems": 1
+  },
+  "system": {
+    "package_file": "kpi.zip",
+    "status": "completed",
+    "summary": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1,
+      "error": 0,
+      "skip": 0
+    },
+    "rules": [
+      {
+        "code": "kpi.call",
+        "name": "呼叫 KPI 检查",
+        "category": "kpi",
+        "priority": 1,
+        "execution_order": 1,
+        "status": "fail",
+        "severity": "medium",
+        "summary": "呼叫 KPI 检查完成：2 文件，2 记录，1 成功率越限"
+      }
+    ]
+  }
+}
