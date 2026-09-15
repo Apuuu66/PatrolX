@@ -186,13 +186,13 @@
 
 **目的**：补齐兼容性、文档、报告和全流程验证。
 
-- [ ] T055 验证历史 `metadata.version=1` 结果前端回退旧表，且不迁移或重算。
-- [ ] T056 [P] 更新 `docs/architecture.md`、`docs/design/mechanisms.md` 或既有 KPI 文档中的配置路径和展示机制。
-- [ ] T057 [P] 检查 HTML 报告对新增 metadata 不报错；保持既有规则摘要。
-- [ ] T058 运行本地 CLI/API/单规则重跑一致性测试。
-- [ ] T059 运行 `python build.py lint && python build.py test && python build.py verify`。
-- [ ] T060 运行 `python build.py contract && python build.py gen-web-api && cd web && npm run build`。
-- [ ] T061 按 `quickstart.md` 完成手工页面验证，更新 `tasks.md` 复选框和完成记录。
+- [x] T055 验证历史 `metadata.version=1` 结果前端回退旧表，且不迁移或重算。
+- [x] T056 [P] 更新 `docs/architecture.md`、`docs/design/mechanisms.md` 或既有 KPI 文档中的配置路径和展示机制。
+- [x] T057 [P] 检查 HTML 报告对新增 metadata 不报错；保持既有规则摘要。
+- [x] T058 运行本地 CLI/API/单规则重跑一致性测试。
+- [x] T059 运行 `python build.py lint && python build.py test && python build.py verify`。
+- [x] T060 运行 `python build.py contract && python build.py gen-web-api && cd web && npm run build`。
+- [x] T061 按 `quickstart.md` 完成手工页面验证，更新 `tasks.md` 复选框和完成记录。
 
 ---
 

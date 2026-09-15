@@ -541,7 +541,10 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 | `kpi.call` | `^kpi/(?:.*/)?kpi-call-(?:5\|15\|30\|60)\.csv$` |
 
 - 规则不使用私有 prepare，直接读取自己的 `source_patterns` 匹配文件。
-- 呼叫阈值、指标别名和解析预算配置在 `deploy/config/kpi_rules.yaml`。
+- KPI 指标目录、别名、公式、阈值、容量语义和解析预算配置在 `deploy/config/kpi/`；
+  `common.yaml` 管公共配置，`call.yaml`、`api.yaml`、`media.yaml` 按领域维护。
+- 目录化结果写入 `metric_catalog`、`kpi_results`、`unclassified_metrics`；未登记列只保留来源和样例，不改变规则状态。
+- 历史结果 `metadata.version=1` 前端回退明细表，后端不迁移、不重算；分页原始记录通过 `/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records` 按需查询。
 - `统计峰值`、`最大并发` 等容量指标只展示和追溯，不参与成功/失败率判断。
 - 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
 - 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildKpiMetricGroups, filterKpiMetricGroups } from "./kpiCatalogModel.ts";
+import { buildKpiMetricGroups, filterKpiMetricGroups, parseKpiMetadata } from "./kpiCatalogModel.ts";
 
 const metadata = {
   version: 2,
@@ -131,4 +131,19 @@ test("searches Chinese, English, stable key and aliases", () => {
       `query=${query}`,
     );
   }
+});
+
+test("keeps historical version 1 metadata in the legacy detail-table path", () => {
+  const historical = {
+    version: 1,
+    kpi_files: [
+      {
+        path: "kpi/kpi-call-15.csv",
+        period_minutes: 15,
+        records: [{ line_number: 4, values: { 呼叫请求: 100 } }],
+      },
+    ],
+  };
+  assert.equal(parseKpiMetadata(historical), null);
+  assert.equal(parseKpiMetadata(metadata)?.version, 2);
 });

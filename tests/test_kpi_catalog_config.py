@@ -1,7 +1,7 @@
 """KPI 目录化配置契约测试。"""
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import pytest
 
