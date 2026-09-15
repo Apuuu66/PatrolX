@@ -14,11 +14,19 @@ import zoneinfo
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
 
-import yaml
+from app.inspectors.kpi.catalog import (
+    KpiCatalogError,
+    KpiConfig,
+    KpiThreshold,
+    load_kpi_catalog,
+    normalize_metric_name,
+)
 
-CONFIG_RELATIVE_PATH = "deploy/config/kpi_rules.yaml"
+KpiConfigError = KpiCatalogError
+__all__ = ["KpiConfigError", "KpiConfig", "KpiThreshold", "load_kpi_catalog", "normalize_metric_name"]
+
+CONFIG_RELATIVE_PATH = "deploy/config/kpi"
 VALID_PERIODS = {5, 15, 30, 60}
 VALID_SEMANTICS = {"peak", "concurrency", "gauge"}
 VALID_CAPACITY_STATUS = {"confirmed", "unknown"}
@@ -26,10 +34,6 @@ VALID_DIRECTIONS = {"min", "max"}
 
 # 文件名解析
 _FILENAME_RE = re.compile(r"^kpi/(?P<dir_prefix>(?:.*/)?)kpi-(?P<domain>api|media|call)-(?P<period>5|15|30|60)\.csv$")
-
-
-class KpiConfigError(Exception):
-    """KPI 配置缺失或非法。"""
 
 
 @dataclass(slots=True)
@@ -92,34 +96,6 @@ class KpiCsvFile:
         return len(self.errors) + sum(len(r.errors) for r in self.records)
 
 
-@dataclass(slots=True)
-class KpiThreshold:
-    """一个阈值配置。"""
-
-    metric: str
-    label: str
-    direction: str  # min | max
-    unit: str
-    default: float
-    periods: dict[str, float]
-
-
-@dataclass(slots=True)
-class KpiConfig:
-    """KPI 规则配置。"""
-
-    version: int
-    input_timezone: str
-    aliases: dict[str, dict[str, str]]
-    capacity_metrics: dict[str, dict[str, dict[str, Any]]]
-    limits: dict[str, dict[str, KpiThreshold]]
-    budgets: dict[str, int]
-
-    @property
-    def tzinfo(self) -> zoneinfo.ZoneInfo:
-        return zoneinfo.ZoneInfo(self.input_timezone)
-
-
 def parse_kpi_path(relative_path: str) -> tuple[str, int] | None:
     """从任务相对路径解析 domain 和 period_minutes，不匹配返回 None。"""
     match = _FILENAME_RE.fullmatch(relative_path)
@@ -129,167 +105,8 @@ def parse_kpi_path(relative_path: str) -> tuple[str, int] | None:
 
 
 def load_kpi_config(config_path: Path | None = None) -> KpiConfig:
-    """读取并校验 KPI 规则配置文件。"""
-    resolved = config_path or Path(CONFIG_RELATIVE_PATH)
-    if not resolved.is_file():
-        raise KpiConfigError(f"配置文件不存在: {resolved}")
-    try:
-        raw = yaml.safe_load(resolved.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError) as exc:
-        raise KpiConfigError(f"配置文件读取或解析失败: {exc}") from exc
-    if not isinstance(raw, dict):
-        raise KpiConfigError("配置文件顶层必须是字典")
-
-    version = raw.get("version")
-    if version != 1:
-        raise KpiConfigError(f"不支持的配置版本: {version}")
-
-    input_tz = raw.get("input_timezone")
-    if not isinstance(input_tz, str) or not input_tz.strip():
-        raise KpiConfigError("input_timezone 缺失或非法")
-    try:
-        zoneinfo.ZoneInfo(input_tz)
-    except zoneinfo.ZoneInfoNotFoundError as exc:
-        raise KpiConfigError(f"非法时区: {input_tz}") from exc
-
-    aliases_raw = raw.get("aliases")
-    if not isinstance(aliases_raw, dict):
-        raise KpiConfigError("aliases 缺失或非法")
-    aliases: dict[str, dict[str, str]] = {}
-    for domain, mapping in aliases_raw.items():
-        if not isinstance(domain, str) or not isinstance(mapping, dict):
-            raise KpiConfigError(f"aliases.{domain} 非法")
-        aliases[domain] = {}
-        for source, key in mapping.items():
-            if not isinstance(source, str) or not isinstance(key, str):
-                raise KpiConfigError(f"aliases.{domain}.{source} 非法")
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
-                raise KpiConfigError(f"aliases.{domain}.{source} 稳定 key 非法: {key}")
-            aliases[domain][source] = key
-
-    capacity_raw = raw.get("capacity_metrics")
-    if not isinstance(capacity_raw, dict):
-        raise KpiConfigError("capacity_metrics 缺失或非法")
-    capacity_metrics: dict[str, dict[str, dict[str, Any]]] = {}
-    for domain, entries in capacity_raw.items():
-        if not isinstance(domain, str) or not isinstance(entries, dict):
-            raise KpiConfigError(f"capacity_metrics.{domain} 非法")
-        capacity_metrics[domain] = {}
-        for source, spec in entries.items():
-            if not isinstance(source, str) or not isinstance(spec, dict):
-                raise KpiConfigError(f"capacity_metrics.{domain}.{source} 非法")
-            metric = spec.get("metric")
-            if not isinstance(metric, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", metric):
-                raise KpiConfigError(f"capacity_metrics.{domain}.{source}.metric 非法: {metric}")
-            semantics = spec.get("semantics")
-            status = spec.get("status")
-            if status not in VALID_CAPACITY_STATUS:
-                raise KpiConfigError(f"capacity_metrics.{domain}.{source}.status 非法: {status}")
-            if status == "confirmed" and semantics not in VALID_SEMANTICS:
-                raise KpiConfigError(f"capacity_metrics.{domain}.{source}.semantics 必填（confirmed）: {semantics}")
-            if status == "unknown":
-                semantics = None
-            capacity_metrics[domain][source] = {
-                "metric": metric,
-                "semantics": semantics,
-                "status": status,
-            }
-
-    # 别名稳定 key 与容量 metric key 不得冲突
-    for domain in aliases:
-        alias_keys = set(aliases[domain].values())
-        cap_keys = {e["metric"] for e in capacity_metrics.get(domain, {}).values()}
-        overlap = alias_keys & cap_keys
-        if overlap:
-            raise KpiConfigError(f"aliases 与 capacity_metrics key 冲突 ({domain}): {overlap}")
-
-    limits_raw = raw.get("limits")
-    if not isinstance(limits_raw, dict):
-        raise KpiConfigError("limits 缺失或非法")
-    limits: dict[str, dict[str, KpiThreshold]] = {}
-    for domain, metrics in limits_raw.items():
-        if not isinstance(domain, str) or not isinstance(metrics, dict):
-            raise KpiConfigError(f"limits.{domain} 非法")
-        limits[domain] = {}
-        for metric, spec in metrics.items():
-            if not isinstance(metric, str) or not isinstance(spec, dict):
-                raise KpiConfigError(f"limits.{domain}.{metric} 非法")
-            label = spec.get("label")
-            direction = spec.get("direction")
-            unit = spec.get("unit")
-            default = spec.get("default")
-            periods_raw = spec.get("periods")
-            if not isinstance(label, str) or not label.strip():
-                raise KpiConfigError(f"limits.{domain}.{metric}.label 非法")
-            if direction not in VALID_DIRECTIONS:
-                raise KpiConfigError(f"limits.{domain}.{metric}.direction 非法: {direction}")
-            if not isinstance(unit, str):
-                raise KpiConfigError(f"limits.{domain}.{metric}.unit 非法")
-            if isinstance(default, bool) or not isinstance(default, (int, float)):
-                raise KpiConfigError(f"limits.{domain}.{metric}.default 非法: {default}")
-            periods: dict[str, float] = {}
-            if periods_raw is not None:
-                if not isinstance(periods_raw, dict):
-                    raise KpiConfigError(f"limits.{domain}.{metric}.periods 非法")
-                for period_key, val in periods_raw.items():
-                    if period_key not in {"5", "15", "30", "60"}:
-                        raise KpiConfigError(f"limits.{domain}.{metric}.periods key 非法: {period_key}")
-                    if not isinstance(val, (int, float)):
-                        raise KpiConfigError(f"limits.{domain}.{metric}.periods[{period_key}] 非法")
-                    periods[period_key] = float(val)
-            limits[domain][metric] = KpiThreshold(
-                metric=metric,
-                label=label,
-                direction=direction,
-                unit=unit,
-                default=float(default),
-                periods=periods,
-            )
-
-    budgets_raw = raw.get("budgets")
-    if not isinstance(budgets_raw, dict):
-        raise KpiConfigError("budgets 缺失或非法")
-    budget_keys = {
-        "max_file_bytes",
-        "max_rows_per_file",
-        "max_columns_per_file",
-        "max_files_per_domain",
-        "max_records_per_domain",
-    }
-    budgets: dict[str, int] = {}
-    for key in budget_keys:
-        val = budgets_raw.get(key)
-        if isinstance(val, bool) or not isinstance(val, int) or val <= 0:
-            raise KpiConfigError(f"budgets.{key} 必须为正整数: {val}")
-        budgets[key] = val
-
-    call_aliases = aliases.get("call", {})
-    required_aliases = {
-        "呼叫请求次数",
-        "呼叫请求成功次数",
-        "呼叫请求失败次数",
-        "呼叫成功率",
-        "呼叫失败率",
-    }
-    missing_aliases = required_aliases - set(call_aliases)
-    if missing_aliases:
-        raise KpiConfigError(f"aliases.call 缺少必需映射: {sorted(missing_aliases)}")
-    if len(set(call_aliases.values())) != len(call_aliases):
-        raise KpiConfigError("aliases.call 存在重复稳定 key")
-    call_limits = limits.get("call", {})
-    required_limits = {"call_success_rate", "call_failure_rate"}
-    missing_limits = required_limits - set(call_limits)
-    if missing_limits:
-        raise KpiConfigError(f"limits.call 缺少必需阈值: {sorted(missing_limits)}")
-
-    return KpiConfig(
-        version=1,
-        input_timezone=input_tz,
-        aliases=aliases,
-        capacity_metrics=capacity_metrics,
-        limits=limits,
-        budgets=budgets,
-    )
+    """读取并校验目录化 KPI 规则配置。"""
+    return load_kpi_catalog(config_path or Path(CONFIG_RELATIVE_PATH))
 
 
 def _sha256_prefix(text: str, length: int = 16) -> str:

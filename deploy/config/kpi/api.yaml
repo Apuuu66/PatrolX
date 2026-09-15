@@ -1,0 +1,4 @@
+domain: api
+metrics: []
+thresholds: {}
+capacity_metrics: {}

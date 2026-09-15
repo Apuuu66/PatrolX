@@ -1,5 +1,6 @@
 """KPI CSV 共享解析器、配置校验、关联派生和容量指标测试。"""
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -181,13 +182,26 @@ def test_parse_csv_file_reports_duplicate_objects(tmp_path: Path) -> None:
     assert parsed.errors[0].code == "duplicate_object"
 
 
+def _copy_kpi_config(tmp_path: Path) -> Path:
+    target = tmp_path / "kpi"
+    shutil.copytree(Path("deploy/config/kpi"), target)
+    return target
+
+
+def _read_domain(config_dir: Path, name: str = "call.yaml") -> dict:
+    return yaml.safe_load((config_dir / name).read_text(encoding="utf-8"))
+
+
+def _write_domain(config_dir: Path, raw: dict, name: str = "call.yaml") -> None:
+    (config_dir / name).write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+
+
 def test_parse_csv_file_reports_row_count_limit(tmp_path: Path) -> None:
-    config_path = Path("deploy/config/kpi_rules.yaml")
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = yaml.safe_load((config_dir / "common.yaml").read_text(encoding="utf-8"))
     raw["budgets"]["max_rows_per_file"] = 4
-    config_file = tmp_path / "kpi_rules.yaml"
-    config_file.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
-    config = load_kpi_config(config_file)
+    (config_dir / "common.yaml").write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    config = load_kpi_config(config_dir)
     content = _content(
         ["呼叫请求"],
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100]],
@@ -199,49 +213,73 @@ def test_parse_csv_file_reports_row_count_limit(tmp_path: Path) -> None:
     assert parsed.errors[0].code == "resource_limit_exceeded"
 
 
-def test_config_requires_complete_call_aliases_and_limits(tmp_path: Path) -> None:
-    raw = yaml.safe_load(Path("deploy/config/kpi_rules.yaml").read_text(encoding="utf-8"))
-    del raw["aliases"]["call"]["呼叫请求成功次数"]
-    path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
-    with pytest.raises(KpiConfigError, match="缺少必需映射"):
-        load_kpi_config(path)
+def test_config_requires_complete_call_metrics_and_thresholds(tmp_path: Path) -> None:
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
+    raw["metrics"] = [metric for metric in raw["metrics"] if metric["key"] != "call_success_count"]
+    _write_domain(config_dir, raw)
+    with pytest.raises(KpiConfigError, match="引用未知输入"):
+        load_kpi_config(config_dir)
 
-    raw = yaml.safe_load(Path("deploy/config/kpi_rules.yaml").read_text(encoding="utf-8"))
-    del raw["limits"]["call"]["call_failure_rate"]
-    path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    raw = _read_domain(config_dir)
+    raw["metrics"].append(
+        {
+            "key": "call_success_count",
+            "name_zh": "呼叫请求成功次数",
+            "name_en": "Call Success Count",
+            "metric_type": "count",
+            "semantic_group": "traffic",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {"kind": "sum"},
+            "aliases": [{"language": "zh", "value": "呼叫请求成功次数"}],
+        }
+    )
+    del raw["thresholds"]["call_failure_rate"]
+    _write_domain(config_dir, raw)
     with pytest.raises(KpiConfigError, match="缺少必需阈值"):
-        load_kpi_config(path)
+        load_kpi_config(config_dir)
 
 
 def test_config_rejects_alias_and_capacity_key_conflict(tmp_path: Path) -> None:
-    raw = yaml.safe_load(Path("deploy/config/kpi_rules.yaml").read_text(encoding="utf-8"))
-    raw["aliases"]["call"]["统计峰值"] = "max_concurrency"
-    path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
-    with pytest.raises(KpiConfigError, match="冲突"):
-        load_kpi_config(path)
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
+    for metric in raw["metrics"]:
+        if metric["key"] == "max_concurrency":
+            metric["aliases"].append({"language": "zh", "value": "统计峰值"})
+    _write_domain(config_dir, raw)
+    with pytest.raises(KpiConfigError, match="已映射到"):
+        load_kpi_config(config_dir)
 
 
 @pytest.mark.parametrize(
     ("path", "match"),
     [
-        (["aliases", "call", "呼叫请求次数"], "非法"),
-        (["capacity_metrics", "call", "统计峰值", "status"], "status 非法"),
-        (["limits", "call", "call_success_rate", "direction"], "direction 非法"),
-        (["budgets", "max_file_bytes"], "必须为正整数"),
+        (["metrics", 0, "aliases", 0, "value"], "value: 缺失或非法"),
+        (["capacity_metrics", "统计峰值", "status"], "非法容量语义或状态"),
+        (["thresholds", "call_success_rate", "direction"], "direction"),
     ],
 )
-def test_config_rejects_invalid_fields(tmp_path: Path, path: list[str], match: str) -> None:
-    raw = yaml.safe_load(Path("deploy/config/kpi_rules.yaml").read_text(encoding="utf-8"))
+def test_config_rejects_invalid_domain_fields(tmp_path: Path, path: list, match: str) -> None:
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
     target = raw
     for key in path[:-1]:
         target = target[key]
     target[path[-1]] = None
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    _write_domain(config_dir, raw)
     with pytest.raises(KpiConfigError, match=match):
-        load_kpi_config(config_file)
+        load_kpi_config(config_dir)
+
+
+def test_config_rejects_invalid_budget(tmp_path: Path) -> None:
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = yaml.safe_load((config_dir / "common.yaml").read_text(encoding="utf-8"))
+    raw["budgets"]["max_file_bytes"] = None
+    (config_dir / "common.yaml").write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(KpiConfigError, match="必须为正整数"):
+        load_kpi_config(config_dir)
 
 
 def test_capacity_metrics_are_mapped_per_record(tmp_path: Path) -> None:
@@ -259,14 +297,14 @@ def test_capacity_metrics_are_mapped_per_record(tmp_path: Path) -> None:
 
 
 def test_unknown_capacity_semantics_is_display_only(tmp_path: Path) -> None:
-    raw = yaml.safe_load(Path("deploy/config/kpi_rules.yaml").read_text(encoding="utf-8"))
-    raw["capacity_metrics"]["call"]["统计峰值"]["status"] = "unknown"
-    raw["capacity_metrics"]["call"]["统计峰值"]["semantics"] = None
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
+    raw["capacity_metrics"]["统计峰值"]["status"] = "unknown"
+    raw["capacity_metrics"]["统计峰值"]["semantics"] = None
+    _write_domain(config_dir, raw)
     content = _content(["统计峰值"], [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 101]])
     path = _write(tmp_path, "kpi/kpi-call-15.csv", content)
-    parsed = parse_csv_file(path, "kpi/kpi-call-15.csv", "call", 15, load_kpi_config(config_file))
+    parsed = parse_csv_file(path, "kpi/kpi-call-15.csv", "call", 15, load_kpi_config(config_dir))
     capacity = parsed.records[0].capacity_values[0]
     assert capacity.status == "unknown"
     assert capacity.reason == "capacity_semantics_unknown"

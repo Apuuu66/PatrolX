@@ -48,7 +48,9 @@ NA = "N/A"
 def _derive_rates(record: KpiRecord, alias: dict[str, str]) -> None:
     """为单条记录计算派生成功率和失败率。"""
     derived: dict[str, float] = {}
-    source_names = {stable: source for source, stable in alias.items()}
+    source_names: dict[str, str] = {}
+    for source, stable in alias.items():
+        source_names.setdefault(stable, source)
     attempts = record.values.get(source_names.get("call_attempts", ""), None)
     success = record.values.get(source_names.get("call_success_count", ""), None)
     failure = record.values.get(source_names.get("call_failure_count", ""), None)
