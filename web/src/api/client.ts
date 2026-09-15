@@ -159,6 +159,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询 KPI 原始记录 */
+        get: operations["listKpiRecordsV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/overview": {
         parameters: {
             query?: never;
@@ -696,6 +713,91 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @enum {string} */
+        KpiDisplayStatusV2: "pass" | "warn" | "fail" | "neutral" | "unavailable";
+        KpiRecordItemV2: {
+            metric_key: string;
+            metric_name_zh: string;
+            source_file: string;
+            line_number: number;
+            period_minutes: number;
+            /** Format: date-time */
+            start_at: string;
+            /** Format: date-time */
+            end_at: string;
+            value: number | string | null;
+            status: components["schemas"]["KpiDisplayStatusV2"];
+            errors: {
+                [key: string]: unknown;
+            }[];
+        };
+        KpiRecordPageV2: {
+            total: number;
+            page: number;
+            page_size: number;
+            items: components["schemas"]["KpiRecordItemV2"][];
+        };
+        KpiMetricDefinitionV2: {
+            key: string;
+            name_zh: string;
+            name_en: string;
+            aliases: {
+                [key: string]: unknown;
+            }[];
+            /** @enum {string} */
+            metric_type: "count" | "rate" | "capacity" | "latency" | "gauge";
+            /** @enum {string} */
+            semantic_group: "quality" | "traffic" | "capacity" | "latency" | "other";
+            /** @enum {string} */
+            display_role: "highlight" | "context" | "diagnostic" | "catalog";
+            unit: string | null;
+            /** @enum {string} */
+            source_type: "raw" | "derived";
+            aggregation: {
+                [key: string]: unknown;
+            };
+            formula?: {
+                [key: string]: unknown;
+            } | null;
+            description?: string | null;
+        };
+        KpiMetricResultV2: {
+            key: string;
+            main_value: number | string | null;
+            value_available: boolean;
+            unavailable_reason?: string | null;
+            display_status: components["schemas"]["KpiDisplayStatusV2"];
+            unit: string | null;
+            aggregation: string;
+            threshold?: {
+                [key: string]: unknown;
+            } | null;
+            breach_count: number;
+            series: {
+                [key: string]: unknown;
+            }[];
+            source_files: string[];
+            provenance: {
+                [key: string]: unknown;
+            };
+        };
+        KpiUnclassifiedMetricV2: {
+            source_name: string;
+            source_files: string[];
+            record_count: number;
+            sample_values: unknown[];
+            reason: string;
+        };
+        KpiMetadataV2: {
+            version: number;
+            domain: string;
+            metric_catalog: components["schemas"]["KpiMetricDefinitionV2"][];
+            kpi_results: components["schemas"]["KpiMetricResultV2"][];
+            unclassified_metrics: components["schemas"]["KpiUnclassifiedMetricV2"][];
+            kpi_files: {
+                [key: string]: unknown;
+            }[];
+        };
     };
     responses: {
         /** @description 请求错误 */
@@ -731,6 +833,7 @@ export interface components {
         RuleCode: string;
         Page: number;
         PageSize: number;
+        KpiRecordPageSize: number;
     };
     requestBodies: never;
     headers: never;
@@ -1017,7 +1120,10 @@ export interface operations {
     };
     getRuleResultV2: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 为 true 时清空 KPI metadata.kpi_files[].records，保留文件摘要与目录。 */
+                exclude_records?: boolean;
+            };
             header?: never;
             path: {
                 task_id: components["parameters"]["TaskId"];
@@ -1036,6 +1142,40 @@ export interface operations {
                     "application/json": components["schemas"]["RuleResultV2"];
                 };
             };
+            404: components["responses"]["Error404"];
+        };
+    };
+    listKpiRecordsV2: {
+        parameters: {
+            query?: {
+                /** @description 稳定指标 key，精确匹配。 */
+                metric_key?: string;
+                /** @description 任务内相对路径，精确匹配。 */
+                source_file?: string;
+                period_minutes?: 5 | 15 | 30 | 60;
+                status?: components["schemas"]["KpiDisplayStatusV2"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["KpiRecordPageSize"];
+            };
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+                rule_code: components["parameters"]["RuleCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description KPI 原始记录分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiRecordPageV2"];
+                };
+            };
+            400: components["responses"]["Error400"];
             404: components["responses"]["Error404"];
         };
     };

@@ -155,6 +155,102 @@ class SystemInspection(BaseModel):
     customer: dict[str, str] = Field(default_factory=dict)
 
 
+class KpiPeriodMinutes(IntEnum):
+    FIVE = 5
+    FIFTEEN = 15
+    THIRTY = 30
+    SIXTY = 60
+
+
+class KpiDisplayStatus(StrEnum):
+    PASS = "pass"
+    WARN = "warn"
+    FAIL = "fail"
+    NEUTRAL = "neutral"
+    UNAVAILABLE = "unavailable"
+
+
+KpiValue = int | float | str | None
+
+
+class KpiMetricDefinition(BaseModel):
+    """KPI 目录中的指标定义。"""
+
+    key: str
+    name_zh: str
+    name_en: str
+    aliases: list[dict[str, Any]] = Field(default_factory=list)
+    metric_type: str
+    semantic_group: str
+    display_role: str
+    unit: str | None = None
+    source_type: str
+    aggregation: dict[str, Any]
+    formula: dict[str, Any] | None = None
+    description: str | None = None
+
+
+class KpiMetricResult(BaseModel):
+    """KPI 指标聚合结果。"""
+
+    key: str
+    main_value: KpiValue = None
+    value_available: bool = True
+    unavailable_reason: str | None = None
+    display_status: KpiDisplayStatus
+    unit: str | None = None
+    aggregation: str
+    threshold: dict[str, Any] | None = None
+    breach_count: int = Field(default=0, ge=0)
+    series: list[dict[str, Any]] = Field(default_factory=list)
+    source_files: list[str] = Field(default_factory=list)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+
+class KpiUnclassifiedMetric(BaseModel):
+    """未登记 KPI 指标，仅作为目录补齐线索展示。"""
+
+    source_name: str
+    source_files: list[str] = Field(default_factory=list)
+    record_count: int = Field(default=0, ge=0)
+    sample_values: list[Any] = Field(default_factory=list)
+    reason: str = "metric_not_registered"
+
+
+class KpiRecordError(BaseModel):
+    """KPI 原始记录错误投影。"""
+
+    code: str
+    line_number: int | None = None
+    column: str | None = None
+    message: str = ""
+    value: KpiValue = None
+
+
+class KpiRecordItem(BaseModel):
+    """按指标展开的 KPI 原始记录。"""
+
+    metric_key: str
+    metric_name_zh: str
+    source_file: str
+    line_number: int = Field(ge=1)
+    period_minutes: int = Field(ge=1)
+    start_at: datetime
+    end_at: datetime
+    value: KpiValue = None
+    status: KpiDisplayStatus = KpiDisplayStatus.NEUTRAL
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class KpiRecordPage(BaseModel):
+    """KPI 原始记录分页响应。"""
+
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    items: list[KpiRecordItem] = Field(default_factory=list)
+
+
 class PreparationIssue(BaseModel):
     type: PreparationIssueType
     source: str | None = None

@@ -24,6 +24,9 @@ from app.models.schemas import (
     DictUpdateRequest,
     InspectionTask,
     InspectorInfo,
+    KpiDisplayStatus,
+    KpiPeriodMinutes,
+    KpiRecordPage,
     LogEntry,
     OverviewSummary,
     RerunRequest,
@@ -33,6 +36,7 @@ from app.models.schemas import (
     TaskListResponse,
     TaskLogs,
 )
+from app.services.kpi_records import list_kpi_records
 from app.services.overview import build_overview
 from app.services.tasks import DeleteResult, TaskDeleteError, task_service
 
@@ -253,12 +257,52 @@ def get_system_v2(task_id: str = PathParam()) -> SystemInspection:
 
 
 @router.get("/tasks/{task_id}/rules/{rule_code}", response_model=RuleResult, operation_id="getRuleResultV2")
-def get_rule_result_v2(task_id: str = PathParam(), rule_code: str = PathParam()) -> RuleResult:
+def get_rule_result_v2(
+    task_id: str = PathParam(),
+    rule_code: str = PathParam(),
+    exclude_records: bool = False,
+) -> RuleResult:
     system = _load_system_json(task_id)
-    for rule in system.rules:
-        if rule.code == rule_code:
-            return rule
-    raise AppError("not_found", f"规则结果不存在: {rule_code}", 404)
+    rule = next((item for item in system.rules if item.code == rule_code), None)
+    if rule is None:
+        raise AppError("not_found", f"规则结果不存在: {rule_code}", 404)
+    if not exclude_records:
+        return rule
+    projected = rule.model_copy(deep=True)
+    if projected.metadata.get("version", 0) >= 2:
+        for kpi_file in projected.metadata.get("kpi_files", []):
+            kpi_file["records"] = []
+    return projected
+
+
+@router.get(
+    "/tasks/{task_id}/rules/{rule_code}/kpi/records",
+    response_model=KpiRecordPage,
+    operation_id="listKpiRecordsV2",
+)
+def list_kpi_records_v2(
+    task_id: str = PathParam(),
+    rule_code: str = PathParam(),
+    metric_key: str | None = Query(default=None),
+    source_file: str | None = Query(default=None),
+    period_minutes: KpiPeriodMinutes | None = Query(default=None),
+    status: KpiDisplayStatus | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+) -> KpiRecordPage:
+    try:
+        return list_kpi_records(
+            task_id,
+            rule_code,
+            metric_key=metric_key,
+            source_file=source_file,
+            period_minutes=period_minutes,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+    except KeyError as exc:
+        raise AppError("not_found", "规则结果不存在", 404) from exc
 
 
 @router.get("/inspectors", response_model=list[InspectorInfo], operation_id="listInspectorsV2")

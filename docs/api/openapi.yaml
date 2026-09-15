@@ -215,6 +215,12 @@ paths:
       parameters:
       - $ref: '#/components/parameters/TaskId'
       - $ref: '#/components/parameters/RuleCode'
+      - name: exclude_records
+        in: query
+        schema:
+          type: boolean
+          default: false
+        description: 为 true 时清空 KPI metadata.kpi_files[].records，保留文件摘要与目录。
       responses:
         '200':
           description: 规则结果（metrics/findings）
@@ -222,6 +228,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RuleResultV2'
+        '404':
+          $ref: '#/components/responses/Error404'
+  /api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records:
+    get:
+      summary: 分页查询 KPI 原始记录
+      operationId: listKpiRecordsV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      - $ref: '#/components/parameters/RuleCode'
+      - name: metric_key
+        in: query
+        schema:
+          type: string
+        description: 稳定指标 key，精确匹配。
+      - name: source_file
+        in: query
+        schema:
+          type: string
+        description: 任务内相对路径，精确匹配。
+      - name: period_minutes
+        in: query
+        schema:
+          type: integer
+          enum: [5, 15, 30, 60]
+      - name: status
+        in: query
+        schema:
+          $ref: '#/components/schemas/KpiDisplayStatusV2'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/KpiRecordPageSize'
+      responses:
+        '200':
+          description: KPI 原始记录分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiRecordPageV2'
+        '400':
+          $ref: '#/components/responses/Error400'
         '404':
           $ref: '#/components/responses/Error404'
   /api/v2/overview:
@@ -330,6 +375,14 @@ components:
         default: 20
         minimum: 1
         maximum: 100
+    KpiRecordPageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 200
   responses:
     Error400:
       description: 请求错误
@@ -1482,3 +1535,198 @@ components:
           type: object
           additionalProperties: true
       description: 错误码（/api/v2 含包上传与损坏数据错误）
+    KpiDisplayStatusV2:
+      type: string
+      enum:
+      - pass
+      - warn
+      - fail
+      - neutral
+      - unavailable
+    KpiRecordItemV2:
+      type: object
+      required:
+      - metric_key
+      - metric_name_zh
+      - source_file
+      - line_number
+      - period_minutes
+      - start_at
+      - end_at
+      - value
+      - status
+      - errors
+      properties:
+        metric_key:
+          type: string
+        metric_name_zh:
+          type: string
+        source_file:
+          type: string
+        line_number:
+          type: integer
+          minimum: 1
+        period_minutes:
+          type: integer
+          minimum: 1
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        value:
+          oneOf:
+          - type: number
+          - type: string
+          - type: 'null'
+        status:
+          $ref: '#/components/schemas/KpiDisplayStatusV2'
+        errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    KpiRecordPageV2:
+      type: object
+      required: [total, page, page_size, items]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiRecordItemV2'
+    KpiMetricDefinitionV2:
+      type: object
+      required: [key, name_zh, name_en, aliases, metric_type, semantic_group, display_role, unit, source_type, aggregation]
+      properties:
+        key:
+          type: string
+        name_zh:
+          type: string
+        name_en:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        metric_type:
+          type: string
+          enum: [count, rate, capacity, latency, gauge]
+        semantic_group:
+          type: string
+          enum: [quality, traffic, capacity, latency, other]
+        display_role:
+          type: string
+          enum: [highlight, context, diagnostic, catalog]
+        unit:
+          type: string
+          nullable: true
+        source_type:
+          type: string
+          enum: [raw, derived]
+        aggregation:
+          type: object
+          additionalProperties: true
+        formula:
+          type: object
+          additionalProperties: true
+          nullable: true
+        description:
+          type: string
+          nullable: true
+    KpiMetricResultV2:
+      type: object
+      required: [key, main_value, value_available, display_status, unit, aggregation, breach_count, series, source_files, provenance]
+      properties:
+        key:
+          type: string
+        main_value:
+          oneOf:
+          - type: number
+          - type: string
+          - type: 'null'
+        value_available:
+          type: boolean
+        unavailable_reason:
+          type: string
+          nullable: true
+        display_status:
+          $ref: '#/components/schemas/KpiDisplayStatusV2'
+        unit:
+          type: string
+          nullable: true
+        aggregation:
+          type: string
+        threshold:
+          type: object
+          additionalProperties: true
+          nullable: true
+        breach_count:
+          type: integer
+          minimum: 0
+        series:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        source_files:
+          type: array
+          items:
+            type: string
+        provenance:
+          type: object
+          additionalProperties: true
+    KpiUnclassifiedMetricV2:
+      type: object
+      required: [source_name, source_files, record_count, sample_values, reason]
+      properties:
+        source_name:
+          type: string
+        source_files:
+          type: array
+          items:
+            type: string
+        record_count:
+          type: integer
+          minimum: 0
+        sample_values:
+          type: array
+        reason:
+          type: string
+    KpiMetadataV2:
+      type: object
+      required: [version, domain, metric_catalog, kpi_results, unclassified_metrics, kpi_files]
+      properties:
+        version:
+          type: integer
+          minimum: 2
+        domain:
+          type: string
+        metric_catalog:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiMetricDefinitionV2'
+        kpi_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiMetricResultV2'
+        unclassified_metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiUnclassifiedMetricV2'
+        kpi_files:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
