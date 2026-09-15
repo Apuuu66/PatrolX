@@ -430,7 +430,18 @@ export function TaskListPage() {
                 setPage(1);
               }}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+              const last = items[0];
+              if (last) {
+                form.setFieldsValue({
+                  province: last.customer_province ?? undefined,
+                  operator: last.customer_operator ?? undefined,
+                  product: last.customer_product ?? undefined,
+                  version: last.customer_version ?? undefined,
+                });
+              }
+              setOpen(true);
+            }}>
               上传数据包
             </Button>
           </Space>
