@@ -15,7 +15,7 @@ BASE = "ZZapp01BCN_app_Problem_scene_333/333/app Problem scene"
 
 
 def _call_kpi_5_csv() -> str:
-    """生成 14 天 × 4 个服务实例的完整呼叫 KPI 样例，覆盖双周周期与异常形态。"""
+    """生成 31 天 × 4 个服务实例的完整呼叫 KPI 月度样例，覆盖周期、节假日与异常形态。"""
     lines = [
         "设备类型：XXX",
         "测量单元名称：呼叫会话统计",
@@ -29,11 +29,11 @@ def _call_kpi_5_csv() -> str:
         ("Access-GW", "access-node-01", 1.16, 1.04),
         ("Access-GW", "access-node-02", 1.31, 1.12),
     ]
-    holidays = {12}
-    maintenance_days = {8, 15}
-    severe_degradation_days = {10, 13}
-    base = datetime(2026, 9, 3)
-    for slot in range(14 * 288):
+    holidays = {22, 29}
+    maintenance_days = {18, 25}
+    severe_degradation_days = {17, 21, 27, 31, 4, 8}
+    base = datetime(2026, 8, 15)
+    for slot in range(31 * 288):
         start_at = base + timedelta(minutes=slot * 5)
         end_at = start_at + timedelta(minutes=5)
         start_text = start_at.strftime("%Y-%m-%d %H:%M:%S")
@@ -43,7 +43,7 @@ def _call_kpi_5_csv() -> str:
         is_weekend = start_at.weekday() >= 5
         is_holiday = day_of_month in holidays
         load_season = 0.68 if is_weekend or is_holiday else 1.0
-        cycle_progress = (slot / (14 * 288) - 0.5) * 0.08
+        cycle_progress = (slot / (31 * 288) - 0.5) * 0.08
         row_index = slot * len(services)
 
         for service_idx, (service, instance, load_factor, quality_factor) in enumerate(services):
@@ -68,7 +68,7 @@ def _call_kpi_5_csv() -> str:
                 if severe_day:
                     burst += 0.011
                 failure_rate = burst + service_idx * 0.0038 + (slot % 5) * 0.0021
-            if day_of_month in maintenance_days and service_idx == 4 and 14 * 60 <= minute_of_day < 15 * 60:
+            if day_of_month in maintenance_days and service_idx == 3 and 14 * 60 <= minute_of_day < 15 * 60:
                 failure_rate = 0.036
             failure_rate *= quality_factor
             failures = min(requests, max(1, round(requests * failure_rate)))
