@@ -7,9 +7,11 @@ import { KpiUnclassifiedList } from "./KpiUnclassifiedList";
 
 interface Props {
   metadata: unknown;
+  taskId?: string;
+  ruleCode?: string;
 }
 
-export function KpiInspectionPanel({ metadata }: Props) {
+export function KpiInspectionPanel({ metadata, taskId, ruleCode }: Props) {
   const parsed = parseKpiMetadata(metadata);
 
   if (!parsed) {
@@ -36,7 +38,7 @@ export function KpiInspectionPanel({ metadata }: Props) {
         ))}
       </Row>
       <div style={{ marginTop: 16 }}>
-        <KpiMetricCatalog metadata={parsed} />
+        <KpiMetricCatalog metadata={parsed} taskId={taskId} ruleCode={ruleCode} />
       </div>
       <div style={{ marginTop: 20 }}>
         <KpiUnclassifiedList metadata={parsed} />

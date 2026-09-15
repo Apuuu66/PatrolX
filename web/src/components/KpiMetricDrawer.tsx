@@ -1,16 +1,18 @@
-import { Button, Descriptions, Drawer, Space, Table, Tag, Typography } from "antd";
+import { Descriptions, Drawer, Space, Table, Tag, Typography } from "antd";
 
 import { getKpiMetricDetailView, type KpiCatalogItem } from "./kpiCatalogModel";
 import { KpiMetricTrend } from "./KpiMetricTrend";
+import { KpiRecordTable } from "./KpiRecordTable";
 
 interface Props {
   item: KpiCatalogItem | null;
   open: boolean;
   onClose: () => void;
-  onOpenRecords?: (item: KpiCatalogItem) => void;
+  taskId?: string;
+  ruleCode?: string;
 }
 
-export function KpiMetricDrawer({ item, open, onClose, onOpenRecords }: Props) {
+export function KpiMetricDrawer({ item, open, onClose, taskId, ruleCode }: Props) {
   if (!item) {
     return <Drawer open={open} onClose={onClose} width={760} title="指标详情" />;
   }
@@ -90,13 +92,14 @@ export function KpiMetricDrawer({ item, open, onClose, onOpenRecords }: Props) {
 
         <KpiMetricTrend result={item.result} metricName={view.title} />
 
-        <Button
-          block
-          disabled={!onOpenRecords}
-          onClick={() => item && onOpenRecords?.(item)}
-        >
-          查看原始记录
-        </Button>
+        {taskId && ruleCode && (
+          <KpiRecordTable
+            taskId={taskId}
+            ruleCode={ruleCode}
+            item={item}
+            sourceFiles={view.sourceFiles}
+          />
+        )}
       </Space>
     </Drawer>
   );

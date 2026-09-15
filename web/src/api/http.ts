@@ -8,6 +8,8 @@ export type RuleResult = components["schemas"]["RuleResultV2"];
 export type RuleStatus = components["schemas"]["RuleStatusV2"];
 export type Severity = components["schemas"]["SeverityV2"];
 export type InspectorInfo = components["schemas"]["InspectorInfoV2"];
+export type KpiRecordItem = components["schemas"]["KpiRecordItemV2"];
+export type KpiRecordPage = components["schemas"]["KpiRecordPageV2"];
 export type DataPreparation = components["schemas"]["DataPreparationV2"];
 export type PreparationItem = components["schemas"]["PreparationItemV2"];
 export type PreparationIssue = components["schemas"]["PreparationIssueV2"];
@@ -104,6 +106,28 @@ export const api = {
   getRuleResult: (taskId: string, ruleCode: string, excludeRecords = false) => {
     const query = excludeRecords ? "?exclude_records=true" : "";
     return request<RuleResult>(`${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}${query}`);
+  },
+
+  listKpiRecords: (
+    taskId: string,
+    ruleCode: string,
+    query: {
+      metric_key?: string;
+      source_file?: string;
+      period_minutes?: 5 | 15 | 30 | 60;
+      status?: components["schemas"]["KpiDisplayStatusV2"];
+      page?: number;
+      page_size?: number;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiRecordPage>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}/kpi/records${qs ? `?${qs}` : ""}`,
+    );
   },
 
   listInspectors: (category?: string, includeHidden = false) => {

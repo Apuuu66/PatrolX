@@ -13,9 +13,11 @@ import { KpiMetricDrawer } from "./KpiMetricDrawer";
 
 interface Props {
   metadata: unknown;
+  taskId?: string;
+  ruleCode?: string;
 }
 
-export function KpiMetricCatalog({ metadata }: Props) {
+export function KpiMetricCatalog({ metadata, taskId, ruleCode }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<KpiDisplayStatus | undefined>();
   const [threshold, setThreshold] = useState<"with" | "without" | undefined>();
@@ -91,7 +93,13 @@ export function KpiMetricCatalog({ metadata }: Props) {
         ))
       )}
 
-      <KpiMetricDrawer item={selected} open={Boolean(selected)} onClose={() => setSelected(null)} />
+      <KpiMetricDrawer
+        item={selected}
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        taskId={taskId}
+        ruleCode={ruleCode}
+      />
     </div>
   );
 }

@@ -90,7 +90,7 @@ export function RuleDetailPage() {
 
       {Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "kpi_files") && (
         <Card title="KPI 巡检" style={{ marginBottom: 16 }}>
-          <KpiInspectionPanel metadata={result.metadata} />
+          <KpiInspectionPanel metadata={result.metadata} taskId={taskId} ruleCode={ruleCode} />
         </Card>
       )}
 

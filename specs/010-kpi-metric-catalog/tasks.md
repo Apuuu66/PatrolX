@@ -168,15 +168,15 @@
 
 ### US6 测试
 
-- [ ] T049 [P] [US6] 在 `tests/test_kpi_records_api.py` 添加异常状态、来源文件、周期、指标过滤和分页边界测试。
-- [ ] T050 [P] [US6] 在 `web/src/components/KpiMetricDrawer.test.ts` 添加记录分页、加载态、筛选和空态测试。
+- [x] T049 [P] [US6] 在 `tests/test_kpi_records_api.py` 添加异常状态、来源文件、周期、指标过滤和分页边界测试。
+- [x] T050 [P] [US6] 在 `web/src/components/KpiMetricDrawer.test.ts` 添加记录分页、加载态、筛选和空态测试。
 
 ### US6 实现
 
-- [ ] T051 [US6] 在 `web/src/components/KpiMetricDrawer.tsx` 集成生成客户端的 KPI 记录查询。
-- [ ] T052 [US6] 在 `web/src/components/KpiRecordTable.tsx` 实现分页表格、筛选、UTC 时间和错误展示。
-- [ ] T053 [US6] 确认 `RuleDetailPage` 和 `KpiInspectionPanel` 首屏不渲染 `metadata.kpi_files[].records`。
-- [ ] T054 [US6] 运行记录 API 测试和前端构建。
+- [x] T051 [US6] 在 `web/src/components/KpiMetricDrawer.tsx` 集成生成客户端的 KPI 记录查询。
+- [x] T052 [US6] 在 `web/src/components/KpiRecordTable.tsx` 实现分页表格、筛选、UTC 时间和错误展示。
+- [x] T053 [US6] 确认 `RuleDetailPage` 和 `KpiInspectionPanel` 首屏不渲染 `metadata.kpi_files[].records`。
+- [x] T054 [US6] 运行记录 API 测试和前端构建。
 
 **检查点**：原始记录可审计且首屏性能可控。
 

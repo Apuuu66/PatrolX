@@ -92,3 +92,73 @@ test("builds trend points and unavailable reason", () => {
   assert.equal(trend.emptyText, "");
   assert.equal(getKpiMetricTrendView({ ...item.result, series: [] }).emptyText, "暂无可用序列");
 });
+
+import { buildKpiRecordQuery, getKpiRecordPageInfo, getKpiRecordRows } from "./kpiRecordTableModel.ts";
+
+const records = [
+  {
+    metric_key: "call_success_rate",
+    metric_name_zh: "呼叫成功率",
+    source_file: "kpi/kpi-call-5.csv",
+    line_number: 4,
+    period_minutes: 5,
+    start_at: "2026-09-14T02:00:00Z",
+    end_at: "2026-09-14T02:05:00Z",
+    value: 90,
+    status: "fail",
+    errors: [],
+  },
+  {
+    metric_key: "call_success_rate",
+    metric_name_zh: "呼叫成功率",
+    source_file: "kpi/kpi-call-5.csv",
+    line_number: 5,
+    period_minutes: 5,
+    start_at: "2026-09-14T02:05:00Z",
+    end_at: "2026-09-14T02:10:00Z",
+    value: null,
+    status: "unavailable",
+    errors: [{ code: "invalid_value", message: "值非法" }],
+  },
+] as never[];
+
+test("builds paginated KPI record queries with exact filters", () => {
+  assert.deepEqual(buildKpiRecordQuery("call_success_rate", {}, 1, 50), {
+    metric_key: "call_success_rate",
+    page: 1,
+    page_size: 50,
+  });
+  assert.deepEqual(
+    buildKpiRecordQuery("call_success_rate", {
+      sourceFile: "kpi/kpi-call-5.csv",
+      periodMinutes: 5,
+      status: "fail",
+    }, 2, 200),
+    {
+      metric_key: "call_success_rate",
+      source_file: "kpi/kpi-call-5.csv",
+      period_minutes: 5,
+      status: "fail",
+      page: 2,
+      page_size: 200,
+    },
+  );
+  assert.equal(buildKpiRecordQuery("call_success_rate", {}, -1, 999).page_size, 200);
+});
+
+test("projects UTC record rows and errors", () => {
+  const rows = getKpiRecordRows(records);
+  assert.equal(rows[0]?.timeText, "2026-09-14 02:00:00 UTC — 2026-09-14 02:05:00 UTC");
+  assert.deepEqual(rows.map((row) => [row.statusLabel, row.statusColor]), [
+    ["失败", "#ff4d4f"],
+    ["不可用", "#8c8c8c"],
+  ]);
+  assert.equal(rows[1]?.errorsText, "值非法");
+});
+
+test("describes record pages and empty state", () => {
+  assert.equal(getKpiRecordPageInfo(null), "");
+  assert.equal(getKpiRecordPageInfo({ total: 0, page: 1, page_size: 50, items: [] }), "共 0 条");
+  assert.equal(getKpiRecordPageInfo({ total: 8, page: 3, page_size: 3, items: [] as never[] }), "7-7 / 共 8 条");
+  assert.equal(getKpiRecordRows([]).length, 0);
+});
