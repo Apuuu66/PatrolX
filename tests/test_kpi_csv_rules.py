@@ -423,3 +423,33 @@ def test_kpi_call_emits_version_2_catalog_results_and_preserves_rule_status(tmp_
     assert results["call_success_rate"]["breach_count"] == 1
     assert results["call_attempts"]["display_status"] == "neutral"
     assert metadata["unclassified_metrics"] == []
+
+
+def test_kpi_call_normalizes_synonyms_and_keeps_near_name_unclassified(tmp_path: Path) -> None:
+    from app.inspectors.registry import registry
+    from app.services.executor import RuleContext
+
+    registered_content = _content(
+        ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数"],
+        [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 95, 5]],
+    )
+    synonym_content = _content(
+        ["呼叫请求", "请求成功", "请求失败", "近似呼叫请求"],
+        [[15, "2026-09-01 10:15:00", "2026-09-01 10:30:00", 40, 38, 2, 66]],
+    )
+    _write(tmp_path, "kpi/kpi-call-15.csv", registered_content)
+    _write(tmp_path, "kpi/sub/kpi-call-15.csv", synonym_content)
+    ctx = RuleContext(task_id="kpi-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
+    ctx.files = [Path("kpi/kpi-call-15.csv"), Path("kpi/sub/kpi-call-15.csv")]
+    result = registry.get("kpi.call").run(ctx)
+    metadata = result.metadata
+    results = {item["key"]: item for item in metadata["kpi_results"]}
+
+    assert results["call_attempts"]["main_value"] == 140.0
+    assert results["call_success_count"]["main_value"] == 133.0
+    assert results["call_failure_count"]["main_value"] == 7.0
+    unclassified = {item["source_name"]: item for item in metadata["unclassified_metrics"]}
+    assert set(unclassified) == {"近似呼叫请求"}
+    assert unclassified["近似呼叫请求"]["record_count"] == 1
+    assert unclassified["近似呼叫请求"]["sample_values"] == [66.0]
+    assert unclassified["近似呼叫请求"]["source_files"] == ["kpi/sub/kpi-call-15.csv"]

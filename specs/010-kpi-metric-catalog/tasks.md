@@ -126,14 +126,14 @@
 
 ### US4 测试
 
-- [ ] T039 [P] [US4] 在 `tests/test_kpi_catalog_config.py` 添加新增指标、追加别名、中英文归一化、别名冲突、key 重复和跨领域公式拒绝测试。
-- [ ] T040 [P] [US4] 在 `tests/test_kpi_csv_rules.py` 添加同义列归一、未登记近似名保持未分类的规则级失败测试。
+- [x] T039 [P] [US4] 在 `tests/test_kpi_catalog_config.py` 添加新增指标、追加别名、中英文归一化、别名冲突、key 重复和跨领域公式拒绝测试。
+- [x] T040 [P] [US4] 在 `tests/test_kpi_csv_rules.py` 添加同义列归一、未登记近似名保持未分类的规则级失败测试。
 
 ### US4 实现
 
-- [ ] T041 [US4] 完善 `deploy/config/kpi/*.yaml` 当前 call 指标、别名、阈值和容量配置；`api.yaml`、`media.yaml` 提供合法空领域模板。
-- [ ] T042 [US4] 实现新增指标只影响目标领域文件，并保证配置来源显示 `deploy/config/kpi`。
-- [ ] T043 [US4] 运行配置和规则测试，验证只改目标领域文件可通过校验。
+- [x] T041 [US4] 完善 `deploy/config/kpi/*.yaml` 当前 call 指标、别名、阈值和容量配置；`api.yaml`、`media.yaml` 提供合法空领域模板。
+- [x] T042 [US4] 实现新增指标只影响目标领域文件，并保证配置来源显示 `deploy/config/kpi`。
+- [x] T043 [US4] 运行配置和规则测试，验证只改目标领域文件可通过校验。
 
 **检查点**：配置维护路径清晰且无别名歧义。
 

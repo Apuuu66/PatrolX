@@ -1,6 +1,7 @@
 """KPI 目录化配置契约测试。"""
 
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -64,3 +65,137 @@ def test_load_kpi_config_rejects_invalid_files(tmp_path: Path, filename: str, co
         (tmp_path / "unknown.yaml").write_text(content, encoding="utf-8")
     with pytest.raises(KpiConfigError, match=context):
         load_kpi_config(tmp_path)
+
+
+def _copy_kpi_config(tmp_path: Path) -> Path:
+    import shutil
+
+    target = tmp_path / "kpi"
+    shutil.copytree(KPI_CONFIG_DIR, target)
+    return target
+
+
+def _read_domain(config_dir: Path, name: str = "api.yaml") -> dict:
+    import yaml
+
+    return yaml.safe_load((config_dir / name).read_text(encoding="utf-8"))
+
+
+def _write_domain(config_dir: Path, raw: dict, name: str = "api.yaml") -> None:
+    import yaml
+
+    (config_dir / name).write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+
+
+def test_new_metric_and_alias_only_affect_target_domain(tmp_path: Path) -> None:
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
+    raw["metrics"].append(
+        {
+            "key": "api_requests",
+            "name_zh": "API 请求次数",
+            "name_en": "API Requests",
+            "metric_type": "count",
+            "semantic_group": "traffic",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {"kind": "sum"},
+            "aliases": [
+                {"language": "zh", "value": "API请求数"},
+                {"language": "en", "value": "Total API Calls"},
+            ],
+        }
+    )
+    _write_domain(config_dir, raw)
+
+    config = load_kpi_config(config_dir)
+    api = config.domains["api"]
+    call = config.domains["call"]
+
+    assert "api_requests" in api.metrics
+    assert api.alias_index[normalize_metric_name("API请求数")] == "api_requests"
+    assert api.alias_index[normalize_metric_name("  api请求数 ")] == "api_requests"
+    assert api.alias_index[normalize_metric_name("api requests")] == "api_requests"
+    assert call.alias_index.get(normalize_metric_name("API请求数")) is None
+    assert config.domains["api"].config_source.endswith("api.yaml")
+    assert config.domains["call"].config_source.endswith("call.yaml")
+
+
+def test_metric_names_and_aliases_are_exact_after_normalization() -> None:
+    config = load_kpi_config()
+    call = config.domains["call"]
+    assert call.alias_index[normalize_metric_name("  CALL　ATTEMPTS ")] == "call_attempts"
+    assert normalize_metric_name("CALL近似ATTEMPTS") != normalize_metric_name("call attempts")
+
+
+def _valid_api_metrics() -> list[dict]:
+    return [
+        {
+            "key": "api_requests",
+            "name_zh": "API 请求次数",
+            "name_en": "API Requests",
+            "metric_type": "count",
+            "semantic_group": "traffic",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {"kind": "sum"},
+            "aliases": [{"language": "zh", "value": "API请求次数"}],
+        },
+        {
+            "key": "api_success_count",
+            "name_zh": "API 成功次数",
+            "name_en": "API Successes",
+            "metric_type": "count",
+            "semantic_group": "traffic",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {"kind": "sum"},
+            "aliases": [{"language": "zh", "value": "API成功次数"}],
+        },
+    ]
+
+
+def test_config_rejects_duplicate_metric_key_and_alias_conflict(tmp_path: Path) -> None:
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
+    raw["metrics"] = _valid_api_metrics()
+    raw["metrics"].append(dict(raw["metrics"][0]))
+    _write_domain(config_dir, raw)
+    with pytest.raises(KpiConfigError, match=": 重复"):
+        load_kpi_config(config_dir)
+
+    conflict_dir = tmp_path / "kpi-conflict"
+    shutil.copytree(KPI_CONFIG_DIR, conflict_dir)
+    config_dir = conflict_dir
+    raw = _read_domain(config_dir)
+    raw["metrics"] = _valid_api_metrics()
+    raw["metrics"][1].setdefault("aliases", []).append({"language": "zh", "value": raw["metrics"][0]["name_zh"]})
+    _write_domain(config_dir, raw)
+    with pytest.raises(KpiConfigError, match="已映射到"):
+        load_kpi_config(config_dir)
+
+
+def test_config_rejects_cross_domain_formula(tmp_path: Path) -> None:
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
+    raw["metrics"].append(
+        {
+            "key": "api_bad_rate",
+            "name_zh": "错误跨域成功率",
+            "name_en": "Invalid Cross Domain Rate",
+            "metric_type": "rate",
+            "semantic_group": "quality",
+            "display_role": "highlight",
+            "unit": "%",
+            "source_type": "derived",
+            "aggregation": {"kind": "ratio_from_inputs"},
+            "aliases": [{"language": "zh", "value": "错误跨域成功率"}],
+            "formula": {"kind": "ratio", "numerator": "call_success_count", "denominator": "call_attempts"},
+        }
+    )
+    _write_domain(config_dir, raw)
+    with pytest.raises(KpiConfigError, match="api.metrics\\[key=api_bad_rate\\].formula: 引用未知输入"):
+        load_kpi_config(config_dir)
