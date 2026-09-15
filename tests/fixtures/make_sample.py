@@ -15,7 +15,7 @@ BASE = "ZZapp01BCN_app_Problem_scene_333/333/app Problem scene"
 
 
 def _call_kpi_5_csv() -> str:
-    """生成 31 天 × 4 个服务实例的完整呼叫 KPI 月度样例，覆盖周期、节假日与异常形态。"""
+    """生成 31 天 × 6 个服务实例的完整呼叫 KPI 月度样例，覆盖周期、节假日与异常形态。"""
     lines = [
         "设备类型：XXX",
         "测量单元名称：呼叫会话统计",
@@ -28,6 +28,8 @@ def _call_kpi_5_csv() -> str:
         ("IMS-Core", "ims-node-02", 0.88, 0.91),
         ("Access-GW", "access-node-01", 1.16, 1.04),
         ("Access-GW", "access-node-02", 1.31, 1.12),
+        ("SBC", "sbc-node-01", 1.12, 1.06),
+        ("Media-FW", "media-node-01", 1.05, 0.99),
     ]
     holidays = {22, 29}
     maintenance_days = {18, 25}
