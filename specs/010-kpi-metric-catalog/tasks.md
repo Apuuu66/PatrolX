@@ -18,10 +18,10 @@
 
 **目的**：准备实现分支、契约基线和任务验证入口。
 
-- [ ] T001 在 `feature/010-kpi-metric-catalog` 实现分支/worktree 中确认 `spec.md`、`plan.md`、`research.md`、`data-model.md`、`contracts/`、`quickstart.md` 已提交。
-- [ ] T002 运行 `python build.py test` 记录当前 KPI 相关失败基线；先提交新增失败测试，不提交未验证实现。
-- [ ] T003 [P] 在 `tests/test_kpi_catalog_config.py` 中添加配置目录、版本、必需领域文件和旧路径不再加载的失败测试。
-- [ ] T004 [P] 在 `tests/test_contract.py` 中添加 KPI 记录分页接口、`exclude_records=true` 和 KPI metadata schema 的失败契约测试。
+- [x] T001 在 `feature/010-kpi-metric-catalog` 实现分支/worktree 中确认 `spec.md`、`plan.md`、`research.md`、`data-model.md`、`contracts/`、`quickstart.md` 已提交。
+- [x] T002 运行 `python build.py test` 记录当前 KPI 相关失败基线；先提交新增失败测试，不提交未验证实现。
+- [x] T003 [P] 在 `tests/test_kpi_catalog_config.py` 中添加配置目录、版本、必需领域文件和旧路径不再加载的失败测试。
+- [x] T004 [P] 在 `tests/test_contract.py` 中添加 KPI 记录分页接口、`exclude_records=true` 和 KPI metadata schema 的失败契约测试。
 
 **检查点**：任务清单和失败测试可作为实现起点。
 
@@ -31,19 +31,19 @@
 
 **目的**：建立 KPI 配置模型、加载校验、结果契约和记录查询接口。
 
-- [ ] T005 在 `deploy/config/kpi/` 创建 `common.yaml`、`call.yaml`、`api.yaml`、`media.yaml`，并移除 `deploy/config/kpi_rules.yaml`。
-- [ ] T006 在 `app/inspectors/kpi/catalog.py` 实现 `KpiCommonConfig`、`KpiMetricDefinition`、`KpiAggregation`、`KpiRatioFormula`、`KpiThreshold` 等配置模型。
-- [ ] T007 实现 `load_kpi_config()`：读取目录化配置，校验版本、时区、预算、领域、未知文件、必需指标/阈值、别名冲突、公式输入、循环依赖和容量引用。
-- [ ] T008 实现名称归一化精确匹配 helper，处理 Unicode `NFKC`、首尾空白、连续空白和 `casefold()`；禁止模糊匹配。
-- [ ] T009 在 `app/inspectors/kpi/common.py` 接入目录化配置，保留 CSV 单文件解析失败不中断行为，并把未登记列记入解析结果。
-- [ ] T010 在 `app/models/schemas.py` 新增 KPI 目录、指标结果、溯源、未分类指标和记录分页辅助模型；不得修改既有字段语义。
-- [ ] T011 先同步 `docs/api/openapi.yaml`：新增 `GET /api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records`、`exclude_records=true`、KPI metadata schema、分页 schema 和错误响应。
-- [ ] T012 运行 `python build.py contract` 和 `python build.py gen-web-api`，确保生成客户端包含新契约；随后运行 `cd web && npm run build`。
-- [ ] T013 在 `app/services/kpi_records.py` 实现记录过滤、排序、状态解释和分页投影。
-- [ ] T014 在 `app/services/tasks.py` 支持 `exclude_records=true`：只清空 KPI `metadata.kpi_files[].records`，默认行为不变。
-- [ ] T015 在 `app/api/routes.py` 注册分页记录查询接口，并把 `exclude_records` 接入规则结果查询。
-- [ ] T016 在 `tests/test_kpi_records_api.py` 中验证默认兼容、排除记录、按指标/文件/周期/状态过滤、分页、非 KPI 空结果和统一错误。
-- [ ] T017 运行 `python build.py lint && python build.py test && python build.py contract`，修复基础层失败。
+- [x] T005 在 `deploy/config/kpi/` 创建 `common.yaml`、`call.yaml`、`api.yaml`、`media.yaml`，并移除 `deploy/config/kpi_rules.yaml`。
+- [x] T006 在 `app/inspectors/kpi/catalog.py` 实现 `KpiCommonConfig`、`KpiMetricDefinition`、`KpiAggregation`、`KpiRatioFormula`、`KpiThreshold` 等配置模型。
+- [x] T007 实现 `load_kpi_config()`：读取目录化配置，校验版本、时区、预算、领域、未知文件、必需指标/阈值、别名冲突、公式输入、循环依赖和容量引用。
+- [x] T008 实现名称归一化精确匹配 helper，处理 Unicode `NFKC`、首尾空白、连续空白和 `casefold()`；禁止模糊匹配。
+- [x] T009 在 `app/inspectors/kpi/common.py` 接入目录化配置，保留 CSV 单文件解析失败不中断行为，并把未登记列记入解析结果。
+- [x] T010 在 `app/models/schemas.py` 新增 KPI 目录、指标结果、溯源、未分类指标和记录分页辅助模型；不得修改既有字段语义。
+- [x] T011 先同步 `docs/api/openapi.yaml`：新增 `GET /api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records`、`exclude_records=true`、KPI metadata schema、分页 schema 和错误响应。
+- [x] T012 运行 `python build.py contract` 和 `python build.py gen-web-api`，确保生成客户端包含新契约；随后运行 `cd web && npm run build`。
+- [x] T013 在 `app/services/kpi_records.py` 实现记录过滤、排序、状态解释和分页投影。
+- [x] T014 在 `app/services/tasks.py` 支持 `exclude_records=true`：只清空 KPI `metadata.kpi_files[].records`，默认行为不变。
+- [x] T015 在 `app/api/routes.py` 注册分页记录查询接口，并把 `exclude_records` 接入规则结果查询。
+- [x] T016 在 `tests/test_kpi_records_api.py` 中验证默认兼容、排除记录、按指标/文件/周期/状态过滤、分页、非 KPI 空结果和统一错误。
+- [x] T017 运行 `python build.py lint && python build.py test && python build.py contract`，修复基础层失败。
 
 **检查点**：配置与公共契约基础可用；用户故事可以开始。
 
