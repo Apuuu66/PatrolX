@@ -36,6 +36,11 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "../api/http";
+import {
+  categoryLabel,
+  formatPreparationIssuePath,
+  getPreparationDisplay,
+} from "../utils/preparationDisplay";
 import { TaskStatusTag } from "../components/StatusBadge";
 import { RESULT_STATUS_META } from "../components/statusLabels";
 import { usePolling } from "../hooks/usePolling";
@@ -54,19 +59,6 @@ const OVERVIEW_ITEMS = [
   { key: "finding_count", label: "发现问题" },
 ] as const;
 
-
-const PREPARATION_EXCEPTION_STATUS = new Set(["warn", "fail", "error"]);
-
-const PREPARATION_LABELS: Record<string, string> = {
-  main: "主包",
-  logs: "日志",
-  kpi: "KPI",
-  traffic: "流量",
-  alarm: "告警",
-  config: "配置",
-  resource: "资源",
-  other: "其他",
-};
 
 const PREPARATION_STATUS_COLORS: Record<string, string> = {
   pass: "#52c41a",
@@ -150,65 +142,110 @@ function PreparationPanel({
   expanded: boolean;
   onToggle: (taskId: string) => void;
 }) {
-  const abnormalItems = preparation.items.filter((item) => PREPARATION_EXCEPTION_STATUS.has(item.status));
+  const [showAllAbnormal, setShowAllAbnormal] = useState(false);
+  const [activeCategories, setActiveCategories] = useState<string[]>([]);
+  const display = useMemo(
+    () => getPreparationDisplay(preparation, showAllAbnormal),
+    [preparation, showAllAbnormal],
+  );
+
+  const toggleCategory = (category: string) =>
+    setActiveCategories((current) =>
+      current.includes(category)
+        ? current.filter((value) => value !== category)
+        : [...current, category],
+    );
+
   return (
     <div style={{ marginTop: 12, borderTop: "1px solid #f0f0f0", paddingTop: 10 }}>
-      <Button type="text" size="small" onClick={() => onToggle(taskId)}>
+      <Button type="text" size="small" onClick={() => onToggle(taskId)} style={{ paddingInline: 0 }}>
         <Flex align="center" gap={8}>
           <Typography.Text strong>数据准备</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            成功 {preparation.success_count} · 警告 {preparation.warning_count} · 失败 {preparation.failure_count} · 跳过 {preparation.skip_count}
+            {display.summary}
           </Typography.Text>
-          <Typography.Text style={{ color: PREPARATION_STATUS_COLORS[preparation.status] }}>
+          <Typography.Text type="secondary">
             {expanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
           </Typography.Text>
         </Flex>
       </Button>
       {expanded && (
         <div style={{ marginTop: 8 }}>
-          <Flex gap={6} wrap="wrap">
-            {preparation.items.map((item) => (
-              <Typography.Text
-                key={item.code}
-                code
-                style={{ fontSize: 12, color: PREPARATION_STATUS_COLORS[item.status] }}
-              >
-                {PREPARATION_LABELS[item.category] ?? item.category}
-                {item.total_count > 0 ? ` ${item.extracted_count}/${item.total_count}` : ""}
-              </Typography.Text>
-            ))}
-          </Flex>
-          <Flex vertical gap={8} style={{ marginTop: 10 }}>
-            {abnormalItems.map((item) => (
-              <div key={item.code} style={{ padding: 10, borderRadius: 8, background: "#fafafa" }}>
-                <Flex align="center" gap={8} wrap="wrap">
-                  <Typography.Text strong style={{ fontSize: 13 }}>
-                    {item.name}
-                  </Typography.Text>
-                  <Typography.Text style={{ fontSize: 12, color: PREPARATION_STATUS_COLORS[item.status] }}>
-                    {item.status.toUpperCase()}
-                  </Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {item.summary}
-                  </Typography.Text>
-                </Flex>
-                {item.issues.map((issue, index) => (
-                  <div key={`${issue.type}-${index}`} style={{ marginTop: 5 }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {issue.type} · {issue.reason}
-                    </Typography.Text>
-                    <Typography.Paragraph style={{ margin: 0, fontSize: 12 }} code ellipsis>
-                      {issue.source || "-"} → {issue.target || "-"}
-                      {issue.path_length ? ` · 长度 ${issue.path_length}` : ""}
-                      {issue.path_limit ? ` · 上限 ${issue.path_limit}` : ""}
-                    </Typography.Paragraph>
-                  </div>
-                ))}
-              </div>
-            ))}
-            {abnormalItems.length === 0 && (
+          <Flex vertical gap={4}>
+            {display.visibleAbnormalItems.map((item) => {
+              const active = activeCategories.includes(item.category);
+              const firstIssue = item.issues[0];
+              return (
+                <div key={item.code}>
+                  <Button
+                    type="text"
+                    block
+                    onClick={() => toggleCategory(item.category)}
+                    style={{
+                      height: "auto",
+                      minHeight: 34,
+                      justifyContent: "flex-start",
+                      paddingInline: 8,
+                      textAlign: "left",
+                    }}
+                  >
+                    <Flex align="center" gap={8} style={{ width: "100%" }}>
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 8,
+                          height: 8,
+                          flex: "0 0 auto",
+                          borderRadius: "50%",
+                          background: PREPARATION_STATUS_COLORS[item.status],
+                        }}
+                      />
+                      <Typography.Text strong style={{ fontSize: 13 }}>
+                        {categoryLabel(item.category)}
+                        {item.total_count > 0 ? ` ${item.extracted_count}/${item.total_count}` : ""}
+                      </Typography.Text>
+                      {firstIssue && (
+                        <Typography.Text
+                          type="secondary"
+                          ellipsis
+                          style={{ fontSize: 12, flex: 1, minWidth: 0 }}
+                        >
+                          {firstIssue.reason}
+                        </Typography.Text>
+                      )}
+                      {active ? <CaretDownOutlined /> : <CaretRightOutlined />}
+                    </Flex>
+                  </Button>
+                  {active && (
+                    <div style={{ padding: "6px 16px 8px" }}>
+                      {item.issues.map((issue, index) => (
+                        <div key={`${issue.type}-${index}`} style={{ marginBottom: 6 }}>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            {issue.type} · {issue.reason}
+                          </Typography.Text>
+                          <Typography.Paragraph style={{ margin: 0, fontSize: 12 }} code ellipsis>
+                            {formatPreparationIssuePath(issue)}
+                          </Typography.Paragraph>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {display.hiddenAbnormalCount > 0 && (
+              <Button type="link" size="small" style={{ alignSelf: "flex-start" }} onClick={() => setShowAllAbnormal(true)}>
+                展开全部 {display.abnormalItems.length} 类
+              </Button>
+            )}
+            {display.abnormalItems.length === 0 && (
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 各分类准备正常或暂无来源数据
+              </Typography.Text>
+            )}
+            {display.normalSummary && (
+              <Typography.Text type="secondary" style={{ fontSize: 12, paddingLeft: 8 }}>
+                {display.normalSummary}
               </Typography.Text>
             )}
           </Flex>
@@ -264,12 +301,11 @@ export function TaskListPage() {
   }, []);
 
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
-  const preparationOpen = (taskId: string, preparation: DataPreparation | null | undefined) =>
-    preparationExpanded[taskId] ?? Boolean(preparation && PREPARATION_EXCEPTION_STATUS.has(preparation.status));
+  const preparationOpen = (taskId: string) => preparationExpanded[taskId] ?? false;
   const togglePreparation = (taskId: string) =>
     setPreparationExpanded((current) => ({
       ...current,
-      [taskId]: !preparationOpen(taskId, items.find((item) => item.task_id === taskId)?.preparation),
+      [taskId]: !preparationOpen(taskId),
     }));
   usePolling(load, 2000, busy);
 
@@ -553,7 +589,7 @@ export function TaskListPage() {
                 <PreparationPanel
                   preparation={record.preparation}
                   taskId={record.task_id}
-                  expanded={preparationOpen(record.task_id, record.preparation)}
+                  expanded={preparationOpen(record.task_id)}
                   onToggle={togglePreparation}
                 />
               )}
