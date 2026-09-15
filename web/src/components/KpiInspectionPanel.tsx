@@ -3,6 +3,7 @@ import { Card, Col, Row, Typography } from "antd";
 import { parseKpiMetadata, summarizeKpiMetadata } from "./kpiCatalogModel";
 import { KpiDetailTable } from "./KpiDetailTable";
 import { KpiMetricCatalog } from "./KpiMetricCatalog";
+import { KpiUnclassifiedList } from "./KpiUnclassifiedList";
 
 interface Props {
   metadata: unknown;
@@ -36,6 +37,9 @@ export function KpiInspectionPanel({ metadata }: Props) {
       </Row>
       <div style={{ marginTop: 16 }}>
         <KpiMetricCatalog metadata={parsed} />
+      </div>
+      <div style={{ marginTop: 20 }}>
+        <KpiUnclassifiedList metadata={parsed} />
       </div>
       <Typography.Text type="secondary" style={{ display: "block", marginTop: 16, fontSize: 12 }}>
         配置来源：{parsed.config_source} · 输入时区：{parsed.input_timezone}

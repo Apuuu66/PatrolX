@@ -230,6 +230,33 @@ export function filterKpiMetricGroups(metadata: unknown, filter: KpiCatalogFilte
     .filter((group) => group.items.length > 0);
 }
 
+export type KpiUnclassifiedRow = {
+  sourceName: string;
+  sourceFiles: string;
+  recordCount: number;
+  sampleValues: string;
+  reason: string;
+};
+
+export function buildKpiUnclassifiedRows(
+  metadata: unknown,
+  filter: { query?: string } = {},
+): KpiUnclassifiedRow[] {
+  const query = filter.query?.trim().toLowerCase() ?? "";
+  return parseKpiMetadata(metadata)?.unclassified_metrics
+    .map((item) => ({
+      sourceName: item.source_name,
+      sourceFiles: item.source_files.join(", ") || "-",
+      recordCount: item.record_count,
+      sampleValues: item.sample_values.length ? item.sample_values.map((value) => String(value)).join(", ") : "-",
+      reason: item.reason === "metric_not_registered" ? "未登记指标" : item.reason,
+    }))
+    .filter((row) => {
+      if (!query) return true;
+      return `${row.sourceName}\n${row.sourceFiles}\n${row.reason}`.toLowerCase().includes(query);
+    }) ?? [];
+}
+
 export function summarizeKpiMetadata(metadata: unknown): {
   total: number;
   highlight: number;

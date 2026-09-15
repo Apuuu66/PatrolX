@@ -453,3 +453,32 @@ def test_kpi_call_normalizes_synonyms_and_keeps_near_name_unclassified(tmp_path:
     assert unclassified["近似呼叫请求"]["record_count"] == 1
     assert unclassified["近似呼叫请求"]["sample_values"] == [66.0]
     assert unclassified["近似呼叫请求"]["source_files"] == ["kpi/sub/kpi-call-15.csv"]
+
+
+def test_unclassified_metric_is_reported_without_changing_rule_status(tmp_path: Path) -> None:
+    from app.inspectors.registry import registry
+    from app.models.schemas import RuleStatus
+    from app.services.executor import RuleContext
+
+    content = _content(
+        ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "自定义业务指标"],
+        [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 95, 5, 88]],
+    )
+    _write(tmp_path, "kpi/kpi-call-15.csv", content)
+    ctx = RuleContext(task_id="kpi-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
+    ctx.files = [Path("kpi/kpi-call-15.csv")]
+    result = registry.get("kpi.call").run(ctx)
+    metadata = result.metadata
+
+    assert result.status == RuleStatus.FAIL
+    results = {item["key"]: item for item in metadata["kpi_results"]}
+    assert results["call_success_rate"]["main_value"] == pytest.approx(95.0)
+    assert metadata["unclassified_metrics"] == [
+        {
+            "source_name": "自定义业务指标",
+            "source_files": ["kpi/kpi-call-15.csv"],
+            "record_count": 1,
+            "sample_values": [88.0],
+            "reason": "metric_not_registered",
+        }
+    ]

@@ -147,14 +147,14 @@
 
 ### US5 测试
 
-- [ ] T044 [P] [US5] 在 `tests/test_kpi_csv_rules.py` 添加未分类指标、样例值、来源文件、记录数和不改变规则状态失败测试。
-- [ ] T045 [P] [US5] 在 `web/src/components/KpiUnclassifiedList.test.ts` 添加未分类列表、空态和搜索测试。
+- [x] T044 [P] [US5] 在 `tests/test_kpi_csv_rules.py` 添加未分类指标、样例值、来源文件、记录数和不改变规则状态失败测试。
+- [x] T045 [P] [US5] 在 `web/src/components/KpiUnclassifiedList.test.ts` 添加未分类列表、空态和搜索测试。
 
 ### US5 实现
 
-- [ ] T046 [US5] 在 `app/inspectors/kpi/catalog.py` 聚合未登记列为 `unclassified_metrics`，保留原始列名、来源文件、记录数和样例值。
-- [ ] T047 [US5] 在 `web/src/components/KpiUnclassifiedList.tsx` 展示未分类指标和维护提示。
-- [ ] T048 [US5] 运行规则测试和前端组件测试。
+- [x] T046 [US5] 在 `app/inspectors/kpi/catalog.py` 聚合未登记列为 `unclassified_metrics`，保留原始列名、来源文件、记录数和样例值。
+- [x] T047 [US5] 在 `web/src/components/KpiUnclassifiedList.tsx` 展示未分类指标和维护提示。
+- [x] T048 [US5] 运行规则测试和前端组件测试。
 
 **检查点**：未知指标不丢失且不误导判定。
 
