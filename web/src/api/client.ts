@@ -526,6 +526,41 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @enum {string} */
+        PreparationStatusV2: "pass" | "warn" | "fail" | "skip" | "error";
+        /** @enum {string} */
+        PreparationIssueTypeV2: "conflict" | "duplicate" | "skipped" | "failed" | "rejected";
+        PreparationIssueV2: {
+            type: components["schemas"]["PreparationIssueTypeV2"];
+            source?: string | null;
+            target?: string | null;
+            reason: string;
+            path_length?: number | null;
+            path_limit?: number | null;
+        };
+        PreparationItemV2: {
+            /** @example pkg.extract.kpi */
+            code: string;
+            /** @example KPI 分类解压 */
+            name: string;
+            /** @example kpi */
+            category: string;
+            status: components["schemas"]["PreparationStatusV2"];
+            summary: string;
+            duration_ms?: number | null;
+            extracted_count: number;
+            total_count: number;
+            issues: components["schemas"]["PreparationIssueV2"][];
+        };
+        DataPreparationV2: {
+            status: components["schemas"]["PreparationStatusV2"];
+            items: components["schemas"]["PreparationItemV2"][];
+            total: number;
+            success_count: number;
+            warning_count: number;
+            failure_count: number;
+            skip_count: number;
+        };
         InspectionTaskV2: {
             task_id: string;
             name: string;
@@ -537,6 +572,7 @@ export interface components {
             /** Format: date-time */
             completed_at?: string;
             stats: components["schemas"]["TaskStatsV2"];
+            preparation?: components["schemas"]["DataPreparationV2"] | null;
             system?: components["schemas"]["SystemInspectionV2"];
         };
         TaskCreatedV2: {
@@ -630,13 +666,31 @@ export interface components {
             code: string;
             name: string;
         };
+        /** @description 任务删除失败错误（detail 携带重试上下文） */
+        TaskDeleteErrorV2: components["schemas"]["ErrorV2"] & {
+            detail?: components["schemas"]["TaskDeleteErrorDetailV2"];
+        };
+        TaskDeleteErrorDetailV2: {
+            /** @description 任务标识，禁止修改。 */
+            task_id: string;
+            /** @description 删除涉及的现场相对位置。 */
+            locations: string[];
+            /** @description 删除失败的具体路径。 */
+            failed_path: string;
+            /** @description 可读失败原因。 */
+            reason: string;
+            /** @description 路径长度；仅路径限制相关错误返回。 */
+            path_length?: number;
+            /** @description 路径长度上限；仅路径限制相关错误返回。 */
+            path_limit?: number;
+        };
         /** @description 错误码（/api/v2 含包上传与损坏数据错误） */
         ErrorV2: {
             /**
              * @description 错误码（新增时同步契约与实现）
              * @enum {string}
              */
-            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "package_checksum_conflict" | "invalid_filename" | "corrupt_data";
+            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "task_delete_failed" | "package_checksum_conflict" | "invalid_filename" | "corrupt_data";
             message: string;
             detail?: {
                 [key: string]: unknown;
@@ -852,6 +906,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+            /** @description 任务现场删除失败；任务记录与可恢复现场保持可见 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDeleteErrorV2"];
                 };
             };
         };

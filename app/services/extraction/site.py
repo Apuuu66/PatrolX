@@ -5,7 +5,12 @@ from pathlib import Path
 
 from app.core.archive import ArchiveError, unpack
 from app.services.extraction.budget import ExtractionBudget, ExtractionLogger, _log_extract
-from app.services.extraction.layout import MAIN_EVIDENCE_DIR, WORK_CATEGORIES, _relative_files
+from app.services.extraction.layout import (
+    MAIN_EVIDENCE_DIR,
+    WORK_CATEGORIES,
+    PathLimitPolicy,
+    _relative_files,
+)
 from app.services.extraction.manifest import (
     MANIFEST_VERSION,
     manifest_path,
@@ -22,9 +27,13 @@ def extract_main_site(
     checksum: str,
     log: ExtractionLogger | None = None,
     policy_path: Path | None = None,
+    path_policy: PathLimitPolicy | None = None,
 ) -> dict:
     """保留主包证据现场并生成分类工作现场。"""
+    path_policy = path_policy or PathLimitPolicy.current()
     existing = reusable_manifest(data_dir, checksum)
+    if existing is not None and existing.get("path_limit") != path_policy.snapshot():
+        existing = None
     if existing is not None:
         _log_extract(
             log,
@@ -50,7 +59,14 @@ def extract_main_site(
         checksum=checksum,
     )
     try:
-        unpack(package, staging)
+        unpack(
+            package,
+            staging,
+            path_limit_check=lambda target, label: path_policy.check(
+                data_dir / MAIN_EVIDENCE_DIR / target.relative_to(staging.resolve()),
+                label,
+            ),
+        )
     except ArchiveError as exc:
         shutil.rmtree(staging, ignore_errors=True)
         _log_extract(
@@ -93,10 +109,12 @@ def extract_main_site(
             "evidence_path": MAIN_EVIDENCE_DIR,
             "reused": False,
         },
+        "files": [],
         "subpackages": [],
         "log_gz": [],
         "rejected": [],
         "policy": policy_manifest_snapshot(policy),
+        "path_limit": path_policy.snapshot(),
     }
     budget = ExtractionBudget()
     seen_checksums: set[str] = set()
@@ -116,6 +134,7 @@ def extract_main_site(
             1,
             log,
             policy,
+            path_policy,
         )
     write_manifest(data_dir, manifest)
     _log_extract(
@@ -134,31 +153,59 @@ def extract_main_site(
 
 
 def category_failures(manifest: dict, category: str) -> list[dict]:
-    """读取指定分类的子包和日志 gzip 失败/冲突状态。"""
+    """读取指定分类的子包和日志 gzip 异常明细，保留状态与路径限制上下文。"""
     failures: list[dict] = []
+    statuses = {"conflict", "duplicate", "failed", "rejected"}
+    for item in manifest.get("files", []):
+        if item.get("category") != category or item.get("status") not in statuses:
+            continue
+        source = item.get("source")
+        failures.append(
+            {
+                "name": Path(str(source or "")).name,
+                "source": source,
+                "target": item.get("target"),
+                "error": item.get("error"),
+                "error_code": item.get("error_code"),
+                "status": item.get("status"),
+                "path_length": item.get("path_length"),
+                "path_limit": item.get("path_limit"),
+            }
+        )
     for item in manifest.get("subpackages", []):
-        if item.get("category") == category and item.get("status") in {"failed", "rejected"}:
-            failures.append(
-                {
-                    "name": Path(str(item.get("source", ""))).name,
-                    "checksum": item.get("checksum"),
-                    "target": item.get("target"),
-                    "error": item.get("error"),
-                    "status": item.get("status"),
-                }
-            )
+        if item.get("category") != category or item.get("status") not in statuses:
+            continue
+        source = item.get("source")
+        failures.append(
+            {
+                "name": Path(str(source or "")).name,
+                "source": source,
+                "checksum": item.get("checksum"),
+                "target": item.get("target"),
+                "error": item.get("error"),
+                "error_code": item.get("error_code"),
+                "status": item.get("status"),
+                "path_length": item.get("path_length"),
+                "path_limit": item.get("path_limit"),
+            }
+        )
     if category == "logs":
         for item in manifest.get("log_gz", []):
-            if item.get("status") in {"conflict", "failed", "rejected"}:
-                failures.append(
-                    {
-                        "name": Path(str(item.get("target", ""))).name,
-                        "source": item.get("source_relative_path"),
-                        "target": item.get("target"),
-                        "error": item.get("error"),
-                        "status": item.get("status"),
-                    }
-                )
+            if item.get("status") not in statuses:
+                continue
+            source = item.get("source_relative_path")
+            failures.append(
+                {
+                    "name": Path(str(item.get("target", ""))).name,
+                    "source": source,
+                    "target": item.get("target"),
+                    "error": item.get("error"),
+                    "error_code": item.get("error_code"),
+                    "status": item.get("status"),
+                    "path_length": item.get("path_length"),
+                    "path_limit": item.get("path_limit"),
+                }
+            )
     return failures
 
 

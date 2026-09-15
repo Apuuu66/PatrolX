@@ -196,4 +196,36 @@ def test_idempotent_reuse_and_policy_change_does_not_rebuild_old_site(tmp_path, 
     run_task(package, task_id=task_id)
     rebuilt = read_manifest(data_dir)
     assert rebuilt["policy"]["fingerprint"] != old_fingerprint
-    assert (data_dir / "other/a/a").is_file()
+    assert (data_dir / "other/a").is_file()
+
+
+def test_conflict_duplicate_and_skipped_are_recorded(tmp_path, monkeypatch) -> None:
+    """目标冲突、相同 checksum 和策略保留分别记录为 conflict/duplicate/skipped。"""
+    from app.core.checksum import sha256_file
+    from app.services import extraction
+
+    _setup_policy_env(tmp_path, monkeypatch, {"nested": {"skip_paths": ["/skip/"]}, "whitelist": {"name_keywords": []}})
+    source_zip = _policy_zip(tmp_path / "_build/source.zip", {"data.txt": "data"})
+    conflict_zip = _policy_zip(tmp_path / "_build/conflict.zip", {"same.txt": "first"})
+    duplicate_zip = _policy_zip(tmp_path / "_build/duplicate.zip", {"same.txt": "first"})
+    package = tmp_path / "uploads/states.zip"
+    _policy_zip(
+        package,
+        {
+            "skip/retained.zip": source_zip.read_bytes(),
+            "first.zip": conflict_zip.read_bytes(),
+            "second.zip": _policy_zip(tmp_path / "_build/conflict2.zip", {"same.txt": "second"}).read_bytes(),
+            "third.zip": duplicate_zip.read_bytes(),
+        },
+    )
+    data_dir = tmp_path / "output/state-task"
+
+    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
+
+    states = [item["status"] for item in manifest["subpackages"]]
+    assert states.count("skipped") == 1
+    assert states.count("extracted") == 2
+    assert states.count("duplicate") == 1
+    conflicts = [item for item in manifest["files"] if item["target"] == "other/same.txt"]
+    assert [item["status"] for item in conflicts] == ["extracted", "conflict"]
+    assert (data_dir / "other/same.txt").read_text() == "first"

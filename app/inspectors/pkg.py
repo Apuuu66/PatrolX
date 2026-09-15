@@ -36,13 +36,16 @@ def _result_for_manifest(
             },
         )
 
-    items = [item for item in manifest.get("subpackages", []) if item.get("category") == category]
+    items = [
+        *[item for item in manifest.get("files", []) if item.get("category") == category],
+        *[item for item in manifest.get("subpackages", []) if item.get("category") == category],
+    ]
+    if category == "logs":
+        items.extend(manifest.get("log_gz", []))
     failures = extraction.category_failures(manifest, category)
     total = len(items)
-    if category == "logs":
-        total += len(manifest.get("log_gz", []))
     failed = len(failures)
-    completed = total - failed
+    completed = sum(item.get("status") == "extracted" for item in items)
     status = RuleStatus.PASS if failed == 0 else RuleStatus.WARN
     return make_result(
         inspector,

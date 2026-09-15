@@ -81,3 +81,37 @@ def test_inspectors_metadata() -> None:
     codes = {item["code"] for item in resp.json()}
     assert {"kpi.api", "alarm.stat", "resource.check"} <= codes
     assert all(item["description"] and item["recommendation"] for item in resp.json())
+
+
+def test_task_preparation_status_is_exposed() -> None:
+    """任务列表和详情都返回数据准备摘要，普通规则统计保持不变。"""
+    task_id = _upload()
+    task = _wait(task_id)
+    stats = task["stats"]
+
+    detail = client.get(f"/api/v2/tasks/{task_id}").json()
+    assert detail["preparation"] is not None
+    preparation = detail["preparation"]
+    assert preparation["status"] in ("pass", "warn", "fail", "error")
+    assert [item["category"] for item in preparation["items"]] == [
+        "main",
+        "logs",
+        "kpi",
+        "traffic",
+        "alarm",
+        "config",
+        "resource",
+        "other",
+    ]
+    main = preparation["items"][0]
+    assert main["code"] == "pkg.extract.main"
+    assert main["total_count"] >= 1
+    assert main["extracted_count"] == main["total_count"]
+    assert detail["stats"] == stats
+
+    listing = client.get("/api/v2/tasks", params={"page_size": 100}).json()
+    item = next(task for task in listing["items"] if task["task_id"] == task_id)
+    assert item["preparation"] is not None
+    assert item["stats"] == stats
+
+    assert client.delete(f"/api/v2/tasks/{task_id}").status_code == 204

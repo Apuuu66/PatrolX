@@ -4,6 +4,11 @@ import gzip
 import zipfile
 from pathlib import Path
 
+import pytest
+
+from app.core.archive import ArchiveError
+from app.core.checksum import sha256_file
+from app.services import extraction
 from tests.baseline_helpers import Env, setup_env
 
 
@@ -78,9 +83,9 @@ def test_main_site_is_retained_and_nested_packages_are_finalized(tmp_path, monke
         "kpi_outer.zip",
         "config/system.ini",
     }
-    assert (task_dir / "logs/ServiceLog_20260901011314/AppService/logs/paas-node-1/app_history.log").is_file()
-    assert (task_dir / "kpi/kpi_data/kpi/inner_kpi.csv").is_file()
-    assert (task_dir / "logs/ServiceLog_inner/InnerService/logs/paas-node-2/error.log").is_file()
+    assert (task_dir / "logs/AppService/logs/paas-node-1/app_history.log").is_file()
+    assert (task_dir / "kpi/kpi/inner_kpi.csv").is_file()
+    assert (task_dir / "logs/InnerService/logs/paas-node-2/error.log").is_file()
 
     work_files = _relative_files(task_dir / "logs") | _relative_files(task_dir / "kpi")
     assert not any(name.endswith((".zip", ".tar", ".tar.gz", ".tgz", ".log.gz")) for name in work_files)
@@ -102,14 +107,12 @@ def test_nested_evidence_package_does_not_leave_category_tree(tmp_path, monkeypa
     task = run_task(package, task_id="task-empty-site")
     task_dir = env.task_dir(task.task_id)
 
-    assert (task_dir / "logs/ServiceLog_nested/AppService/logs/node/app.log").is_file()
+    assert (task_dir / "logs/AppService/logs/node/app.log").is_file()
     assert not (task_dir / "logs/Problem scene").exists()
 
 
 def test_extraction_process_is_logged(tmp_path, monkeypatch) -> None:
     """主包、子包和日志 gzip 的关键解压过程写入执行日志。"""
-    from app.core.checksum import sha256_file
-    from app.services import extraction
 
     env: Env = setup_env(tmp_path, monkeypatch)
     package = _multi_level_package(env)
@@ -218,7 +221,7 @@ def test_log_gz_conflict_and_failure_are_isolated(tmp_path, monkeypatch) -> None
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     states = {Path(item["target"]).name: item for item in manifest["log_gz"]}
-    logs_dir = task_dir / "logs/ServiceLog/AppService/logs/node"
+    logs_dir = task_dir / "logs/AppService/logs/node"
 
     assert task.status == "completed"
     assert states["ok.log"]["status"] == "extracted"
@@ -226,8 +229,6 @@ def test_log_gz_conflict_and_failure_are_isolated(tmp_path, monkeypatch) -> None
     assert states["bad.log"]["status"] == "failed"
     assert (logs_dir / "ok.log").is_file()
     assert (logs_dir / "existing.log").is_file()
-    assert (logs_dir / "existing.log.gz").is_file()
-    assert (logs_dir / "bad.log.gz").is_file()
     assert not (logs_dir / "ok.log.gz").exists()
 
 
@@ -263,7 +264,7 @@ def test_normal_rules_do_not_match_main_evidence(tmp_path, monkeypatch) -> None:
 
     posix_paths = [path.as_posix() for path in matched]
 
-    assert "kpi/kpi_data/kpi/inner_kpi.csv" in posix_paths
+    assert "kpi/kpi/inner_kpi.csv" in posix_paths
     assert not any(path.startswith(".main/") for path in posix_paths)
     assert ".patrolx-extracted.json" not in posix_paths
 
@@ -271,9 +272,6 @@ def test_normal_rules_do_not_match_main_evidence(tmp_path, monkeypatch) -> None:
 def test_manifest_structure_and_old_version_are_not_reused(tmp_path, monkeypatch) -> None:
     """manifest v3 结构不完整、损坏或旧版本时必须整体重建现场。"""
     import json
-
-    from app.core.checksum import sha256_file
-    from app.services import extraction
 
     env = setup_env(tmp_path, monkeypatch)
     package = _multi_level_package(env)
@@ -327,8 +325,6 @@ def test_task_level_budget_allows_3gb() -> None:
 
 def test_task_level_budget_failures_are_isolated_and_recorded(tmp_path, monkeypatch) -> None:
     """任务级文件预算拒绝对应文件，记录 rejected，不中断后续 gzip 处理。"""
-    from app.core.checksum import sha256_file
-    from app.services import extraction
 
     env = setup_env(tmp_path, monkeypatch)
     package = _budget_package(env)
@@ -348,8 +344,6 @@ def test_task_level_budget_failures_are_isolated_and_recorded(tmp_path, monkeypa
 
 def test_gzip_budget_failure_is_isolated_and_recorded(tmp_path, monkeypatch) -> None:
     """gzip 输出超过任务累计预算时记录失败，不生成目标 .log。"""
-    from app.core.checksum import sha256_file
-    from app.services import extraction
 
     env = setup_env(tmp_path, monkeypatch)
     package = _budget_package(env)
@@ -365,3 +359,123 @@ def test_gzip_budget_failure_is_isolated_and_recorded(tmp_path, monkeypatch) -> 
     assert any(item["reason"].startswith("任务累计解压总量超限") for item in manifest["rejected"])
     assert not (data_dir / "logs/node/app.log").exists()
     assert manifest["main"]["count"] == 3
+
+
+def _classified_package(env: Env) -> Path:
+    """构造覆盖 logs/kpi/config/resource 的主包与目标冲突来源。"""
+    service_zip = env.uploads / "_build" / "ServiceLog_classified.zip"
+    _zip(service_zip, {"AppService/logs/node/app.log": "app log\n"})
+    package = env.uploads / "classified.zip"
+    _zip(
+        package,
+        {
+            "config/system.ini": "[app]\nname=app\n",
+            "resource/host.out": '{"host": "node-1"}',
+            "AppService_logs.zip": service_zip.read_bytes(),
+            "kpi/kpi-api.csv": "metric,value\nsuccess,99\n",
+        },
+    )
+    return package
+
+
+def test_classified_files_place_directly_by_category(tmp_path, monkeypatch) -> None:
+    """普通文件、日志和子包成员直接进入分类根，且原始包内容不变。"""
+    import hashlib
+
+    env = setup_env(tmp_path, monkeypatch)
+    package = _classified_package(env)
+    before = package.read_bytes()
+    data_dir = env.task_dir("task-classified")
+
+    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
+
+    assert hashlib.sha256(package.read_bytes()).hexdigest() == hashlib.sha256(before).hexdigest()
+    assert (data_dir / "config/system.ini").is_file()
+    assert (data_dir / "kpi/kpi-api.csv").is_file()
+    assert (data_dir / "resource/host.out").is_file()
+    assert (data_dir / "logs/AppService/logs/node/app.log").is_file()
+    assert manifest["version"] == 4
+    assert any(item["target"] == "logs/AppService/logs/node/app.log" for item in manifest["files"])
+    assert any(item["target"] == "config/system.ini" for item in manifest["files"])
+    assert not (data_dir / "logs/ServiceLog_classified").exists()
+
+
+def test_path_limit_blocks_main_evidence_before_rebuild(tmp_path, monkeypatch) -> None:
+    """主包证据目标命中路径限制时提前失败，不生成新 manifest。"""
+    from app.services.extraction.layout import PathLimitPolicy
+
+    env = setup_env(tmp_path, monkeypatch)
+    package = env.uploads / "too-long-main.zip"
+    _zip(package, {"config/system.ini": "ok"})
+    data_dir = env.task_dir("task-too-long-main")
+    policy = PathLimitPolicy(enabled=True, limit=len(str(data_dir / ".main" / "config/system.ini")))
+
+    with pytest.raises(ArchiveError, match="目标路径长度"):
+        extraction.extract_main_site(package, data_dir, sha256_file(package), path_policy=policy)
+    assert not (data_dir / extraction.MANIFEST_NAME).exists()
+
+
+def test_path_limit_records_normal_file_and_cleans_partial_file(tmp_path, monkeypatch) -> None:
+    """普通文件路径过长提前失败，记录 path_too_long 且不留下半成品。"""
+    from app.services.extraction.budget import ExtractionBudget
+    from app.services.extraction.layout import PathLimitPolicy
+    from app.services.extraction.nested import _ingest_file
+
+    source = tmp_path / "source.ini"
+    source.write_text("ok", encoding="utf-8")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    destination = data_dir / "config/system.ini"
+    policy = PathLimitPolicy(enabled=True, limit=len(str(destination)))
+    manifest = {"files": [], "rejected": []}
+
+    _ingest_file(
+        source,
+        Path("config/system.ini"),
+        "evidence",
+        "",
+        "",
+        data_dir,
+        manifest,
+        ExtractionBudget(),
+        set(),
+        1,
+        None,
+        None,
+        policy,
+    )
+
+    item = manifest["files"][0]
+    assert item["status"] == "failed"
+    assert item["error_code"] == "path_too_long"
+    assert item["path_length"] == len(str(destination))
+    assert item["path_limit"] == len(str(destination))
+    assert not destination.exists()
+
+
+def test_path_limit_records_log_gz_and_nested_staging(tmp_path, monkeypatch) -> None:
+    """日志和子包 staging 命中限制时记录失败并清理。"""
+    from app.services.extraction.layout import PathLimitPolicy
+
+    env = setup_env(tmp_path, monkeypatch)
+    inner_zip = env.uploads / "_build" / "long-inner.zip"
+    _zip(inner_zip, {"AppService/logs/node/app.log": "log\n"})
+    package = env.uploads / "too-long-items.zip"
+    _zip(
+        package,
+        {
+            "logs/node/app.log.gz": gzip.compress(b"log\n"),
+            "ServiceLog.zip": inner_zip.read_bytes(),
+        },
+    )
+    data_dir = env.task_dir("task-too-long-items")
+    staging_root = data_dir / f".extract-{sha256_file(inner_zip)[:12]}"
+    policy = PathLimitPolicy(enabled=True, limit=len(str(staging_root / "AppService/logs/node/app.log")))
+
+    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package), path_policy=policy)
+
+    assert manifest["log_gz"][0]["status"] == "extracted"
+    assert manifest["subpackages"][0]["status"] == "failed"
+    assert manifest["subpackages"][0]["error_code"] == "path_too_long"
+    assert not (data_dir / "logs/AppService").exists()
+    assert not any(path.name.startswith(".extract-") for path in data_dir.iterdir())

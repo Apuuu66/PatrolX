@@ -35,5 +35,7 @@ def test_core_schemas_present() -> None:
         "InspectorInfo",
         "DictsResponse",
         "Error",
+        "TaskDeleteErrorV2",
+        "TaskDeleteErrorDetailV2",
     ):
         assert name in schemas, f"缺少 schema: {name}"

@@ -1,14 +1,18 @@
 """解压现场分类落位与安全路径 helper。"""
 
+import json
+import os
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 
-from app.core.archive import ArchiveError
+from app.core.archive import ArchiveError, PathTooLongError
 from app.core.classify import classify_file, classify_name
 from app.models.schemas import RuleCategory
 
 MANIFEST_NAME = ".patrolx-extracted.json"
 MAIN_EVIDENCE_DIR = ".main"
-MANIFEST_VERSION = 3
+MANIFEST_VERSION = 4
 CATEGORY_DIRECTORIES = {
     RuleCategory.LOG.value: "logs",
     RuleCategory.KPI.value: "kpi",
@@ -21,16 +25,68 @@ CATEGORY_DIRECTORIES = {
 WORK_CATEGORIES = list(CATEGORY_DIRECTORIES.values())
 
 
+@dataclass(frozen=True)
+class PathLimitPolicy:
+    """注入式路径长度限制策略。"""
+
+    enabled: bool = False
+    limit: int | None = None
+
+    @classmethod
+    def current(cls) -> "PathLimitPolicy":
+        """读取当前系统限制；仅 Windows 传统 MAX_PATH 生效时启用。"""
+        if sys.platform != "win32":
+            return cls(enabled=False, limit=None)
+        limit = 260
+        try:
+            import winreg  # noqa: PLC0415
+
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control\FileSystem",
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
+            if value == 1:
+                return cls(enabled=False, limit=None)
+        except OSError:
+            return cls(enabled=True, limit=limit)
+        return cls(enabled=True, limit=limit)
+
+    @property
+    def fingerprint(self) -> str:
+        """返回用于 manifest 复用判断的稳定指纹。"""
+        payload = {"enabled": self.enabled, "limit": self.limit}
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        import hashlib
+
+        return hashlib.sha256(encoded).hexdigest()
+
+    def snapshot(self) -> dict[str, object]:
+        """返回 manifest 路径限制上下文。"""
+        return {"enabled": self.enabled, "limit": self.limit, "fingerprint": self.fingerprint}
+
+    def check(self, destination: Path, _label: str | None = None) -> None:
+        """目标完整路径超过限制时提前失败。"""
+        if not self.enabled or self.limit is None:
+            return
+        full_path = os.path.abspath(os.fspath(destination))
+        length = len(full_path)
+        if length >= self.limit:
+            raise PathTooLongError(full_path, length, self.limit)
+
+
 def _relative_files(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.is_file())
 
 
-def _safe_destination(data_dir: Path, relative: Path) -> Path:
+def _safe_destination(data_dir: Path, relative: Path, path_policy: PathLimitPolicy | None = None) -> Path:
     destination = (data_dir / relative).resolve()
     if not destination.is_relative_to(data_dir.resolve()):
         raise ArchiveError(f"目标路径穿越被拒绝: {relative.as_posix()}")
     if destination.is_symlink() or any(parent.is_symlink() for parent in destination.parents):
         raise ArchiveError(f"目标路径包含链接: {relative.as_posix()}")
+    if path_policy is not None:
+        path_policy.check(destination)
     return destination
 
 
@@ -80,14 +136,13 @@ def _destination_relative(
     group: str,
     category: str,
 ) -> Path:
+    category_root = Path(CATEGORY_DIRECTORIES[category])
     if source_kind == "evidence":
         parts = source_relative.parts
         if parts and len(parts) > 1 and parts[0] == CATEGORY_DIRECTORIES[category]:
-            return Path(CATEGORY_DIRECTORIES[category]) / Path(*parts[1:])
-        return Path(CATEGORY_DIRECTORIES[category]) / source_relative
-    if group:
-        return Path(CATEGORY_DIRECTORIES[category]) / group / source_relative
-    return Path(CATEGORY_DIRECTORIES[category]) / source_relative
+            return category_root / Path(*parts[1:])
+        return category_root / source_relative
+    return category_root / source_relative
 
 
 def _register_rejected(
