@@ -15,7 +15,7 @@ BASE = "ZZapp01BCN_app_Problem_scene_333/333/app Problem scene"
 
 
 def _call_kpi_5_csv() -> str:
-    """生成 7 天 × 4 个服务实例的完整呼叫 KPI 样例，固定数据便于测试复核。"""
+    """生成 14 天 × 4 个服务实例的完整呼叫 KPI 样例，覆盖双周周期与异常形态。"""
     lines = [
         "设备类型：XXX",
         "测量单元名称：呼叫会话统计",
@@ -24,40 +24,52 @@ def _call_kpi_5_csv() -> str:
         "统计峰值,最大并发,x业务请求次数,x业务请求成功次数,x业务请求失败次数",
     ]
     services = [
-        ("IMS-Core", "ims-node-01", 1.00, 1.00),
-        ("IMS-Core", "ims-node-02", 0.88, 0.82),
-        ("Access-GW", "access-node-01", 1.16, 1.22),
-        ("Access-GW", "access-node-02", 1.31, 1.08),
+        ("IMS-Core", "ims-node-01", 1.00, 0.96),
+        ("IMS-Core", "ims-node-02", 0.88, 0.91),
+        ("Access-GW", "access-node-01", 1.16, 1.04),
+        ("Access-GW", "access-node-02", 1.31, 1.12),
     ]
-    base = datetime(2026, 9, 8)
-    for slot in range(7 * 288):
+    holidays = {12}
+    maintenance_days = {8, 15}
+    severe_degradation_days = {10, 13}
+    base = datetime(2026, 9, 3)
+    for slot in range(14 * 288):
         start_at = base + timedelta(minutes=slot * 5)
         end_at = start_at + timedelta(minutes=5)
         start_text = start_at.strftime("%Y-%m-%d %H:%M:%S")
         end_text = end_at.strftime("%Y-%m-%d %H:%M:%S")
         minute_of_day = slot * 5 % 1440
+        day_of_month = start_at.day
         is_weekend = start_at.weekday() >= 5
+        is_holiday = day_of_month in holidays
+        load_season = 0.68 if is_weekend or is_holiday else 1.0
+        cycle_progress = (slot / (14 * 288) - 0.5) * 0.08
+        row_index = slot * len(services)
 
         for service_idx, (service, instance, load_factor, quality_factor) in enumerate(services):
             requests = int(
-                1250
-                + 640
-                * math.sin(2 * math.pi * (minute_of_day - 475) / 1440)
-                * load_factor
-                * (0.64 if is_weekend else 1.0)
-                + 95 * math.sin(2 * math.pi * minute_of_day / 91)
-                + service_idx * 73
-                + (slot % 11) * 9
+                1180
+                + 640 * math.sin(2 * math.pi * (minute_of_day - 470) / 1440) * load_factor * load_season
+                + 320 * math.sin(2 * math.pi * (start_at.timetuple().tm_yday - 18) / 30) * load_factor
+                + 96 * math.sin(2 * math.pi * minute_of_day / 91)
+                + service_idx * 68
+                + cycle_progress * 1000
+                + (slot % 11) * 8
             )
-            requests = max(160, requests)
+            requests = max(150, requests)
 
-            failure_rate = 0.004 + 0.0022 * abs(math.sin(2 * math.pi * minute_of_day / 175))
-            # 每天设置早晚两个异常窗口，不同实例严重度不同，便于展示趋势和越限明细。
-            morning_breach = 8 * 60 + 12 <= minute_of_day < 8 * 60 + 34
-            evening_breach = 20 * 60 + 27 <= minute_of_day < 20 * 60 + 58
+            failure_rate = 0.0038 + 0.0021 * abs(math.sin(2 * math.pi * minute_of_day / 175))
+            # 每天早晚各设置一个异常窗口；部分日期扩展为严重劣化，便于展示月度趋势和定位。
+            morning_breach = 8 * 60 + 12 <= minute_of_day < 8 * 60 + 46
+            evening_breach = 20 * 60 + 27 <= minute_of_day < 21 * 60 + 8
+            severe_day = day_of_month in severe_degradation_days
             if morning_breach or evening_breach:
-                burst = 0.031 if morning_breach else 0.027
-                failure_rate = burst + service_idx * 0.0037 + (slot % 4) * 0.0022
+                burst = 0.033 if morning_breach else 0.028
+                if severe_day:
+                    burst += 0.011
+                failure_rate = burst + service_idx * 0.0038 + (slot % 5) * 0.0021
+            if day_of_month in maintenance_days and service_idx == 4 and 14 * 60 <= minute_of_day < 15 * 60:
+                failure_rate = 0.036
             failure_rate *= quality_factor
             failures = min(requests, max(1, round(requests * failure_rate)))
             successes = requests - failures
@@ -65,30 +77,24 @@ def _call_kpi_5_csv() -> str:
             actual_failure_rate = round(failures / requests * 100, 2)
 
             peak = int(
-                235
-                + 124
-                * math.sin(2 * math.pi * (minute_of_day - 497) / 1440)
-                * load_factor
-                * (0.61 if is_weekend else 1.0)
-                + service_idx * 18
+                228
+                + 128 * math.sin(2 * math.pi * (minute_of_day - 495) / 1440) * load_factor * load_season
+                + service_idx * 17
                 + (slot % 17) * 4
             )
             concurrency = int(
-                158
-                + 86
-                * math.sin(2 * math.pi * (minute_of_day - 512) / 1440)
-                * load_factor
-                * (0.58 if is_weekend else 1.0)
-                + service_idx * 12
+                152
+                + 88 * math.sin(2 * math.pi * (minute_of_day - 513) / 1440) * load_factor * load_season
+                + service_idx * 11
                 + (slot % 13) * 3
             )
-            x_requests = int(requests * 0.58 + service_idx * 23 + (slot % 7) * 11)
-            x_failures = min(x_requests, 1 + (slot + service_idx * 3) % 6)
+            x_requests = int(requests * 0.57 + service_idx * 21 + (slot % 7) * 10)
+            x_failures = min(x_requests, 1 + (slot + service_idx * 3) % 7)
             x_successes = x_requests - x_failures
 
             trusted = True
             untrusted_reason = ""
-            if service_idx == 3 and minute_of_day % 120 == 55:
+            if service_idx in (3, 5) and minute_of_day % 120 == 55:
                 trusted = False
                 untrusted_reason = "采样窗口部分回补"
 
@@ -99,6 +105,23 @@ def _call_kpi_5_csv() -> str:
                 f"{requests},{successes},{failures},{success_rate:.2f},{actual_failure_rate:.2f}"
                 f",{peak},{concurrency},{x_requests},{x_successes},{x_failures}"
             )
+
+            # 少量固定注入的记录：自洽异常和解析异常不中断整个文件解析。
+            if row_index == 6000:
+                lines[-1] = lines[-1].replace(
+                    f",{requests},{successes},{failures},",
+                    f",{requests},{successes - 4},{failures},",
+                )
+            elif row_index == 12000:
+                lines[-1] = lines[-1].replace(
+                    f",{requests},{successes},{failures},",
+                    f",{requests},{successes - 9},{failures},",
+                )
+            elif row_index == 9000:
+                lines[-1] = "IMS-Core,ims-node-01,可信,,invalid-time,,5,1200,,bad-number,99.00,1.00,200,120"
+            elif row_index == 15000:
+                lines[-1] = "Access-GW,access-node-02,可信,,2026-09-01 10:00:00,,5,1500,1460,40,97.33,2.67,not-number"
+
     return "\n".join(lines) + "\n"
 
 
