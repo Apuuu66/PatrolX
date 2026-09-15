@@ -16,9 +16,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.inspectors.kpi.catalog import (
+    KpiAggregationResult,
     KpiCatalogError,
     KpiConfig,
+    KpiDomainConfig,
+    KpiMetricDefinition,
     KpiThreshold,
+    aggregate_kpi_metric,
+    evaluate_kpi_threshold,
     load_kpi_catalog,
     normalize_metric_name,
 )
@@ -142,6 +147,210 @@ def parse_time(text: str, tz: zoneinfo.ZoneInfo) -> datetime:
         return dt.astimezone(UTC)
     except ValueError:
         raise ValueError(f"无法解析时间: {text}") from None
+
+
+def _stable_record_values(record: KpiRecord, domain_config: KpiDomainConfig) -> dict[str, float]:
+    """把源列名精确归一到稳定 key；未登记列不进入已登记指标输入。"""
+    values: dict[str, float] = {}
+    for source_name, value in record.values.items():
+        key = domain_config.alias_index.get(normalize_metric_name(source_name))
+        if key is not None:
+            values[key] = value
+    return values
+
+
+def _record_metric_value(
+    definition: KpiMetricDefinition,
+    stable_values: dict[str, float],
+) -> tuple[float | None, KpiAggregationResult | None]:
+    """按目录定义获取单条记录值；公式优先，不用直接同语义列覆盖。"""
+    if definition.source_type == "derived":
+        result = aggregate_kpi_metric(definition, {key: [value] for key, value in stable_values.items()})
+        return (result.main_value if result.value_available else None), result
+    return stable_values.get(definition.key), None
+
+
+def _unclassified_metrics(
+    files: list[KpiCsvFile],
+    domain_config: KpiDomainConfig,
+) -> list[dict[str, object]]:
+    grouped: dict[str, dict[str, object]] = {}
+    for kpi_file in files:
+        registered = {name for name in kpi_file.objects if domain_config.alias_index.get(normalize_metric_name(name))}
+        unclassified = [name for name in kpi_file.objects if name not in registered]
+        for name in unclassified:
+            item = grouped.setdefault(
+                name,
+                {
+                    "source_name": name,
+                    "source_files": [],
+                    "record_count": 0,
+                    "sample_values": [],
+                    "reason": "metric_not_registered",
+                },
+            )
+            if kpi_file.path not in item["source_files"]:
+                item["source_files"].append(kpi_file.path)  # type: ignore[union-attr]
+            for record in kpi_file.records:
+                if name in record.values:
+                    item["record_count"] += 1  # type: ignore[operator]
+                    if len(item["sample_values"]) < 5:  # type: ignore[operator]
+                        item["sample_values"].append(record.values[name])  # type: ignore[union-attr]
+    return list(grouped.values())
+
+
+def build_kpi_metadata(
+    domain: str,
+    files: list[KpiCsvFile],
+    config: KpiConfig,
+) -> dict[str, object]:
+    """生成目录化 KPI 元数据；历史结果不会被迁移或重算。"""
+    domain_config = config.domains[domain]
+    records = [record for kpi_file in files for record in kpi_file.records]
+    stable_records = [_stable_record_values(record, domain_config) for record in records]
+    metric_results: list[dict[str, object]] = []
+    threshold = domain_config.thresholds
+
+    for definition in domain_config.metrics.values():
+        input_values: dict[str, list[float]] = {}
+        if definition.source_type == "derived":
+            keys = [definition.key]
+            if definition.formula is not None:
+                formula = definition.formula
+                keys = [formula.numerator, formula.denominator, *formula.denominator_fallback_inputs]
+            for key in dict.fromkeys(keys):
+                input_values[key] = [values[key] for values in stable_records if key in values]
+        else:
+            input_values[definition.key] = [
+                values[definition.key] for values in stable_records if definition.key in values
+            ]
+
+        aggregate = aggregate_kpi_metric(definition, input_values)
+        breach_count = 0
+        item_threshold = threshold.get(definition.key)
+        series: list[dict[str, object]] = []
+        for kpi_file in files:
+            for record in kpi_file.records:
+                stable_values = _stable_record_values(record, domain_config)
+                value, _ = _record_metric_value(definition, stable_values)
+                if value is not None:
+                    series.append(
+                        {
+                            "start_at": record.start_at.isoformat(),
+                            "end_at": record.end_at.isoformat(),
+                            "period_minutes": record.period_minutes,
+                            "value": value,
+                        }
+                    )
+                if not record.errors and evaluate_kpi_threshold(value, item_threshold, record.period_minutes) == "fail":
+                    breach_count += 1
+
+        main_status = evaluate_kpi_threshold(aggregate.main_value, item_threshold, 0)
+        direct_cross_reference: list[dict[str, object]] = []
+        if definition.source_type == "derived":
+            for kpi_file in files:
+                for record in kpi_file.records:
+                    stable_values = _stable_record_values(record, domain_config)
+                    if definition.key in stable_values:
+                        direct_cross_reference.append(
+                            {
+                                "name": definition.key,
+                                "source_file": kpi_file.path,
+                                "value": stable_values[definition.key],
+                            }
+                        )
+        aggregate.provenance["direct_cross_reference"] = direct_cross_reference
+        metric_results.append(
+            {
+                "key": definition.key,
+                "main_value": aggregate.main_value,
+                "value_available": aggregate.value_available,
+                "unavailable_reason": aggregate.unavailable_reason,
+                "display_status": main_status,
+                "unit": definition.unit,
+                "aggregation": aggregate.actual_aggregation,
+                "threshold": None
+                if item_threshold is None
+                else {
+                    "metric": item_threshold.metric,
+                    "label": item_threshold.label,
+                    "direction": item_threshold.direction,
+                    "unit": item_threshold.unit,
+                    "default": item_threshold.default,
+                    "periods": item_threshold.periods,
+                },
+                "breach_count": breach_count,
+                "series": series,
+                "source_files": [kpi_file.path for kpi_file in files if kpi_file.record_count],
+                "provenance": aggregate.provenance,
+            }
+        )
+
+    return {
+        "version": 2,
+        "domain": domain,
+        "config_source": "deploy/config/kpi",
+        "input_timezone": config.input_timezone,
+        "metric_catalog": [item.as_metadata() for item in domain_config.metrics.values()],
+        "kpi_results": metric_results,
+        "unclassified_metrics": _unclassified_metrics(files, domain_config),
+        "kpi_files": [
+            {
+                "path": kpi_file.path,
+                "domain": kpi_file.domain,
+                "period_minutes": kpi_file.period_minutes,
+                "measurement_set": kpi_file.measurement_set,
+                "status": kpi_file.status,
+                "objects": kpi_file.objects,
+                "record_count": kpi_file.record_count,
+                "parse_error_count": kpi_file.parse_error_count,
+                "errors": [
+                    {
+                        "code": error.code,
+                        "line_number": error.line_number,
+                        "column": error.column,
+                        "message": error.message,
+                        "value": error.value,
+                    }
+                    for error in kpi_file.errors
+                ],
+                "records": [
+                    {
+                        "line_number": record.line_number,
+                        "period_minutes": record.period_minutes,
+                        "start_at": record.start_at.isoformat(),
+                        "end_at": record.end_at.isoformat(),
+                        "values": record.values,
+                        "derived": record.derived,
+                        "capacity_values": [
+                            {
+                                "source_name": capacity.source_name,
+                                "metric": capacity.metric,
+                                "value": capacity.value,
+                                "status": capacity.status,
+                                "semantics": capacity.semantics,
+                                "reason": capacity.reason,
+                            }
+                            for capacity in (record.capacity_values or [])
+                        ]
+                        or None,
+                        "errors": [
+                            {
+                                "code": error.code,
+                                "line_number": error.line_number,
+                                "column": error.column,
+                                "message": error.message,
+                                "value": error.value,
+                            }
+                            for error in record.errors
+                        ],
+                    }
+                    for record in kpi_file.records
+                ],
+            }
+            for kpi_file in files
+        ],
+    }
 
 
 def parse_csv_file(

@@ -10,6 +10,7 @@ from app.inspectors.kpi.common import (
     KpiConfigError,
     KpiRecord,
     KpiThreshold,
+    build_kpi_metadata,
     finding_id,
     load_kpi_config,
     parse_all_files,
@@ -24,7 +25,7 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.1.0",
+    rule_version="1.2.0",
     description="解析呼叫 KPI CSV 文件，执行成功率/失败率阈值检查、请求关联一致性检查和容量指标展示",
     recommendation="检查阈值越限、数据自洽异常和容量趋势",
     source_patterns=[r"^kpi/(?:.*/)?kpi-call-(?:5|15|30|60)\.csv$"],
@@ -276,68 +277,7 @@ def _run(ctx: RuleContext) -> object:
                 "unit": "项",
             },
         ],
-        metadata={
-            "version": 1,
-            "domain": "call",
-            "config_source": "deploy/config/kpi_rules.yaml",
-            "input_timezone": config.input_timezone,
-            "kpi_files": [
-                {
-                    "path": f.path,
-                    "domain": f.domain,
-                    "period_minutes": f.period_minutes,
-                    "measurement_set": f.measurement_set,
-                    "status": f.status,
-                    "objects": f.objects,
-                    "record_count": f.record_count,
-                    "parse_error_count": f.parse_error_count,
-                    "errors": [
-                        {
-                            "code": e.code,
-                            "line_number": e.line_number,
-                            "column": e.column,
-                            "message": e.message,
-                            "value": e.value,
-                        }
-                        for e in f.errors
-                    ],
-                    "records": [
-                        {
-                            "line_number": r.line_number,
-                            "period_minutes": r.period_minutes,
-                            "start_at": r.start_at.isoformat(),
-                            "end_at": r.end_at.isoformat(),
-                            "values": r.values,
-                            "derived": r.derived,
-                            "capacity_values": [
-                                {
-                                    "source_name": c.source_name,
-                                    "metric": c.metric,
-                                    "value": c.value,
-                                    "status": c.status,
-                                    "semantics": c.semantics,
-                                    "reason": c.reason,
-                                }
-                                for c in (r.capacity_values or [])
-                            ]
-                            or None,
-                            "errors": [
-                                {
-                                    "code": e.code,
-                                    "line_number": e.line_number,
-                                    "column": e.column,
-                                    "message": e.message,
-                                    "value": e.value,
-                                }
-                                for e in r.errors
-                            ],
-                        }
-                        for r in f.records
-                    ],
-                }
-                for f in files
-            ],
-        },
+        metadata=build_kpi_metadata("call", files, config),
     )
 
 

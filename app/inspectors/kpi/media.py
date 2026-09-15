@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from app.inspectors.base import Inspector
 from app.inspectors.kpi.common import (
     KpiConfigError,
+    build_kpi_metadata,
     finding_id,
     load_kpi_config,
     parse_all_files,
@@ -22,7 +23,7 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.1.0",
+    rule_version="1.2.0",
     description="解析媒体统计 KPI CSV 文件，完成识别、完整性检查和指标展示",
     recommendation="检查解析错误行和指标值是否正常",
     source_patterns=[r"^kpi/(?:.*/)?kpi-media-(?:5|15|30|60)\.csv$"],
@@ -116,68 +117,7 @@ def _run(ctx: RuleContext) -> object:
             {"key": "metric_count", "label": "指标列数", "value": metric_count, "unit": "项"},
             {"key": "parse_error_count", "label": "解析错误数", "value": parse_error_count, "unit": "条"},
         ],
-        metadata={
-            "version": 1,
-            "domain": "media",
-            "config_source": "deploy/config/kpi_rules.yaml",
-            "input_timezone": config.input_timezone,
-            "kpi_files": [
-                {
-                    "path": f.path,
-                    "domain": f.domain,
-                    "period_minutes": f.period_minutes,
-                    "measurement_set": f.measurement_set,
-                    "status": f.status,
-                    "objects": f.objects,
-                    "record_count": f.record_count,
-                    "parse_error_count": f.parse_error_count,
-                    "errors": [
-                        {
-                            "code": e.code,
-                            "line_number": e.line_number,
-                            "column": e.column,
-                            "message": e.message,
-                            "value": e.value,
-                        }
-                        for e in f.errors
-                    ],
-                    "records": [
-                        {
-                            "line_number": r.line_number,
-                            "period_minutes": r.period_minutes,
-                            "start_at": r.start_at.isoformat(),
-                            "end_at": r.end_at.isoformat(),
-                            "values": r.values,
-                            "derived": r.derived,
-                            "capacity_values": [
-                                {
-                                    "source_name": c.source_name,
-                                    "metric": c.metric,
-                                    "value": c.value,
-                                    "status": c.status,
-                                    "semantics": c.semantics,
-                                    "reason": c.reason,
-                                }
-                                for c in (r.capacity_values or [])
-                            ]
-                            or None,
-                            "errors": [
-                                {
-                                    "code": e.code,
-                                    "line_number": e.line_number,
-                                    "column": e.column,
-                                    "message": e.message,
-                                    "value": e.value,
-                                }
-                                for e in r.errors
-                            ],
-                        }
-                        for r in f.records
-                    ],
-                }
-                for f in files
-            ],
-        },
+        metadata=build_kpi_metadata("media", files, config),
     )
 
 

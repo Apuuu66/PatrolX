@@ -114,6 +114,222 @@ class KpiThreshold:
 
 
 @dataclass(slots=True)
+class KpiAggregationResult:
+    """单个 KPI 指标的聚合结果与溯源。"""
+
+    key: str
+    main_value: float | None = None
+    value_available: bool = False
+    unavailable_reason: str | None = None
+    actual_aggregation: str = ""
+    provenance: dict[str, Any] = field(default_factory=dict)
+
+
+def _numeric_values(values: list[Any]) -> tuple[list[float], bool]:
+    """保留可解析数值；布尔值按配置口径视为非法。"""
+    result: list[float] = []
+    has_missing = False
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            has_missing = True
+            continue
+        result.append(float(value))
+    return result, has_missing
+
+
+def _aggregate_values(kind: str, values: list[float], quantile: float | None = None) -> float:
+    if kind == "sum":
+        return sum(values)
+    if kind == "max":
+        return max(values)
+    if kind == "percentile":
+        if quantile is None:
+            raise ValueError("percentile aggregation requires quantile")
+        ordered = sorted(values)
+        position = (len(ordered) - 1) * quantile
+        lower = int(position)
+        upper = min(lower + 1, len(ordered) - 1)
+        fraction = position - lower
+        return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
+    raise ValueError(f"unsupported aggregation kind: {kind}")
+
+
+def _actual_aggregation(kind: str, quantile: float | None = None) -> str:
+    if kind == "percentile":
+        if quantile is None:
+            raise ValueError("percentile aggregation requires quantile")
+        percent = quantile * 100
+        if percent.is_integer():
+            return f"p{int(percent)}"
+        return f"p{format(percent, '.15g')}"
+    return kind
+
+
+def _sum_input(values: list[Any]) -> float | None:
+    numeric, _ = _numeric_values(values)
+    return sum(numeric) if numeric else None
+
+
+def _formula_text(formula: KpiRatioFormula) -> str:
+    text = f"{formula.numerator} / {formula.denominator}"
+    if formula.scale != 1:
+        text += f" * {format(formula.scale, '.15g')}"
+    return text
+
+
+def aggregate_kpi_metric(
+    definition: KpiMetricDefinition,
+    input_values: dict[str, list[Any]],
+) -> KpiAggregationResult:
+    """按指标声明聚合主值；派生比率先汇总输入再计算。"""
+    if definition.source_type == "derived":
+        if definition.formula is None:
+            return KpiAggregationResult(
+                key=definition.key,
+                unavailable_reason="formula_not_configured",
+                actual_aggregation=definition.aggregation.kind,
+            )
+        formula = definition.formula
+        aggregated_inputs: dict[str, float | None] = {
+            key: _sum_input(input_values.get(key, []))
+            for key in (formula.numerator, formula.denominator, *formula.denominator_fallback_inputs)
+        }
+        input_provenance: list[dict[str, Any]] = []
+        missing_inputs: list[str] = []
+        numerator = aggregated_inputs.get(formula.numerator)
+        if numerator is None:
+            missing_inputs.append(formula.numerator)
+        denominator = aggregated_inputs.get(formula.denominator)
+        denominator_present = denominator is not None
+        fallback_used = False
+
+        if not denominator_present and not formula.denominator_fallback_inputs:
+            missing_inputs.append(formula.denominator)
+        if not denominator_present:
+            fallback_values: list[float] = []
+            for key in formula.denominator_fallback_inputs:
+                value = aggregated_inputs.get(key)
+                if value is None:
+                    missing_inputs.append(key)
+                else:
+                    fallback_values.append(value)
+            if not missing_inputs and fallback_values:
+                denominator = sum(fallback_values)
+                fallback_used = True
+
+        inputs = [formula.numerator, formula.denominator, *formula.denominator_fallback_inputs]
+        for key in dict.fromkeys(inputs):
+            value = aggregated_inputs.get(key)
+            input_provenance.append(
+                {
+                    "key": key,
+                    "aggregation": "sum",
+                    "value": value,
+                }
+            )
+
+        if numerator is None:
+            return KpiAggregationResult(
+                key=definition.key,
+                unavailable_reason=f"missing_input: {formula.numerator}",
+                actual_aggregation=definition.aggregation.kind,
+                provenance={
+                    "formula": _formula_text(formula),
+                    "inputs": input_provenance,
+                    "missing_inputs": list(dict.fromkeys(missing_inputs)),
+                    "denominator_zero": False,
+                    "fallback_used": fallback_used,
+                },
+            )
+        if denominator is None:
+            reason_key = missing_inputs[0] if missing_inputs else formula.denominator
+            return KpiAggregationResult(
+                key=definition.key,
+                unavailable_reason=f"missing_input: {reason_key}",
+                actual_aggregation=definition.aggregation.kind,
+                provenance={
+                    "formula": _formula_text(formula),
+                    "inputs": input_provenance,
+                    "missing_inputs": list(dict.fromkeys(missing_inputs)),
+                    "denominator_zero": False,
+                    "fallback_used": fallback_used,
+                },
+            )
+        if denominator == 0:
+            return KpiAggregationResult(
+                key=definition.key,
+                unavailable_reason="denominator_zero",
+                actual_aggregation=definition.aggregation.kind,
+                provenance={
+                    "formula": _formula_text(formula),
+                    "inputs": input_provenance,
+                    "missing_inputs": [],
+                    "denominator_zero": True,
+                    "fallback_used": fallback_used,
+                },
+            )
+        return KpiAggregationResult(
+            key=definition.key,
+            main_value=numerator / denominator * formula.scale,
+            value_available=True,
+            actual_aggregation=definition.aggregation.kind,
+            provenance={
+                "formula": _formula_text(formula),
+                "inputs": input_provenance,
+                "missing_inputs": [],
+                "denominator_zero": False,
+                "fallback_used": fallback_used,
+            },
+        )
+
+    values, has_missing = _numeric_values(input_values.get(definition.key, []))
+    kind = definition.aggregation.kind
+    actual = _actual_aggregation(kind, definition.aggregation.quantile)
+    if not values:
+        return KpiAggregationResult(
+            key=definition.key,
+            unavailable_reason="no_records",
+            actual_aggregation=actual,
+            provenance={"inputs": [], "missing_inputs": [definition.key] if has_missing else []},
+        )
+    value = _aggregate_values(kind, values, definition.aggregation.quantile)
+    return KpiAggregationResult(
+        key=definition.key,
+        main_value=value,
+        value_available=True,
+        actual_aggregation=actual,
+        provenance={
+            "inputs": [
+                {
+                    "key": definition.key,
+                    "aggregation": actual,
+                    "value": value,
+                }
+            ],
+            "missing_inputs": [],
+        },
+    )
+
+
+def evaluate_kpi_threshold(
+    value: float | None,
+    threshold: KpiThreshold | None,
+    period_minutes: int,
+) -> str:
+    """评估阈值状态；无阈值始终为 neutral。"""
+    if threshold is None:
+        return "neutral"
+    if value is None:
+        return "unavailable"
+    limit = threshold.periods.get(str(period_minutes), threshold.default)
+    if threshold.direction == "min" and value < limit:
+        return "fail"
+    if threshold.direction == "max" and value > limit:
+        return "fail"
+    return "pass"
+
+
+@dataclass(slots=True)
 class KpiDomainConfig:
     domain: str
     metrics: dict[str, KpiMetricDefinition]

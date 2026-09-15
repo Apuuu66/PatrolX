@@ -361,3 +361,36 @@ BasicKpi,,可信,,2026-09-14 10:00:00,2026-09-14 10:05:00,5,100,100,0
         "呼叫请求成功次数": 100.0,
         "呼叫请求失败次数": 0.0,
     }
+
+
+def test_kpi_call_emits_version_2_catalog_results_and_preserves_rule_status(tmp_path: Path) -> None:
+    from app.inspectors.registry import registry
+    from app.models.schemas import RuleStatus
+    from app.services.executor import RuleContext
+
+    content = _content(
+        ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "统计峰值", "最大并发"],
+        [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 80, 20, 10, 8]],
+        "呼叫会话统计",
+    )
+    _write(tmp_path, "kpi/kpi-call-15.csv", content)
+    logs: list[dict] = []
+
+    def log(level: str, message: str, detail: dict | None = None) -> None:
+        logs.append({"level": level, "message": message, **(detail or {})})
+
+    ctx = RuleContext(task_id="kpi-test", data_dir=tmp_path, log=log)
+    ctx.files = [Path("kpi/kpi-call-15.csv")]
+    result = registry.get("kpi.call").run(ctx)
+    metadata = result.metadata
+
+    assert result.status == RuleStatus.FAIL
+    assert metadata["version"] == 2
+    assert metadata["config_source"] == "deploy/config/kpi"
+    assert {"call_attempts", "call_success_rate"} <= {item["key"] for item in metadata["metric_catalog"]}
+    results = {item["key"]: item for item in metadata["kpi_results"]}
+    assert results["call_success_rate"]["main_value"] == pytest.approx(80.0)
+    assert results["call_success_rate"]["display_status"] == "fail"
+    assert results["call_success_rate"]["breach_count"] == 1
+    assert results["call_attempts"]["display_status"] == "neutral"
+    assert metadata["unclassified_metrics"] == []

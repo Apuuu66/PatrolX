@@ -57,16 +57,16 @@
 
 ### US1 测试
 
-- [ ] T018 [P] [US1] 在 `tests/test_kpi_catalog_aggregation.py` 中编写重点指标、阈值状态、无阈值中性状态和越限数量失败测试。
-- [ ] T019 [P] [US1] 在 `tests/test_kpi_csv_rules.py` 中补充 KPI 结果 `metadata.version=2`、`kpi_results` 和整体规则状态兼容失败测试。
+- [x] T018 [P] [US1] 在 `tests/test_kpi_catalog_aggregation.py` 中编写重点指标、阈值状态、无阈值中性状态和越限数量失败测试。
+- [x] T019 [P] [US1] 在 `tests/test_kpi_csv_rules.py` 中补充 KPI 结果 `metadata.version=2`、`kpi_results` 和整体规则状态兼容失败测试。
 
 ### US1 实现
 
-- [ ] T020 [US1] 在 `app/inspectors/kpi/catalog.py` 实现主值聚合：计数求和、容量取最大、时延取最大/分位、比率先汇总输入再计算，并携带实际汇总方式。
-- [ ] T021 [US1] 在 `app/inspectors/kpi/catalog.py` 实现阈值评估和 `display_status`：`pass/warn/fail/neutral/unavailable`。
-- [ ] T022 [US1] 在 `app/inspectors/kpi/call.py`、`app/inspectors/kpi/api.py`、`app/inspectors/kpi/media.py` 生成 `metric_catalog`、`kpi_results`、`unclassified_metrics` 和文件摘要；升级相关 `rule_version`。
-- [ ] T023 [US1] 保持既有 `RuleResult.status` 语义：解析失败/阈值越限为 `fail`，一致性异常为 `warn`，配置错误为 `error`，仅未分类指标不改变状态。
-- [ ] T024 [US1] 运行 KPI 后端测试，确认重点指标、中性指标和规则状态兼容通过。
+- [x] T020 [US1] 在 `app/inspectors/kpi/catalog.py` 实现主值聚合：计数求和、容量取最大、时延取最大/分位、比率先汇总输入再计算，并携带实际汇总方式。
+- [x] T021 [US1] 在 `app/inspectors/kpi/catalog.py` 实现阈值评估和 `display_status`：`pass/warn/fail/neutral/unavailable`。
+- [x] T022 [US1] 在 `app/inspectors/kpi/call.py`、`app/inspectors/kpi/api.py`、`app/inspectors/kpi/media.py` 生成 `metric_catalog`、`kpi_results`、`unclassified_metrics` 和文件摘要；升级相关 `rule_version`。
+- [x] T023 [US1] 保持既有 `RuleResult.status` 语义：解析失败/阈值越限为 `fail`，一致性异常为 `warn`，配置错误为 `error`，仅未分类指标不改变状态。
+- [x] T024 [US1] 运行 KPI 后端测试，确认重点指标、中性指标和规则状态兼容通过。
 
 **检查点**：服务端可输出可判定优先级和状态的 KPI 元数据。
 
