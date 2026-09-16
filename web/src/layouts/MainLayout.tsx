@@ -66,7 +66,9 @@ export function MainLayout() {
           <Typography.Text type="secondary">本地 / 在线双模式</Typography.Text>
         </Header>
         <Content style={{ padding: 24, background: "#f5f5f5" }}>
-          <Outlet />
+          <div style={{ maxWidth: 1440, margin: "0 auto", width: "100%" }}>
+            <Outlet />
+          </div>
         </Content>
       </Layout>
     </Layout>

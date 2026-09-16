@@ -52,13 +52,6 @@ const STATUS_OPTIONS = [
   { value: "failed", label: "失败" },
 ];
 
-const OVERVIEW_ITEMS = [
-  { key: "task_count", label: "巡检任务" },
-  { key: "registered_rule_count", label: "注册规则" },
-  { key: "rule_result_count", label: "规则结果" },
-  { key: "finding_count", label: "发现问题" },
-] as const;
-
 
 const PREPARATION_STATUS_COLORS: Record<string, string> = {
   pass: "#52c41a",
@@ -416,31 +409,36 @@ export function TaskListPage() {
   return (
     <Flex vertical gap={16}>
       <Card styles={{ body: { padding: "18px 20px" } }}>
-        <Flex gap={28} align="center" justify="space-between" wrap="wrap">
-          <Flex gap={36} wrap="wrap">
-            {OVERVIEW_ITEMS.map((item) => (
-              <div key={item.key}>
-                <Typography.Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-                  {(overview?.[item.key] ?? 0).toLocaleString()}
-                </Typography.Title>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {item.label}
-                </Typography.Text>
-              </div>
-            ))}
-          </Flex>
-          <Flex gap={16} wrap="wrap">
-            {RESULT_STATUS_META.map((item) => (
-              <div key={item.key} style={{ minWidth: 72, textAlign: "center" }}>
-                <Typography.Text strong style={{ display: "block", fontSize: 20, color: item.color }}>
-                  {(overview?.status_counts?.[item.key] ?? 0).toLocaleString()}
-                </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {item.label}
-                </Typography.Text>
-              </div>
-            ))}
-          </Flex>
+        <Flex gap={36} wrap="wrap">
+          {[
+            {
+              key: "abnormal_rules",
+              label: "异常规则",
+              value:
+                (overview?.status_counts?.warn ?? 0) +
+                (overview?.status_counts?.fail ?? 0) +
+                (overview?.status_counts?.error ?? 0),
+              color: "#cf1322",
+            },
+            { key: "finding_count", label: "发现问题", value: overview?.finding_count ?? 0, color: "#1677ff" },
+            { key: "task_count", label: "任务总数", value: overview?.task_count ?? 0, color: undefined },
+          ].map((item) => (
+            <div key={item.key} style={{ minWidth: 108 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {item.label}
+              </Typography.Text>
+              <Typography.Title
+                level={3}
+                style={{
+                  margin: "2px 0 0",
+                  fontWeight: 700,
+                  color: item.color ?? "rgba(0, 0, 0, 0.88)",
+                }}
+              >
+                {item.value.toLocaleString()}
+              </Typography.Title>
+            </div>
+          ))}
         </Flex>
       </Card>
 
@@ -484,10 +482,14 @@ export function TaskListPage() {
         }
       >
         <Flex vertical gap={12}>
-          {items.map((record) => (
+          {items.map((record) => {
+            const abnormalCount =
+              record.stats.fail + record.stats.warn + record.stats.error;
+            return (
             <Card
               key={record.task_id}
               hoverable
+              style={abnormalCount ? { borderColor: "#ffccc7" } : undefined}
               styles={{ body: { padding: 16 } }}
             >
               <div
@@ -523,30 +525,21 @@ export function TaskListPage() {
                 )}
               </div>
 
-              <Flex gap={8} wrap="wrap">
-                {RESULT_STATUS_META.map((item) => {
-                  const value = record.stats[item.key];
-                  return (
-                    <div
-                      key={item.key}
-                      style={{
-                        flex: "1 1 52px",
-                        minWidth: 56,
-                        padding: "7px 6px",
-                        borderRadius: 10,
-                        textAlign: "center",
-                        background: `${item.color}14`,
-                      }}
-                    >
-                      <Typography.Text strong style={{ display: "block", color: item.color, fontSize: 18 }}>
-                        {value}
-                      </Typography.Text>
-                      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                        {item.label}
-                      </Typography.Text>
-                    </div>
-                  );
-                })}
+              <Flex gap={6} wrap="wrap">
+                {RESULT_STATUS_META.map((item) => (
+                  <Typography.Text
+                    key={item.key}
+                    style={{
+                      fontSize: 12,
+                      color: item.color,
+                      background: `${item.color}14`,
+                      borderRadius: 12,
+                      padding: "2px 8px",
+                    }}
+                  >
+                    {item.label} {record.stats[item.key]}
+                  </Typography.Text>
+                ))}
               </Flex>
 
               <Flex vertical align="flex-end" gap={8}>
@@ -594,7 +587,8 @@ export function TaskListPage() {
                 />
               )}
             </Card>
-          ))}
+            );
+          })}
 
           {!loading && items.length === 0 && <Empty description="暂无巡检任务" />}
 

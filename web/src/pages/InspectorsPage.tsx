@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { App, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
+import { App, Card, Descriptions, Input, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { api, type InspectorInfo } from "../api/http";
 import { SeverityTag } from "../components/StatusBadge";
@@ -54,14 +54,6 @@ export function InspectorsPage() {
     { title: "优先级", dataIndex: "priority", width: 80, render: (v: number) => `P${v}` },
     { title: "严重度", dataIndex: "severity", width: 90, render: (v: string) => <SeverityTag severity={v} /> },
     { title: "版本", dataIndex: "rule_version", width: 80 },
-    { title: "描述", dataIndex: "description" },
-    { title: "处理建议", dataIndex: "recommendation" },
-    {
-      title: "源文件匹配",
-      dataIndex: "source_patterns",
-      width: 220,
-      render: (v: string[]) => (v ?? []).map((i) => <Tag key={i}>{i}</Tag>),
-    },
   ];
 
   return (
@@ -80,7 +72,33 @@ export function InspectorsPage() {
         </Space>
       }
     >
-      <Table rowKey="code" size="small" loading={loading} dataSource={filtered} columns={columns} pagination={{ pageSize: 20 }} />
+      <Table
+        rowKey="code"
+        size="small"
+        loading={loading}
+        dataSource={filtered}
+        columns={columns}
+        pagination={{ pageSize: 20 }}
+        expandable={{
+          expandedRowRender: (record) => (
+            <Descriptions
+              size="small"
+              column={1}
+              items={[
+                { key: "description", label: "描述", children: record.description ?? "-" },
+                { key: "recommendation", label: "处理建议", children: record.recommendation ?? "-" },
+                {
+                  key: "source_patterns",
+                  label: "源文件匹配",
+                  children: (record.source_patterns ?? []).length
+                    ? record.source_patterns.map((pattern) => <Tag key={pattern}>{pattern}</Tag>)
+                    : "-",
+                },
+              ]}
+            />
+          ),
+        }}
+      />
     </Card>
   );
 }

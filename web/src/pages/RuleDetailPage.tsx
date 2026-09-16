@@ -67,7 +67,16 @@ export function RuleDetailPage() {
             <Typography.Text type="secondary">{result.code}</Typography.Text>
           </Space>
         }
-        description={conclusion}
+        description={
+          <div>
+            <div>{conclusion}</div>
+            {meta?.recommendation && (
+              <Typography.Text type="secondary" style={{ display: "block", marginTop: 4 }}>
+                建议：{meta.recommendation}
+              </Typography.Text>
+            )}
+          </div>
+        }
         style={{ marginBottom: 16 }}
       />
 
@@ -113,7 +122,6 @@ export function RuleDetailPage() {
           column={2}
           items={[
             { key: "desc", label: "规则描述", children: meta?.description ?? "-" },
-            { key: "rec", label: "处理建议", children: meta?.recommendation ?? "-" },
             { key: "version", label: "规则版本", children: meta?.rule_version ?? "-" },
             { key: "duration", label: "执行耗时", children: `${result.duration_ms ?? "-"}ms` },
             { key: "priority", label: "优先级", children: `P${result.priority}` },

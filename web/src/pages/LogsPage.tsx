@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { App, Breadcrumb, Card, Empty, List, Space, Spin, Tag, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { App, Breadcrumb, Card, Empty, Select, Space, Table, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { Link, useParams } from "react-router-dom";
 import { api, type LogEntry } from "../api/http";
@@ -11,11 +12,20 @@ const LEVEL_COLOR: Record<string, string> = {
   debug: "default",
 };
 
+const LEVEL_OPTIONS = [
+  { value: "error", label: "error" },
+  { value: "warn", label: "warn" },
+  { value: "info", label: "info" },
+  { value: "debug", label: "debug" },
+];
+
 export function LogsPage() {
   const { taskId = "" } = useParams();
   const { message } = App.useApp();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [level, setLevel] = useState<string | undefined>();
+  const [ruleCode, setRuleCode] = useState<string | undefined>();
 
   useEffect(() => {
     void (async () => {
@@ -30,6 +40,46 @@ export function LogsPage() {
     })();
   }, [taskId, message]);
 
+  const ruleOptions = useMemo(
+    () =>
+      Array.from(new Set(entries.map((entry) => entry.rule_code).filter(Boolean) as string[])).map((code) => ({
+        value: code,
+        label: code,
+      })),
+    [entries],
+  );
+
+  const filtered = useMemo(
+    () =>
+      entries.filter((entry) => {
+        if (level && entry.level !== level) return false;
+        if (ruleCode && entry.rule_code !== ruleCode) return false;
+        return true;
+      }),
+    [entries, level, ruleCode],
+  );
+
+  const columns: ColumnsType<LogEntry> = [
+    {
+      title: "时间",
+      dataIndex: "ts",
+      width: 130,
+      render: (value: string) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {dayjs(value).format("HH:mm:ss.SSS")}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "级别",
+      dataIndex: "level",
+      width: 90,
+      render: (value: string) => <Tag color={LEVEL_COLOR[value] ?? "default"}>{value}</Tag>,
+    },
+    { title: "规则", dataIndex: "rule_code", width: 190, render: (value?: string) => value ?? "-" },
+    { title: "消息", dataIndex: "message" },
+  ];
+
   return (
     <div>
       <Breadcrumb
@@ -40,36 +90,52 @@ export function LogsPage() {
           { title: "执行日志" },
         ]}
       />
-      <Card title="执行日志">
+      <Card
+        title={`执行日志（${filtered.length}）`}
+        extra={
+          <Space wrap>
+            <Select
+              allowClear
+              placeholder="级别"
+              style={{ width: 120 }}
+              value={level}
+              options={LEVEL_OPTIONS}
+              onChange={setLevel}
+            />
+            <Select
+              allowClear
+              showSearch
+              placeholder="规则"
+              style={{ width: 200 }}
+              value={ruleCode}
+              options={ruleOptions}
+              onChange={setRuleCode}
+            />
+          </Space>
+        }
+      >
         {loading ? (
-          <div style={{ textAlign: "center", padding: 40 }}>
-            <Spin />
-          </div>
-        ) : entries.length === 0 ? (
-          <Empty description="暂无日志" />
+          <Empty description="加载中" />
+        ) : filtered.length === 0 ? (
+          <Empty description="暂无匹配日志" />
         ) : (
-          <List
+          <Table
+            rowKey={(record) => `${record.ts}-${record.rule_code ?? ""}-${record.message}`}
             size="small"
-            dataSource={entries}
-            renderItem={(e) => (
-              <List.Item>
-                <div style={{ width: "100%" }}>
-                  <Space>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {dayjs(e.ts).format("HH:mm:ss.SSS")}
-                    </Typography.Text>
-                    <Tag color={LEVEL_COLOR[e.level] ?? "default"}>{e.level}</Tag>
-                    {e.rule_code && <Tag>{e.rule_code}</Tag>}
-                  </Space>
-                  <div style={{ marginTop: 2 }}>{e.message}</div>
-                  {Object.keys(e.detail ?? {}).length > 0 && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {JSON.stringify(e.detail)}
-                    </Typography.Text>
-                  )}
-                </div>
-              </List.Item>
-            )}
+            dataSource={filtered}
+            columns={columns}
+            pagination={{ pageSize: 50, showSizeChanger: false }}
+            expandable={{
+              rowExpandable: (record) => Object.keys(record.detail ?? {}).length > 0,
+              expandedRowRender: (record) => (
+                <Typography.Paragraph
+                  code
+                  style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+                >
+                  {JSON.stringify(record.detail, null, 2)}
+                </Typography.Paragraph>
+              ),
+            }}
           />
         )}
       </Card>
