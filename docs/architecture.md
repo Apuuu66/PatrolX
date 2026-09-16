@@ -549,3 +549,4 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
 - 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
+- 配置辅助工具 `tools/generate_kpi_config.py` 可扫描 KPI CSV 生成未登记指标草稿；`--apply` 只追加新指标，并在合并后重新校验配置目录。
