@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   App,
   Breadcrumb,
   Button,
   Card,
-  Alert,
+  Collapse,
   Descriptions,
   Empty,
   Popconfirm,
   Space,
   Spin,
   Table,
+  Tag,
   Typography,
 } from "antd";
 import { FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined } from "@ant-design/icons";
@@ -110,6 +112,17 @@ export function TaskDetailPage() {
     return Array.from(map.entries());
   }, [filteredRules]);
 
+  const attentionRules = useMemo(
+    () =>
+      rules
+        .filter((rule) => rule.status === "fail" || rule.status === "warn" || rule.status === "error")
+        .sort((left, right) => {
+          const weight = { fail: 0, warn: 1, error: 2, pass: 9, skip: 9 } as const;
+          return weight[left.status] - weight[right.status];
+        }),
+    [rules],
+  );
+
   const columns: ColumnsType<RuleResult> = [
     {
       title: "规则",
@@ -196,6 +209,21 @@ export function TaskDetailPage() {
           activeStatus={statusFilter}
           onStatusClick={handleStatusClick}
         />
+        <Alert
+          style={{ marginTop: 16 }}
+          type={attentionRules.length ? "warning" : "success"}
+          showIcon
+          message={
+            attentionRules.length
+              ? `重点关注 ${attentionRules.length} 条规则`
+              : "巡检完成，未发现需要重点处理的规则"
+          }
+          description={
+            attentionRules.length
+              ? "以下规则存在失败、告警或执行异常，建议优先查看结论和证据。"
+              : undefined
+          }
+        />
         <Descriptions
           size="small"
           column={4}
@@ -224,20 +252,36 @@ export function TaskDetailPage() {
         <Alert type="error" showIcon message="任务失败" description={failure} style={{ marginBottom: 16 }} />
       )}
 
-      {grouped.length === 0 && statusFilter !== null && (
-        <Card style={{ marginBottom: 16 }}>
-          <Empty description={`当前状态"${statusFilter}"没有规则结果`} />
+      {attentionRules.length > 0 && (
+        <Card
+          title={`重点关注（${attentionRules.length}）`}
+          style={{ marginBottom: 16 }}
+          styles={{ header: { borderColor: "#ffccc7" } }}
+        >
+          <Table rowKey="code" size="small" columns={columns} dataSource={attentionRules} pagination={false} />
         </Card>
       )}
-      {grouped.map(([category, list]) => (
-        <Card
-          key={category}
-          title={`${CATEGORY_LABELS[category] ?? category}（${list.length}）`}
-          style={{ marginBottom: 16 }}
-        >
-          <Table rowKey="code" size="small" columns={columns} dataSource={list} pagination={false} />
-        </Card>
-      ))}
+
+      <Card title="全部规则" styles={{ body: { paddingTop: 8 } }}>
+        {grouped.length === 0 ? (
+          <Empty description={statusFilter ? `当前状态"${statusFilter}"没有规则结果` : "暂无规则结果"} />
+        ) : (
+          <Collapse
+            items={grouped.map(([category, list]) => ({
+              key: category,
+              label: (
+                <Space>
+                  <span>{CATEGORY_LABELS[category] ?? category}</span>
+                  <Tag>{list.length}</Tag>
+                </Space>
+              ),
+              children: (
+                <Table rowKey="code" size="small" columns={columns} dataSource={list} pagination={false} />
+              ),
+            }))}
+          />
+        )}
+      </Card>
     </div>
   );
 }

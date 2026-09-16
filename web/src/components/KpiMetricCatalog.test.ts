@@ -147,3 +147,22 @@ test("keeps historical version 1 metadata in the legacy detail-table path", () =
   assert.equal(parseKpiMetadata(historical), null);
   assert.equal(parseKpiMetadata(metadata)?.version, 2);
 });
+import { getKpiFocusItems } from "./kpiCatalogModel.ts";
+
+test("returns abnormal indicators before neutral catalog items", () => {
+  const focus = getKpiFocusItems(metadata);
+  assert.deepEqual(
+    focus.map((item) => item.definition.key),
+    ["call_success_rate", "stat_peak"],
+  );
+});
+
+test("limits focus items to the requested count", () => {
+  const focus = getKpiFocusItems(metadata, 1);
+  assert.deepEqual(focus.map((item) => item.definition.key), ["call_success_rate"]);
+});
+import { summarizeKpiMetadata } from "./kpiCatalogModel.ts";
+
+test("summarizes abnormal indicators by fail and unavailable status", () => {
+  assert.equal(summarizeKpiMetadata(metadata).abnormal, 2);
+});
