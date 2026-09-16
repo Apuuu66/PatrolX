@@ -20,7 +20,6 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 IS_WINDOWS = os.name == "nt"
