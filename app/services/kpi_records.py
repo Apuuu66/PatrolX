@@ -95,11 +95,15 @@ def _derived_value(
 
 def _build_catalog(metadata: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
     catalog: dict[str, dict[str, Any]] = {}
-    for definition in metadata.get("metric_catalog", []):
+    definitions = metadata.get("metric_catalog", [])
+    results = metadata.get("kpi_results", [])
+    for definition in definitions if isinstance(definitions, list) else []:
+        if not isinstance(definition, dict):
+            continue
         key = str(definition.get("key", ""))
         if key:
             catalog[key] = definition
-    thresholds = _threshold_map(metadata.get("kpi_results", []))
+    thresholds = _threshold_map(results if isinstance(results, list) else [])
     return catalog, thresholds
 
 
@@ -142,19 +146,37 @@ def project_kpi_records(
 ) -> KpiRecordPage:
     """将目录化 KPI metadata 投影为记录分页。"""
     metadata = result.metadata
-    if not isinstance(metadata, dict) or int(metadata.get("version", 0)) < 2:
+    try:
+        metadata_version = int(metadata.get("version", 0)) if isinstance(metadata, dict) else 0
+    except (TypeError, ValueError):
+        metadata_version = 0
+    if metadata_version < 2:
         return KpiRecordPage(total=0, page=page, page_size=page_size, items=[])
 
     catalog, thresholds = _build_catalog(metadata)
     aliases = _alias_map(catalog)
     items: list[KpiRecordItem] = []
 
-    for kpi_file in metadata.get("kpi_files", []):
+    kpi_files = metadata.get("kpi_files", [])
+    if not isinstance(kpi_files, list):
+        kpi_files = []
+    for kpi_file in kpi_files:
+        if not isinstance(kpi_file, dict):
+            continue
         file_path = str(kpi_file.get("path", ""))
         if source_file is not None and file_path != source_file:
             continue
-        for record in kpi_file.get("records", []):
-            record_period = int(record.get("period_minutes", kpi_file.get("period_minutes", 0)))
+        records = kpi_file.get("records", [])
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            try:
+                record_period = int(record.get("period_minutes", kpi_file.get("period_minutes", 0)))
+                line_number = int(record.get("line_number", 0))
+            except (TypeError, ValueError):
+                continue
             if period_minutes is not None and record_period != period_minutes:
                 continue
             source_values: dict[str, float] = {}
@@ -189,13 +211,13 @@ def project_kpi_records(
                         metric_key=key,
                         metric_name_zh=str(definition.get("name_zh", key)),
                         source_file=file_path,
-                        line_number=int(record.get("line_number", 0)),
+                        line_number=line_number,
                         period_minutes=record_period,
                         start_at=record.get("start_at"),
                         end_at=record.get("end_at"),
                         value=value,
                         status=display_status,
-                        errors=record.get("errors", []),
+                        errors=record.get("errors", []) if isinstance(record.get("errors", []), list) else [],
                     )
                 )
 

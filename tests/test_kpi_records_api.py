@@ -248,3 +248,82 @@ def test_kpi_records_missing_rule_returns_404() -> None:
     response = client.get("/api/v2/tasks/missing/rules/kpi.call/kpi/records")
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
+
+
+def test_kpi_records_rejects_invalid_pagination_and_status() -> None:
+    task_id = "records-invalid-params"
+    _save(task_id, "kpi.call", _metadata())
+
+    invalid_queries: list[dict[str, object]] = [
+        {"page": 0},
+        {"page": -1},
+        {"page_size": 0},
+        {"page_size": 201},
+        {"status": "unknown"},
+    ]
+    for params in invalid_queries:
+        response = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records", params=params)
+        assert response.status_code == 422, (params, response.status_code, response.text)
+
+
+def test_kpi_records_treats_unknown_filters_as_empty_pages() -> None:
+    task_id = "records-unknown-filters"
+    _save(task_id, "kpi.call", _metadata())
+
+    for params in (
+        {"metric_key": "not_registered"},
+        {"source_file": "kpi/not-found.csv"},
+    ):
+        response = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records", params=params)
+        assert response.status_code == 200, (params, response.text)
+        assert response.json()["total"] == 0
+        assert response.json()["items"] == []
+
+
+def test_kpi_records_survives_malformed_metadata() -> None:
+    task_id = "records-corrupt-metadata"
+    metadata = _metadata()
+    metadata["version"] = "not-a-number"
+    metadata["kpi_files"] = {"unexpected": "shape"}
+    _save(task_id, "kpi.call", metadata)
+
+    response = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records")
+    assert response.status_code == 200, response.text
+    assert response.json()["total"] == 0
+    assert response.json()["items"] == []
+
+
+def test_kpi_records_skips_malformed_records() -> None:
+    task_id = "records-corrupt-record"
+    metadata = _metadata()
+    metadata["kpi_files"] = [
+        {
+            "path": "kpi/kpi-call-5.csv",
+            "domain": "call",
+            "period_minutes": 5,
+            "records": [
+                {"line_number": "bad", "period_minutes": "bad", "values": "bad", "errors": []},
+                metadata["kpi_files"][0]["records"][0],
+            ],
+        }
+    ]
+    _save(task_id, "kpi.call", metadata)
+
+    response = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records")
+    assert response.status_code == 200, response.text
+    page = response.json()
+    assert page["total"] == 4
+    assert [item["line_number"] for item in page["items"]] == [4, 4, 4, 4]
+
+
+def test_kpi_records_survives_malformed_catalog_and_results() -> None:
+    task_id = "records-corrupt-catalog"
+    metadata = _metadata()
+    metadata["metric_catalog"] = {"bad": "shape"}
+    metadata["kpi_results"] = {"bad": "shape"}
+    _save(task_id, "kpi.call", metadata)
+
+    response = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records")
+    assert response.status_code == 200, response.text
+    assert response.json()["total"] == 0
+    assert response.json()["items"] == []
