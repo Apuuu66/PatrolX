@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path, PureWindowsPath
+from typing import Any
 
 import yaml
 from fastapi import APIRouter, File, Form, Query, UploadFile
@@ -163,7 +164,20 @@ def get_task_v2(task_id: str = PathParam()) -> InspectionTask:
     task = task_service.get(task_id)
     if task is None:
         raise AppError("not_found", "任务不存在", 404)
-    return task
+    system = task.system
+    if system is None:
+        return task
+    return task.model_copy(
+        update={
+            "system": system.model_copy(
+                update={
+                    "rules": [
+                        rule.model_copy(update={"metadata": {}, "metrics": [], "findings": []}) for rule in system.rules
+                    ]
+                }
+            )
+        }
+    )
 
 
 @router.delete("/tasks/{task_id}", status_code=204, operation_id="deleteTaskV2")
@@ -238,6 +252,20 @@ def get_task_logs_v2(task_id: str = PathParam()) -> TaskLogs:
     return TaskLogs(task_id=task_id, entries=entries)
 
 
+KPI_SERIES_MAX_POINTS = 200
+
+
+def _bounded_kpi_list(items: list[Any], max_items: int = KPI_SERIES_MAX_POINTS) -> list[Any]:
+    """为展示接口均匀抽稀长列表；完整数据仍保留在规则结果文件中。"""
+    if len(items) <= max_items:
+        return items
+    step = -(-len(items) // max_items)
+    sampled = items[::step]
+    if sampled[-1] is not items[-1]:
+        sampled.append(items[-1])
+    return sampled
+
+
 def _load_system_json(task_id: str) -> SystemInspection:
     path = settings.output / task_id / "system.json"
     if path.exists():
@@ -252,8 +280,18 @@ def _load_system_json(task_id: str) -> SystemInspection:
 
 
 @router.get("/tasks/{task_id}/system", response_model=SystemInspection, operation_id="getSystemV2")
-def get_system_v2(task_id: str = PathParam()) -> SystemInspection:
-    return _load_system_json(task_id)
+def get_system_v2(
+    task_id: str = PathParam(),
+    exclude_details: bool = False,
+) -> SystemInspection:
+    system = _load_system_json(task_id)
+    if not exclude_details:
+        return system
+    return system.model_copy(
+        update={
+            "rules": [rule.model_copy(update={"metadata": {}, "metrics": [], "findings": []}) for rule in system.rules]
+        }
+    )
 
 
 @router.get("/tasks/{task_id}/rules/{rule_code}", response_model=RuleResult, operation_id="getRuleResultV2")
@@ -268,10 +306,36 @@ def get_rule_result_v2(
         raise AppError("not_found", f"规则结果不存在: {rule_code}", 404)
     if not exclude_records:
         return rule
-    projected = rule.model_copy(deep=True)
-    if projected.metadata.get("version", 0) >= 2:
-        for kpi_file in projected.metadata.get("kpi_files", []):
-            kpi_file["records"] = []
+    projected = rule.model_copy()
+    metadata = dict(projected.metadata)
+    if metadata.get("version", 0) >= 2:
+        kpi_files = []
+        for kpi_file in metadata.get("kpi_files", []):
+            if isinstance(kpi_file, dict):
+                kpi_file = {**kpi_file, "records": []}
+            kpi_files.append(kpi_file)
+        metadata["kpi_files"] = kpi_files
+
+        kpi_results = []
+        for result in metadata.get("kpi_results", []):
+            if not isinstance(result, dict):
+                kpi_results.append(result)
+                continue
+            result = dict(result)
+            series = result.get("series")
+            if isinstance(series, list):
+                result["series"] = _bounded_kpi_list(series)
+            provenance = result.get("provenance")
+            if isinstance(provenance, dict):
+                cross_reference = provenance.get("direct_cross_reference")
+                if isinstance(cross_reference, list):
+                    result["provenance"] = {
+                        **provenance,
+                        "direct_cross_reference": _bounded_kpi_list(cross_reference),
+                    }
+            kpi_results.append(result)
+        metadata["kpi_results"] = kpi_results
+    projected.metadata = metadata
     return projected
 
 

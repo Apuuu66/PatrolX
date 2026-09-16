@@ -707,7 +707,7 @@ export interface components {
              * @description 错误码（新增时同步契约与实现）
              * @enum {string}
              */
-            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "task_delete_failed" | "package_checksum_conflict" | "invalid_filename" | "corrupt_data";
+            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "task_delete_failed" | "package_checksum_conflict" | "invalid_filename" | "corrupt_data" | "validation_error";
             message: string;
             detail?: {
                 [key: string]: unknown;
@@ -827,6 +827,15 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description 请求参数校验失败 */
+        Error422: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorV2"];
+            };
+        };
     };
     parameters: {
         TaskId: string;
@@ -905,6 +914,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskListResponseV2"];
                 };
             };
+            422: components["responses"]["Error422"];
         };
     };
     createTaskV2: {
@@ -1097,7 +1107,10 @@ export interface operations {
     };
     getSystemV2: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 为 true 时只返回规则状态摘要，清空 rules[].metadata/metrics/findings。 */
+                exclude_details?: boolean;
+            };
             header?: never;
             path: {
                 task_id: components["parameters"]["TaskId"];
@@ -1121,7 +1134,7 @@ export interface operations {
     getRuleResultV2: {
         parameters: {
             query?: {
-                /** @description 为 true 时清空 KPI metadata.kpi_files[].records，保留文件摘要与目录。 */
+                /** @description 为 true 时清空 KPI metadata.kpi_files[].records，并对 kpi_results[].series 与 provenance.direct_cross_reference 做最多 200 点的展示抽稀；完整序列保留在规则结果文件中。 */
                 exclude_records?: boolean;
             };
             header?: never;
@@ -1177,6 +1190,7 @@ export interface operations {
             };
             400: components["responses"]["Error400"];
             404: components["responses"]["Error404"];
+            422: components["responses"]["Error422"];
         };
     };
     getOverviewV2: {

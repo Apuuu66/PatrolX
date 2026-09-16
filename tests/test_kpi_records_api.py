@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.core.config import settings
 from app.main import app
 from app.models.schemas import (
+    InspectionTask,
     Priority,
     RuleCategory,
     RuleResult,
@@ -13,7 +14,7 @@ from app.models.schemas import (
     Summary,
     SystemInspection,
 )
-from app.services.store import save_rule_result, save_system
+from app.services.store import save_rule_result, save_system, save_task_meta
 
 client = TestClient(app)
 
@@ -131,14 +132,25 @@ def _save(task_id: str, code: str, metadata: dict, *, with_system: bool = False)
     rule = _rule(code, metadata)
     save_rule_result(settings.output, task_id, rule)
     if with_system:
-        save_system(
+        system = SystemInspection(
+            package_file=f"{task_id}.zip",
+            status="completed",
+            summary=Summary(total=1, **{"pass": 0, "warn": 0, "fail": 1, "error": 0, "skip": 0}),
+            rules=[rule],
+        )
+        save_system(settings.output, task_id, system)
+        save_task_meta(
             settings.output,
-            task_id,
-            SystemInspection(
-                package_file=f"{task_id}.zip",
+            InspectionTask(
+                task_id=task_id,
+                name=task_id,
+                mode="online",
                 status="completed",
-                summary=Summary(total=1, **{"pass": 0, "warn": 0, "fail": 1, "error": 0, "skip": 0}),
-                rules=[rule],
+                trigger="api",
+                created_at="2026-09-14T02:00:00Z",
+                completed_at="2026-09-14T02:01:00Z",
+                stats={"total": 1, "pass": 0, "warn": 0, "fail": 1, "error": 0, "skip": 0, "systems": 1},
+                system=system,
             ),
         )
 
@@ -222,16 +234,34 @@ def test_kpi_records_returns_empty_for_legacy_metadata() -> None:
 
 def test_rule_result_can_exclude_kpi_records() -> None:
     task_id = "records-exclude"
-    _save(task_id, "kpi.call", _metadata(), with_system=True)
+    metadata = _metadata()
+    metadata["kpi_results"][0]["series"] = [
+        {"start_at": f"2026-09-14T02:{index:02d}:00Z", "value": index} for index in range(501)
+    ]
+    metadata["kpi_results"][0]["provenance"] = {
+        "formula": "call_success_count / call_attempts * 100",
+        "direct_cross_reference": [{"source_file": "kpi/kpi-call-5.csv", "value": index} for index in range(501)],
+    }
+    _save(task_id, "kpi.call", metadata, with_system=True)
 
     default = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call")
     assert default.status_code == 200
+    assert len(default.json()["metadata"]["kpi_results"][0]["series"]) == 501
     assert default.json()["metadata"]["kpi_files"][0]["records"]
 
     excluded = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call", params={"exclude_records": "true"})
     assert excluded.status_code == 200
     assert excluded.json()["metadata"]["kpi_files"][0]["records"] == []
     assert excluded.json()["metadata"]["metric_catalog"]
+    result = excluded.json()["metadata"]["kpi_results"][0]
+    series = result["series"]
+    assert len(series) <= 200
+    assert series[0]["value"] == 0
+    assert series[-1]["value"] == 500
+    cross_reference = result["provenance"]["direct_cross_reference"]
+    assert len(cross_reference) <= 200
+    assert cross_reference[0]["value"] == 0
+    assert cross_reference[-1]["value"] == 500
 
 
 def test_kpi_records_returns_empty_for_non_kpi_metadata() -> None:
@@ -264,6 +294,10 @@ def test_kpi_records_rejects_invalid_pagination_and_status() -> None:
     for params in invalid_queries:
         response = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records", params=params)
         assert response.status_code == 422, (params, response.status_code, response.text)
+        body = response.json()
+        assert body["code"] == "validation_error", (params, body)
+        assert body["message"], body
+        assert body["detail"]["errors"], body
 
 
 def test_kpi_records_treats_unknown_filters_as_empty_pages() -> None:
@@ -327,3 +361,39 @@ def test_kpi_records_survives_malformed_catalog_and_results() -> None:
     assert response.status_code == 200, response.text
     assert response.json()["total"] == 0
     assert response.json()["items"] == []
+
+
+def test_system_summary_can_exclude_rule_details() -> None:
+    task_id = "system-summary"
+    _save(task_id, "kpi.call", _metadata(), with_system=True)
+
+    default = client.get(f"/api/v2/tasks/{task_id}/system")
+    assert default.status_code == 200
+    assert default.json()["rules"][0]["metadata"]["kpi_files"]
+
+    summarized = client.get(f"/api/v2/tasks/{task_id}/system", params={"exclude_details": "true"})
+    assert summarized.status_code == 200
+    rule = summarized.json()["rules"][0]
+    assert rule["code"] == "kpi.call"
+    assert rule["status"] == "fail"
+    assert rule["metadata"] == {}
+    assert rule["metrics"] == []
+    assert rule["findings"] == []
+
+
+def test_task_summary_excludes_rule_details() -> None:
+    task_id = "task-summary"
+    _save(task_id, "kpi.call", _metadata(), with_system=True)
+
+    response = client.get(f"/api/v2/tasks/{task_id}")
+    assert response.status_code == 200
+    task = response.json()
+    assert task["status"] == "completed"
+    assert task["stats"]["total"] == 1
+    assert task["system"]["summary"]["total"] == 1
+    rule = task["system"]["rules"][0]
+    assert rule["code"] == "kpi.call"
+    assert rule["status"] == "fail"
+    assert rule["metadata"] == {}
+    assert rule["metrics"] == []
+    assert rule["findings"] == []

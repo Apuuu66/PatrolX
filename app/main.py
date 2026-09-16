@@ -7,6 +7,7 @@
 import time
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from app import __version__
@@ -16,6 +17,19 @@ from app.core.metrics import render_metrics
 from app.models.schemas import Error
 
 _logging_configured = False
+
+
+def _validation_detail(exc: RequestValidationError) -> dict[str, object]:
+    """将 Pydantic 校验错误转换为可 JSON 化的统一 detail。"""
+    errors = [
+        {
+            "loc": [str(item) for item in error.get("loc", [])],
+            "msg": str(error.get("msg", "校验失败")),
+            "type": str(error.get("type", "value_error")),
+        }
+        for error in exc.errors()
+    ]
+    return {"errors": errors}
 
 
 def create_app() -> FastAPI:
@@ -51,6 +65,17 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=exc.status_code,
             content=Error(code=exc.code, message=exc.message, detail=exc.detail).model_dump(),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(_request, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=Error(
+                code="validation_error",
+                message="请求参数校验失败",
+                detail=_validation_detail(exc),
+            ).model_dump(),
         )
 
     @app.get("/healthz", tags=["system"], operation_id="healthz")

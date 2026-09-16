@@ -101,7 +101,10 @@ export const api = {
 
   getTaskLogs: (taskId: string) => request<{ task_id: string; entries: LogEntry[] }>(`${BASE}/tasks/${encodeURIComponent(taskId)}/logs`),
 
-  getSystem: (taskId: string) => request<SystemInspection>(`${BASE}/tasks/${encodeURIComponent(taskId)}/system`),
+  getSystem: (taskId: string, excludeDetails = false) =>
+    request<SystemInspection>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/system${excludeDetails ? "?exclude_details=true" : ""}`,
+    ),
 
   getRuleResult: (taskId: string, ruleCode: string, excludeRecords = false) => {
     const query = excludeRecords ? "?exclude_records=true" : "";

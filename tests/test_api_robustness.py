@@ -104,6 +104,10 @@ def test_pagination_validates_query_bounds(tmp_path, monkeypatch) -> None:
     ):
         response = client.get("/api/v2/tasks", params=params)
         assert response.status_code == 422, (params, response.status_code, response.text)
+        body = response.json()
+        assert body["code"] == "validation_error", (params, body)
+        assert body["message"], (params, body)
+        assert body["detail"]["errors"], (params, body)
 
 
 def test_corrupt_task_json_does_not_break_list(tmp_path, monkeypatch) -> None:

@@ -199,3 +199,11 @@ def test_config_rejects_cross_domain_formula(tmp_path: Path) -> None:
     _write_domain(config_dir, raw)
     with pytest.raises(KpiConfigError, match="api.metrics\\[key=api_bad_rate\\].formula: 引用未知输入"):
         load_kpi_config(config_dir)
+
+
+def test_load_kpi_config_is_independent_from_process_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """KPI 默认配置必须基于项目根路径解析，不能依赖启动进程 cwd。"""
+    monkeypatch.chdir(tmp_path)
+    config = load_kpi_config()
+    assert config.version == 2
+    assert set(config.domains) == {"call", "api", "media"}

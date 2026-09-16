@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from app.inspectors.kpi import common as kpi_common
 from app.inspectors.registry import registry
 from app.models.schemas import RuleStatus
 from app.services.executor import Executor, RuleContext
@@ -263,7 +262,7 @@ def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> 
 
 
 def test_kpi_call_config_error_is_not_silently_skipped(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(kpi_common, "CONFIG_RELATIVE_PATH", str(tmp_path / "missing.yaml"))
+    monkeypatch.setattr("app.core.config.settings.config_dir", tmp_path / "missing.yaml")
     ctx = _ctx(tmp_path, {"kpi/kpi-call-15.csv": _GOOD_CALL})
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.ERROR

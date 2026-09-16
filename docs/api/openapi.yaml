@@ -105,6 +105,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskListResponseV2'
+        '422':
+          $ref: '#/components/responses/Error422'
   /api/v2/tasks/{task_id}:
     get:
       summary: 任务摘要（不含全量规则结果）
@@ -199,6 +201,12 @@ paths:
       operationId: getSystemV2
       parameters:
       - $ref: '#/components/parameters/TaskId'
+      - name: exclude_details
+        in: query
+        schema:
+          type: boolean
+          default: false
+        description: 为 true 时只返回规则状态摘要，清空 rules[].metadata/metrics/findings。
       responses:
         '200':
           description: 系统巡检结果
@@ -220,7 +228,7 @@ paths:
         schema:
           type: boolean
           default: false
-        description: 为 true 时清空 KPI metadata.kpi_files[].records，保留文件摘要与目录。
+        description: 为 true 时清空 KPI metadata.kpi_files[].records，并对 kpi_results[].series 与 provenance.direct_cross_reference 做最多 200 点的展示抽稀；完整序列保留在规则结果文件中。
       responses:
         '200':
           description: 规则结果（metrics/findings）
@@ -269,6 +277,8 @@ paths:
           $ref: '#/components/responses/Error400'
         '404':
           $ref: '#/components/responses/Error404'
+        '422':
+          $ref: '#/components/responses/Error422'
   /api/v2/overview:
     get:
       summary: 全局巡检概览
@@ -402,6 +412,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Error422:
+      description: 请求参数校验失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorV2'
   schemas:
     TaskStatus:
       type: string
@@ -1528,6 +1544,7 @@ components:
           - package_checksum_conflict
           - invalid_filename
           - corrupt_data
+          - validation_error
           description: 错误码（新增时同步契约与实现）
         message:
           type: string

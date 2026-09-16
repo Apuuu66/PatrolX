@@ -49,7 +49,7 @@ export function TaskDetailPage() {
     try {
       const [t, s, inspectors, logs] = await Promise.all([
         api.getTask(taskId),
-        api.getSystem(taskId).catch(() => null),
+        api.getSystem(taskId, true).catch(() => null),
         api.listInspectors(undefined, true),
         api.getTaskLogs(taskId).catch(() => null),
       ]);

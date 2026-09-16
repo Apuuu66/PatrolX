@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from app.core.config import settings
 from app.inspectors.kpi.catalog import (
     KpiAggregationResult,
     KpiCatalogError,
@@ -31,7 +32,6 @@ from app.inspectors.kpi.catalog import (
 KpiConfigError = KpiCatalogError
 __all__ = ["KpiConfigError", "KpiConfig", "KpiThreshold", "load_kpi_catalog", "normalize_metric_name"]
 
-CONFIG_RELATIVE_PATH = "deploy/config/kpi"
 VALID_PERIODS = {5, 15, 30, 60}
 VALID_SEMANTICS = {"peak", "concurrency", "gauge"}
 VALID_CAPACITY_STATUS = {"confirmed", "unknown"}
@@ -111,7 +111,7 @@ def parse_kpi_path(relative_path: str) -> tuple[str, int] | None:
 
 def load_kpi_config(config_path: Path | None = None) -> KpiConfig:
     """读取并校验目录化 KPI 规则配置。"""
-    return load_kpi_catalog(config_path or Path(CONFIG_RELATIVE_PATH))
+    return load_kpi_catalog(config_path or settings.config / "kpi")
 
 
 def _sha256_prefix(text: str, length: int = 16) -> str:
