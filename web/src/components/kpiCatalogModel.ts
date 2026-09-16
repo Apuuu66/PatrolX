@@ -259,6 +259,7 @@ export function buildKpiUnclassifiedRows(
 
 export function summarizeKpiMetadata(metadata: unknown): {
   total: number;
+  abnormal: number;
   highlight: number;
   breach: number;
   unavailable: number;
@@ -266,10 +267,49 @@ export function summarizeKpiMetadata(metadata: unknown): {
   const items = buildKpiMetricItems(metadata);
   return {
     total: items.length,
+    abnormal: items.filter(
+      (item) => item.result?.display_status === "fail" || item.result?.display_status === "unavailable",
+    ).length,
     highlight: items.filter((item) => item.definition.display_role === "highlight").length,
     breach: items.reduce((sum, item) => sum + (item.result?.breach_count ?? 0), 0),
     unavailable: items.filter((item) => item.result?.display_status === "unavailable").length,
   };
+}
+
+const FOCUS_STATUS_WEIGHT: Record<KpiDisplayStatus, number> = {
+  fail: 0,
+  unavailable: 1,
+  warn: 2,
+  neutral: 3,
+  pass: 4,
+};
+
+/**
+ * 返回默认首屏需要关注的指标：异常优先，其次是重点指标和高越限项。
+ */
+export function getKpiFocusItems(metadata: unknown, limit = 8): KpiCatalogItem[] {
+  return buildKpiMetricItems(metadata)
+    .filter((item) => {
+      const status = item.result?.display_status;
+      return (
+        item.definition.display_role === "highlight" ||
+        status === "fail" ||
+        status === "unavailable" ||
+        (item.result?.breach_count ?? 0) > 0
+      );
+    })
+    .sort((left, right) => {
+      const leftStatus = FOCUS_STATUS_WEIGHT[left.result?.display_status ?? "neutral"];
+      const rightStatus = FOCUS_STATUS_WEIGHT[right.result?.display_status ?? "neutral"];
+      if (leftStatus !== rightStatus) return leftStatus - rightStatus;
+      const leftHighlight = left.definition.display_role === "highlight";
+      const rightHighlight = right.definition.display_role === "highlight";
+      if (leftHighlight !== rightHighlight) return leftHighlight ? -1 : 1;
+      const breachDiff = (right.result?.breach_count ?? 0) - (left.result?.breach_count ?? 0);
+      if (breachDiff) return breachDiff;
+      return left.definition.name_zh.localeCompare(right.definition.name_zh, "zh-Hans-CN");
+    })
+    .slice(0, Math.max(0, limit));
 }
 
 export function getKpiMetricCardView(item: {

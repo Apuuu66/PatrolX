@@ -36,3 +36,15 @@ def test_sample_package_covers_all_normal_rules(package: Path, tmp_path, monkeyp
     skipped = {code for code, result in actual_results.items() if result.status == "skip"}
     assert not skipped, f"样例包存在跳过规则: {sorted(skipped)}"
     assert not ({"kpi.api", "kpi.call", "kpi.media"} - set(actual_results))
+
+
+def test_full_sample_kpi_call_has_5000_records() -> None:
+    """full 包的呼叫 KPI 样例固定为 5000 条记录，保证页面验证数据量可控。"""
+    import zipfile
+
+    package = REPO_ROOT / "uploads" / "ZZapp01BCN_app_Problem_scene_333_full.zip"
+    with zipfile.ZipFile(package) as archive:
+        lines = archive.read("kpi/kpi-call-5.csv").decode("utf-8").splitlines()
+    header_prefixes = ("设备类型：", "测量单元名称：", "服务名,")
+    data_rows = [line for line in lines if line and not line.startswith(header_prefixes)]
+    assert len(data_rows) == 5000

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { App, Breadcrumb, Button, Card, Descriptions, Empty, List, Spin, Space, Tag, Typography } from "antd";
+import { Alert, App, Breadcrumb, Button, Card, Descriptions, Empty, List, Spin, Space, Tag, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult } from "../api/http";
 import { KpiInspectionPanel } from "../components/KpiInspectionPanel";
@@ -42,6 +42,10 @@ export function RuleDetailPage() {
     return <Empty description="规则结果不存在" />;
   }
 
+  const conclusion = result.summary || meta?.description || "已完成规则执行";
+  const hasKpiResults = Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "kpi_files");
+  const alertType = result.status === "fail" || result.status === "error" ? "error" : result.status === "warn" ? "warning" : "info";
+
   return (
     <div>
       <Breadcrumb
@@ -52,49 +56,22 @@ export function RuleDetailPage() {
           { title: result.name },
         ]}
       />
-      <Card
-        title={
-          <Space>
+      <Alert
+        type={alertType}
+        showIcon
+        message={
+          <Space wrap>
             <Typography.Text strong>{result.name}</Typography.Text>
             <RuleStatusTag status={result.status} skipReason={result.skip_reason} />
             <SeverityTag severity={result.severity} />
+            <Typography.Text type="secondary">{result.code}</Typography.Text>
           </Space>
         }
-        extra={
-          <Typography.Text type="secondary">
-            {result.code} · 优先级 P{result.priority} · 耗时 {result.duration_ms ?? "-"}ms
-          </Typography.Text>
-        }
+        description={conclusion}
         style={{ marginBottom: 16 }}
-      >
-        <Descriptions
-          size="small"
-          column={2}
-          items={[
-            { key: "desc", label: "规则描述", children: meta?.description ?? "-" },
-            { key: "rec", label: "处理建议", children: meta?.recommendation ?? "-" },
-            { key: "version", label: "规则版本", children: meta?.rule_version ?? "-" },
-            { key: "summary", label: "结果摘要", children: result.summary ?? "-" },
-            {
-              key: "source_patterns",
-              label: "源文件匹配",
-              children: (meta?.source_patterns ?? []).length ? meta!.source_patterns.map((i) => <Tag key={i}>{i}</Tag>) : "-",
-            },
-          ]}
-        />
-      </Card>
+      />
 
-      <Card title="指标" style={{ marginBottom: 16 }}>
-        <MetricPanel metrics={result.metrics ?? []} />
-      </Card>
-
-      {Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "kpi_files") && (
-        <Card title="KPI 巡检" style={{ marginBottom: 16 }}>
-          <KpiInspectionPanel metadata={result.metadata} taskId={taskId} ruleCode={ruleCode} />
-        </Card>
-      )}
-
-      <Card title={`发现（${(result.findings ?? []).length}）`}>
+      <Card title={`发现（${(result.findings ?? []).length}）`} style={{ marginBottom: 16 }}>
         {(result.findings ?? []).length === 0 ? (
           <Typography.Text type="secondary">无发现</Typography.Text>
         ) : (
@@ -120,7 +97,36 @@ export function RuleDetailPage() {
         )}
       </Card>
 
-      <Button style={{ marginTop: 16 }} onClick={() => navigate(`/tasks/${taskId}`)}>
+      {hasKpiResults && (
+        <Card title="KPI 巡检" style={{ marginBottom: 16 }}>
+          <KpiInspectionPanel metadata={result.metadata} taskId={taskId} ruleCode={ruleCode} />
+        </Card>
+      )}
+
+      <Card title="指标" style={{ marginBottom: 16 }}>
+        <MetricPanel metrics={result.metrics ?? []} />
+      </Card>
+
+      <Card title="技术信息" style={{ marginBottom: 16 }}>
+        <Descriptions
+          size="small"
+          column={2}
+          items={[
+            { key: "desc", label: "规则描述", children: meta?.description ?? "-" },
+            { key: "rec", label: "处理建议", children: meta?.recommendation ?? "-" },
+            { key: "version", label: "规则版本", children: meta?.rule_version ?? "-" },
+            { key: "duration", label: "执行耗时", children: `${result.duration_ms ?? "-"}ms` },
+            { key: "priority", label: "优先级", children: `P${result.priority}` },
+            {
+              key: "source_patterns",
+              label: "源文件匹配",
+              children: (meta?.source_patterns ?? []).length ? meta!.source_patterns.map((i) => <Tag key={i}>{i}</Tag>) : "-",
+            },
+          ]}
+        />
+      </Card>
+
+      <Button onClick={() => navigate(`/tasks/${taskId}`)}>
         返回任务详情
       </Button>
     </div>
