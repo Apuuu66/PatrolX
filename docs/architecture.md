@@ -552,7 +552,7 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 配置辅助工具 `tools/generate_kpi_config.py` 按开始时间、结束时间和周期列名语义识别 KPI CSV 表头，生成未登记指标草稿；`--apply` 只追加新指标，并在合并后重新校验配置目录。
 - `--input` 推荐传 `local_run/<package>.zip`；工具按包名定位对应的 `output/<task_id>/kpi`，
   也兼容直接传已解压 CSV 目录。工具不会自己解压，需先执行 `python main.py` 生成任务现场。
-  CLI 路径可用 Windows 原生反斜杠；含空格时按 shell 规则加引号。
+  Windows 上推荐使用 Git Bash 或 WSL 执行 bash 命令；路径使用 `/`，含空格时加引号。
 
 ### 7.9 扫描规则生成辅助
 
@@ -592,25 +592,12 @@ output/task-<cleaned-package-name>/
 先执行 `python main.py` 生成任务现场，再让扫描工具读取任务根目录：
 
 ```bash
-# macOS / Linux
 python main.py
 
-python tools/generate_scan_rules.py generate \
-  --source-dir output/task-<cleaned-package-name> \
-  --output deploy/config/scan_rules.draft.yaml
+python tools/generate_scan_rules.py generate --source-dir output/task-<cleaned-package-name> --output deploy/config/scan_rules.draft.yaml
 
-python tools/generate_scan_rules.py validate \
-  --source-dir output/task-<cleaned-package-name> \
-  --rules deploy/config/scan_rules.yaml
+python tools/generate_scan_rules.py validate --source-dir output/task-<cleaned-package-name> --rules deploy/config/scan_rules.yaml
 ```
 
-Windows PowerShell 路径可继续使用反斜杠：
-
-```powershell
-python tools\generate_scan_rules.py generate `
-  --source-dir .\output\task-<cleaned-package-name> `
-  --output .\deploy\config\scan_rules.draft.yaml
-```
-
-但 YAML 中的 `source_patterns` 必须使用 POSIX `/` 分隔符；运行时任务清单会把相对路径统一
-转换为 `/` 后再做 `re.fullmatch()`。路径包含空格时按所在 shell 的规则加引号。
+Windows 上推荐使用 Git Bash 或 WSL。YAML 中的 `source_patterns` 必须使用 POSIX `/` 分隔符；
+运行时任务清单会把相对路径统一转换为 `/` 后再做 `re.fullmatch()`。路径包含空格时加引号。

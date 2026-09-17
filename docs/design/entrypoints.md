@@ -116,7 +116,7 @@ local_run/
 └── extracted/          # 子目录，不作为 python main.py 的任务输入
 ```
 
-macOS / Linux 示例：
+macOS / Linux / Windows Git Bash 示例：
 
 ```bash
 mkdir -p local_run
@@ -124,13 +124,8 @@ cp /path/to/sample.zip local_run/
 python main.py
 ```
 
-Windows PowerShell 示例：
-
-```powershell
-New-Item -ItemType Directory -Force .\local_run | Out-Null
-Copy-Item "C:\data\sample.zip" .\local_run\
-python main.py
-```
+Windows 上推荐使用 Git Bash 或 WSL；路径可以用 `C:/data/sample.zip` 或 `/c/data/sample.zip`，
+含空格时加引号。
 
 工具脚本不直接读取压缩包。推荐先让本地入口生成任务解压现场：把压缩包放入 `local_run/`，执行
 `python main.py`，再使用对应的 `output/<task_id>/` 目录。`<task_id>` 由包名清洗后派生，例如：
@@ -145,19 +140,7 @@ local_run/sample-a.zip   ->   output/task-sample_a/
 ```bash
 python main.py
 
-python tools/generate_kpi_config.py \
-  --input local_run/sample-a.zip \
-  --output-dir drafts/kpi
-```
-
-Windows PowerShell 示例：
-
-```powershell
-python main.py
-
-python tools\generate_kpi_config.py `
-  --input .\local_run\sample-a.zip `
-  --output-dir .\drafts\kpi
+python tools/generate_kpi_config.py --input local_run/sample-a.zip --output-dir drafts/kpi
 ```
 
 也可以直接传已解压目录，例如 `--input output/task-sample_a/kpi`。工具会递归扫描 `--input` 下的
@@ -169,15 +152,12 @@ python tools\generate_kpi_config.py `
 ```bash
 python main.py
 
-python tools/generate_scan_rules.py generate \
-  --source-dir output/task-<cleaned-package-name> \
-  --output deploy/config/scan_rules.draft.yaml
+python tools/generate_scan_rules.py generate --source-dir output/task-<cleaned-package-name> --output deploy/config/scan_rules.draft.yaml
 ```
 
-Windows PowerShell 中路径分隔符可以使用 `\`，含空格的路径加引号即可；生成的
-`source_patterns` 仍要写成 POSIX `/` 分隔符。任务根目录里包含 `.main/`、`prepared/` 等证据和
-派生现场，草稿中的 `matched_files` 只用于人工核对；整理正式扫描组时应只保留运行时需要匹配的
-分类工作目录文件。
+Windows 上推荐使用 Git Bash 或 WSL；生成的 `source_patterns` 仍要写成 POSIX `/` 分隔符。
+任务根目录里包含 `.main/`、`prepared/` 等证据和派生现场，草稿中的 `matched_files` 只用于
+人工核对；整理正式扫描组时应只保留运行时需要匹配的分类工作目录文件。
 
 | 目的 | 输入位置 | 参数 |
 | --- | --- | --- |
