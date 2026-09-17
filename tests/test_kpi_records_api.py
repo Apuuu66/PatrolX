@@ -102,7 +102,7 @@ def _metadata() -> dict:
         "unclassified_metrics": [],
         "kpi_files": [
             {
-                "path": "kpi/kpi-call-5.csv",
+                "path": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
                 "domain": "call",
                 "period_minutes": 5,
                 "records": [
@@ -195,7 +195,7 @@ def test_kpi_records_filters_and_paginates() -> None:
 
     source = client.get(
         f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records",
-        params={"source_file": "kpi/kpi-call-5.csv", "period_minutes": 5},
+        params={"source_file": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv", "period_minutes": 5},
     )
     assert source.status_code == 200
     assert source.json()["total"] == 8
@@ -240,7 +240,10 @@ def test_rule_result_can_exclude_kpi_records() -> None:
     ]
     metadata["kpi_results"][0]["provenance"] = {
         "formula": "call_success_count / call_attempts * 100",
-        "direct_cross_reference": [{"source_file": "kpi/kpi-call-5.csv", "value": index} for index in range(501)],
+        "direct_cross_reference": [
+            {"source_file": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv", "value": index}
+            for index in range(501)
+        ],
     }
     _save(task_id, "kpi.call", metadata, with_system=True)
 
@@ -332,7 +335,7 @@ def test_kpi_records_skips_malformed_records() -> None:
     metadata = _metadata()
     metadata["kpi_files"] = [
         {
-            "path": "kpi/kpi-call-5.csv",
+            "path": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
             "domain": "call",
             "period_minutes": 5,
             "records": [

@@ -38,12 +38,16 @@ def test_enriched_sample_kpi_api_remains_stable(tmp_path, monkeypatch) -> None:
 
     filtered = client.get(
         records_url,
-        params={"metric_key": "call_success_rate", "source_file": "kpi/kpi-call-5.csv", "period_minutes": 5},
+        params={
+            "metric_key": "call_success_rate",
+            "source_file": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
+            "period_minutes": 5,
+        },
     )
     assert filtered.status_code == 200
     for item in filtered.json()["items"]:
         assert item["metric_key"] == "call_success_rate"
-        assert item["source_file"] == "kpi/kpi-call-5.csv"
+        assert item["source_file"] == "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv"
         assert item["period_minutes"] == 5
 
 

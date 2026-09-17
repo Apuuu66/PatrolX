@@ -162,13 +162,13 @@ logs/ServiceLog_<timestamp>/<service>/logs/<node>/<file>.log
 示例：
 
 ```text
-logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log
+logs/UmfService/logs/paas-192.168.2.2/UmfService.log
 ```
 
 会被识别为：
 
 ```text
-service = AAAService
+service = UmfService
 node    = paas-192.168.2.2
 ```
 
@@ -226,15 +226,15 @@ node    = paas-192.168.2.2
 
 服务专属规则目前通过精确服务名过滤：
 
-- `log.aaa_service` 只处理 `service == "AAAService"`。
-- `log.app_service` 只处理 `service == "AppService"`。
+- `log.umf_service` 只处理 `service == "UmfService"`。
+- `log.umf_acc` 只处理 `service == "UMFAcc"`。
 
 这些规则直接过滤 `TaskFileCatalog` 匹配到的源日志记录。
 
 | 规则 | 匹配方式 | 判定 |
 | --- | --- | --- |
-| `log.aaa_service` | 文本包含 `auth failure` / `retry timer exceeded` | 任一类命中数 `>= 3` 时 `fail` |
-| `log.app_service` | 文本包含 `connection pool exhausted` 或包含 `sctp` | 连接池 `>= 2` 或 SCTP `>= 3` 时 `fail` |
+| `log.umf_service` | 文本包含 `auth failure` / `retry timer exceeded` | 任一类命中数 `>= 3` 时 `fail` |
+| `log.umf_acc` | 文本包含 `connection pool exhausted` 或包含 `sctp` | 连接池 `>= 2` 或 SCTP `>= 3` 时 `fail` |
 
 ### 差异
 

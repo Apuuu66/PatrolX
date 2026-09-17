@@ -31,9 +31,9 @@ groups:
     source_patterns:
       - '^logs/(?:ServiceLog_[^/]+/)?DDD/.+\.log$'
   kpi_call:
-    description: 呼叫 KPI CSV
+    description: 呼叫 KPI 真实导出 CSV
     source_patterns:
-      - '^kpi/(?:.*/)?kpi-call-(?:5|15|30|60)\.csv$'
+      - '^kpi/(?:.*/)?(?:[^/]+_)?Call_Session_API_Statistics_(?:5|15|30|60)(?:_0_[^/]+)?\.csv$'
   kpi_api:
     description: API KPI CSV
     source_patterns:

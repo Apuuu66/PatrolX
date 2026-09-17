@@ -90,8 +90,12 @@ def test_config_check_accepts_keys_across_files(tmp_path: Path) -> None:
     assert result.metrics[1].value == 0
 
 
-def test_resource_check_warn(tmp_path: Path) -> None:
-    ctx = _ctx(tmp_path, {"resource/pod.txt": "pod-1 cpu 900m mem 512Mi\n"})
+def test_resource_check_warn_for_container_csv(tmp_path: Path) -> None:
+    content = (
+        "服务名,实例,测量开始时间,测量结束时间,周期(分钟),容器CPU使用率,容器内存使用率\n"
+        "IMS-Core,ims-node-01,2026-09-02 00:00:00,2026-09-02 00:05:00,5,86.40,91.20\n"
+    )
+    ctx = _ctx(tmp_path, {"resource/Container_Metric_Unit_5.csv": content})
     result = _run_rule("resource.check", ctx)
     assert result.status == RuleStatus.WARN
 
@@ -139,8 +143,8 @@ def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) 
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log": app,
+            "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log": aaa,
         },
     )
 
@@ -149,8 +153,8 @@ def test_log_filter_builds_service_index_for_service_log_layout(tmp_path: Path) 
     assert result.status == RuleStatus.PASS
     assert result.metadata["service_count"] == 2
     assert result.metadata["processed_files"] == [
-        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log",
-        "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log",
+        "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log",
+        "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log",
     ]
     assert result.metadata["levels"] == {"ERROR": 2, "STACK": 1}
     assert result.metadata["files"] == 2
@@ -168,8 +172,7 @@ def test_log_filter_keeps_python_traceback_after_error(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/"
-            "app_service_error_20260901011314.log": plain,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc_error_20260901011314.log": plain,
         },
     )
 
@@ -196,8 +199,8 @@ def test_service_errors_warn_on_hot_service(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": plain,
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log": plain,
+            "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log": aaa,
         },
     )
     result = _run_rule("log.service_errors", ctx)
@@ -205,7 +208,7 @@ def test_service_errors_warn_on_hot_service(tmp_path: Path) -> None:
     assert result.status == RuleStatus.WARN
     assert result.metrics[0].value == 2
     assert result.metrics[2].value == 6
-    assert result.findings[0].title.startswith("AppService 服务错误集中")
+    assert result.findings[0].title.startswith("UMFAcc 服务错误集中")
     assert result.metadata["processed_files"]
     assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.service_errors")
 
@@ -221,8 +224,8 @@ def test_fault_pattern_matches_real_operational_cases(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": app,
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log": aaa,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log": app,
+            "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log": aaa,
         },
     )
     result = _run_rule("log.fault_pattern", ctx)
@@ -231,7 +234,7 @@ def test_fault_pattern_matches_real_operational_cases(tmp_path: Path) -> None:
     assert result.metrics[0].value == 4
     assert result.metrics[1].value == 2
     assert result.metadata["pattern_counts"]["db_connection_pool_exhausted"] == 2
-    assert any(finding.title.startswith("AppService 数据库连接池耗尽") for finding in result.findings)
+    assert any(finding.title.startswith("UMFAcc 数据库连接池耗尽") for finding in result.findings)
     assert result.metadata["processed_files"]
     assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.fault_pattern")
 
@@ -243,17 +246,14 @@ def test_repeat_error_detects_database_pool_storm(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log": "\n".join(
-                lines
-            )
-            + "\n",
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log": "\n".join(lines) + "\n",
         },
     )
     result = _run_rule("log.repeat_error", ctx)
 
     assert result.status == RuleStatus.WARN
     assert result.metrics[1].value == 8
-    assert result.findings[0].title.startswith("AppService 重复错误：")
+    assert result.findings[0].title.startswith("UMFAcc 重复错误：")
     assert result.metadata["processed_files"]
     assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.repeat_error")
 
@@ -272,8 +272,8 @@ def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log": app,
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service_error_20260901011314.log": aaa,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc_error_20260901011314.log": app,
+            "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService_error_20260901011314.log": aaa,
         },
     )
     result = _run_rule("log.stacktrace", ctx)
@@ -281,12 +281,12 @@ def test_stacktrace_groups_by_service_and_type(tmp_path: Path) -> None:
     assert result.status == RuleStatus.WARN
     assert result.metrics[0].value == 2
     assert result.metrics[1].value == 2
-    assert "AppService" in result.metadata["service_counts"]
+    assert "UMFAcc" in result.metadata["service_counts"]
     assert result.metadata["processed_files"]
     assert result.metadata["processed_files"] == _logged_processed_files(ctx, "log.stacktrace")
 
 
-def test_app_service_rule_detects_pool_and_sctp_errors(tmp_path: Path) -> None:
+def test_umf_acc_rule_detects_pool_and_sctp_errors(tmp_path: Path) -> None:
     app = (
         "2026-09-01T10:00:01Z ERROR app db connection pool exhausted\n"
         "2026-09-01T10:00:02Z ERROR app db connection pool exhausted\n"
@@ -296,43 +296,43 @@ def test_app_service_rule_detects_pool_and_sctp_errors(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log": app,
+            "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log": aaa,
         },
     )
-    result = _run_rule("log.app_service", ctx)
+    result = _run_rule("log.umf_acc", ctx)
 
     assert result.status == RuleStatus.FAIL
-    assert result.summary == "AppService 存在数据库连接池耗尽"
+    assert result.summary == "UMFAcc 存在数据库连接池耗尽"
     assert [(metric.key, metric.value) for metric in result.metrics] == [
         ("error_count", 3),
         ("pool_exhausted_count", 2),
         ("sctp_error_count", 1),
     ]
     assert [finding.title for finding in result.findings] == [
-        "AppService 数据库连接池耗尽",
-        "AppService SCTP 链路异常",
+        "UMFAcc 数据库连接池耗尽",
+        "UMFAcc SCTP 链路异常",
     ]
     assert result.metadata["processed_files"] == [
-        "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log"
+        "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log"
     ]
 
 
-def test_app_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
+def test_umf_acc_rule_skips_when_service_missing(tmp_path: Path) -> None:
     aaa = "2026-09-01T10:05:00Z ERROR aaa auth failure count 3\n"
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+            "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log": aaa,
         },
     )
-    result = _run_rule("log.app_service", ctx)
+    result = _run_rule("log.umf_acc", ctx)
 
     assert result.status == RuleStatus.SKIP
-    assert result.skip_reason == "未发现 AppService 日志"
+    assert result.skip_reason == "未发现 UMFAcc 日志"
 
 
-def test_aaa_service_rule_detects_auth_and_retry_issues(tmp_path: Path) -> None:
+def test_umf_service_rule_detects_auth_and_retry_issues(tmp_path: Path) -> None:
     app = "2026-09-01T10:00:01Z ERROR app db connection pool exhausted\n"
     aaa = (
         "2026-09-01T10:05:00Z ERROR aaa auth failure count 3\n"
@@ -342,42 +342,42 @@ def test_aaa_service_rule_detects_auth_and_retry_issues(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
-            "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": aaa,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log": app,
+            "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log": aaa,
         },
     )
-    result = _run_rule("log.aaa_service", ctx)
+    result = _run_rule("log.umf_service", ctx)
 
     assert result.status == RuleStatus.WARN
-    assert result.summary == "AAAService 存在认证失败"
+    assert result.summary == "UmfService 存在认证失败"
     assert [(metric.key, metric.value) for metric in result.metrics] == [
         ("error_count", 2),
         ("auth_failure_count", 2),
         ("retry_timer_count", 1),
     ]
-    assert result.findings[0].title == "AAAService 认证失败"
+    assert result.findings[0].title == "UmfService 认证失败"
     assert result.metadata["processed_files"] == [
-        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log"
+        "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log"
     ]
 
 
-def test_aaa_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
+def test_umf_service_rule_skips_when_service_missing(tmp_path: Path) -> None:
     app = "2026-09-01T10:00:01Z ERROR app db connection pool exhausted\n"
     ctx = _ctx(
         tmp_path,
         {
-            "logs/ServiceLog_20260901011314/AppService/logs/paas-192.168.2.2/app_service.log": app,
+            "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log": app,
         },
     )
-    result = _run_rule("log.aaa_service", ctx)
+    result = _run_rule("log.umf_service", ctx)
 
     assert result.status == RuleStatus.SKIP
-    assert result.skip_reason == "未发现 AAAService 日志"
+    assert result.skip_reason == "未发现 UmfService 日志"
 
 
 def test_ccc_service_rule_passes_when_all_ten_nodes_start(tmp_path: Path) -> None:
     files: dict[str, str] = {
-        "logs/ServiceLog_20260901011314/AppService/logs/paas-other/app_service.log": (
+        "logs/ServiceLog_20260901011314/UMFAcc/logs/paas-other/UMFAcc.log": (
             "2026-09-01T10:00:00Z ERROR app unrelated error\n"
         )
     }
@@ -477,8 +477,8 @@ def test_ddd_service_rule_passes_without_ping_failure(tmp_path: Path) -> None:
 
 def test_ccc_and_ddd_service_rules_skip_when_service_missing(tmp_path: Path) -> None:
     files = {
-        "logs/ServiceLog_20260901011314/AAAService/logs/paas-192.168.2.2/aaa_service.log": (
-            "2026-09-01T10:00:00Z INFO  AAAService start success\n"
+        "logs/ServiceLog_20260901011314/UmfService/logs/paas-192.168.2.2/UmfService.log": (
+            "2026-09-01T10:00:00Z INFO  UmfService start success\n"
         )
     }
     ctx = _ctx(tmp_path, files)
@@ -490,3 +490,21 @@ def test_ccc_and_ddd_service_rules_skip_when_service_missing(tmp_path: Path) -> 
     assert ccc.skip_reason == "未发现 CCC 日志"
     assert ddd.status == RuleStatus.SKIP
     assert ddd.skip_reason == "未发现 DDD 日志"
+
+
+def test_resource_check_supports_container_csv_by_column_names(tmp_path: Path) -> None:
+    content = (
+        "设备类型：XXX\n"
+        "测量单元名称：容器指标单元\n"
+        "实例,周期(分钟),测量开始时间,容器内存使用率,服务名,容器CPU使用率,测量结束时间\n"
+        "ims-node-01,5,2026-09-02 00:00:00,91.20,IMS-Core,86.40,2026-09-02 00:05:00\n"
+    )
+    ctx = _ctx(tmp_path, {"resource/Container_Metric_Unit_5.csv": content})
+    result = _run_rule("resource.check", ctx)
+
+    assert result.status == RuleStatus.WARN
+    assert [(metric.key, metric.value) for metric in result.metrics] == [("high_cpu", 1), ("high_mem", 1)]
+    assert {finding.title for finding in result.findings} == {
+        "IMS-Core/ims-node-01 CPU使用率偏高",
+        "IMS-Core/ims-node-01 内存使用率偏高",
+    }

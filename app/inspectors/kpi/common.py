@@ -38,7 +38,10 @@ VALID_CAPACITY_STATUS = {"confirmed", "unknown"}
 VALID_DIRECTIONS = {"min", "max"}
 
 # 文件名解析
-_FILENAME_RE = re.compile(r"^kpi/(?P<dir_prefix>(?:.*/)?)kpi-(?P<domain>api|media|call)-(?P<period>5|15|30|60)\.csv$")
+_FILENAME_RE = re.compile(
+    r"^kpi/(?:.*/)?(?:kpi-(?P<domain>api|media)-(?P<period>5|15|30|60)"
+    r"|(?:[^/]+_)?Call_Session_API_Statistics_(?P<call_period>5|15|30|60)(?:_0_[^/]+)?)\.csv$"
+)
 
 
 @dataclass(slots=True)
@@ -106,6 +109,8 @@ def parse_kpi_path(relative_path: str) -> tuple[str, int] | None:
     match = _FILENAME_RE.fullmatch(relative_path)
     if match is None:
         return None
+    if match.group("domain") is None:
+        return "call", int(match.group("call_period"))
     return match.group("domain"), int(match.group("period"))
 
 

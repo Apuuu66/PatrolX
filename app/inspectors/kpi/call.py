@@ -83,7 +83,7 @@ def _run(ctx: RuleContext) -> object:
             inspector,
             status=RuleStatus.SKIP,
             summary="未发现呼叫 KPI 文件",
-            skip_reason="未匹配到 kpi-call-*.csv 文件",
+            skip_reason="未匹配到 Call_Session_API_Statistics_*.csv 文件",
         )
     try:
         config = load_kpi_config()
@@ -101,7 +101,7 @@ def _run(ctx: RuleContext) -> object:
             inspector,
             status=RuleStatus.SKIP,
             summary="未发现呼叫 KPI 文件",
-            skip_reason="匹配文件不属于 kpi-call-*.csv",
+            skip_reason="匹配文件不属于 Call_Session_API_Statistics_*.csv",
         )
     alias = config.aliases.get("call", {})
     sr_threshold = config.limits.get("call", {}).get("call_success_rate")

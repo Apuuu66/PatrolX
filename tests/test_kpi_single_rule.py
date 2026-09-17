@@ -67,10 +67,10 @@ def test_kpi_source_patterns_match_only_own_domain_and_period(tmp_path: Path) ->
     files = {
         "kpi/kpi-api-5.csv": _kpi_content(["请求总数"], [[*_CALL_ROW, 1]], "API 统计"),
         "kpi/nested/kpi-media-15.csv": _kpi_content(["媒体请求"], [[*_CALL_ROW, 2]], "媒体统计"),
-        "kpi/deep/kpi-call-60.csv": _GOOD_CALL,
+        "kpi/deep/ne333_Call_Session_API_Statistics_60_0_202609020000.csv": _GOOD_CALL,
         "kpi/kpi-other-15.csv": "ignored\n",
-        "kpi/kpi-call-20.csv": "ignored\n",
-        "kpi/kpi-call-15.csv.bak": "ignored\n",
+        "kpi/ne333_Call_Session_API_Statistics_20_0_202609020000.csv": "ignored\n",
+        "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv.bak": "ignored\n",
     }
     ctx = _ctx(tmp_path, files)
     registry.load_all()
@@ -85,7 +85,7 @@ def test_kpi_source_patterns_match_only_own_domain_and_period(tmp_path: Path) ->
     }
     assert expected["kpi.api"] == ["kpi/kpi-api-5.csv"]
     assert expected["kpi.media"] == ["kpi/nested/kpi-media-15.csv"]
-    assert expected["kpi.call"] == ["kpi/deep/kpi-call-60.csv"]
+    assert expected["kpi.call"] == ["kpi/deep/ne333_Call_Session_API_Statistics_60_0_202609020000.csv"]
 
 
 def test_kpi_rules_exclude_dot_main_and_prepared_files(tmp_path: Path) -> None:
@@ -191,7 +191,7 @@ def test_kpi_media_fails_on_period_mismatch(tmp_path: Path) -> None:
 
 
 def test_kpi_call_threshold_pass_and_capacity_are_display_only(tmp_path: Path) -> None:
-    ctx = _ctx(tmp_path, {"kpi/kpi-call-15.csv": _GOOD_CALL})
+    ctx = _ctx(tmp_path, {"kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": _GOOD_CALL})
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.PASS
     values = {metric.key: metric.value for metric in result.metrics}
@@ -214,7 +214,7 @@ def test_kpi_call_passes_when_rates_are_not_derivable(tmp_path: Path) -> None:
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 10, 8]],
         "呼叫会话统计",
     )
-    ctx = _ctx(tmp_path, {"kpi/kpi-call-15.csv": content})
+    ctx = _ctx(tmp_path, {"kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": content})
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.PASS
     values = {metric.key: metric.value for metric in result.metrics}
@@ -229,7 +229,7 @@ def test_kpi_call_formula_has_priority_and_rates_are_cross_reference_only(tmp_pa
         [[*_CALL_ROW, 100, 90, 10, 80, 20]],
         "呼叫会话统计",
     )
-    ctx = _ctx(tmp_path, {"kpi/kpi-call-15.csv": content})
+    ctx = _ctx(tmp_path, {"kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": content})
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.FAIL
     record = result.metadata["kpi_files"][0]["records"][0]
@@ -247,7 +247,10 @@ def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> 
     broken = _kpi_content(["呼叫请求次数"], [[*_CALL_ROW, "bad"]], "呼叫会话统计")
     ctx = _ctx(
         tmp_path,
-        {"kpi/kpi-call-15.csv": inconsistent, "kpi/sub/kpi-call-15.csv": broken},
+        {
+            "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": inconsistent,
+            "kpi/sub/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": broken,
+        },
     )
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.FAIL
@@ -263,7 +266,7 @@ def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> 
 
 def test_kpi_call_config_error_is_not_silently_skipped(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("app.core.config.settings.config_dir", tmp_path / "missing.yaml")
-    ctx = _ctx(tmp_path, {"kpi/kpi-call-15.csv": _GOOD_CALL})
+    ctx = _ctx(tmp_path, {"kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": _GOOD_CALL})
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.ERROR
     assert result.summary == "KPI 配置加载失败"
@@ -274,7 +277,7 @@ def test_kpi_domains_remain_isolated(tmp_path: Path) -> None:
     bad_api += "bad-row\n"
     files = {
         "kpi/kpi-api-15.csv": bad_api,
-        "kpi/kpi-call-15.csv": _GOOD_CALL,
+        "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": _GOOD_CALL,
     }
     ctx = _ctx(tmp_path, files)
     api_result = _run_rule("kpi.api", ctx)
@@ -294,7 +297,7 @@ def test_kpi_domain_errors_do_not_change_other_domain_results(tmp_path: Path) ->
     files = {
         "kpi/kpi-api-15.csv": broken_api,
         "kpi/kpi-media-15.csv": broken_media,
-        "kpi/kpi-call-15.csv": _GOOD_CALL,
+        "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": _GOOD_CALL,
     }
     ctx = _ctx(tmp_path, files)
     api = _run_rule("kpi.api", ctx)
@@ -317,7 +320,9 @@ def test_kpi_domain_errors_do_not_change_other_domain_results(tmp_path: Path) ->
         2,
         0,
     ]
-    assert [file["path"] for file in call.metadata["kpi_files"]] == ["kpi/kpi-call-15.csv"]
+    assert [file["path"] for file in call.metadata["kpi_files"]] == [
+        "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv"
+    ]
 
 
 def test_all_kpi_domains_skip_without_any_kpi_files(tmp_path: Path) -> None:

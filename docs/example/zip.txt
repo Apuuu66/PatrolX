@@ -7,115 +7,43 @@ ZZapp01BCN_app_Problem_scene_333.zip
     └── 333/
         └── app Problem scene/
             ├── Alarm Information/
-            │   ├── alarm_history_202609010101137101.csv
-            │   └── alarm_summary_202609010101137101.json
+            │   ├── alarm_history_202609010101137101.zip
             ├── Basic Information/
             │   ├── system_info.ini
             │   └── version.ini
             ├── KPI/
-            │   └── kpi_202609010101137101.csv
-            ├── Resource/
-            │   └── pod_cpu_mem_202609010101137101.txt
-            ├── Traffic/
-            │   └── call_stat_202609010101137101.txt
+            │   └── PerfResult_202609010101137101.zip
             └── Service Logs (Problem)/
                 └── ServiceLog_20260901011314.zip
 
 2. 嵌套日志子包结构
 
 ServiceLog_20260901011314.zip
-├── AAAService/
+├── UmfService/
 │   └── logs/
 │       └── paas-192.168.2.2/
-│           ├── aaa_service_20260901011314.log
-│           └── aaa_service_history_20260901011314.log.gz
-└── AppService/
+│           ├── UmfService.log
+│           └── UmfService_20260901011314.log.gz
+└── UMFAcc/
     └── logs/
         └── paas-192.168.2.2/
-            ├── app_service_20260901011314.log
-            ├── app_service_error_20260901011314.log
-            └── app_service_history_20260901011314.log.gz
-
+            ├── UMFAcc.log
+            └── UMFAcc_20260901011314.log.gz
+PerfResult_202609010101137101.zip
+└── ne333_Call_Session_API_Statistics_5_0_202609020000.csv
+└── ne333_Call_Session_API_Statistics_15_0_202609020000.csv
+└── ne333_Call_Session_API_Statistics_30_0_202609020000.csv
+└── ne333_Call_Session_API_Statistics_60_0_202609020000.csv
+└── ne333_Container_Metric_Unit_5_0_202609020000.csv
+└── ne333_Container_Metric_Unit_15_0_202609020000.csv
 3. 文件内容示例
 
-3.1 Alarm Information/alarm_history_202609010101137101.csv
+3.1 Alarm Information/alarm_history_202609010101137101_001.csv
 
 alarm_id,created_time,cleared_time,alarm_code,severity,status,object,description
 1001,2026-09-01 10:00:01,,DB_CONNECTION_POOL_EXHAUSTED,CRITICAL,未处理,app-node-01,数据库连接池耗尽
 1002,2026-09-01 10:00:04,2026-09-01 10:00:30,SCTP_LINK_DOWN,HIGH,处理中,app-node-01,SCTP链路中断
 1003,2026-09-01 10:02:11,,CPU_USAGE_HIGH,MEDIUM,未处理,pod-app-1,CPU使用率偏高
-
-3.2 Alarm Information/alarm_summary_202609010101137101.json
-
-{
-  "scene_id": "333",
-  "scene_name": "app Problem scene",
-  "begin_time": "2026-09-01T10:00:00Z",
-  "end_time": "2026-09-01T10:10:00Z",
-  "total": 3,
-  "unhandled": 2,
-  "severity_distribution": {
-    "CRITICAL": 1,
-    "HIGH": 1,
-    "MEDIUM": 1
-  }
-}
-
-3.3 Basic Information/system_info.ini
-
-[app]
-name=app
-log_level=INFO
-
-[system]
-node_id=app-node-01
-region=gd
-collect_time=2026-09-01T10:00:00Z
-
-3.4 Basic Information/version.ini
-
-[version]
-product=app
-release=R24.1
-patch=SP03
-build=20260901.01
-
-3.5 KPI/kpi_202609010101137101.csv
-
-metric,value,unit,timestamp
-call_success_rate,93.6,%,2026-09-01T10:00:00Z
-attach_success_rate,96.8,%,2026-09-01T10:00:00Z
-setup_success_rate,95.2,%,2026-09-01T10:00:00Z
-
-3.6 Resource/pod_cpu_mem_202609010101137101.txt
-
-pod-app-1 cpu 890m mem 768Mi
-pod-app-2 cpu 430m mem 1200Mi
-pod-aaa-1 cpu 210m mem 512Mi
-
-3.7 Traffic/call_stat_202609010101137101.txt
-
-total_calls 12345
-answer_rate 93.8
-
-3.8 ServiceLog_20260901011314.zip/AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log
-
-2026-09-01T10:05:00Z ERROR aaa auth failure count 3
-2026-09-01T10:05:01Z ERROR aaa auth failure count 4
-2026-09-01T10:05:02Z WARN  aaa retry timer exceeded
-
-3.9 ServiceLog_20260901011314.zip/AppService/logs/paas-192.168.2.2/app_service_20260901011314.log
-
-2026-09-01T10:00:00Z INFO  app service started
-2026-09-01T10:00:01Z ERROR app db connection pool exhausted
-2026-09-01T10:00:02Z ERROR app db connection pool exhausted
-2026-09-01T10:00:03Z WARN  app retry timer exceeded
-
-3.10 ServiceLog_20260901011314.zip/AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log
-
-2026-09-01T10:00:01Z ERROR app sctp link down
-2026-09-01T10:00:04Z ERROR app sctp reconnect failed
-2026-09-01T10:00:05Z INFO  app sctp link recovered
 
 3.11 说明
 

@@ -57,8 +57,8 @@ def _parse(tmp_path: Path, name: str, content: str, domain: str = "call"):
     [
         ("kpi/kpi-api-5.csv", "api", 5),
         ("kpi/kpi-media-15.csv", "media", 15),
-        ("kpi/kpi-call-30.csv", "call", 30),
-        ("kpi/sub/kpi-call-60.csv", "call", 60),
+        ("kpi/ne333_Call_Session_API_Statistics_30_0_202609020000.csv", "call", 30),
+        ("kpi/sub/ne333_Call_Session_API_Statistics_60_0_202609020000.csv", "call", 60),
     ],
 )
 def test_parse_kpi_path_supports_all_domains_and_periods(name: str, domain: str, period: int) -> None:
@@ -67,7 +67,12 @@ def test_parse_kpi_path_supports_all_domains_and_periods(name: str, domain: str,
 
 @pytest.mark.parametrize(
     "name",
-    ["kpi/kpi-other-15.csv", "kpi/kpi-call-20.csv", "kpi/kpi-call-15.CSV", "kpi/kpi-call.csv"],
+    [
+        "kpi/kpi-other-15.csv",
+        "kpi/ne333_Call_Session_API_Statistics_20_0_202609020000.csv",
+        "kpi/ne333_Call_Session_API_Statistics_15.CSV",
+        "kpi/kpi-call-15.csv",
+    ],
 )
 def test_parse_kpi_path_rejects_unknown_names(name: str) -> None:
     assert parse_kpi_path(name) is None
@@ -81,7 +86,7 @@ def test_parse_csv_file_reads_metadata_flexible_header_and_normalizes_utc_time(t
         ["呼叫请求", "请求成功", "请求失败"],
         [[period, "2026-09-01 10:00:00", f"2026-09-01 {end_hour:02d}:{end_minute:02d}:00", 100, 99, 1]],
     )
-    parsed = _parse(tmp_path, f"kpi/kpi-call-{period}.csv", content)
+    parsed = _parse(tmp_path, f"kpi/ne333_Call_Session_API_Statistics_{period}_0_202609020000.csv", content)
     assert parsed.status == "ok"
     assert parsed.measurement_set == "呼叫会话统计"
     assert parsed.objects == ["呼叫请求", "请求成功", "请求失败"]
@@ -101,7 +106,7 @@ def test_parse_csv_file_skips_blank_metadata_rows(tmp_path: Path) -> None:
         ["呼叫请求"],
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100]],
     ).replace("设备类型：XXX\n", "设备类型：XXX\n\n")
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.status == "ok"
     assert parsed.measurement_set == "呼叫会话统计"
     assert parsed.record_count == 1
@@ -117,14 +122,14 @@ def test_parse_csv_file_preserves_nested_relative_path(tmp_path: Path) -> None:
 
 def test_parse_csv_file_reports_period_mismatch(tmp_path: Path) -> None:
     content = _content(["呼叫请求"], [[5, "2026-09-01 10:00:00", "2026-09-01 10:05:00", 100]])
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.status == "failed"
     assert parsed.records[0].errors[0].code == "period_mismatch"
 
 
 def test_parse_csv_file_reports_time_range_mismatch(tmp_path: Path) -> None:
     content = _content(["呼叫请求"], [[15, "2026-09-01 10:00:00", "2026-09-01 10:30:00", 100]])
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.records[0].errors[0].code == "time_range_mismatch"
     assert parsed.status == "failed"
 
@@ -137,7 +142,7 @@ def test_parse_csv_file_reports_invalid_time_and_continues_next_row(tmp_path: Pa
             [15, "2026-09-01 10:15:00", "2026-09-01 10:30:00", 101],
         ],
     )
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.record_count == 1
     assert parsed.records[0].errors[0].code == "invalid_time"
     assert not parsed.records[1].errors
@@ -147,7 +152,7 @@ def test_parse_csv_file_reports_invalid_time_and_continues_next_row(tmp_path: Pa
 def test_parse_csv_file_reports_column_count_mismatch(tmp_path: Path) -> None:
     content = _content(["呼叫请求", "请求成功"], [])
     content += "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100\n"
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.status == "failed"
     assert parsed.records[0].errors[0].code == "column_count_mismatch"
 
@@ -157,7 +162,7 @@ def test_parse_csv_file_reports_invalid_value_and_keeps_parseable_value(tmp_path
         ["呼叫请求", "请求成功"],
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", "bad", 99]],
     )
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.records[0].errors[0].code == "invalid_value"
     assert parsed.records[0].values == {"请求成功": 99.0}
 
@@ -168,7 +173,7 @@ def test_parse_csv_file_reports_empty_measurement_set(tmp_path: Path) -> None:
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100]],
         measurement="",
     )
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.errors[0].code == "missing_measurement_set"
     assert parsed.status == "failed"
 
@@ -178,7 +183,7 @@ def test_parse_csv_file_reports_duplicate_objects(tmp_path: Path) -> None:
         ["呼叫请求", "呼叫请求"],
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 99]],
     )
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     assert parsed.errors[0].code == "duplicate_object"
 
 
@@ -207,8 +212,8 @@ def test_parse_csv_file_reports_row_count_limit(tmp_path: Path) -> None:
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100]],
     )
     content += "BasicKpi,,可信,,2026-09-01 10:15:00,2026-09-01 10:30:00,15,101\n"
-    path = _write(tmp_path, "kpi/kpi-call-15.csv", content)
-    parsed = parse_csv_file(path, "kpi/kpi-call-15.csv", "call", 15, config)
+    path = _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
+    parsed = parse_csv_file(path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", "call", 15, config)
     assert parsed.status == "failed"
     assert parsed.errors[0].code == "resource_limit_exceeded"
 
@@ -287,7 +292,7 @@ def test_capacity_metrics_are_mapped_per_record(tmp_path: Path) -> None:
         ["呼叫请求", "统计峰值", "最大并发"],
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 101, 88]],
     )
-    parsed = _parse(tmp_path, "kpi/kpi-call-15.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     record = parsed.records[0]
     assert [item.metric for item in record.capacity_values or []] == [
         "stat_peak",
@@ -303,8 +308,10 @@ def test_unknown_capacity_semantics_is_display_only(tmp_path: Path) -> None:
     raw["capacity_metrics"]["统计峰值"]["semantics"] = None
     _write_domain(config_dir, raw)
     content = _content(["统计峰值"], [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 101]])
-    path = _write(tmp_path, "kpi/kpi-call-15.csv", content)
-    parsed = parse_csv_file(path, "kpi/kpi-call-15.csv", "call", 15, load_kpi_config(config_dir))
+    path = _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
+    parsed = parse_csv_file(
+        path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", "call", 15, load_kpi_config(config_dir)
+    )
     capacity = parsed.records[0].capacity_values[0]
     assert capacity.status == "unknown"
     assert capacity.reason == "capacity_semantics_unknown"
@@ -355,9 +362,9 @@ def test_direct_rate_columns_are_cross_reference_only(tmp_path: Path) -> None:
         ],
         [[5, "2026-09-01 10:00:00", "2026-09-01 10:05:00", 100, 90, 10, 99.9, 0.1]],
     )
-    _write(tmp_path, "kpi/kpi-call-5.csv", content)
+    _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv", content)
     ctx = RuleContext(task_id="kpi-direct-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
-    ctx.files = [Path("kpi/kpi-call-5.csv")]
+    ctx.files = [Path("kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv")]
     result = registry.get("kpi.call").run(ctx)
     metadata = result.metadata
     rate = next(item for item in metadata["kpi_results"] if item["key"] == "call_success_rate")
@@ -365,7 +372,13 @@ def test_direct_rate_columns_are_cross_reference_only(tmp_path: Path) -> None:
     assert rate["main_value"] == 90.0
     assert rate["series"][0]["value"] == 90.0
     cross_reference = rate["provenance"]["direct_cross_reference"]
-    assert cross_reference == [{"source_name": "呼叫成功率", "source_file": "kpi/kpi-call-5.csv", "value": 99.9}]
+    assert cross_reference == [
+        {
+            "source_name": "呼叫成功率",
+            "source_file": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
+            "value": 99.9,
+        }
+    ]
     assert next(item for item in result.metrics if item.key == "success_rate_min").value == 90.0
 
 
@@ -375,7 +388,7 @@ def test_parse_csv_file_reads_metadata_and_flexible_real_header(tmp_path: Path) 
 服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数
 BasicKpi,,可信,,2026-09-14 10:00:00,2026-09-14 10:05:00,5,100,100,0
 """
-    parsed = _parse(tmp_path, "kpi/kpi-call-5.csv", content)
+    parsed = _parse(tmp_path, "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv", content)
     assert parsed.status == "ok"
     assert parsed.measurement_set == "呼叫会话统计"
     assert parsed.objects == ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数"]
@@ -402,14 +415,14 @@ def test_kpi_call_emits_version_2_catalog_results_and_preserves_rule_status(tmp_
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 80, 20, 10, 8]],
         "呼叫会话统计",
     )
-    _write(tmp_path, "kpi/kpi-call-15.csv", content)
+    _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     logs: list[dict] = []
 
     def log(level: str, message: str, detail: dict | None = None) -> None:
         logs.append({"level": level, "message": message, **(detail or {})})
 
     ctx = RuleContext(task_id="kpi-test", data_dir=tmp_path, log=log)
-    ctx.files = [Path("kpi/kpi-call-15.csv")]
+    ctx.files = [Path("kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv")]
     result = registry.get("kpi.call").run(ctx)
     metadata = result.metadata
 
@@ -437,10 +450,13 @@ def test_kpi_call_normalizes_synonyms_and_keeps_near_name_unclassified(tmp_path:
         ["呼叫请求", "请求成功", "请求失败", "近似呼叫请求"],
         [[15, "2026-09-01 10:15:00", "2026-09-01 10:30:00", 40, 38, 2, 66]],
     )
-    _write(tmp_path, "kpi/kpi-call-15.csv", registered_content)
-    _write(tmp_path, "kpi/sub/kpi-call-15.csv", synonym_content)
+    _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", registered_content)
+    _write(tmp_path, "kpi/sub/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", synonym_content)
     ctx = RuleContext(task_id="kpi-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
-    ctx.files = [Path("kpi/kpi-call-15.csv"), Path("kpi/sub/kpi-call-15.csv")]
+    ctx.files = [
+        Path("kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv"),
+        Path("kpi/sub/ne333_Call_Session_API_Statistics_15_0_202609020000.csv"),
+    ]
     result = registry.get("kpi.call").run(ctx)
     metadata = result.metadata
     results = {item["key"]: item for item in metadata["kpi_results"]}
@@ -452,7 +468,9 @@ def test_kpi_call_normalizes_synonyms_and_keeps_near_name_unclassified(tmp_path:
     assert set(unclassified) == {"近似呼叫请求"}
     assert unclassified["近似呼叫请求"]["record_count"] == 1
     assert unclassified["近似呼叫请求"]["sample_values"] == [66.0]
-    assert unclassified["近似呼叫请求"]["source_files"] == ["kpi/sub/kpi-call-15.csv"]
+    assert unclassified["近似呼叫请求"]["source_files"] == [
+        "kpi/sub/ne333_Call_Session_API_Statistics_15_0_202609020000.csv"
+    ]
 
 
 def test_unclassified_metric_is_reported_without_changing_rule_status(tmp_path: Path) -> None:
@@ -464,9 +482,9 @@ def test_unclassified_metric_is_reported_without_changing_rule_status(tmp_path: 
         ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "自定义业务指标"],
         [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 95, 5, 88]],
     )
-    _write(tmp_path, "kpi/kpi-call-15.csv", content)
+    _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
     ctx = RuleContext(task_id="kpi-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
-    ctx.files = [Path("kpi/kpi-call-15.csv")]
+    ctx.files = [Path("kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv")]
     result = registry.get("kpi.call").run(ctx)
     metadata = result.metadata
 
@@ -476,7 +494,7 @@ def test_unclassified_metric_is_reported_without_changing_rule_status(tmp_path: 
     assert metadata["unclassified_metrics"] == [
         {
             "source_name": "自定义业务指标",
-            "source_files": ["kpi/kpi-call-15.csv"],
+            "source_files": ["kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv"],
             "record_count": 1,
             "sample_values": [88.0],
             "reason": "metric_not_registered",

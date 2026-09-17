@@ -2,7 +2,6 @@
 
 import gzip
 import io
-import json
 import math
 import zipfile
 from datetime import datetime, timedelta
@@ -134,45 +133,17 @@ FILES: dict[str, str] = {
         "1002,2026-09-01 10:00:04,2026-09-01 10:00:30,SCTP_LINK_DOWN,HIGH,处理中,app-node-01,SCTP链路中断\n"
         "1003,2026-09-01 10:02:11,,CPU_USAGE_HIGH,MEDIUM,未处理,pod-app-1,CPU使用率偏高\n"
     ),
-    f"{BASE}/Alarm Information/alarm_summary_202609010101137101.json": json.dumps(
-        {
-            "scene_id": "333",
-            "scene_name": "app Problem scene",
-            "begin_time": "2026-09-01T10:00:00Z",
-            "end_time": "2026-09-01T10:10:00Z",
-            "total": 3,
-            "unhandled": 2,
-            "severity_distribution": {"CRITICAL": 1, "HIGH": 1, "MEDIUM": 1},
-        },
-        ensure_ascii=False,
-    ),
     f"{BASE}/Basic Information/system_info.ini": (
         "[app]\nname=app\nlog_level=INFO\n\n[system]\nnode_id=app-node-01\nregion=gd\ncollect_time=2026-09-01T10:00:00Z\n"
     ),
     f"{BASE}/Basic Information/version.ini": ("[version]\nproduct=app\nrelease=R24.1\npatch=SP03\nbuild=20260901.01\n"),
-    f"{BASE}/KPI/kpi_202609010101137101.csv": (
-        "metric,value,unit,timestamp\n"
-        "call_success_rate,93.6,%,2026-09-01T10:00:00Z\n"
-        "attach_success_rate,96.8,%,2026-09-01T10:00:00Z\n"
-        "setup_success_rate,95.2,%,2026-09-01T10:00:00Z\n"
-    ),
-    f"{BASE}/Resource/pod_cpu_mem_202609010101137101.txt": (
-        "pod-app-1 cpu 890m mem 768Mi\npod-app-2 cpu 430m mem 1200Mi\npod-aaa-1 cpu 210m mem 512Mi\n"
-    ),
     f"{BASE}/Traffic/call_stat_202609010101137101.txt": ("total_calls 12345\nanswer_rate 93.8\n"),
-    "kpi/kpi-call-5.csv": _call_kpi_5_csv(),
+    "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv": _call_kpi_5_csv(),
 }
 
-# 保留样例包中原有的其他 KPI 文件，便于比较不同格式和解析容错。
+# 保留 API 解析容错样例。
 FILES.update(
     {
-        f"{BASE}/KPI/kpi-call-15.csv": (
-            "呼叫会话统计\n"
-            "测量周期,开始时间,结束时间,呼叫请求,请求成功,请求失败,统计峰值,最大并发\n"
-            "15,2026-09-01 10:00:00,2026-09-01 10:15:00,1200,1170,30,100,88\n"
-            "15,2026-09-01 10:15:00,2026-09-01 10:30:00,1350,1300,50,105,92\n"
-            "15,2026-09-01 10:30:00,2026-09-01 10:45:00,1500,1440,60,120,98\n"
-        ),
         f"{BASE}/KPI/kpi-api-15.csv": (
             "API 统计\n"
             "测量周期,开始时间,结束时间,请求总数,成功数\n"

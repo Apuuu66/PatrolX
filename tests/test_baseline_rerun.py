@@ -129,7 +129,7 @@ def test_kpi_rules_rerun_without_prepare_and_deterministically(tmp_path: Path, m
             "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数\n"
             "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,99,1\n"
         )
-        archive.writestr("kpi/kpi-call-15.csv", call_content)
+        archive.writestr("kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", call_content)
     task_id = run_task(package).task_id
     shutil.rmtree(env.task_dir(task_id) / "prepared", ignore_errors=True)
 

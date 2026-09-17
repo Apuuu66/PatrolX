@@ -1,4 +1,4 @@
-"""log.aaa_service（P1）：AAAService 专属日志巡检。"""
+"""log.umf_service（P1）：UmfService 专属日志巡检。"""
 
 import sys
 from pathlib import Path
@@ -11,18 +11,18 @@ from app.inspectors.registry import registry
 from app.models.schemas import Finding, Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import RuleContext, make_result
 
-SERVICE_NAME = "AAAService"
+SERVICE_NAME = "UmfService"
 ERROR_LEVELS = {"ERROR", "FATAL", "CRITICAL"}
 AUTH_FAIL_COUNT = 3
 
 inspector = Inspector(
-    code="log.aaa_service",
-    name="AAAService 日志巡检",
+    code="log.umf_service",
+    name="UmfService 日志巡检",
     category=RuleCategory.LOG,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
     rule_version="4.0.0",
-    description="检查 AAAService 的认证失败和重试定时器超限",
+    description="检查 UmfService 的认证失败和重试定时器超限",
     recommendation="检查认证服务可用性、账号锁定策略和重试定时器配置",
     source_refs=["logs_all"],
     outputs_metrics=[
@@ -39,8 +39,8 @@ def _run(ctx: RuleContext) -> object:
         return make_result(
             inspector,
             status=RuleStatus.SKIP,
-            summary="未发现 AAAService 日志",
-            skip_reason="未发现 AAAService 日志",
+            summary="未发现 UmfService 日志",
+            skip_reason="未发现 UmfService 日志",
         )
 
     processed_files = log_service_processed_files(ctx, inspector.code, source_files)
@@ -53,7 +53,7 @@ def _run(ctx: RuleContext) -> object:
         findings.append(
             Finding(
                 finding_id=f"{inspector.code}-auth-failure",
-                title="AAAService 认证失败",
+                title="UmfService 认证失败",
                 severity=Severity.MEDIUM,
                 source_file=auth_records[0]["source_file"],
                 evidence=auth_records[0]["message"],
@@ -65,7 +65,7 @@ def _run(ctx: RuleContext) -> object:
         findings.append(
             Finding(
                 finding_id=f"{inspector.code}-retry-timer",
-                title="AAAService 重试定时器超限",
+                title="UmfService 重试定时器超限",
                 severity=Severity.MEDIUM,
                 source_file=retry_records[0]["source_file"],
                 evidence=retry_records[0]["message"],
@@ -76,13 +76,13 @@ def _run(ctx: RuleContext) -> object:
 
     if len(auth_records) >= AUTH_FAIL_COUNT or len(retry_records) >= AUTH_FAIL_COUNT:
         status = RuleStatus.FAIL
-        summary = "AAAService 认证失败持续增加" if auth_records else "AAAService 重试定时器频繁超限"
+        summary = "UmfService 认证失败持续增加" if auth_records else "UmfService 重试定时器频繁超限"
     elif auth_records or retry_records:
         status = RuleStatus.WARN
-        summary = "AAAService 存在认证失败" if auth_records else "AAAService 重试定时器超限"
+        summary = "UmfService 存在认证失败" if auth_records else "UmfService 重试定时器超限"
     else:
         status = RuleStatus.PASS
-        summary = "AAAService 日志正常"
+        summary = "UmfService 日志正常"
 
     return make_result(
         inspector,

@@ -135,7 +135,7 @@ def test_policy_extraction_logs_include_task_and_path_context(tmp_path, monkeypa
     hit = next(item for item in lines if item["message"] == "extract.policy.whitelist")
     assert hit["task_id"] == task.task_id
     assert hit["source"] == "skip/alarm.txt"
-    assert hit["target"] == "alarm/skip/alarm.txt"
+    assert hit["target"] == "alarm/alarm.txt"
 
     conflict = next(item for item in lines if item["message"] == "日志 gzip 目标冲突")
     assert conflict["task_id"] == task.task_id

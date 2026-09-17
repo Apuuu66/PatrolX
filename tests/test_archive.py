@@ -222,7 +222,7 @@ def test_whitelist_has_priority_and_restores_normal_processing(tmp_path, monkeyp
 
     assert "other/keep-inner.txt" in all_final
     assert "logs/inner.txt" in all_final
-    assert "alarm/skip/alarm.txt" in all_final
+    assert "alarm/alarm.txt" in all_final
     assert "other/skip/normal.zip" in all_final
     assert "logs/plain.txt" in all_final
     assert "logs/inner.zip" not in all_final

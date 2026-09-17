@@ -485,7 +485,16 @@ def _ingest_file(
 
     decision = _evidence_policy(source_relative, policy, False) if source_kind == "evidence" else None
     category, _ = _category_of(source, parent_category)
-    relative = _destination_relative(source_relative, source_kind, "", category)
+    # 主包内非语义根目录下的普通文件平铺；完整原始路径仍保留在 .main 证据现场。
+    destination_source = source_relative
+    if (
+        source_kind == "evidence"
+        and category != RuleCategory.LOG.value
+        and source_relative.parts[:-1]
+        and source_relative.parts[0] != CATEGORY_DIRECTORIES[category]
+    ):
+        destination_source = Path(source_relative.name)
+    relative = _destination_relative(destination_source, source_kind, "", category)
     state: dict[str, object] = {
         "source": _source_display(source_relative, source_kind),
         "category": CATEGORY_DIRECTORIES[category],
