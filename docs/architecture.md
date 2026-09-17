@@ -550,3 +550,10 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
 - 配置辅助工具 `tools/generate_kpi_config.py` 按开始时间、结束时间和周期列名语义识别 KPI CSV 表头，生成未登记指标草稿；`--apply` 只追加新指标，并在合并后重新校验配置目录。
+
+### 7.9 扫描规则生成辅助
+
+`tools/generate_scan_rules.py` 用于在无法提供真实压缩包时，从本地解压目录提取全部文件名并生成
+`source_patterns` YAML 草稿。默认按目录和文件名中的连续数字泛化；也可选择按目录泛化或逐文件精确匹配。
+草稿中的 `matched_files` 仅用于人工核对，不参与运行时匹配。用户修改 `source_patterns` 后执行
+`validate` 子命令，可检查非法正则和漏配文件；校验语义与规则执行器的 `re.fullmatch()` 一致。
