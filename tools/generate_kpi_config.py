@@ -21,8 +21,11 @@ import yaml
 from app.inspectors.kpi.catalog import load_kpi_catalog, normalize_metric_name
 
 FILE_NAME_RE = re.compile(r"^kpi-(?P<domain>api|media|call)-(?P<period>5|15|30|60)\.csv$", re.IGNORECASE)
-STANDARD_HEADER_COLUMNS = {"测量开始时间", "测量结束时间", "周期(分钟)"}
-SIMPLE_HEADER_COLUMNS = {"测量周期", "开始时间", "结束时间"}
+HEADER_ALIASES: dict[str, set[str]] = {
+    "start": {"测量开始时间", "开始时间", "start_time", "start time"},
+    "end": {"测量结束时间", "结束时间", "end_time", "end time"},
+    "period": {"周期(分钟)", "测量周期", "period_minutes", "period minutes", "period"},
+}
 MAX_SAMPLE_VALUES = 5
 
 _LATENCY_KEYWORDS = ("响应时延", "响应时间", "时延", "延迟", "耗时")
@@ -79,8 +82,23 @@ def _read_csv_rows(path: Path) -> tuple[list[list[str]], str]:
     raise ValueError(f"无法识别 CSV 编码: {path}")
 
 
+def _match_header_columns(row: list[str]) -> dict[str, int] | None:
+    """按列名语义识别表头；同一结构字段重复出现时视为非法。"""
+    matched: dict[str, int] = {}
+    for index, cell in enumerate(row):
+        normalized = normalize_metric_name(cell)
+        for role, aliases in HEADER_ALIASES.items():
+            if normalized not in aliases:
+                continue
+            if role in matched:
+                return None
+            matched[role] = index
+            break
+    return matched if set(matched) == set(HEADER_ALIASES) else None
+
+
 def _parse_csv_file(path: Path, relative_path: str) -> dict[str, Any]:
-    """解析一个 KPI CSV 的元数据、表头和数值样例。"""
+    """解析 KPI CSV 元数据、表头和数值样例；表头由列名语义识别。"""
     rows, encoding = _read_csv_rows(path)
     parsed: dict[str, Any] = {
         "path": relative_path,
@@ -97,17 +115,13 @@ def _parse_csv_file(path: Path, relative_path: str) -> dict[str, Any]:
         return parsed
 
     header_index: int | None = None
-    header_mode: str | None = None
+    header_columns: dict[str, int] = {}
     metadata: dict[str, str] = {}
     for row_index, row in enumerate(rows):
-        cells = {cell.strip() for cell in row}
-        if STANDARD_HEADER_COLUMNS.issubset(cells):
+        matched = _match_header_columns(row)
+        if matched is not None:
             header_index = row_index
-            header_mode = "standard"
-            break
-        if SIMPLE_HEADER_COLUMNS.issubset(cells):
-            header_index = row_index
-            header_mode = "simple"
+            header_columns = matched
             break
         non_empty = [cell.strip() for cell in row if cell.strip()]
         if len(non_empty) == 1 and any(separator in non_empty[0] for separator in ("：", ":")):
@@ -115,53 +129,22 @@ def _parse_csv_file(path: Path, relative_path: str) -> dict[str, Any]:
             key, value = non_empty[0].split(separator, 1)
             metadata[key.strip()] = value.strip()
 
-    if header_index is None or header_mode is None:
+    if header_index is None or not header_columns:
         parsed["errors"].append(
             {
                 "code": "invalid_header",
-                "message": "缺少有效 KPI 表头，支持标准表头或测量周期/开始时间/结束时间表头",
+                "message": "缺少有效 KPI 表头，必须能按列名识别开始时间、结束时间和周期",
                 "line_number": len(rows),
             }
         )
         return parsed
 
     parsed["metadata"] = metadata
-    if header_mode == "standard" and not metadata.get("测量单元名称", "").strip():
-        parsed["errors"].append(
-            {"code": "missing_measurement_set", "message": "缺少测量单元名称元数据", "line_number": 1}
-        )
-
     header = [cell.strip() for cell in rows[header_index]]
-    if header_mode == "standard":
-        try:
-            period_index = header.index("周期(分钟)")
-        except ValueError:
-            parsed["errors"].append(
-                {
-                    "code": "invalid_header",
-                    "message": "表头缺少 周期(分钟)",
-                    "line_number": header_index + 1,
-                }
-            )
-            parsed["header"] = header
-            return parsed
-        object_start = period_index + 1
-    else:
-        try:
-            end_index = header.index("结束时间")
-        except ValueError:
-            parsed["errors"].append(
-                {
-                    "code": "invalid_header",
-                    "message": "表头缺少 结束时间",
-                    "line_number": header_index + 1,
-                }
-            )
-            parsed["header"] = header
-            return parsed
-        object_start = end_index + 1
-
+    object_start = max(header_columns.values()) + 1
     objects = header[object_start:]
+    parsed["header"] = header
+    parsed["header_columns"] = header_columns
     parsed["objects"] = objects
     samples: dict[str, list[float]] = {name: [] for name in objects}
     counts: dict[str, int] = {name: 0 for name in objects}

@@ -108,6 +108,27 @@ def test_scan_supports_simple_kpi_header(tmp_path: Path) -> None:
     assert _by_name(metrics, "平均时延")["metric_type"] == "latency"
 
 
+def test_header_is_resolved_by_column_names(tmp_path: Path) -> None:
+    tool = _load_tool()
+    config_dir = tmp_path / "config" / "kpi"
+    input_dir = tmp_path / "input"
+    _write_config(config_dir)
+    (input_dir / "kpi").mkdir(parents=True)
+    (input_dir / "kpi" / "kpi-api-30.csv").write_text(
+        "设备类型：XXX\n"
+        "服务名,测量开始时间,结束时间,测量周期,请求总数,请求成功\n"
+        "API,2026-09-01 10:00:00,2026-09-01 10:30:00,30,120,117\n",
+        encoding="utf-8",
+    )
+
+    report = tool.scan_kpi_csv(input_dir, config_dir=config_dir)
+    metrics = report["domains"]["api"]["metrics"]
+    names = {item["source_name"] for item in metrics}
+
+    assert names == {"请求总数", "请求成功"}
+    assert _by_name(metrics, "请求总数")["metric_type"] == "count"
+
+
 def test_apply_appends_new_metrics_without_changing_existing(tmp_path: Path) -> None:
     tool = _load_tool()
     config_dir = tmp_path / "config" / "kpi"
