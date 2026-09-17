@@ -253,8 +253,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _expand_cli_path(path: Path) -> Path:
+    """展开 CLI 路径中的用户目录；Windows/Unix 分隔符交给 pathlib 处理。"""
+    return path.expanduser()
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    args.source_dir = _expand_cli_path(args.source_dir)
+    if args.command == "generate" and args.output is not None:
+        args.output = _expand_cli_path(args.output)
+    if args.command == "validate":
+        args.rules = _expand_cli_path(args.rules)
     try:
         if args.command == "generate":
             excludes = {args.output.resolve()} if args.output and args.output != Path("-") else None

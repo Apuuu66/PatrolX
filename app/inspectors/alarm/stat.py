@@ -25,7 +25,7 @@ inspector = Inspector(
     rule_version="1.1.0",
     description="统计告警总量、严重级分布与未处理/未清除告警；存在 CRITICAL 或未处理告警时告警",
     recommendation="优先处理 CRITICAL/HIGH 未处理告警，核查根因",
-    source_patterns=[r"^alarm/.*$"],
+    source_refs=["alarm_all"],
     outputs_metrics=[
         {"key": "alarm_total", "label": "告警总量", "unit": "条"},
         {"key": "unhandled", "label": "未处理告警", "unit": "条"},

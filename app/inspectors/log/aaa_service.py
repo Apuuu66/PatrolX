@@ -24,7 +24,7 @@ inspector = Inspector(
     rule_version="4.0.0",
     description="检查 AAAService 的认证失败和重试定时器超限",
     recommendation="检查认证服务可用性、账号锁定策略和重试定时器配置",
-    source_patterns=[r"^logs/.*\.log$"],
+    source_refs=["logs_all"],
     outputs_metrics=[
         {"key": "error_count", "label": "错误条数", "unit": "条"},
         {"key": "auth_failure_count", "label": "认证失败条数", "unit": "条"},

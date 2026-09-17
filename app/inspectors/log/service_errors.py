@@ -23,7 +23,7 @@ inspector = Inspector(
     rule_version="4.0.0",
     description="按服务聚合 ERROR/FATAL/CRITICAL 日志，识别错误最集中的服务",
     recommendation="优先排查错误最集中的服务及其数据库、网络和下游依赖",
-    source_patterns=[r"^logs/.*\.log$"],
+    source_refs=["logs_all"],
     outputs_metrics=[
         {"key": "service_count", "label": "服务数量", "unit": "个"},
         {"key": "error_service_count", "label": "存在错误的服务数", "unit": "个"},

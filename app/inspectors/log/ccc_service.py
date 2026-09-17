@@ -23,7 +23,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="检查 CCC 每个节点的启动是否成功",
     recommendation="检查未出现 start success 的节点启动流程和依赖状态",
-    source_patterns=[r"^logs/(?:ServiceLog_[^/]+/)?CCC/.+\.log$"],
+    source_refs=["ccc_service_logs"],
     outputs_metrics=[
         {"key": "node_count", "label": "节点数", "unit": "个"},
         {"key": "startup_success_node_count", "label": "启动成功节点数", "unit": "个"},

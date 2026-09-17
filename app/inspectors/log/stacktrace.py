@@ -24,7 +24,7 @@ inspector = Inspector(
     rule_version="4.0.0",
     description="从过滤后的日志中识别异常类型和堆栈，并按服务与异常类型聚合",
     recommendation="根据异常类型定位代码路径，优先处理出现最早且重复最多的异常",
-    source_patterns=[r"^logs/.*\.log$"],
+    source_refs=["logs_all"],
     outputs_metrics=[
         {"key": "stacktrace_count", "label": "堆栈/异常条数", "unit": "个"},
         {"key": "exception_type_count", "label": "异常类型数", "unit": "类"},

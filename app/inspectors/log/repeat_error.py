@@ -29,7 +29,7 @@ inspector = Inspector(
     rule_version="4.0.0",
     description="按服务归一化错误消息，识别连接池耗尽、认证失败、重试风暴等重复错误",
     recommendation="检查重复错误的触发频率、外部依赖可用性、重试与限流配置",
-    source_patterns=[r"^logs/.*\.log$"],
+    source_refs=["logs_all"],
     outputs_metrics=[
         {"key": "repeated_pattern_count", "label": "重复错误模式数", "unit": "个"},
         {"key": "max_repeat_count", "label": "最大重复次数", "unit": "次"},

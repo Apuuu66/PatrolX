@@ -550,6 +550,9 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
 - 配置辅助工具 `tools/generate_kpi_config.py` 按开始时间、结束时间和周期列名语义识别 KPI CSV 表头，生成未登记指标草稿；`--apply` 只追加新指标，并在合并后重新校验配置目录。
+- `--input` 推荐传 `local_run/<package>.zip`；工具按包名定位对应的 `output/<task_id>/kpi`，
+  也兼容直接传已解压 CSV 目录。工具不会自己解压，需先执行 `python main.py` 生成任务现场。
+  CLI 路径可用 Windows 原生反斜杠；含空格时按 shell 规则加引号。
 
 ### 7.9 扫描规则生成辅助
 
@@ -557,3 +560,57 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 `source_patterns` YAML 草稿。默认按目录和文件名中的连续数字泛化；也可选择按目录泛化或逐文件精确匹配。
 草稿中的 `matched_files` 仅用于人工核对，不参与运行时匹配。用户修改 `source_patterns` 后执行
 `validate` 子命令，可检查非法正则和漏配文件；校验语义与规则执行器的 `re.fullmatch()` 一致。
+
+#### 扫描配置与本地输入
+
+规则可用 `source_refs` 引用 `deploy/config/scan_rules.yaml` 中的稳定扫描组；注册表装载后
+把引用展开为运行时 `source_patterns`。普通规则必须声明 `source_patterns` 或 `source_refs`
+之一，不能同时声明两者。
+
+```yaml
+version: 1
+groups:
+  alarm_history:
+    description: 告警历史 CSV
+    source_patterns:
+      - '^alarm/(?:.*/)?alarm_history_\d+\.csv$'
+```
+
+```python
+Inspector(
+    code="alarm.stat",
+    source_refs=["alarm_history"],
+)
+```
+
+规则生成工具推荐复用 `local_run/` 压缩包对应的任务解压现场：
+
+```bash
+output/task-<cleaned-package-name>/
+```
+
+先执行 `python main.py` 生成任务现场，再让扫描工具读取任务根目录：
+
+```bash
+# macOS / Linux
+python main.py
+
+python tools/generate_scan_rules.py generate \
+  --source-dir output/task-<cleaned-package-name> \
+  --output deploy/config/scan_rules.draft.yaml
+
+python tools/generate_scan_rules.py validate \
+  --source-dir output/task-<cleaned-package-name> \
+  --rules deploy/config/scan_rules.yaml
+```
+
+Windows PowerShell 路径可继续使用反斜杠：
+
+```powershell
+python tools\generate_scan_rules.py generate `
+  --source-dir .\output\task-<cleaned-package-name> `
+  --output .\deploy\config\scan_rules.draft.yaml
+```
+
+但 YAML 中的 `source_patterns` 必须使用 POSIX `/` 分隔符；运行时任务清单会把相对路径统一
+转换为 `/` 后再做 `re.fullmatch()`。路径包含空格时按所在 shell 的规则加引号。

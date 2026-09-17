@@ -3,8 +3,12 @@
 import importlib
 import pkgutil
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
+from app.core.config import settings
+from app.core.scan_config import load_scan_groups, validate_scan_groups
 from app.inspectors.base import Inspector, PrepareSpec
 
 
@@ -14,6 +18,7 @@ class RuleRegistry:
         self._prepares: dict[str, tuple[Inspector, PrepareSpec]] = {}
         self._prepare_by_owner: dict[str, PrepareSpec] = {}
         self._loaded = False
+        self._scan_refs_resolved = False
 
     def register(self, inspector: Inspector) -> None:
         inspector.validate()
@@ -22,6 +27,30 @@ class RuleRegistry:
         self._rules[inspector.code] = inspector
         if inspector.prepare is not None:
             self._register_prepare(inspector, inspector.prepare)
+
+    def resolve_scan_refs(self, groups: Mapping[str, Any]) -> None:
+        """将规则声明的 source_refs 展开为运行时 source_patterns。"""
+        normalized_groups = {
+            name: value if isinstance(value, Mapping) else {"source_patterns": value} for name, value in groups.items()
+        }
+        resolved_groups = validate_scan_groups({"version": 1, "groups": normalized_groups})
+        for rule in self._rules.values():
+            if rule.source_refs is None:
+                continue
+            unknown = [ref for ref in rule.source_refs if ref not in resolved_groups]
+            if unknown:
+                raise ValueError(f"规则 {rule.code} 引用未定义扫描组: {unknown[0]}")
+            rule.source_patterns = [pattern for ref in rule.source_refs for pattern in resolved_groups[ref]]
+            rule.scan_refs_resolved = True
+            rule.validate()
+        self._scan_refs_resolved = True
+
+    def _has_unresolved_source_refs(self) -> bool:
+        return any(rule.source_refs is not None for rule in self._rules.values()) and not self._scan_refs_resolved
+
+    def _require_resolved_scan_refs(self) -> None:
+        if self._has_unresolved_source_refs():
+            raise ValueError("source_refs 未解析，禁止生成执行计划")
 
     def _register_prepare(self, owner: Inspector, prepare: PrepareSpec) -> None:
         if owner.code in self._prepare_by_owner:
@@ -58,6 +87,11 @@ class RuleRegistry:
     def codes(self) -> list[str]:
         return sorted(self._rules)
 
+    def inspect_plan(self) -> list[str]:
+        """普通规则 inspect 计划：priority → code。"""
+        self._require_resolved_scan_refs()
+        return [rule.code for rule in self.all() if not rule.hidden]
+
     def load_all(self) -> None:
         if self._loaded:
             return
@@ -77,6 +111,8 @@ class RuleRegistry:
                     continue
             importlib.import_module(mod.name)
         self._loaded = True
+        if settings.scan_rules.exists():
+            self.resolve_scan_refs(load_scan_groups(settings.scan_rules))
 
 
 registry = RuleRegistry()

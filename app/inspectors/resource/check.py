@@ -22,7 +22,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="检查 Pod CPU/内存水位与关键业务资源（控制块/定时器）使用情况",
     recommendation="高水位资源需扩容或排查泄漏",
-    source_patterns=[r"^resource/.*$"],
+    source_refs=["resource_all"],
     outputs_metrics=[
         {"key": "high_cpu", "label": "CPU 高水位实例", "unit": "个"},
         {"key": "high_mem", "label": "内存高水位实例", "unit": "个"},

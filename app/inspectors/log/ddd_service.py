@@ -24,7 +24,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="检查 DDD 日志中是否存在 ping 失败",
     recommendation="检查失败节点网络连通性、目标地址可达性和防火墙配置",
-    source_patterns=[r"^logs/(?:ServiceLog_[^/]+/)?DDD/.+\.log$"],
+    source_refs=["ddd_service_logs"],
     outputs_metrics=[
         {"key": "ping_failure_count", "label": "ping 失败条数", "unit": "条"},
         {"key": "affected_node_count", "label": "受影响节点数", "unit": "个"},

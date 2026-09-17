@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from app.inspectors.kpi.catalog import load_kpi_catalog
@@ -179,3 +180,36 @@ def test_dry_run_writes_draft_outside_config_dir(tmp_path: Path) -> None:
     assert saved["domain"] == "api"
     assert len(saved["metrics"]) == len(report["domains"]["api"]["metrics"])
     assert not list(config_dir.glob("*.draft.yaml"))
+
+
+def test_input_archive_resolves_task_kpi_directory(tmp_path: Path) -> None:
+    tool = _load_tool()
+    config_dir = tmp_path / "config" / "kpi"
+    output_root = tmp_path / "output"
+    task_kpi_dir = output_root / "task-sample_a" / "kpi"
+    package = tmp_path / "local_run" / "sample-a.zip"
+    _write_config(config_dir)
+    task_kpi_dir.mkdir(parents=True)
+    (task_kpi_dir / "kpi-api-5.csv").write_text(
+        "测量周期,开始时间,结束时间,请求总数,请求成功\n5,2026-09-01 10:00:00,2026-09-01 10:05:00,120,117\n",
+        encoding="utf-8",
+    )
+    package.parent.mkdir(parents=True)
+    package.write_bytes(b"")
+
+    input_dir = tool.resolve_input_dir(package, output_root=output_root)
+    report = tool.scan_kpi_csv(input_dir, config_dir=config_dir)
+
+    assert input_dir == task_kpi_dir
+    assert report["summary"]["csv_files"] == 1
+    assert report["summary"]["domains"] == ["api"]
+
+
+def test_input_archive_requires_generated_task_site(tmp_path: Path) -> None:
+    tool = _load_tool()
+    package = tmp_path / "local_run" / "sample-a.zip"
+    package.parent.mkdir(parents=True)
+    package.write_bytes(b"")
+
+    with pytest.raises(ValueError, match="请先执行 python main.py"):
+        tool.resolve_input_dir(package, output_root=tmp_path / "output")

@@ -39,5 +39,9 @@ class Settings(BaseSettings):
     def config(self) -> Path:
         return self.resolved(self.config_dir)
 
+    @property
+    def scan_rules(self) -> Path:
+        return self.config / "scan_rules.yaml"
+
 
 settings = Settings()

@@ -67,7 +67,7 @@ inspector = Inspector(
     rule_version="4.0.0",
     description="将日志消息匹配到数据库连接池、认证失败、SCTP 链路、依赖超时和内存耗尽等已知故障模式",
     recommendation="按命中的故障模式查看证据、受影响服务，并执行对应处置建议",
-    source_patterns=[r"^logs/.*\.log$"],
+    source_refs=["logs_all"],
     outputs_metrics=[
         {"key": "matched_pattern_count", "label": "命中故障模式数", "unit": "类"},
         {"key": "affected_service_count", "label": "受影响服务数", "unit": "个"},

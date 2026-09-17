@@ -28,7 +28,7 @@ inspector = Inspector(
     rule_version="1.2.0",
     description="解析呼叫 KPI CSV 文件，执行成功率/失败率阈值检查、请求关联一致性检查和容量指标展示",
     recommendation="检查阈值越限、数据自洽异常和容量趋势",
-    source_patterns=[r"^kpi/(?:.*/)?kpi-call-(?:5|15|30|60)\.csv$"],
+    source_refs=["kpi_call"],
     outputs_metrics=[
         {"key": "file_count", "label": "文件数", "unit": "个"},
         {"key": "record_count", "label": "记录数", "unit": "条"},

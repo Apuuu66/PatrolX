@@ -1,0 +1,44 @@
+# 规则扫描组配置：规则只引用稳定组名，运行时展开为 source_patterns。
+# pattern 必须匹配以 / 分隔的任务内 POSIX 相对路径。
+version: 1
+groups:
+  alarm_all:
+    description: 告警目录全量文件
+    source_patterns:
+      - '^alarm/.*$'
+  config_all:
+    description: 基础配置目录全量文件
+    source_patterns:
+      - '^config/.*$'
+  resource_all:
+    description: 资源目录全量文件
+    source_patterns:
+      - '^resource/.*$'
+  traffic_all:
+    description: 话务目录全量文件
+    source_patterns:
+      - '^traffic/.*$'
+  logs_all:
+    description: 解压后的最终日志文件
+    source_patterns:
+      - '^logs/.*\.log$'
+  ccc_service_logs:
+    description: CCC 服务日志
+    source_patterns:
+      - '^logs/(?:ServiceLog_[^/]+/)?CCC/.+\.log$'
+  ddd_service_logs:
+    description: DDD 服务日志
+    source_patterns:
+      - '^logs/(?:ServiceLog_[^/]+/)?DDD/.+\.log$'
+  kpi_call:
+    description: 呼叫 KPI CSV
+    source_patterns:
+      - '^kpi/(?:.*/)?kpi-call-(?:5|15|30|60)\.csv$'
+  kpi_api:
+    description: API KPI CSV
+    source_patterns:
+      - '^kpi/(?:.*/)?kpi-api-(?:5|15|30|60)\.csv$'
+  kpi_media:
+    description: 媒体 KPI CSV
+    source_patterns:
+      - '^kpi/(?:.*/)?kpi-media-(?:5|15|30|60)\.csv$'

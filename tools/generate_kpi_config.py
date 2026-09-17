@@ -18,6 +18,9 @@ from typing import Any
 
 import yaml
 
+from app.cli import generate_task_id
+from app.core.archive import is_archive
+from app.core.config import settings
 from app.inspectors.kpi.catalog import load_kpi_catalog, normalize_metric_name
 
 FILE_NAME_RE = re.compile(r"^kpi-(?P<domain>api|media|call)-(?P<period>5|15|30|60)\.csv$", re.IGNORECASE)
@@ -500,20 +503,48 @@ def _print_report(report: dict[str, Any], as_json: bool) -> None:
             print(f"  x {error['path']}: {error['message']}")
 
 
+def resolve_input_dir(path: Path, output_root: Path | None = None) -> Path:
+    """解析 KPI 输入；压缩包入参自动定位对应任务的 kpi 解压目录。"""
+    if path.is_dir():
+        return path
+    if path.is_file() and is_archive(path):
+        task_dir = (output_root or settings.output) / generate_task_id(path.name)
+        input_dir = task_dir / "kpi"
+        if not input_dir.is_dir():
+            raise ValueError(f"任务 KPI 解压目录不存在: {input_dir}；请先执行 python main.py")
+        return input_dir
+    raise ValueError(f"KPI 输入不存在或不是支持的数据包: {path}")
+
+
+def _expand_cli_path(path: Path) -> Path:
+    """展开 CLI 路径中的用户目录；Windows/Unix 分隔符交给 pathlib 处理。"""
+    return path.expanduser()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="扫描 KPI CSV 并生成未登记指标配置")
-    parser.add_argument("--input", type=Path, required=True, help="包含 KPI CSV 的输入目录")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="KPI CSV 输入目录；也可传 local_run/<package>.zip 定位 output/<task_id>/kpi",
+    )
     parser.add_argument("--config-dir", type=Path, default=Path("deploy/config/kpi"), help="KPI 配置目录")
     parser.add_argument("--output-dir", type=Path, help="草稿输出目录，默认打印预览")
     parser.add_argument("--domain", action="append", choices=("call", "api", "media"), help="只处理指定领域，可重复")
     parser.add_argument("--apply", action="store_true", help="合并新增指标到配置目录")
     parser.add_argument("--json", action="store_true", help="输出 JSON 报告")
     args = parser.parse_args(argv)
+    args.input = _expand_cli_path(args.input)
+    args.config_dir = _expand_cli_path(args.config_dir)
+    if args.output_dir is not None:
+        args.output_dir = _expand_cli_path(args.output_dir)
     if args.apply and args.output_dir is not None:
         parser.error("--apply 和 --output-dir 不能同时使用")
 
     try:
-        report = scan_kpi_csv(args.input, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None)
+        input_dir = resolve_input_dir(args.input)
+        report = scan_kpi_csv(input_dir, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None)
         if args.apply:
             changed = apply_report(report, args.config_dir)
             _print_report(report, args.json)

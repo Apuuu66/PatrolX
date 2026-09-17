@@ -21,7 +21,7 @@ inspector = Inspector(
     rule_version="1.0.0",
     description="统计总话务量与应答率，应答率低于阈值告警",
     recommendation="应答率偏低时核查交换资源与拥塞配置",
-    source_patterns=[r"^traffic/.*$"],
+    source_refs=["traffic_all"],
     outputs_metrics=[
         {"key": "total_calls", "label": "总话务量", "unit": "次"},
         {"key": "answer_rate", "label": "应答率", "unit": "%"},

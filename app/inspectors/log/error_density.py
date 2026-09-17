@@ -23,7 +23,7 @@ inspector = Inspector(
     rule_version="4.0.0",
     description="统计 source_patterns 匹配日志中的 ERROR/FATAL/CRITICAL 条数，超过阈值告警",
     recommendation="检查异常来源模块，必要时查看完整日志上下文",
-    source_patterns=[r"^logs/.*\.log$"],
+    source_refs=["logs_all"],
     outputs_metrics=[{"key": "error_count", "label": "错误条数", "unit": "条"}],
 )
 

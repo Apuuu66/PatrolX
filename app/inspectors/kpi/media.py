@@ -26,7 +26,7 @@ inspector = Inspector(
     rule_version="1.2.0",
     description="解析媒体统计 KPI CSV 文件，完成识别、完整性检查和指标展示",
     recommendation="检查解析错误行和指标值是否正常",
-    source_patterns=[r"^kpi/(?:.*/)?kpi-media-(?:5|15|30|60)\.csv$"],
+    source_refs=["kpi_media"],
     outputs_metrics=[
         {"key": "file_count", "label": "文件数", "unit": "个"},
         {"key": "record_count", "label": "记录数", "unit": "条"},

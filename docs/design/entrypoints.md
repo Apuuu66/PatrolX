@@ -97,6 +97,95 @@ def run_local_packages() -> int:
 - 原始压缩包只读。
 - 输出统一写入 `output/<task_id>/`。
 
+### 本地输入与参数约定
+
+`python main.py` 是本地调试入口，不提供 `--input`、`--package` 或 `--task-id` 参数；输入路径固定为
+`local_run/` 顶层目录。推荐把原始压缩包放在：
+
+```text
+local_run/<package>.zip
+```
+
+`local_run/` 只扫描顶层的 `zip` / `tar.gz` 文件，不递归扫描子目录；找到几个合法包，就按文件名顺序
+执行几个任务。例如：
+
+```text
+local_run/
+├── sample-a.zip
+├── sample-b.tar.gz
+└── extracted/          # 子目录，不作为 python main.py 的任务输入
+```
+
+macOS / Linux 示例：
+
+```bash
+mkdir -p local_run
+cp /path/to/sample.zip local_run/
+python main.py
+```
+
+Windows PowerShell 示例：
+
+```powershell
+New-Item -ItemType Directory -Force .\local_run | Out-Null
+Copy-Item "C:\data\sample.zip" .\local_run\
+python main.py
+```
+
+工具脚本不直接读取压缩包。推荐先让本地入口生成任务解压现场：把压缩包放入 `local_run/`，执行
+`python main.py`，再使用对应的 `output/<task_id>/` 目录。`<task_id>` 由包名清洗后派生，例如：
+
+```text
+local_run/sample-a.zip   ->   output/task-sample_a/
+```
+
+`tools/generate_kpi_config.py --input` 可以直接传 `local_run/` 里的压缩包；工具会按包名定位
+对应的 `output/<task_id>/kpi`：
+
+```bash
+python main.py
+
+python tools/generate_kpi_config.py \
+  --input local_run/sample-a.zip \
+  --output-dir drafts/kpi
+```
+
+Windows PowerShell 示例：
+
+```powershell
+python main.py
+
+python tools\generate_kpi_config.py `
+  --input .\local_run\sample-a.zip `
+  --output-dir .\drafts\kpi
+```
+
+也可以直接传已解压目录，例如 `--input output/task-sample_a/kpi`。工具会递归扫描 `--input` 下的
+`*.csv`，但不会自己解压 `zip` / `tar.gz`；必须先执行任务生成解压现场，或使用其他已解压目录。
+
+`tools/generate_scan_rules.py` 也复用同一个任务解压现场，输入参数是 `--source-dir`。为了生成
+和运行时一致的 `logs/...`、`kpi/...` 相对路径，推荐传任务根目录：
+
+```bash
+python main.py
+
+python tools/generate_scan_rules.py generate \
+  --source-dir output/task-<cleaned-package-name> \
+  --output deploy/config/scan_rules.draft.yaml
+```
+
+Windows PowerShell 中路径分隔符可以使用 `\`，含空格的路径加引号即可；生成的
+`source_patterns` 仍要写成 POSIX `/` 分隔符。任务根目录里包含 `.main/`、`prepared/` 等证据和
+派生现场，草稿中的 `matched_files` 只用于人工核对；整理正式扫描组时应只保留运行时需要匹配的
+分类工作目录文件。
+
+| 目的 | 输入位置 | 参数 |
+| --- | --- | --- |
+| 本地调试巡检 | `local_run/<package>.zip` | 无 `--input`，固定扫描顶层 |
+| KPI 指标配置生成 | `local_run/<package>.zip`，或任务现场中的 CSV 目录 | `--input` |
+| 扫描规则生成 / 回验 | `output/task-<cleaned-package-name>/` | `--source-dir` |
+| CLI 全流程验证 | `uploads/<package>.zip` | 无路径参数，固定扫描顶层 |
+
 ## 4. CLI 全流程入口
 
 CLI 的包发现逻辑在 `app/cli.py`：

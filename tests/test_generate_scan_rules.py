@@ -101,3 +101,33 @@ def test_cli_generate_and_validate(tmp_path: Path, capsys) -> None:
     report = json.loads(capsys.readouterr().out)
     assert report["summary"]["matched_files"] == 3
     assert report["summary"]["unmatched_files"] == []
+
+
+def test_cli_expands_user_paths_with_spaces(tmp_path: Path, capsys, monkeypatch) -> None:
+    tool = _load_tool()
+    home = tmp_path / "user home"
+    source = home / "extracted package"
+    _create_files(source)
+    output = home / "scan rules.yaml"
+    monkeypatch.setenv("HOME", str(home))
+
+    assert tool.main(["generate", "--source-dir", "~/extracted package", "--output", "~/scan rules.yaml"]) == 0
+    capsys.readouterr()
+    payload = yaml.safe_load(output.read_text(encoding="utf-8"))
+    assert len(payload["rules"]) == 2
+
+    assert (
+        tool.main(
+            [
+                "validate",
+                "--source-dir",
+                "~/extracted package",
+                "--rules",
+                "~/scan rules.yaml",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["summary"]["matched_files"] == 3

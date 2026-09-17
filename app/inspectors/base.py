@@ -38,6 +38,8 @@ class Inspector:
     recommendation: str
     hidden: bool = False
     source_patterns: list[str] | None = None
+    source_refs: list[str] | None = None
+    scan_refs_resolved: bool = False
     outputs_metrics: list[OutputMetric] = field(default_factory=list)
     params: list[dict[str, Any]] = field(default_factory=list)
     run: Any = None
@@ -56,13 +58,17 @@ class Inspector:
             raise ValueError(f"规则 {self.code} 缺少执行函数 run")
         if self.prepare is not None:
             self._validate_prepare()
-        if self.hidden:
+        if self.source_patterns is not None and self.source_refs is not None and not self.scan_refs_resolved:
+            raise ValueError(f"规则 {self.code} 不能同时声明 source_patterns/source_refs")
+        if self.source_refs is not None:
+            self._validate_source_refs()
+        elif self.hidden:
             if self.source_patterns is None:
                 return self
             if not self.source_patterns:
                 raise ValueError(f"隐藏规则 {self.code} source_patterns 不能为空")
         elif self.source_patterns is None or not self.source_patterns:
-            raise ValueError(f"普通规则 {self.code} 必须声明非空 source_patterns")
+            raise ValueError(f"普通规则 {self.code} 必须声明非空 source_patterns/source_refs")
         if self.source_patterns is not None:
             self._validate_source_patterns()
         metric_keys = []
@@ -81,8 +87,8 @@ class Inspector:
             return
         if self.hidden:
             raise ValueError(f"隐藏规则 {self.code} 不能声明私有 prepare")
-        if not self.source_patterns:
-            raise ValueError(f"规则 {self.code} 声明 prepare 时必须声明 source_patterns")
+        if not self.source_patterns and not self.source_refs:
+            raise ValueError(f"规则 {self.code} 声明 prepare 时必须声明 source_patterns/source_refs")
         if not prepare.code:
             raise ValueError(f"规则 {self.code} 的 prepare 缺少 code")
         if prepare.owner_code != self.code:
@@ -104,3 +110,14 @@ class Inspector:
                 re.compile(pattern)
             except re.error as exc:
                 raise ValueError(f"规则 {self.code} source_patterns 存在非法正则: {pattern}") from exc
+
+    def _validate_source_refs(self) -> None:
+        """校验扫描组引用；组存在性由注册表加载扫描配置后检查。"""
+        if self.source_refs is None or not self.source_refs:
+            raise ValueError(f"规则 {self.code} source_refs 不能为空")
+        if any(not isinstance(ref, str) or not ref for ref in self.source_refs):
+            raise ValueError(f"规则 {self.code} source_refs 必须是非空字符串")
+        if any(ref.strip() != ref or "/" in ref or "\\" in ref for ref in self.source_refs):
+            raise ValueError(f"规则 {self.code} source_refs 存在非法组名: {self.source_refs}")
+        if len(self.source_refs) != len(set(self.source_refs)):
+            raise ValueError(f"规则 {self.code} source_refs 存在重复组名")

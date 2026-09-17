@@ -22,7 +22,7 @@ inspector = Inspector(
     rule_version="1.0.1",
     description="检查基础配置文件与关键配置项是否存在",
     recommendation="缺失配置项可能导致功能异常，需补齐默认值",
-    source_patterns=[r"^config/.*$"],
+    source_refs=["config_all"],
     outputs_metrics=[
         {"key": "files", "label": "配置文件数", "unit": "个"},
         {"key": "missing", "label": "缺失配置项", "unit": "项"},
