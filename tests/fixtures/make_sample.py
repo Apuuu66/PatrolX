@@ -1,4 +1,4 @@
-"""生成完整 App Problem Scene 样例包 tests/fixtures/sample/sample.zip。"""
+"""生成单日 App Problem Scene 样例包 tests/fixtures/sample/sample.zip。"""
 
 import gzip
 import io
@@ -14,7 +14,7 @@ BASE = "ZZapp01BCN_app_Problem_scene_333/333/app Problem scene"
 
 
 def _call_kpi_5_csv() -> str:
-    """生成 31 天 × 6 个服务实例的完整呼叫 KPI 月度样例，覆盖周期、节假日与异常形态。"""
+    """生成 1 天 × 6 个服务实例的呼叫 KPI 样例，覆盖早晚异常窗口与解析容错。"""
     lines = [
         "设备类型：XXX",
         "测量单元名称：呼叫会话统计",
@@ -34,7 +34,7 @@ def _call_kpi_5_csv() -> str:
     maintenance_days = {18, 25}
     severe_degradation_days = {17, 21, 27, 31, 4, 8}
     base = datetime(2026, 8, 15)
-    for slot in range(31 * 288):
+    for slot in range(288):
         start_at = base + timedelta(minutes=slot * 5)
         end_at = start_at + timedelta(minutes=5)
         start_text = start_at.strftime("%Y-%m-%d %H:%M:%S")
@@ -44,7 +44,7 @@ def _call_kpi_5_csv() -> str:
         is_weekend = start_at.weekday() >= 5
         is_holiday = day_of_month in holidays
         load_season = 0.68 if is_weekend or is_holiday else 1.0
-        cycle_progress = (slot / (31 * 288) - 0.5) * 0.08
+        cycle_progress = (slot / 288 - 0.5) * 0.08
         row_index = slot * len(services)
 
         for service_idx, (service, instance, load_factor, quality_factor) in enumerate(services):
@@ -108,19 +108,19 @@ def _call_kpi_5_csv() -> str:
             )
 
             # 少量固定注入的记录：自洽异常和解析异常不中断整个文件解析。
-            if row_index == 6000:
+            if row_index == 300:
                 lines[-1] = lines[-1].replace(
                     f",{requests},{successes},{failures},",
                     f",{requests},{successes - 4},{failures},",
                 )
-            elif row_index == 12000:
+            elif row_index == 900:
                 lines[-1] = lines[-1].replace(
                     f",{requests},{successes},{failures},",
                     f",{requests},{successes - 9},{failures},",
                 )
-            elif row_index == 9000:
+            elif row_index == 600:
                 lines[-1] = "IMS-Core,ims-node-01,可信,,invalid-time,,5,1200,,bad-number,99.00,1.00,200,120"
-            elif row_index == 15000:
+            elif row_index == 1200:
                 lines[-1] = "Access-GW,access-node-02,可信,,2026-09-01 10:00:00,,5,1500,1460,40,97.33,2.67,not-number"
 
     return "\n".join(lines) + "\n"
