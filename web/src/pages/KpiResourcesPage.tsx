@@ -36,7 +36,7 @@ export function KpiResourcesPage() {
         });
         setPageData(data);
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "资源指标加载失败");
+        message.error(err instanceof Error ? err.message : "指标加载失败");
       } finally {
         setLoading(false);
       }
@@ -110,7 +110,7 @@ export function KpiResourcesPage() {
 
   return (
     <Card
-      title={<Typography.Text strong>KPI 资源指标</Typography.Text>}
+      title={<Typography.Text strong>KPI 指标库</Typography.Text>}
       extra={
         <Space wrap>
           <Upload accept=".csv,text/csv" beforeUpload={handleImport} showUploadList={false}>

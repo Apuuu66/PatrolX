@@ -15,6 +15,8 @@ export function MainLayout() {
   const selected =
     location.pathname.startsWith("/tasks") || location.pathname === "/"
       ? "/tasks"
+      : location.pathname.startsWith("/kpi-resources")
+        ? "/kpi-resources"
       : location.pathname.startsWith("/inspectors")
         ? "/inspectors"
         : "/dicts";
@@ -43,7 +45,7 @@ export function MainLayout() {
           selectedKeys={[selected]}
           items={[
             { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
-            { key: "/kpi-resources", icon: <DatabaseOutlined />, label: "KPI 资源" },
+            { key: "/kpi-resources", icon: <DatabaseOutlined />, label: "KPI 指标库" },
             { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
             { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },
           ]}
