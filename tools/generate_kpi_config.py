@@ -3,6 +3,11 @@
 
 默认只生成草稿或打印预览；传入 --apply 后才修改 deploy/config/kpi 下的领域配置。
 工具只做新增，不修改、不删除既有指标、阈值和容量配置。
+
+用法示例：
+    python tools/generate_kpi_config.py --input local_run/sample.zip --output-dir drafts/kpi
+    python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --domain media --output-dir drafts/kpi
+    python tools/generate_kpi_config.py --input local_run/sample.zip --apply
 """
 
 from __future__ import annotations
@@ -34,6 +39,15 @@ MAX_SAMPLE_VALUES = 5
 RESOURCE_HEADER = ("资源id", "中文描述", "英文描述")
 RESOURCE_METRIC_PREFIX = "ME_"
 RESOURCE_UNIT_PREFIX = "UNIT_"
+
+USAGE_EXAMPLES = """\
+用法示例：
+  python tools/generate_kpi_config.py --input local_run/sample.zip --output-dir drafts/kpi
+
+  python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --domain media --output-dir drafts/kpi
+
+  python tools/generate_kpi_config.py --input local_run/sample.zip --apply
+"""
 
 _LATENCY_KEYWORDS = ("响应时延", "响应时间", "时延", "延迟", "耗时")
 _CAPACITY_KEYWORDS = ("峰值", "最大", "并发", "在线数", "连接数")
@@ -680,7 +694,11 @@ def _expand_cli_path(path: Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="扫描 KPI CSV 并生成未登记指标配置")
+    parser = argparse.ArgumentParser(
+        description="扫描 KPI CSV 并生成未登记指标配置",
+        epilog=USAGE_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--input",
         type=Path,
