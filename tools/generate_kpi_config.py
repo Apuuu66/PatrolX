@@ -6,7 +6,7 @@
 
 用法示例：
     python tools/generate_kpi_config.py --input local_run/sample.zip --output-dir drafts/kpi
-    python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --domain media --output-dir drafts/kpi
+    python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --output-dir drafts/kpi
     python tools/generate_kpi_config.py --input local_run/sample.zip --apply
 """
 
@@ -27,7 +27,13 @@ from app.cli import generate_task_id
 from app.core.archive import is_archive
 from app.core.config import settings
 from app.inspectors.kpi.catalog import load_kpi_catalog
-from app.inspectors.kpi.common import load_kpi_config, match_metric_name, normalize_metric_name
+from app.inspectors.kpi.common import match_metric_name, normalize_metric_name
+from app.services.kpi_resources import (
+    import_resource_metrics,
+    load_resource_registry,
+    parse_resource_rows,
+    read_resource_csv,
+)
 
 FILE_NAME_RE = re.compile(r"^kpi-(?P<domain>api|media|call)-(?P<period>5|15|30|60)\.csv$", re.IGNORECASE)
 HEADER_ALIASES: dict[str, set[str]] = {
@@ -36,9 +42,6 @@ HEADER_ALIASES: dict[str, set[str]] = {
     "period": {"周期(分钟)", "测量周期", "period_minutes", "period minutes", "period"},
 }
 MAX_SAMPLE_VALUES = 5
-RESOURCE_HEADER = ("资源id", "中文描述", "英文描述")
-RESOURCE_METRIC_PREFIX = "ME_"
-RESOURCE_UNIT_PREFIX = "UNIT_"
 
 USAGE_EXAMPLES = """\
 用法示例：
@@ -261,13 +264,16 @@ def _candidate_to_metric(candidate: dict[str, Any], key: str, reserved_names: se
     return metric
 
 
-def _match_registered_name(name: str, candidates_by_name: dict[str, dict[str, Any]], alias_index: dict[str, str]) -> str | None:
+def _match_registered_name(
+    name: str, candidates_by_name: dict[str, dict[str, Any]], alias_index: dict[str, str]
+) -> str | None:
     """按最长前缀匹配已登记名或新增候选名，兼容“指标名 + 单位”。"""
     normalized = normalize_metric_name(name)
     best_key: str | None = None
     best_length = 0
     for candidate_name, normalized_name in [
-        (candidate["source_name"], normalize_metric_name(candidate["source_name"])) for candidate in candidates_by_name.values()
+        (candidate["source_name"], normalize_metric_name(candidate["source_name"]))
+        for candidate in candidates_by_name.values()
     ] + list(alias_index.items()):
         if normalized_name and normalized.startswith(normalized_name) and len(normalized_name) > best_length:
             best_key = str(candidate_name) if candidate_name in candidates_by_name else alias_index[str(candidate_name)]
@@ -327,7 +333,11 @@ def _build_domain_config(domain: str, domain_report: dict[str, Any], alias_index
     candidates_by_name: dict[str, dict[str, Any]] = {}
     for index, candidate in enumerate(domain_report["metrics"], start=1):
         resource_key = candidate.get("resource_key")
-        if isinstance(resource_key, str) and re.fullmatch(r"[a-z][a-z0-9_]*", resource_key) and resource_key not in used_keys:
+        if (
+            isinstance(resource_key, str)
+            and re.fullmatch(r"[a-z][a-z0-9_]*", resource_key)
+            and resource_key not in used_keys
+        ):
             candidate["key"] = resource_key
             used_keys.add(resource_key)
         else:
@@ -364,120 +374,63 @@ def scan_resource_csv(
     path: Path,
     *,
     config_dir: Path = Path("deploy/config/kpi"),
-    domains: set[str] | None = None,
 ) -> dict[str, Any]:
-    """解析资源字典 CSV，并把 ME_* 资源转换为指标配置草稿报告。"""
+    """解析资源全集 CSV，返回基础指标预览；不写入配置。"""
     if not path.is_file():
         raise ValueError(f"资源字典 CSV 不存在: {path}")
-    if domains is None or len(domains) != 1:
-        raise ValueError("资源字典模式必须且只能指定一个领域")
-    domain = next(iter(domains))
-    config = load_kpi_catalog(config_dir)
-    domain_config = config.domains[domain]
-    rows, encoding = _read_csv_rows(path)
-    relative_path = path.as_posix()
-    domain_report: dict[str, Any] = {
-        "files": [],
-        "file_errors": [],
-        "row_count": 0,
-        "registered_metrics": [],
-        "metrics": [],
-        "invalid_metrics": [],
-    }
-    candidates: dict[str, dict[str, Any]] = {}
-    used_resource_keys: set[str] = set()
-
-    if not rows:
-        domain_report["file_errors"].append({"code": "empty_file", "message": "文件为空", "path": relative_path})
-    elif tuple(cell.strip() for cell in rows[0][: len(RESOURCE_HEADER)]) != RESOURCE_HEADER:
-        domain_report["file_errors"].append(
-            {
-                "code": "invalid_header",
-                "message": "表头必须为: " + ",".join(RESOURCE_HEADER),
-                "path": relative_path,
-            }
-        )
-    else:
-        for line_number, row in enumerate(rows[1:], start=2):
-            if not row or all(not cell.strip() for cell in row):
-                continue
-            domain_report["row_count"] += 1
-            resource_id = row[0].strip()
-            chinese_name = row[1].strip()
-            english_name = row[2].strip() if len(row) > 2 else ""
-            if not resource_id:
-                domain_report["invalid_metrics"].append(
-                    {"source_name": chinese_name, "reason": "missing_resource_id", "line_number": line_number}
-                )
-                continue
-            if resource_id.startswith(RESOURCE_UNIT_PREFIX):
-                continue
-            if not resource_id.startswith(RESOURCE_METRIC_PREFIX):
-                domain_report["invalid_metrics"].append(
-                    {"source_name": chinese_name, "reason": "unsupported_resource_id", "line_number": line_number}
-                )
-                continue
-            if not chinese_name:
-                domain_report["invalid_metrics"].append(
-                    {"source_name": resource_id, "reason": "missing_chinese_name", "line_number": line_number}
-                )
-                continue
-            resource_key = resource_id.lower()
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", resource_key) or resource_key in used_resource_keys:
-                domain_report["invalid_metrics"].append(
-                    {"source_name": chinese_name, "reason": "invalid_or_duplicate_resource_key", "line_number": line_number}
-                )
-                continue
-            used_resource_keys.add(resource_key)
-            name, explicit_unit = _split_metric_name_unit(chinese_name)
-            if match_metric_name(name, domain_config):
-                domain_report["registered_metrics"].append(name)
-                continue
-            metric_type, aggregation, quantile, semantic_group, default_unit = _infer_metric_type(name)
-            candidate = candidates.setdefault(
-                name,
-                {
-                    "source_name": name,
-                    "name_zh": name,
-                    "english_name": english_name if english_name and english_name != "对应英文" else None,
-                    "resource_key": resource_key,
-                    "unit": explicit_unit or default_unit,
-                    "source_files": [],
-                    "periods": [],
-                    "record_count": 0,
-                    "sample_values": [],
-                },
-            )
-            candidate["metric_type"] = metric_type
-            candidate["aggregation"] = {"kind": aggregation, **({"quantile": quantile} if quantile is not None else {})}
-            candidate["semantic_group"] = semantic_group
-            if relative_path not in candidate["source_files"]:
-                candidate["source_files"].append(relative_path)
-            domain_report["metrics"].append(candidate)
-
-    domain_report["files"].append(
-        {
-            "path": relative_path,
-            "domain": domain,
-            "period": None,
-            "encoding": encoding,
-            "metadata": {},
-            "row_count": domain_report["row_count"],
-        }
-    )
-    domain_report["metrics"] = list(candidates.values())
+    rows = read_resource_csv(path)
+    parsed = parse_resource_rows(rows)
+    registry = load_resource_registry(config_dir)
+    candidates = parsed["candidates"]
+    new_keys = set(candidates) - set(registry.metrics)
+    invalid_rows = parsed["invalid_rows"]
     return {
-        "input_dir": path.as_posix(),
+        "mode": "resource",
+        "input_path": path.as_posix(),
         "config_dir": config_dir.as_posix(),
         "summary": {
             "csv_files": 1,
-            "domains": [domain],
-            "new_metrics": len(domain_report["metrics"]),
-            "registered_metrics": len(domain_report["registered_metrics"]),
-            "invalid_metrics": len(domain_report["invalid_metrics"]),
+            "row_count": parsed["row_count"],
+            "new_metrics": len(new_keys),
+            "updated_metrics": len(candidates) - len(new_keys),
+            "skipped_units": parsed["skipped_units"],
+            "invalid_rows": len(invalid_rows),
+            "missing_registered": len(set(registry.metrics) - set(candidates)),
+            "total_metrics": len(candidates),
         },
-        "domains": {domain: domain_report},
+        "metrics": [metric.to_dict() for metric in candidates.values()],
+        "invalid_rows": invalid_rows,
     }
+
+
+def write_resource_preview(report: dict[str, Any], output_dir: Path) -> Path:
+    """把资源基础指标写入独立预览文件；不生成领域草稿。"""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "resource_metrics.draft.yaml"
+    _atomic_write_yaml(
+        path,
+        {
+            "version": 1,
+            "revision": 0,
+            "metrics": {item["key"]: item for item in report["metrics"]},
+        },
+    )
+    return path
+
+
+def _print_resource_report(report: dict[str, Any], as_json: bool) -> None:
+    """输出资源 CSV 扫描报告。"""
+    if as_json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    print(
+        "资源扫描完成: rows={row_count}, new={new_metrics}, updated={updated_metrics}, "
+        "units={skipped_units}, invalid={invalid_rows}".format(**report["summary"])
+    )
+    for metric in report["metrics"]:
+        print(f"  + {metric['resource_id']} {metric['name_zh']} [{metric['metric_type']}]")
+    for item in report["invalid_rows"]:
+        print(f"  ! line={item['line_number']} {item.get('resource_id', '-')} ({item['reason']})")
 
 
 def scan_kpi_csv(
@@ -514,7 +467,6 @@ def scan_kpi_csv(
         }
         report = domain_reports[domain]
         domain_config = config.domains[domain]
-        alias_index = domain_config.alias_index
         candidates: dict[str, dict[str, Any]] = {}
         registered: set[str] = set()
         for path, relative_path, target_domain, period in (item for item in targets if item[2] == domain):
@@ -725,17 +677,26 @@ def main(argv: list[str] | None = None) -> int:
     if args.resource_csv is not None:
         if args.input is not None:
             parser.error("--input 和 --resource-csv 不能同时使用")
-        if args.domain is None or len(args.domain) != 1:
-            parser.error("--resource-csv 必须且只能指定一个 --domain")
 
     try:
         if args.resource_csv is not None:
-            report = scan_resource_csv(
-                args.resource_csv, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None
-            )
+            report = scan_resource_csv(args.resource_csv, config_dir=args.config_dir)
+            if args.apply:
+                import_resource_metrics(read_resource_csv(args.resource_csv), config_dir=args.config_dir)
+            elif args.output_dir is not None:
+                path = write_resource_preview(report, args.output_dir)
+                _print_resource_report(report, args.json)
+                print(f"draft: {path.as_posix()}")
+                return 0
+            _print_resource_report(report, args.json)
+            if args.apply:
+                print(f"updated: {(args.config_dir / 'resource_metrics.yaml').as_posix()}")
+            return 0
         else:
             input_dir = resolve_input_dir(args.input)
-            report = scan_kpi_csv(input_dir, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None)
+            report = scan_kpi_csv(
+                input_dir, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None
+            )
         if args.apply:
             changed = apply_report(report, args.config_dir)
             _print_report(report, args.json)

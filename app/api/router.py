@@ -6,6 +6,8 @@ import os
 import shutil
 import tempfile
 from pathlib import Path, PureWindowsPath
+from pathlib import Path as FileSystemPath
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 import yaml
@@ -28,6 +30,10 @@ from app.models.schemas import (
     KpiDisplayStatus,
     KpiPeriodMinutes,
     KpiRecordPage,
+    KpiResourceClassificationRequest,
+    KpiResourceClassificationResult,
+    KpiResourceImportReport,
+    KpiResourceMetricPage,
     LogEntry,
     OverviewSummary,
     RerunRequest,
@@ -38,6 +44,13 @@ from app.models.schemas import (
     TaskLogs,
 )
 from app.services.kpi_records import list_kpi_records
+from app.services.kpi_resources import (
+    KpiResourceError,
+    classify_resource_metrics,
+    import_resource_metrics,
+    list_resource_metrics,
+    read_resource_csv,
+)
 from app.services.overview import build_overview
 from app.services.tasks import DeleteResult, TaskDeleteError, task_service
 
@@ -367,6 +380,80 @@ def list_kpi_records_v2(
         )
     except KeyError as exc:
         raise AppError("not_found", "规则结果不存在", 404) from exc
+
+
+def _kpi_resource_config_dir() -> Path:
+    """返回 KPI 资源库使用的配置目录。"""
+    return settings.config / "kpi"
+
+
+def _save_resource_upload(resource_csv: UploadFile) -> FileSystemPath:
+    """把上传 CSV 落盘到临时文件，复用统一的 CSV 编码解析。"""
+    suffix = FileSystemPath(resource_csv.filename or "resource.csv").suffix or ".csv"
+    with NamedTemporaryFile(prefix="kpi-resource-", suffix=suffix, delete=False) as handle:
+        temporary_path = FileSystemPath(handle.name)
+        resource_csv.file.seek(0)
+        shutil.copyfileobj(resource_csv.file, handle)
+    return temporary_path
+
+
+@router.get(
+    "/kpi/resource-metrics",
+    response_model=KpiResourceMetricPage,
+    operation_id="listKpiResourceMetricsV2",
+)
+def list_kpi_resource_metrics_v2(
+    search: str | None = Query(default=None),
+    domain: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=200),
+) -> KpiResourceMetricPage:
+    try:
+        return list_resource_metrics(
+            config_dir=_kpi_resource_config_dir(),
+            search=search,
+            domain=domain,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiResourceError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+
+
+@router.post(
+    "/kpi/resource-metrics",
+    response_model=KpiResourceImportReport,
+    operation_id="importKpiResourceMetricsV2",
+)
+async def import_kpi_resource_metrics_v2(resource_csv: UploadFile = File(...)) -> KpiResourceImportReport:
+    temporary_path: FileSystemPath | None = None
+    try:
+        temporary_path = _save_resource_upload(resource_csv)
+        report = import_resource_metrics(read_resource_csv(temporary_path), config_dir=_kpi_resource_config_dir())
+        return KpiResourceImportReport.model_validate(report)
+    except KpiResourceError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
+@router.put(
+    "/kpi/resource-metrics/classification",
+    response_model=KpiResourceClassificationResult,
+    operation_id="classifyKpiResourceMetricsV2",
+)
+def classify_kpi_resource_metrics_v2(body: KpiResourceClassificationRequest) -> KpiResourceClassificationResult:
+    try:
+        result = classify_resource_metrics(
+            body.metric_keys,
+            domain=body.domain,
+            expected_revision=body.expected_revision,
+            config_dir=_kpi_resource_config_dir(),
+        )
+        return KpiResourceClassificationResult.model_validate(result)
+    except KpiResourceError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
 
 
 @router.get("/inspectors", response_model=list[InspectorInfo], operation_id="listInspectorsV2")

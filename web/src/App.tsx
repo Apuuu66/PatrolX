@@ -9,6 +9,7 @@ import { ReportPage } from "./pages/ReportPage";
 import { LogsPage } from "./pages/LogsPage";
 import { InspectorsPage } from "./pages/InspectorsPage";
 import { DictsPage } from "./pages/DictsPage";
+import { KpiResourcesPage } from "./pages/KpiResourcesPage";
 
 const router = createBrowserRouter([
   {
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
       { path: "tasks/:taskId/report", element: <ReportPage /> },
       { path: "tasks/:taskId/logs", element: <LogsPage /> },
       { path: "inspectors", element: <InspectorsPage /> },
+      { path: "kpi-resources", element: <KpiResourcesPage /> },
       { path: "dicts", element: <DictsPage /> },
     ],
   },

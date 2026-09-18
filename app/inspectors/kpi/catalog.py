@@ -615,6 +615,7 @@ def load_kpi_catalog(config_dir: Path | None = None) -> KpiConfig:
         raise KpiCatalogError(f"KPI 配置目录不存在: {directory}")
     yaml_files = {path.name for path in directory.iterdir() if path.is_file() and path.suffix == ".yaml"}
     expected = {COMMON_FILE, *(f"{domain}.yaml" for domain in REGISTERED_DOMAINS)}
+    yaml_files.discard("resource_metrics.yaml")
     unknown = sorted(yaml_files - expected)
     if unknown:
         raise KpiCatalogError(f"KPI 配置目录包含 unknown file: {unknown}")

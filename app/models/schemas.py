@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -403,3 +403,65 @@ class Error(BaseModel):
     code: str
     message: str
     detail: dict[str, Any] | None = None
+
+
+class KpiResourceDomain(StrEnum):
+    """KPI 资源指标的业务域筛选值。"""
+
+    UNCLASSIFIED = "unclassified"
+    CALL = "call"
+    API = "api"
+    MEDIA = "media"
+
+
+class KpiResourceMetric(BaseModel):
+    """KPI 资源指标库中的基础定义。"""
+
+    key: str
+    resource_id: str
+    name_zh: str
+    name_en: str
+    metric_type: str
+    semantic_group: str
+    display_role: str
+    unit: str
+    source_type: str
+    aggregation: dict[str, Any]
+    domain: KpiResourceDomain
+    imported_at: datetime
+    updated_at: datetime
+
+
+class KpiResourceMetricPage(BaseModel):
+    """KPI 资源指标分页查询响应。"""
+
+    items: list[KpiResourceMetric] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    revision: int = Field(ge=0)
+    summary: dict[KpiResourceDomain, int]
+
+
+class KpiResourceImportReport(BaseModel):
+    """KPI 资源 CSV 导入报告。"""
+
+    revision: int = Field(ge=0)
+    summary: dict[str, int]
+    invalid_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class KpiResourceClassificationRequest(BaseModel):
+    """KPI 资源指标批量分类请求。"""
+
+    metric_keys: list[str] = Field(min_length=1)
+    domain: Literal["call", "api", "media"]
+    expected_revision: int = Field(ge=0)
+
+
+class KpiResourceClassificationResult(BaseModel):
+    """KPI 资源指标批量分类结果。"""
+
+    revision: int = Field(ge=0)
+    domain: Literal["call", "api", "media"]
+    metric_keys: list[str]

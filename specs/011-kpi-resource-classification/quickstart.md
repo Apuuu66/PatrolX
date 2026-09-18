@@ -36,7 +36,7 @@ python tools/generate_kpi_config.py --resource-csv /path/to/resource.csv --apply
 python build.py run
 ```
 
-打开左侧菜单 `KPI 指标资源`：
+打开左侧菜单 `KPI 资源`：
 
 1. 搜索 `21002`，确认能看到资源指标。
 2. 选择一个或多个未分类指标。

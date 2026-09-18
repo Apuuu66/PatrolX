@@ -17,6 +17,11 @@ export type DictsResponse = components["schemas"]["DictsResponseV2"];
 export type OverviewSummary = components["schemas"]["OverviewSummaryV2"];
 export type DictItem = components["schemas"]["DictItemV2"];
 export type LogEntry = components["schemas"]["LogEntryV2"];
+export type KpiResourceDomain = components["schemas"]["KpiResourceDomainV2"];
+export type KpiResourceMetric = components["schemas"]["KpiResourceMetricV2"];
+export type KpiResourceMetricPage = components["schemas"]["KpiResourceMetricPageV2"];
+export type KpiResourceImportReport = components["schemas"]["KpiResourceImportReportV2"];
+export type KpiResourceClassificationResult = components["schemas"]["KpiResourceClassificationResultV2"];
 export type TaskDeleteError = TaskDeleteErrorDetail;
 
 const BASE = "/api/v2";
@@ -142,6 +147,41 @@ export const api = {
   },
 
   listDicts: () => request<DictsResponse>(`${BASE}/dicts`),
+
+  listKpiResourceMetrics: (query: KpiResourceQuery = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiResourceMetricPage>(`${BASE}/kpi/resource-metrics${qs ? `?${qs}` : ""}`);
+  },
+
+  importKpiResourceMetrics: (file: File) => {
+    const form = new FormData();
+    form.set("resource_csv", file);
+    return request<KpiResourceImportReport>(`${BASE}/kpi/resource-metrics`, { method: "POST", body: form });
+  },
+
+  classifyKpiResourceMetrics: (payload: KpiResourceClassificationPayload) =>
+    request<KpiResourceClassificationResult>(`${BASE}/kpi/resource-metrics/classification`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 };
 
 export const reportUrl = (taskId: string) => `${BASE}/tasks/${encodeURIComponent(taskId)}/report`;
+
+export interface KpiResourceQuery {
+  search?: string;
+  domain?: KpiResourceDomain;
+  page?: number;
+  page_size?: number;
+}
+
+export interface KpiResourceClassificationPayload {
+  metric_keys: string[];
+  domain: Exclude<KpiResourceDomain, "unclassified">;
+  expected_revision: number;
+}
