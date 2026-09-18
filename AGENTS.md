@@ -178,6 +178,8 @@ python build.py test
 python build.py verify
 ```
 
+合入验证只跑一次：fast-forward 合入且合入后代码树与验证时完全一致时，不需要在合入后重跑全量测试；仅在非 fast-forward（有 merge/rebase 产生新树）时才需重跑。
+
 涉及契约时执行：
 
 ```bash
