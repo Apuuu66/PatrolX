@@ -88,6 +88,43 @@ def test_kpi_source_patterns_match_only_own_domain_and_period(tmp_path: Path) ->
     assert expected["kpi.call"] == ["kpi/deep/ne333_Call_Session_API_Statistics_60_0_202609020000.csv"]
 
 
+@pytest.mark.parametrize(
+    ("rule_code", "fifteen_path", "five_path"),
+    [
+        ("kpi.api", "kpi/kpi-api-15.csv", "kpi/kpi-api-5.csv"),
+        ("kpi.media", "kpi/media/kpi-media-15.csv", "kpi/kpi-media-5.csv"),
+        (
+            "kpi.call",
+            "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv",
+            "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
+        ),
+    ],
+)
+def test_kpi_rules_prefer_15_minutes_over_5(tmp_path: Path, rule_code: str, fifteen_path: str, five_path: str) -> None:
+    """存在 15 分钟数据时，5 分钟数据不得混入同一条 KPI 结果。"""
+    if rule_code == "kpi.api":
+        fifteen = _kpi_content(["请求总数"], [[*_CALL_ROW, 10]], "API 统计")
+        five = _kpi_content(["请求总数"], [[5, "2026-09-01 10:00:00", "2026-09-01 10:05:00", 20]], "API 统计")
+    elif rule_code == "kpi.media":
+        fifteen = _kpi_content(["媒体请求"], [[*_CALL_ROW, 10]], "媒体统计")
+        five = _kpi_content(["媒体请求"], [[5, "2026-09-01 10:00:00", "2026-09-01 10:05:00", 20]], "媒体统计")
+    else:
+        fifteen = _GOOD_CALL
+        five = _kpi_content(
+            ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "统计峰值", "最大并发"],
+            [[5, "2026-09-01 10:00:00", "2026-09-01 10:05:00", 1200, 1190, 10, 100, 88]],
+            "呼叫会话统计",
+        )
+
+    ctx = _ctx(tmp_path, {fifteen_path: fifteen, five_path: five})
+    result = _run_rule(rule_code, ctx)
+
+    assert result.status != RuleStatus.SKIP
+    assert [file["path"] for file in result.metadata["kpi_files"]] == [fifteen_path]
+    for metric_result in result.metadata["kpi_results"]:
+        assert all(point["period_minutes"] == 15 for point in metric_result["series"])
+
+
 def test_kpi_rules_exclude_dot_main_and_prepared_files(tmp_path: Path) -> None:
     files = {
         ".main/kpi/kpi-api-15.csv": _GOOD_CALL,
@@ -156,25 +193,17 @@ def test_kpi_api_aggregates_files_and_isolates_bad_file(tmp_path: Path) -> None:
     assert result.findings[0].source_file == "kpi/sub/kpi-api-15.csv"
 
 
-def test_kpi_media_aggregates_periods_without_threshold_findings(tmp_path: Path) -> None:
+def test_kpi_media_falls_back_to_5_minutes_without_threshold_findings(tmp_path: Path) -> None:
     five = _kpi_content(
         ["媒体请求"],
         [[5, "2026-09-01 10:00:00", "2026-09-01 10:05:00", 20]],
         "媒体统计",
     )
-    sixty = _kpi_content(
-        ["媒体请求"],
-        [[60, "2026-09-01 10:00:00", "2026-09-01 11:00:00", 30]],
-        "媒体统计",
-    )
-    ctx = _ctx(
-        tmp_path,
-        {"kpi/kpi-media-5.csv": five, "kpi/nested/kpi-media-60.csv": sixty},
-    )
+    ctx = _ctx(tmp_path, {"kpi/kpi-media-5.csv": five})
     result = _run_rule("kpi.media", ctx)
     assert result.status == RuleStatus.PASS
-    assert [metric.value for metric in result.metrics] == [2, 2, 2, 0]
-    assert [file["period_minutes"] for file in result.metadata["kpi_files"]] == [5, 60]
+    assert [metric.value for metric in result.metrics] == [1, 1, 1, 0]
+    assert [file["period_minutes"] for file in result.metadata["kpi_files"]] == [5]
     assert not result.findings
 
 
@@ -336,4 +365,4 @@ def test_all_kpi_domains_skip_without_any_kpi_files(tmp_path: Path) -> None:
 @pytest.mark.parametrize("code", ["kpi.api", "kpi.media", "kpi.call"])
 def test_kpi_rule_version_bumped_for_real_csv_format(code: str) -> None:
     registry.load_all()
-    assert registry.get(code).rule_version == "1.2.0"
+    assert registry.get(code).rule_version == "1.3.0"

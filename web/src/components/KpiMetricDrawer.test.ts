@@ -162,3 +162,34 @@ test("describes record pages and empty state", () => {
   assert.equal(getKpiRecordPageInfo({ total: 8, page: 3, page_size: 3, items: [] as never[] }), "7-7 / 共 8 条");
   assert.equal(getKpiRecordRows([]).length, 0);
 });
+
+test("creates unique keys for duplicated cross-reference values", () => {
+  const duplicatedRow = {
+    source_name: "呼叫请求成功次数",
+    source_file: "kpi/call.csv",
+    value: 100,
+  };
+  const view = getKpiMetricDetailView({
+    ...item,
+    result: {
+      ...item.result,
+      provenance: {
+        ...item.result.provenance,
+        direct_cross_reference: [duplicatedRow, duplicatedRow],
+      },
+    },
+  });
+  assert.equal(view.crossReferenceRows.length, 2);
+  assert.notEqual(view.crossReferenceRows[0]?.key, view.crossReferenceRows[1]?.key);
+});
+
+test("sorts trend points by measurement time", () => {
+  const trend = getKpiMetricTrendView({
+    ...item.result,
+    series: [
+      { start_at: "2026-09-01T02:05:00Z", period_minutes: 15, value: 99.2, status: "pass" },
+      { start_at: "2026-09-01T02:00:00Z", period_minutes: 15, value: 90, status: "fail" },
+    ],
+  });
+  assert.deepEqual(trend.points.map((point) => point.value), [90, 99.2]);
+});

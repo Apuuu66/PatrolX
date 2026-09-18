@@ -45,14 +45,21 @@ test("真实富化样例可在页面完成 KPI 查询且无接口或运行时错
     )
     .toBe("completed");
 
+  const ruleResponse = await request.get(`/api/v2/tasks/${taskId}/rules/kpi.call`);
+  expect(ruleResponse.status()).toBe(200);
+  const sourceFile = (await ruleResponse.json()).metadata?.kpi_files?.[0]?.path;
+  expect(sourceFile).toBeTruthy();
+
   await page.goto(`/tasks/${taskId}`);
   await expect(page.getByText("呼叫 KPI 巡检")).toBeVisible();
   await page.getByText("呼叫 KPI 巡检").click();
   await expect(page.getByText("呼叫成功率")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("kpi/kpi-call-5.csv").first()).toBeVisible();
 
   await page.getByText("呼叫成功率").click();
   await expect(page.getByText("原始记录")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(sourceFile).first()).toBeVisible();
+  await expect(page.getByText("趋势", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("canvas").first()).toBeVisible();
 
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);

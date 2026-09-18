@@ -33,6 +33,8 @@ KpiConfigError = KpiCatalogError
 __all__ = ["KpiConfigError", "KpiConfig", "KpiThreshold", "load_kpi_catalog", "normalize_metric_name"]
 
 VALID_PERIODS = {5, 15, 30, 60}
+# 展示和分析优先采用更稳定的 15 分钟粒度；缺失时按可用粒度兜底。
+KPI_PERIOD_PRIORITY = (15, 5, 30, 60)
 VALID_SEMANTICS = {"peak", "concurrency", "gauge"}
 VALID_CAPACITY_STATUS = {"confirmed", "unknown"}
 VALID_DIRECTIONS = {"min", "max"}
@@ -761,14 +763,23 @@ def parse_all_files(
     domain: str,
     config: KpiConfig,
 ) -> list[KpiCsvFile]:
-    """批量解析匹配文件，按路径排序，单个文件失败不影响其他文件。"""
+    """批量解析匹配文件，只使用最高优先级周期。
+
+    周期优先级为 15 → 5 → 30 → 60；同一优先级下的多个文件仍一起聚合。
+    按路径排序，单个文件失败不影响其他文件。
+    """
     targets: list[tuple[Path, str, int]] = []
+    periods: set[int] = set()
     for path in sorted(ctx_files, key=lambda p: p.as_posix()):
         relative = path.relative_to(data_dir).as_posix() if path.is_relative_to(data_dir) else path.as_posix()
         parsed = parse_kpi_path(relative)
         if parsed is None or parsed[0] != domain:
             continue
         targets.append((path, relative, parsed[1]))
+        periods.add(parsed[1])
+
+    preferred_period = next((period for period in KPI_PERIOD_PRIORITY if period in periods), None)
+    targets = [target for target in targets if target[2] == preferred_period]
 
     if len(targets) > config.budgets["max_files_per_domain"]:
         error_file = KpiCsvFile(

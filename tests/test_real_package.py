@@ -99,8 +99,9 @@ def test_real_kpi_call_and_container_resource_rule_results(tmp_path: Path) -> No
     )
     kpi_result = registry.get("kpi.call").run(kpi_ctx)
     assert kpi_result.status == RuleStatus.PASS
-    assert kpi_result.metrics[0].value == 4
-    assert kpi_result.metrics[1].value == 8
+    # 多周期样例只保留优先级最高的 15 分钟数据。
+    assert kpi_result.metrics[0].value == 1
+    assert kpi_result.metrics[1].value == 2
 
     resource_ctx = _ctx_with_task(
         tmp_path,

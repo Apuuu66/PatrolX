@@ -66,7 +66,7 @@ export function KpiMetricDrawer({ item, open, onClose, taskId, ruleCode }: Props
             <Table
               size="small"
               style={{ marginTop: 8 }}
-              rowKey={(row) => `${row.sourceName}-${row.sourceFile}-${row.valueText}`}
+              rowKey="key"
               pagination={{ pageSize: 5, hideOnSinglePage: true }}
               dataSource={view.crossReferenceRows}
               columns={[

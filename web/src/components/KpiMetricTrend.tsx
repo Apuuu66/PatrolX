@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
 import { Empty, Typography } from "antd";
 
@@ -19,7 +19,7 @@ interface Props {
 
 export function KpiMetricTrend({ result, metricName }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const view = getKpiMetricTrendView(result);
+  const view = useMemo(() => getKpiMetricTrendView(result), [result]);
 
   useEffect(() => {
     if (!ref.current || !view.points.length) return;
@@ -44,7 +44,7 @@ export function KpiMetricTrend({ result, metricName }: Props) {
         {
           name: metricName,
           type: "line",
-          showSymbol: false,
+          showSymbol: view.points.length === 1,
           data: view.points.map((point) => ({
             value: point.value,
             itemStyle: { color: STATUS_COLORS[point.status] ?? STATUS_COLORS.neutral },
@@ -52,13 +52,14 @@ export function KpiMetricTrend({ result, metricName }: Props) {
         },
       ],
     });
-    const onResize = () => chart.resize();
-    window.addEventListener("resize", onResize);
+    // Drawer 打开动画可能改变容器尺寸；监听容器本身，避免初始化后图表停留在零宽状态。
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(ref.current);
     return () => {
-      window.removeEventListener("resize", onResize);
+      observer.disconnect();
       chart.dispose();
     };
-  }, [metricName, view.points]);
+  }, [metricName, view]);
 
   if (!view.points.length) {
     return (

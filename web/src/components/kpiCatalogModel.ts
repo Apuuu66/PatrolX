@@ -372,6 +372,7 @@ export type KpiMetricInputRow = {
 };
 
 export type KpiMetricCrossReferenceRow = {
+  key: string;
   sourceName: string;
   sourceFile: string;
   value: number | string | null;
@@ -450,9 +451,17 @@ export function getKpiMetricDetailView(item: { definition: unknown; result?: unk
   const crossReferenceRows = asArray(provenance.direct_cross_reference)
     .map((value) => readRecord(value))
     .filter((value) => readString(value.source_name))
-    .map((value) => {
+    .map((value, index) => {
       const directValue = typeof value.value === "number" || typeof value.value === "string" ? value.value : null;
       return {
+        key: [
+          readString(value.start_at, "-"),
+          readNumber(value.period_minutes) ?? "-",
+          readString(value.source_file, "-"),
+          readNumber(value.line_number) ?? "-",
+          readString(value.source_name, "-"),
+          index,
+        ].join(":"),
         sourceName: readString(value.source_name),
         sourceFile: readString(value.source_file),
         value: directValue,
@@ -509,7 +518,8 @@ export function getKpiMetricTrendView(result: unknown): { points: KpiTrendPoint[
       value: readNumber(point.value) ?? 0,
       status: readString(point.status, "neutral") as KpiDisplayStatus,
     }))
-    .filter((point): point is KpiTrendPoint => Boolean(point.x) && point.y !== null);
+    .filter((point): point is KpiTrendPoint => Boolean(point.x) && point.y !== null)
+    .sort((left, right) => left.x.localeCompare(right.x));
   if (!asArray(readRecord(result).series).length) return { points: [], emptyText: "暂无可用序列" };
   if (!series.length) return { points: [], emptyText: "序列值不可用" };
   return { points: series, emptyText: "" };
