@@ -1,0 +1,257 @@
+# 本文件是 docs/api/openapi.yaml 中本功能新增片段的设计契约。
+# 实现时必须先合并到唯一契约源 docs/api/openapi.yaml，再生成前端客户端。
+
+paths:
+  /api/v2/kpi/resource-metrics:
+    get:
+      summary: 分页查询 KPI 资源指标库
+      operationId: listKpiResourceMetricsV2
+      parameters:
+        - name: search
+          in: query
+          description: 按资源 ID、中文名或英文名模糊匹配
+          schema:
+            type: string
+        - name: domain
+          in: query
+          schema:
+            $ref: '#/components/schemas/KpiResourceDomain'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: 资源指标分页和统计
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiResourceMetricPageV2'
+    post:
+      summary: 导入 KPI 资源全集 CSV
+      operationId: importKpiResourceMetricsV2
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [resource_csv]
+              properties:
+                resource_csv:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 导入成功并返回报告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiResourceImportReportV2'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
+          description: 资源 ID 冲突或 revision 过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+        '413':
+          $ref: '#/components/responses/Error413'
+
+  /api/v2/kpi/resource-metrics/classification:
+    put:
+      summary: 批量分类 KPI 资源指标
+      operationId: classifyKpiResourceMetricsV2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiResourceClassificationRequestV2'
+      responses:
+        '200':
+          description: 整批分类成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiResourceClassificationResultV2'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: revision 过期、重复定义或指标被引用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+
+components:
+  schemas:
+    KpiResourceDomain:
+      type: string
+      enum: [unclassified, call, api, media]
+
+    KpiResourceMetricV2:
+      type: object
+      required: [key, resource_id, name_zh, name_en, metric_type, semantic_group, display_role, unit, source_type, aggregation, domain, imported_at, updated_at]
+      properties:
+        key:
+          type: string
+        resource_id:
+          type: string
+        name_zh:
+          type: string
+        name_en:
+          type: string
+        metric_type:
+          type: string
+          enum: [count, rate, capacity, latency, gauge]
+        semantic_group:
+          type: string
+          enum: [traffic, quality, latency, capacity, other]
+        display_role:
+          type: string
+          enum: [highlight, context]
+        unit:
+          type: string
+        source_type:
+          type: string
+          enum: [raw, derived]
+        aggregation:
+          type: object
+          additionalProperties: true
+        domain:
+          $ref: '#/components/schemas/KpiResourceDomain'
+        imported_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    KpiResourceMetricPageV2:
+      type: object
+      required: [items, total, page, page_size, summary, revision]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiResourceMetricV2'
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        revision:
+          type: integer
+          minimum: 0
+        summary:
+          type: object
+          required: [unclassified, call, api, media]
+          properties:
+            unclassified:
+              type: integer
+              minimum: 0
+            call:
+              type: integer
+              minimum: 0
+            api:
+              type: integer
+              minimum: 0
+            media:
+              type: integer
+              minimum: 0
+
+    KpiResourceImportReportV2:
+      type: object
+      required: [revision, summary, invalid_rows]
+      properties:
+        revision:
+          type: integer
+          minimum: 0
+        summary:
+          type: object
+          required: [row_count, new_metrics, updated_metrics, skipped_units, skipped_rows, invalid_rows, missing_registered]
+          properties:
+            row_count:
+              type: integer
+              minimum: 0
+            new_metrics:
+              type: integer
+              minimum: 0
+            updated_metrics:
+              type: integer
+              minimum: 0
+            skipped_units:
+              type: integer
+              minimum: 0
+            skipped_rows:
+              type: integer
+              minimum: 0
+            invalid_rows:
+              type: integer
+              minimum: 0
+            missing_registered:
+              type: integer
+              minimum: 0
+        invalid_rows:
+          type: array
+          items:
+            type: object
+            required: [line_number, reason]
+            properties:
+              line_number:
+                type: integer
+                minimum: 2
+              resource_id:
+                type: string
+              reason:
+                type: string
+
+    KpiResourceClassificationRequestV2:
+      type: object
+      required: [metric_keys, domain, expected_revision]
+      properties:
+        metric_keys:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        domain:
+          type: string
+          enum: [call, api, media]
+        expected_revision:
+          type: integer
+          minimum: 0
+
+    KpiResourceClassificationResultV2:
+      type: object
+      required: [revision, domain, metric_keys]
+      properties:
+        revision:
+          type: integer
+          minimum: 0
+        domain:
+          type: string
+          enum: [call, api, media]
+        metric_keys:
+          type: array
+          minItems: 1
+          items:
+            type: string
