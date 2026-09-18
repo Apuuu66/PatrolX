@@ -14,6 +14,9 @@ data/*
 # 本地调试输入包（不入库、不提交）
 local_run/*
 !local_run/README.md
+!local_run/resource_metrics/
+local_run/resource_metrics/*
+!local_run/resource_metrics/.gitkeep
 !uploads/.gitkeep
 !output/.gitkeep
 # 轻量合成测试包：允许随仓库分发
