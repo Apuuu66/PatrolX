@@ -1,5 +1,7 @@
 import type { components } from "../api/client";
 
+import { formatKpiNumber } from "./kpiFormat.ts";
+
 export type KpiRecordItem = components["schemas"]["KpiRecordItemV2"];
 export type KpiRecordPage = components["schemas"]["KpiRecordPageV2"];
 export type KpiRecordStatus = components["schemas"]["KpiDisplayStatusV2"];
@@ -75,7 +77,7 @@ export function getKpiRecordRows(items: KpiRecordItem[]): KpiRecordRow[] {
       lineNumber: item.line_number,
       periodText: `${item.period_minutes} 分钟`,
       timeText: `${utcText(item.start_at)} — ${utcText(item.end_at)}`,
-      valueText: item.value === null || item.value === undefined ? "-" : String(item.value),
+      valueText: formatKpiNumber(item.value),
       status: item.status,
       statusLabel: meta.label,
       statusColor: meta.color,

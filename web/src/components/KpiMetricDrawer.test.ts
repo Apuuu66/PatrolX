@@ -60,11 +60,11 @@ const item = {
 test("explains definition, formula, inputs, cross reference and threshold", () => {
   const view = getKpiMetricDetailView(item);
   assert.equal(view.title, "呼叫成功率");
-  assert.equal(view.description.includes("Call Success Rate"), true);
+  assert.equal(view.description, "Call Success Rate · call_success_rate");
   assert.equal(view.formulaText, "call_success_count / call_attempts * 100");
   assert.deepEqual(view.inputRows.map((row) => [row.key, row.valueText]), [
     ["call_success_count", "900"],
-    ["call_attempts", "1000"],
+    ["call_attempts", "1,000"],
   ]);
   assert.deepEqual(view.inputRows.map((row) => row.sourceNamesText), [
     "呼叫请求成功次数(次)",
@@ -75,6 +75,29 @@ test("explains definition, formula, inputs, cross reference and threshold", () =
   ]);
   assert.equal(view.thresholdText, "阈值 ≥ 99%");
   assert.equal(view.unavailableReasonText, "-");
+});
+
+test("limits drawer KPI values to three decimal places", () => {
+  const view = getKpiMetricDetailView({
+    ...item,
+    result: {
+      ...item.result,
+      main_value: 99.44444444444444,
+      provenance: {
+        ...item.result.provenance,
+        inputs: item.result.provenance.inputs.map((input) =>
+          input.key === "call_success_count" ? { ...input, value: 900.123456 } : input,
+        ),
+        direct_cross_reference: [
+          { source_name: "呼叫成功率", source_file: "kpi/kpi-call-5.csv", value: 99.44444444444444 },
+        ],
+      },
+    },
+  });
+
+  assert.equal(view.mainValueText, "99.444");
+  assert.equal(view.inputRows[0]?.valueText, "900.123");
+  assert.equal(view.crossReferenceRows[0]?.valueText, "99.444");
 });
 
 test("explains unavailable formula inputs", () => {
@@ -118,7 +141,7 @@ const records = [
     period_minutes: 5,
     start_at: "2026-09-14T02:00:00Z",
     end_at: "2026-09-14T02:05:00Z",
-    value: 90,
+    value: 99.44444444444444,
     status: "fail",
     errors: [],
   },
@@ -163,6 +186,7 @@ test("builds paginated KPI record queries with exact filters", () => {
 test("projects UTC record rows and errors", () => {
   const rows = getKpiRecordRows(records);
   assert.equal(rows[0]?.timeText, "2026-09-14 02:00:00 UTC — 2026-09-14 02:05:00 UTC");
+  assert.equal(rows[0]?.valueText, "99.444");
   assert.deepEqual(rows.map((row) => [row.statusLabel, row.statusColor]), [
     ["失败", "#ff4d4f"],
     ["不可用", "#8c8c8c"],

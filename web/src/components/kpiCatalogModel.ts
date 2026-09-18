@@ -59,6 +59,8 @@ export type KpiMetadata = {
   kpi_files: Record<string, unknown>[];
 };
 
+import { formatKpiNumber } from "./kpiFormat.ts";
+
 const SEMANTIC_GROUP_LABELS: Record<string, string> = {
   quality: "质量",
   traffic: "流量",
@@ -354,7 +356,7 @@ export function getKpiMetricCardView(item: {
   return {
     title: nameZh,
     subtitle: nameEn,
-    mainValueText: mainValue === null ? "-" : String(mainValue),
+    mainValueText: formatKpiNumber(mainValue),
     unitText: unit,
     statusLabel: meta.label,
     statusColor: meta.color,
@@ -400,7 +402,7 @@ export type KpiMetricDetailView = {
 };
 
 function valueText(value: number | string | null): string {
-  return value === null || value === undefined || value === "" ? "-" : String(value);
+  return formatKpiNumber(value);
 }
 
 function humanizeUnavailableReason(reason: string | null | undefined): string {
@@ -488,7 +490,7 @@ export function getKpiMetricDetailView(item: { definition: unknown; result?: unk
   return {
     title: nameZh,
     subtitle: nameEn,
-    description: `${nameEn} · ${readString(definition.metric_type, "-")} · ${readString(definition.source_type, "-")}`,
+    description: `${nameEn} · ${key}`,
     mainValueText: valueText(mainValue),
     unitText: unit,
     statusLabel: meta.label,

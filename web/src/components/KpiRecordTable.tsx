@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Empty, Select, Space, Spin, Table, Typography } from "antd";
+import { Alert, Button, Empty, Select, Space, Spin, Table } from "antd";
 
 import { api } from "../api/http";
 import type { KpiCatalogItem } from "./kpiCatalogModel";
@@ -83,8 +83,7 @@ export function KpiRecordTable({ taskId, ruleCode, item, sourceFiles }: Props) {
 
   return (
     <div>
-      <Typography.Text strong>原始记录</Typography.Text>
-      <Space wrap style={{ marginTop: 8 }}>
+      <Space wrap>
         <Select
           allowClear
           placeholder="来源文件"

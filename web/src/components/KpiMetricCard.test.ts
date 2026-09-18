@@ -83,3 +83,23 @@ test("marks unavailable and neutral metrics", () => {
   assert.equal(neutral.statusColor, "#8c8c8c");
   assert.equal(neutral.thresholdText, "无阈值");
 });
+
+test("limits displayed fractional values to three decimal places", () => {
+  const view = getKpiMetricCardView({
+    definition: base,
+    result: {
+      key: base.key,
+      main_value: 99.44444444444444,
+      value_available: true,
+      display_status: "pass",
+      unit: "%",
+      aggregation: "ratio_from_inputs",
+      threshold: { direction: "min", default: 99 },
+      breach_count: 0,
+      series: [],
+      source_files: [],
+      provenance: {},
+    },
+  });
+  assert.equal(view.mainValueText, "99.444");
+});
