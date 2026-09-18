@@ -212,3 +212,72 @@ def test_input_archive_requires_generated_task_site(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="请先执行 python main.py"):
         tool.resolve_input_dir(package, output_root=tmp_path / "output")
+
+
+def _write_resource_csv(path: Path) -> None:
+    path.write_text(
+        "资源id,中文描述,英文描述\n"
+        "UNIT_1,次,times\n"
+        "ME_21002,创建媒体资源请求次数(次),Create Media Resource Request Count\n"
+        "ME_21003,媒体成功率,对应英文\n",
+        encoding="utf-8",
+    )
+
+
+def test_resource_csv_generates_stable_metric_drafts(tmp_path: Path) -> None:
+    tool = _load_tool()
+    config_dir = tmp_path / "config" / "kpi"
+    output_dir = tmp_path / "drafts"
+    resource_csv = tmp_path / "resource.csv"
+    _write_config(config_dir)
+    _write_resource_csv(resource_csv)
+
+    report = tool.scan_resource_csv(resource_csv, config_dir=config_dir, domains={"media"})
+    metrics = report["domains"]["media"]["metrics"]
+
+    assert report["summary"]["csv_files"] == 1
+    assert report["summary"]["new_metrics"] == 2
+    assert [item["source_name"] for item in metrics] == ["创建媒体资源请求次数", "媒体成功率"]
+    assert metrics[0]["resource_key"] == "me_21002"
+    assert metrics[0]["english_name"] == "Create Media Resource Request Count"
+
+    drafts = tool.build_drafts(report, load_kpi_catalog(config_dir))
+    metric, rate = drafts["media"]["metrics"]
+
+    assert metric["key"] == "me_21002"
+    assert metric["name_zh"] == "创建媒体资源请求次数"
+    assert metric["name_en"] == "Create Media Resource Request Count"
+    assert metric["unit"] == "次"
+    assert metric["metric_type"] == "count"
+    assert metric["aggregation"] == {"kind": "sum"}
+
+    assert rate["key"] == "me_21003"
+    assert rate["name_en"] == "TODO: 媒体成功率"
+    assert rate["metric_type"] == "rate"
+    assert rate["unit"] == "%"
+
+    paths = tool.write_drafts(report, output_dir)
+    saved = yaml.safe_load(paths["media"].read_text(encoding="utf-8"))
+    assert [item["key"] for item in saved["metrics"]] == ["me_21002", "me_21003"]
+
+
+def test_resource_csv_apply_appends_stable_metrics_once(tmp_path: Path) -> None:
+    tool = _load_tool()
+    config_dir = tmp_path / "config" / "kpi"
+    resource_csv = tmp_path / "resource.csv"
+    _write_config(config_dir)
+    _write_resource_csv(resource_csv)
+
+    report = tool.scan_resource_csv(resource_csv, config_dir=config_dir, domains={"media"})
+    changed = tool.apply_report(report, config_dir)
+
+    assert changed == [config_dir / "media.yaml"]
+    config = load_kpi_catalog(config_dir)
+    assert config.domains["media"].metrics["me_21002"].name_zh == "创建媒体资源请求次数"
+    assert config.domains["media"].metrics["me_21002"].name_en == "Create Media Resource Request Count"
+    assert config.domains["media"].metrics["me_21002"].unit == "次"
+
+    changed = tool.apply_report(report, config_dir)
+    config = load_kpi_catalog(config_dir)
+    assert changed == []
+    assert len(config.domains["media"].metrics) == 2

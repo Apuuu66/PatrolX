@@ -146,6 +146,14 @@ python tools/generate_kpi_config.py --input local_run/sample-a.zip --output-dir 
 也可以直接传已解压目录，例如 `--input output/task-sample_a/kpi`。工具会递归扫描 `--input` 下的
 `*.csv`，但不会自己解压 `zip` / `tar.gz`；必须先执行任务生成解压现场，或使用其他已解压目录。
 
+如果已有资源字典 CSV，可用 `--resource-csv` 按资源 id 直接生成稳定 key 的指标草稿。该模式要求
+`--domain` 指定唯一领域；`ME_*` 行作为指标，`UNIT_*` 行跳过：
+
+```bash
+python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --domain media --output-dir drafts/kpi
+python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --domain media --apply
+```
+
 `tools/generate_scan_rules.py` 也复用同一个任务解压现场，输入参数是 `--source-dir`。为了生成
 和运行时一致的 `logs/...`、`kpi/...` 相对路径，推荐传任务根目录：
 

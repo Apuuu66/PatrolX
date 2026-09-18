@@ -31,6 +31,9 @@ HEADER_ALIASES: dict[str, set[str]] = {
     "period": {"周期(分钟)", "测量周期", "period_minutes", "period minutes", "period"},
 }
 MAX_SAMPLE_VALUES = 5
+RESOURCE_HEADER = ("资源id", "中文描述", "英文描述")
+RESOURCE_METRIC_PREFIX = "ME_"
+RESOURCE_UNIT_PREFIX = "UNIT_"
 
 _LATENCY_KEYWORDS = ("响应时延", "响应时间", "时延", "延迟", "耗时")
 _CAPACITY_KEYWORDS = ("峰值", "最大", "并发", "在线数", "连接数")
@@ -185,6 +188,20 @@ def _infer_metric_type(name: str) -> tuple[str, str, float | None, str, str]:
     return "gauge", "max", None, "other", "值"
 
 
+def _split_metric_name_unit(name: str) -> tuple[str, str | None]:
+    """拆分中文指标名末尾括号中的单位，兼容中英文括号。"""
+    for opening, closing in (("（", "）"), ("(", ")")):
+        if not name.endswith(closing):
+            continue
+        index = name.rfind(opening)
+        if index <= 0:
+            continue
+        unit = name[index + 1 : -1].strip()
+        if unit:
+            return name[:index].strip(), unit
+    return name.strip(), None
+
+
 def _translate_name(name: str) -> str:
     """用内置术语生成英文名；无法完整翻译时保留 TODO 标记。"""
     translated = name
@@ -206,9 +223,10 @@ def _next_key(domain: str, index: int, used_keys: set[str]) -> str:
 
 
 def _candidate_to_metric(candidate: dict[str, Any], key: str, reserved_names: set[str]) -> dict[str, Any]:
-    name = str(candidate["source_name"])
-    metric_type, aggregation, quantile, group, unit = _infer_metric_type(name)
-    english_name = _translate_name(name)
+    name = str(candidate.get("name_zh") or candidate["source_name"])
+    metric_type, aggregation, quantile, group, default_unit = _infer_metric_type(name)
+    provided_english_name = candidate.get("english_name")
+    english_name = str(provided_english_name).strip() if provided_english_name else _translate_name(name)
     if normalize_metric_name(english_name) in reserved_names:
         english_name = f"TODO: {name}"
     else:
@@ -220,7 +238,7 @@ def _candidate_to_metric(candidate: dict[str, Any], key: str, reserved_names: se
         "metric_type": metric_type,
         "semantic_group": group,
         "display_role": "context",
-        "unit": unit,
+        "unit": str(candidate.get("unit") or default_unit),
         "source_type": "raw",
         "aggregation": {"kind": aggregation},
     }
@@ -294,7 +312,12 @@ def _build_domain_config(domain: str, domain_report: dict[str, Any], alias_index
     reserved_names = set(alias_index)
     candidates_by_name: dict[str, dict[str, Any]] = {}
     for index, candidate in enumerate(domain_report["metrics"], start=1):
-        candidate["key"] = _next_key(domain, index, used_keys)
+        resource_key = candidate.get("resource_key")
+        if isinstance(resource_key, str) and re.fullmatch(r"[a-z][a-z0-9_]*", resource_key) and resource_key not in used_keys:
+            candidate["key"] = resource_key
+            used_keys.add(resource_key)
+        else:
+            candidate["key"] = _next_key(domain, index, used_keys)
         candidates_by_name[str(candidate["source_name"])] = candidate
 
     metrics = [
@@ -320,6 +343,126 @@ def _build_domain_config(domain: str, domain_report: dict[str, Any], alias_index
         "metrics": metrics,
         "thresholds": {},
         "capacity_metrics": {},
+    }
+
+
+def scan_resource_csv(
+    path: Path,
+    *,
+    config_dir: Path = Path("deploy/config/kpi"),
+    domains: set[str] | None = None,
+) -> dict[str, Any]:
+    """解析资源字典 CSV，并把 ME_* 资源转换为指标配置草稿报告。"""
+    if not path.is_file():
+        raise ValueError(f"资源字典 CSV 不存在: {path}")
+    if domains is None or len(domains) != 1:
+        raise ValueError("资源字典模式必须且只能指定一个领域")
+    domain = next(iter(domains))
+    config = load_kpi_catalog(config_dir)
+    domain_config = config.domains[domain]
+    rows, encoding = _read_csv_rows(path)
+    relative_path = path.as_posix()
+    domain_report: dict[str, Any] = {
+        "files": [],
+        "file_errors": [],
+        "row_count": 0,
+        "registered_metrics": [],
+        "metrics": [],
+        "invalid_metrics": [],
+    }
+    candidates: dict[str, dict[str, Any]] = {}
+    used_resource_keys: set[str] = set()
+
+    if not rows:
+        domain_report["file_errors"].append({"code": "empty_file", "message": "文件为空", "path": relative_path})
+    elif tuple(cell.strip() for cell in rows[0][: len(RESOURCE_HEADER)]) != RESOURCE_HEADER:
+        domain_report["file_errors"].append(
+            {
+                "code": "invalid_header",
+                "message": "表头必须为: " + ",".join(RESOURCE_HEADER),
+                "path": relative_path,
+            }
+        )
+    else:
+        for line_number, row in enumerate(rows[1:], start=2):
+            if not row or all(not cell.strip() for cell in row):
+                continue
+            domain_report["row_count"] += 1
+            resource_id = row[0].strip()
+            chinese_name = row[1].strip()
+            english_name = row[2].strip() if len(row) > 2 else ""
+            if not resource_id:
+                domain_report["invalid_metrics"].append(
+                    {"source_name": chinese_name, "reason": "missing_resource_id", "line_number": line_number}
+                )
+                continue
+            if resource_id.startswith(RESOURCE_UNIT_PREFIX):
+                continue
+            if not resource_id.startswith(RESOURCE_METRIC_PREFIX):
+                domain_report["invalid_metrics"].append(
+                    {"source_name": chinese_name, "reason": "unsupported_resource_id", "line_number": line_number}
+                )
+                continue
+            if not chinese_name:
+                domain_report["invalid_metrics"].append(
+                    {"source_name": resource_id, "reason": "missing_chinese_name", "line_number": line_number}
+                )
+                continue
+            resource_key = resource_id.lower()
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", resource_key) or resource_key in used_resource_keys:
+                domain_report["invalid_metrics"].append(
+                    {"source_name": chinese_name, "reason": "invalid_or_duplicate_resource_key", "line_number": line_number}
+                )
+                continue
+            used_resource_keys.add(resource_key)
+            name, explicit_unit = _split_metric_name_unit(chinese_name)
+            if match_metric_name(name, domain_config):
+                domain_report["registered_metrics"].append(name)
+                continue
+            metric_type, aggregation, quantile, semantic_group, default_unit = _infer_metric_type(name)
+            candidate = candidates.setdefault(
+                name,
+                {
+                    "source_name": name,
+                    "name_zh": name,
+                    "english_name": english_name if english_name and english_name != "对应英文" else None,
+                    "resource_key": resource_key,
+                    "unit": explicit_unit or default_unit,
+                    "source_files": [],
+                    "periods": [],
+                    "record_count": 0,
+                    "sample_values": [],
+                },
+            )
+            candidate["metric_type"] = metric_type
+            candidate["aggregation"] = {"kind": aggregation, **({"quantile": quantile} if quantile is not None else {})}
+            candidate["semantic_group"] = semantic_group
+            if relative_path not in candidate["source_files"]:
+                candidate["source_files"].append(relative_path)
+            domain_report["metrics"].append(candidate)
+
+    domain_report["files"].append(
+        {
+            "path": relative_path,
+            "domain": domain,
+            "period": None,
+            "encoding": encoding,
+            "metadata": {},
+            "row_count": domain_report["row_count"],
+        }
+    )
+    domain_report["metrics"] = list(candidates.values())
+    return {
+        "input_dir": path.as_posix(),
+        "config_dir": config_dir.as_posix(),
+        "summary": {
+            "csv_files": 1,
+            "domains": [domain],
+            "new_metrics": len(domain_report["metrics"]),
+            "registered_metrics": len(domain_report["registered_metrics"]),
+            "invalid_metrics": len(domain_report["invalid_metrics"]),
+        },
+        "domains": {domain: domain_report},
     }
 
 
@@ -483,13 +626,16 @@ def apply_report(report: dict[str, Any], config_dir: Path) -> list[Path]:
             for value in (item.get("name_zh"), item.get("name_en"))
             if isinstance(value, str)
         }
+        appended = False
         for metric in draft["metrics"]:
             source_name = str(metric["name_zh"])
             if metric["key"] in existing_keys or normalize_metric_name(source_name) in existing_names:
                 continue
             raw["metrics"].append(metric)
-        _atomic_write_yaml(path, raw)
-        changed.append(path)
+            appended = True
+        if appended:
+            _atomic_write_yaml(path, raw)
+            changed.append(path)
     load_kpi_catalog(config_dir)
     return changed
 
@@ -538,25 +684,40 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--input",
         type=Path,
-        required=True,
         help="KPI CSV 输入目录；也可传 local_run/<package>.zip 定位 output/<task_id>/kpi",
     )
+    parser.add_argument("--resource-csv", type=Path, help="资源字典 CSV（资源id,中文描述,英文描述）")
     parser.add_argument("--config-dir", type=Path, default=Path("deploy/config/kpi"), help="KPI 配置目录")
     parser.add_argument("--output-dir", type=Path, help="草稿输出目录，默认打印预览")
     parser.add_argument("--domain", action="append", choices=("call", "api", "media"), help="只处理指定领域，可重复")
     parser.add_argument("--apply", action="store_true", help="合并新增指标到配置目录")
     parser.add_argument("--json", action="store_true", help="输出 JSON 报告")
     args = parser.parse_args(argv)
-    args.input = _expand_cli_path(args.input)
+    if args.resource_csv is not None:
+        args.resource_csv = _expand_cli_path(args.resource_csv)
+    else:
+        if args.input is None:
+            parser.error("--input 或 --resource-csv 必须提供一个")
+        args.input = _expand_cli_path(args.input)
     args.config_dir = _expand_cli_path(args.config_dir)
     if args.output_dir is not None:
         args.output_dir = _expand_cli_path(args.output_dir)
     if args.apply and args.output_dir is not None:
         parser.error("--apply 和 --output-dir 不能同时使用")
+    if args.resource_csv is not None:
+        if args.input is not None:
+            parser.error("--input 和 --resource-csv 不能同时使用")
+        if args.domain is None or len(args.domain) != 1:
+            parser.error("--resource-csv 必须且只能指定一个 --domain")
 
     try:
-        input_dir = resolve_input_dir(args.input)
-        report = scan_kpi_csv(input_dir, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None)
+        if args.resource_csv is not None:
+            report = scan_resource_csv(
+                args.resource_csv, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None
+            )
+        else:
+            input_dir = resolve_input_dir(args.input)
+            report = scan_kpi_csv(input_dir, config_dir=args.config_dir, domains=set(args.domain) if args.domain else None)
         if args.apply:
             changed = apply_report(report, args.config_dir)
             _print_report(report, args.json)

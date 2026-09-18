@@ -552,6 +552,7 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
 - 配置辅助工具 `tools/generate_kpi_config.py` 按开始时间、结束时间和周期列名语义识别 KPI CSV 表头，生成未登记指标草稿；`--apply` 只追加新指标，并在合并后重新校验配置目录。
+- 资源字典 CSV 可通过 `--resource-csv` 解析；`ME_*` 映射为指标并用资源 id 小写作为稳定 key，`UNIT_*` 跳过，`--apply` 仍只追加新指标。
 - `--input` 推荐传 `local_run/<package>.zip`；工具按包名定位对应的 `output/<task_id>/kpi`，
   也兼容直接传已解压 CSV 目录。工具不会自己解压，需先执行 `python main.py` 生成任务现场。
   Windows 上推荐使用 Git Bash 或 WSL 执行 bash 命令；路径使用 `/`，含空格时加引号。
