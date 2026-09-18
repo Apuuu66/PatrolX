@@ -6,7 +6,7 @@ import { buildKpiMetricGroups, filterKpiMetricGroups, parseKpiMetadata } from ".
 const metadata = {
   version: 2,
   domain: "call",
-  config_source: "deploy/config/kpi",
+  config_source: "git-json+db",
   input_timezone: "Asia/Shanghai",
   metric_catalog: [
     {

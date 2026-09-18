@@ -404,7 +404,7 @@ docs/api/openapi.yaml
 
 原则：
 
-- 接口路径使用 `/api/v2`。
+- 任务、系统、规则等既有接口使用 `/api/v2`；KPI 指标库资源使用 `/api/v3`。
 - 资源接口直接返回资源 JSON，不套壳。
 - 创建/重跑类操作返回 `202 + Location`。
 - 错误响应统一为 `{code, message, detail}`。
@@ -429,6 +429,7 @@ python build.py gen-web-api
 | `/tasks/:taskId/report` | 报告预览 |
 | `/tasks/:taskId/logs` | 执行日志 |
 | `/inspectors` | 规则管理 |
+| `/kpi-resources` | KPI 指标库 |
 | `/dicts` | 数据字典 |
 
 前端原则：
@@ -469,8 +470,9 @@ InspectionTask
 
 默认存储：
 
-- SQLite：任务元数据和轻量状态。
-- 文件：原始包、解压数据、规则结果、报告、执行日志。
+- SQLite：任务元数据、轻量状态、KPI 分类状态/修订/审计。
+- Git JSON：`deploy/data/kpi_catalog.json` 是 KPI 基础指标和规则权威数据。
+- 文件：原始包、解压数据、规则结果、报告、执行日志、任务 KPI 快照。
 - 结果文档按任务 → 规则平铺组织。
 
 默认不引入：
@@ -543,22 +545,20 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 规则不使用私有 prepare，直接读取自己的 `source_patterns` 匹配文件。
 - 同一领域存在多个周期时按 `15 → 5 → 30 → 60` 选择一个最高优先级周期；
   只有该周期的多个文件一起聚合，其他周期不混入同一条结果。
-- KPI 指标目录、稳定 key、中英文指标名、公式、阈值、容量语义和解析预算配置在 `deploy/config/kpi/`；
-  `common.yaml` 管公共配置，`call.yaml`、`api.yaml`、`media.yaml` 按领域维护。
+- KPI 基础指标、公式、阈值、容量语义和解析预算的权威来源是 Git JSON `deploy/data/kpi_catalog.json`；
+  业务域分类状态、修订和审计保存在 SQLite。
+- 任务执行在解压完成后生成 `output/<task_id>/kpi/kpi_catalog_snapshot.json`。普通规则只读取任务快照；
+  快照不可变，单规则重跑优先复用。快照缺失时从 Git JSON + DB 重建，损坏时任务失败，不回退旧 YAML。
 - 目录化结果写入 `metric_catalog`、`kpi_results`、`unclassified_metrics`；未登记列只保留来源和样例，不改变规则状态。
 - 历史结果 `metadata.version=1` 前端回退明细表，后端不迁移、不重算；分页原始记录通过 `/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records` 按需查询。
 - `统计峰值`、`最大并发` 等容量指标只展示和追溯，不参与成功/失败率判断。
 - 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
-- 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。
+- 时间输入按 Git JSON 的 `input_timezone` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
-- 配置辅助工具 `tools/generate_kpi_config.py` 按开始时间、结束时间和周期列名语义识别 KPI CSV 表头，生成未登记指标草稿；`--apply` 只追加新指标，并在合并后重新校验配置目录。
-- 资源字典 CSV 默认递归读取 `local_run/resource_metrics/` 下的全部 CSV，也可通过 `--resource-csv`
-  指定文件或目录；
-  `ME_*` 映射为指标并用资源 id 小写作为稳定 key，`UNIT_*` 跳过。
-- 资源全集登记到独立文件 `resource_metrics.yaml`，导入时只生成基础信息且全部保持未分类；业务域归属必须通过在线分类显式确认。
-- `--input` 推荐传 `local_run/<package>.zip`；工具按包名定位对应的 `output/<task_id>/kpi`，
-  也兼容直接传已解压 CSV 目录。工具不会自己解压，需先执行 `python main.py` 生成任务现场。
-  Windows 上推荐使用 Git Bash 或 WSL 执行 bash 命令；路径使用 `/`，含空格时加引号。
+- 资源 CSV 只能通过离线命令生成 Git JSON：`python -m app.tools.kpi_catalog generate --csv <path> --output deploy/data/kpi_catalog.json`。
+  固定表头为 `资源id,中文描述,英文描述`；`ME_*` 生成指标，`UNIT_*` 仅生成预留单位，`unit_key` 当前固定为 null。
+- KPI 指标库使用 `/api/v3/kpi/resource-metrics`、`/api/v3/kpi/resource-metrics/classification` 和审计接口；
+  分类请求显式携带 `operator`，不提供乐观锁。在线 CSV 导入已退役。
 
 ### 7.9 扫描规则生成辅助
 

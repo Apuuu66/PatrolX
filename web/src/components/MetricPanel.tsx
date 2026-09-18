@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import echarts from "../lib/echarts";
 import { Card, Col, Row, Table, Typography } from "antd";
 import type { components } from "../api/client";
 

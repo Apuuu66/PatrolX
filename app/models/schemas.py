@@ -414,54 +414,82 @@ class KpiResourceDomain(StrEnum):
     MEDIA = "media"
 
 
-class KpiResourceMetric(BaseModel):
-    """KPI 资源指标库中的基础定义。"""
+class KpiResourceMetricV3(BaseModel):
+    """KPI 指标库中的基础资源与分类状态。"""
 
     key: str
     resource_id: str
     name_zh: str
     name_en: str
-    metric_type: str
-    semantic_group: str
-    display_role: str
-    unit: str
-    source_type: str
-    aggregation: dict[str, Any]
     domain: KpiResourceDomain
-    imported_at: datetime
+    missing_from_base: bool
+    created_at: datetime
     updated_at: datetime
 
 
-class KpiResourceMetricPage(BaseModel):
-    """KPI 资源指标分页查询响应。"""
+class KpiResourceMetricPageV3(BaseModel):
+    """KPI 指标库分页查询响应。"""
 
-    items: list[KpiResourceMetric] = Field(default_factory=list)
+    items: list[KpiResourceMetricV3] = Field(default_factory=list)
     total: int = Field(ge=0)
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, le=200)
-    revision: int = Field(ge=0)
+    base_data_version: str
+    classification_version: int = Field(ge=0)
     summary: dict[KpiResourceDomain, int]
 
 
-class KpiResourceImportReport(BaseModel):
-    """KPI 资源 CSV 导入报告。"""
+class KpiResourceClassificationRequestV3(BaseModel):
+    """KPI 指标批量分类请求。"""
 
-    revision: int = Field(ge=0)
-    summary: dict[str, int]
-    invalid_rows: list[dict[str, Any]] = Field(default_factory=list)
+    metric_keys: list[str] = Field(min_length=1, max_length=100)
+    domain: Literal["unclassified", "call", "api", "media"]
+    operator: str = Field(min_length=1)
 
-
-class KpiResourceClassificationRequest(BaseModel):
-    """KPI 资源指标批量分类请求。"""
-
-    metric_keys: list[str] = Field(min_length=1)
-    domain: Literal["call", "api", "media"]
-    expected_revision: int = Field(ge=0)
+    @model_validator(mode="after")
+    def validate_metric_keys(self) -> "KpiResourceClassificationRequestV3":
+        if len(self.metric_keys) != len(set(self.metric_keys)):
+            raise ValueError("metric_keys 不能重复")
+        return self
 
 
-class KpiResourceClassificationResult(BaseModel):
-    """KPI 资源指标批量分类结果。"""
+class KpiResourceClassificationResultV3(BaseModel):
+    """KPI 指标批量分类结果。"""
 
-    revision: int = Field(ge=0)
-    domain: Literal["call", "api", "media"]
+    classification_version: int = Field(ge=0)
+    domain: Literal["unclassified", "call", "api", "media"]
     metric_keys: list[str]
+    audited_count: int = Field(ge=0)
+
+
+class KpiClassificationAuditV3(BaseModel):
+    """KPI 分类审计记录。"""
+
+    id: int
+    metric_key: str
+    operation: str
+    operator: str
+    from_domain: str
+    to_domain: str
+    result: str
+    operated_at: datetime
+
+
+class KpiClassificationAuditPageV3(BaseModel):
+    """KPI 分类审计分页响应。"""
+
+    items: list[KpiClassificationAuditV3] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+
+
+class KpiTaskCatalogSnapshot(BaseModel):
+    """任务启动时的 KPI 配置快照。"""
+
+    schema_version: int = 1
+    base_data_version: str
+    classification_version: int = Field(ge=0)
+    captured_at: datetime
+    metrics: list[dict[str, Any]] = Field(default_factory=list)
+    rules: dict[str, Any]

@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from app import __version__
-from app.api.router import AppError, router
+from app.api.router import AppError, router, v3_router
 from app.core.logging import configure_logging, get_logger
 from app.core.metrics import render_metrics
 from app.models.schemas import Error
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
         description="PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）",
     )
     app.include_router(router)
+    app.include_router(v3_router)
 
     @app.middleware("http")
     async def access_log(request, call_next):

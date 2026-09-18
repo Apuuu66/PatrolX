@@ -8,6 +8,12 @@ from app.inspectors.registry import registry
 from app.models.schemas import RuleStatus
 from app.services.executor import Executor, RuleContext
 from app.services.scanning import match_paths
+from tests.kpi_helpers import configure_kpi_catalog
+
+
+@pytest.fixture(autouse=True)
+def kpi_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    configure_kpi_catalog(tmp_path, monkeypatch)
 
 
 def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
@@ -232,8 +238,8 @@ def test_kpi_call_threshold_pass_and_capacity_are_display_only(tmp_path: Path) -
     assert values["capacity_unknown_count"] == 0
     record = result.metadata["kpi_files"][0]["records"][0]
     assert [item["metric"] for item in record["capacity_values"]] == [
-        "stat_peak",
-        "max_concurrency",
+        "me_stat_peak",
+        "me_max_concurrency",
     ]
 
 
@@ -263,8 +269,8 @@ def test_kpi_call_formula_has_priority_and_rates_are_cross_reference_only(tmp_pa
     assert result.status == RuleStatus.FAIL
     record = result.metadata["kpi_files"][0]["records"][0]
     assert record["values"]["呼叫成功率"] == 80.0
-    assert record["derived"]["call_success_rate"] == 90.0
-    assert record["derived"]["call_failure_rate"] == 10.0
+    assert record["derived"]["me_call_success_rate"] == 90.0
+    assert record["derived"]["me_call_failure_rate"] == 10.0
 
 
 def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> None:
@@ -294,7 +300,7 @@ def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> 
 
 
 def test_kpi_call_config_error_is_not_silently_skipped(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("app.core.config.settings.config_dir", tmp_path / "missing.yaml")
+    monkeypatch.setattr("app.core.config.settings.kpi_catalog_path", tmp_path / "bad.json")
     ctx = _ctx(tmp_path, {"kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": _GOOD_CALL})
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.ERROR

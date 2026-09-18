@@ -15,11 +15,18 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined } from "@ant-design/icons";
+import { DownloadOutlined, FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type RuleResult, type RuleStatus, type SystemInspection, type TaskSummary } from "../api/http";
+import {
+  api,
+  type KpiTaskCatalogSnapshot,
+  type RuleResult,
+  type RuleStatus,
+  type SystemInspection,
+  type TaskSummary,
+} from "../api/http";
 import { RuleStatusTag, SeverityTag, TaskStatusTag } from "../components/StatusBadge";
 import { SummaryCards } from "../components/SummaryCards";
 import { usePolling } from "../hooks/usePolling";
@@ -42,6 +49,7 @@ export function TaskDetailPage() {
   const navigate = useNavigate();
   const [task, setTask] = useState<TaskSummary | null>(null);
   const [system, setSystem] = useState<SystemInspection | null>(null);
+  const [catalogSnapshot, setCatalogSnapshot] = useState<KpiTaskCatalogSnapshot | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
@@ -49,14 +57,16 @@ export function TaskDetailPage() {
 
   const load = useCallback(async () => {
     try {
-      const [t, s, inspectors, logs] = await Promise.all([
+      const [t, s, snapshot, inspectors, logs] = await Promise.all([
         api.getTask(taskId),
         api.getSystem(taskId, true).catch(() => null),
+        api.getKpiCatalogSnapshot(taskId).catch(() => null),
         api.listInspectors(undefined, true),
         api.getTaskLogs(taskId).catch(() => null),
       ]);
       setTask(t);
       setSystem(s);
+      setCatalogSnapshot(snapshot);
       setHidden(new Set(inspectors.filter((i) => i.hidden).map((i) => i.code)));
       setFailure(latestTaskFailure(logs?.entries ?? []));
     } catch (err) {
@@ -72,6 +82,17 @@ export function TaskDetailPage() {
 
   const busy = task?.status === "pending" || task?.status === "running";
   usePolling(load, 2000, !!busy);
+
+  const downloadCatalogSnapshot = () => {
+    if (!catalogSnapshot) return;
+    const blob = new Blob([JSON.stringify(catalogSnapshot, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `kpi_catalog_snapshot_${taskId}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   const rerunAll = async () => {
     try {
@@ -246,6 +267,33 @@ export function TaskDetailPage() {
             },
           ]}
         />
+        {catalogSnapshot && (
+          <Descriptions
+            size="small"
+            column={3}
+            title="KPI 快照"
+            style={{ marginTop: 16 }}
+            items={[
+              { key: "base", label: "基础数据版本", children: catalogSnapshot.base_data_version.slice(0, 12) },
+              { key: "classification", label: "分类修订", children: catalogSnapshot.classification_version },
+              {
+                key: "captured_at",
+                label: "生成时间",
+                children: dayjs(catalogSnapshot.captured_at).format("YYYY-MM-DD HH:mm:ss"),
+              },
+              { key: "metrics", label: "指标数量", children: catalogSnapshot.metrics.length },
+              {
+                key: "download",
+                label: "完整快照",
+                children: (
+                  <Button size="small" icon={<DownloadOutlined />} onClick={downloadCatalogSnapshot}>
+                    下载
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        )}
       </Card>
 
       {task.status === "failed" && failure && (

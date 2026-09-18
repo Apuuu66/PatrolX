@@ -6,6 +6,7 @@ from pathlib import Path
 from app.inspectors.registry import registry
 from app.models.schemas import RuleStatus
 from app.services.executor import RuleContext
+from tests.kpi_helpers import configure_kpi_catalog
 
 
 def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
@@ -40,7 +41,8 @@ def _run_rule(code: str, ctx: RuleContext):
     return rule.run(ctx)
 
 
-def test_kpi_api_pass(tmp_path: Path) -> None:
+def test_kpi_api_pass(tmp_path: Path, monkeypatch) -> None:
+    configure_kpi_catalog(tmp_path, monkeypatch)
     content = (
         "设备类型：XXX\n"
         "测量单元名称：API 统计\n"

@@ -244,25 +244,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/kpi/resource-metrics": {
+    "/api/v3/kpi/resource-metrics": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 分页查询 KPI 资源指标库 */
-        get: operations["listKpiResourceMetricsV2"];
+        /** 分页查询 KPI 指标库 */
+        get: operations["listKpiResourceMetricsV3"];
         put?: never;
-        /** 导入 KPI 资源全集 CSV */
-        post: operations["importKpiResourceMetricsV2"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v2/kpi/resource-metrics/classification": {
+    "/api/v3/kpi/resource-metrics/classification": {
         parameters: {
             query?: never;
             header?: never;
@@ -270,8 +269,42 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 批量分类 KPI 资源指标 */
-        put: operations["classifyKpiResourceMetricsV2"];
+        /** 批量分类 KPI 指标 */
+        put: operations["classifyKpiResourceMetricsV3"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v3/kpi/resource-metrics/classification-audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询 KPI 分类审计 */
+        get: operations["listKpiClassificationAuditsV3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v3/tasks/{task_id}/kpi/catalog-snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取任务 KPI 配置快照 */
+        get: operations["getKpiCatalogSnapshotV3"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -834,36 +867,26 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        KpiResourceDomainV2: "unclassified" | "call" | "api" | "media";
-        KpiResourceMetricV2: {
+        KpiResourceDomainV3: "unclassified" | "call" | "api" | "media";
+        KpiResourceMetricV3: {
             key: string;
             resource_id: string;
             name_zh: string;
             name_en: string;
-            /** @enum {string} */
-            metric_type: "count" | "rate" | "capacity" | "latency" | "gauge";
-            /** @enum {string} */
-            semantic_group: "traffic" | "quality" | "latency" | "capacity" | "other";
-            /** @enum {string} */
-            display_role: "highlight" | "context";
-            unit: string;
-            /** @enum {string} */
-            source_type: "raw" | "derived";
-            aggregation: {
-                [key: string]: unknown;
-            };
-            domain: components["schemas"]["KpiResourceDomainV2"];
+            domain: components["schemas"]["KpiResourceDomainV3"];
+            missing_from_base: boolean;
             /** Format: date-time */
-            imported_at: string;
+            created_at: string;
             /** Format: date-time */
             updated_at: string;
         };
-        KpiResourceMetricPageV2: {
-            items: components["schemas"]["KpiResourceMetricV2"][];
+        KpiResourceMetricPageV3: {
+            items: components["schemas"]["KpiResourceMetricV3"][];
             total: number;
             page: number;
             page_size: number;
-            revision: number;
+            base_data_version: string;
+            classification_version: number;
             summary: {
                 unclassified: number;
                 call: number;
@@ -871,34 +894,53 @@ export interface components {
                 media: number;
             };
         };
-        KpiResourceImportReportV2: {
-            revision: number;
-            summary: {
-                row_count: number;
-                new_metrics: number;
-                updated_metrics: number;
-                skipped_units: number;
-                skipped_rows: number;
-                invalid_rows: number;
-                missing_registered: number;
-            };
-            invalid_rows: {
-                line_number: number;
-                resource_id?: string;
-                reason: string;
+        KpiResourceClassificationRequestV3: {
+            metric_keys: string[];
+            /** @enum {string} */
+            domain: "unclassified" | "call" | "api" | "media";
+            operator: string;
+        };
+        KpiResourceClassificationResultV3: {
+            classification_version: number;
+            /** @enum {string} */
+            domain: "unclassified" | "call" | "api" | "media";
+            metric_keys: string[];
+            audited_count: number;
+        };
+        KpiClassificationAuditV3: {
+            id: number;
+            metric_key: string;
+            /** @enum {string} */
+            operation: "classify" | "unclassify";
+            operator: string;
+            /** @enum {string} */
+            from_domain: "unclassified" | "call" | "api" | "media";
+            /** @enum {string} */
+            to_domain: "unclassified" | "call" | "api" | "media";
+            /** @enum {string} */
+            result: "success";
+            /** Format: date-time */
+            operated_at: string;
+        };
+        KpiClassificationAuditPageV3: {
+            items: components["schemas"]["KpiClassificationAuditV3"][];
+            total: number;
+            page: number;
+            page_size: number;
+        };
+        KpiTaskCatalogSnapshotV3: {
+            /** @enum {integer} */
+            schema_version: 1;
+            base_data_version: string;
+            classification_version: number;
+            /** Format: date-time */
+            captured_at: string;
+            metrics: {
+                [key: string]: unknown;
             }[];
-        };
-        KpiResourceClassificationRequestV2: {
-            metric_keys: string[];
-            /** @enum {string} */
-            domain: "call" | "api" | "media";
-            expected_revision: number;
-        };
-        KpiResourceClassificationResultV2: {
-            revision: number;
-            /** @enum {string} */
-            domain: "call" | "api" | "media";
-            metric_keys: string[];
+            rules: {
+                [key: string]: unknown;
+            };
         };
     };
     responses: {
@@ -931,6 +973,15 @@ export interface components {
         };
         /** @description 请求参数校验失败 */
         Error422: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorV2"];
+            };
+        };
+        /** @description 服务器内部错误 */
+        Error500: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1385,12 +1436,13 @@ export interface operations {
             400: components["responses"]["Error400"];
         };
     };
-    listKpiResourceMetricsV2: {
+    listKpiResourceMetricsV3: {
         parameters: {
             query?: {
                 /** @description 按资源 ID、中文名或英文名模糊匹配 */
                 search?: string;
-                domain?: components["schemas"]["KpiResourceDomainV2"];
+                domain?: components["schemas"]["KpiResourceDomainV3"];
+                include_missing?: boolean;
                 page?: components["parameters"]["Page"];
                 page_size?: components["parameters"]["PageSize"];
             };
@@ -1400,59 +1452,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 资源指标分页和统计 */
+            /** @description 指标库分页和统计 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KpiResourceMetricPageV2"];
-                };
-            };
-        };
-    };
-    importKpiResourceMetricsV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description KPI 资源全集 CSV（资源id,中文描述,英文描述）
-                     */
-                    resource_csv: string;
-                };
-            };
-        };
-        responses: {
-            /** @description 导入成功并返回报告 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiResourceImportReportV2"];
+                    "application/json": components["schemas"]["KpiResourceMetricPageV3"];
                 };
             };
             400: components["responses"]["Error400"];
-            /** @description 资源 ID 冲突或 revision 过期 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-            413: components["responses"]["Error413"];
+            500: components["responses"]["Error500"];
         };
     };
-    classifyKpiResourceMetricsV2: {
+    classifyKpiResourceMetricsV3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1461,7 +1474,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["KpiResourceClassificationRequestV2"];
+                "application/json": components["schemas"]["KpiResourceClassificationRequestV3"];
             };
         };
         responses: {
@@ -1471,12 +1484,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KpiResourceClassificationResultV2"];
+                    "application/json": components["schemas"]["KpiResourceClassificationResultV3"];
                 };
             };
             400: components["responses"]["Error400"];
             404: components["responses"]["Error404"];
-            /** @description revision 过期、重复定义或指标被引用 */
+            /** @description 指标被公式、阈值或容量规则引用 */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1485,6 +1498,66 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorV2"];
                 };
             };
+        };
+    };
+    listKpiClassificationAuditsV3: {
+        parameters: {
+            query?: {
+                metric_key?: string;
+                operator?: string;
+                domain?: components["schemas"]["KpiResourceDomainV3"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 分类审计分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiClassificationAuditPageV3"];
+                };
+            };
+            400: components["responses"]["Error400"];
+        };
+    };
+    getKpiCatalogSnapshotV3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 任务 KPI 配置快照 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiTaskCatalogSnapshotV3"];
+                };
+            };
+            404: components["responses"]["Error404"];
+            /** @description 任务存在但 KPI 配置快照缺失 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+            500: components["responses"]["Error500"];
         };
     };
 }

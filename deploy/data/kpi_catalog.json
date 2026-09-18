@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source_csv_sha256": "aa2fa2bdb47e65abdd3a0a522230689392906c39d48b4d78ab41edc7b5b7a8c4",
+  "metrics": [],
+  "units": [],
+  "rules": {
+    "common": {
+      "input_timezone": "Asia/Shanghai",
+      "budgets": {
+        "max_files": 1000,
+        "max_records": 200000
+      }
+    },
+    "metric_rules": [],
+    "thresholds": [],
+    "capacity_rules": [],
+    "display_rules": []
+  }
+}

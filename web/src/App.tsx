@@ -1,15 +1,33 @@
+import { Suspense, lazy } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import { App as AntApp, ConfigProvider } from "antd";
+import { App as AntApp, ConfigProvider, Spin } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { MainLayout } from "./layouts/MainLayout";
-import { TaskListPage } from "./pages/TaskListPage";
-import { TaskDetailPage } from "./pages/TaskDetailPage";
-import { RuleDetailPage } from "./pages/RuleDetailPage";
-import { ReportPage } from "./pages/ReportPage";
-import { LogsPage } from "./pages/LogsPage";
-import { InspectorsPage } from "./pages/InspectorsPage";
-import { DictsPage } from "./pages/DictsPage";
-import { KpiResourcesPage } from "./pages/KpiResourcesPage";
+
+const TaskListPage = lazy(() =>
+  import("./pages/TaskListPage").then(({ TaskListPage }) => ({ default: TaskListPage })),
+);
+const TaskDetailPage = lazy(() =>
+  import("./pages/TaskDetailPage").then(({ TaskDetailPage }) => ({ default: TaskDetailPage })),
+);
+const RuleDetailPage = lazy(() =>
+  import("./pages/RuleDetailPage").then(({ RuleDetailPage }) => ({ default: RuleDetailPage })),
+);
+const ReportPage = lazy(() => import("./pages/ReportPage").then(({ ReportPage }) => ({ default: ReportPage })));
+const LogsPage = lazy(() => import("./pages/LogsPage").then(({ LogsPage }) => ({ default: LogsPage })));
+const InspectorsPage = lazy(() =>
+  import("./pages/InspectorsPage").then(({ InspectorsPage }) => ({ default: InspectorsPage })),
+);
+const DictsPage = lazy(() => import("./pages/DictsPage").then(({ DictsPage }) => ({ default: DictsPage })));
+const KpiResourcesPage = lazy(() =>
+  import("./pages/KpiResourcesPage").then(({ KpiResourcesPage }) => ({ default: KpiResourcesPage })),
+);
+
+const PageFallback = (
+  <div style={{ display: "grid", placeItems: "center", minHeight: 320 }}>
+    <Spin />
+  </div>
+);
 
 const router = createBrowserRouter([
   {
@@ -33,7 +51,9 @@ export default function App() {
   return (
     <ConfigProvider locale={zhCN}>
       <AntApp>
-        <RouterProvider router={router} />
+        <Suspense fallback={PageFallback}>
+          <RouterProvider router={router} />
+        </Suspense>
       </AntApp>
     </ConfigProvider>
   );

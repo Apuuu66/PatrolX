@@ -1,8 +1,0 @@
-version: 2
-input_timezone: "Asia/Shanghai"
-budgets:
-  max_file_bytes: 67108864
-  max_rows_per_file: 100000
-  max_columns_per_file: 256
-  max_files_per_domain: 1000
-  max_records_per_domain: 200000

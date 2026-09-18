@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from app.core.config import settings
 from app.inspectors.kpi.catalog import (
     KpiAggregationResult,
     KpiCatalogError,
@@ -28,6 +27,7 @@ from app.inspectors.kpi.catalog import (
     load_kpi_catalog,
     normalize_metric_name,
 )
+from app.services.kpi_catalog import load_task_kpi_config
 
 KpiConfigError = KpiCatalogError
 __all__ = [
@@ -123,9 +123,9 @@ def parse_kpi_path(relative_path: str) -> tuple[str, int] | None:
     return match.group("domain"), int(match.group("period"))
 
 
-def load_kpi_config(config_path: Path | None = None) -> KpiConfig:
-    """读取并校验目录化 KPI 规则配置。"""
-    return load_kpi_catalog(config_path or settings.config / "kpi")
+def load_kpi_config(task_id: str) -> KpiConfig:
+    """读取任务启动时的 KPI 配置快照。"""
+    return load_task_kpi_config(task_id)
 
 
 def _sha256_prefix(text: str, length: int = 16) -> str:
@@ -383,7 +383,9 @@ def build_kpi_metadata(
     return {
         "version": 2,
         "domain": domain,
-        "config_source": "deploy/config/kpi",
+        "config_source": "git-json+db",
+        "base_data_version": config.base_data_version,
+        "classification_version": config.classification_version,
         "input_timezone": config.input_timezone,
         "metric_catalog": [item.as_metadata() for item in domain_config.metrics.values()],
         "kpi_results": metric_results,

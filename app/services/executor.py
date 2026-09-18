@@ -316,7 +316,7 @@ class Executor:
         del rule, ctx
         return False
 
-    def run_all(self, ctx: RuleContext) -> dict[str, RuleResult]:
+    def run_all(self, ctx: RuleContext, after_extract: Callable[[], None] | None = None) -> dict[str, RuleResult]:
         """按 EXTRACT → PREPARE → INSPECT 固定屏障执行任务。"""
         results: dict[str, RuleResult] = {}
         for code in self.extract_plan():
@@ -330,6 +330,9 @@ class Executor:
                     rule_code=code,
                 )
                 return results
+
+        if after_extract is not None:
+            after_extract()
 
         try:
             ctx.ensure_catalog()

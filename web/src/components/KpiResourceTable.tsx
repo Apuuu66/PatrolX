@@ -1,7 +1,7 @@
 import { Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { KpiResourceMetric } from "../api/http";
-import { resourceDomainLabel, resourceTypeLabel } from "./kpiResourceModel";
+import { resourceDomainLabel } from "./kpiResourceModel";
 
 const DOMAIN_COLORS: Record<string, string> = {
   unclassified: "default",
@@ -36,8 +36,6 @@ export function KpiResourceTable({
     { title: "Key", dataIndex: "key", width: 140 },
     { title: "中文名", dataIndex: "name_zh", ellipsis: true },
     { title: "英文名", dataIndex: "name_en", ellipsis: true },
-    { title: "单位", dataIndex: "unit", width: 90 },
-    { title: "类型", dataIndex: "metric_type", width: 100, render: resourceTypeLabel },
     {
       title: "业务域",
       dataIndex: "domain",

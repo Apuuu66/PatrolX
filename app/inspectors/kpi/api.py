@@ -45,7 +45,7 @@ def _run(ctx: RuleContext) -> object:
             skip_reason="未匹配到 kpi-api-*.csv 文件",
         )
     try:
-        config = load_kpi_config()
+        config = load_kpi_config(ctx.task_id)
     except KpiConfigError as exc:
         return make_result(
             inspector,

@@ -23,7 +23,7 @@ export function KpiUnclassifiedList({ metadata }: Props) {
         type="info"
         showIcon
         message={`${rows.length} 个未登记指标`}
-        description="这些列未进入指标判定。如需纳入口径，请在 deploy/config/kpi 对应领域文件中新增指标或别名。"
+        description="这些列未进入指标判定。如需纳入口径，请先在权威 CSV 中登记资源并离线生成 Git JSON。"
       />
       <Input.Search
         allowClear

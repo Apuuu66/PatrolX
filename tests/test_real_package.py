@@ -11,6 +11,7 @@ from app.models.schemas import RuleCategory, RuleStatus
 from app.services.executor import RuleContext
 from app.services.extraction import extract_main_site
 from tests.fixtures.make_real_package import build_real_package
+from tests.kpi_helpers import configure_kpi_catalog
 
 
 def _extract(tmp_path: Path):
@@ -84,7 +85,8 @@ def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Pat
     assert not manifest["rejected"]
 
 
-def test_real_kpi_call_and_container_resource_rule_results(tmp_path: Path) -> None:
+def test_real_kpi_call_and_container_resource_rule_results(tmp_path: Path, monkeypatch) -> None:
+    configure_kpi_catalog(tmp_path, monkeypatch)
     data_dir, _ = _extract(tmp_path)
     registry.load_all()
 

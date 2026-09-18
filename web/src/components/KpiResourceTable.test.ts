@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildResourceQuery, resourceDomainLabel, resourceRowSelection, resourceTypeLabel } from "./kpiResourceModel.ts";
+import { buildResourceQuery, resourceDomainLabel, resourceRowSelection } from "./kpiResourceModel.ts";
 
 test("builds resource query with search, filter and bounded pagination", () => {
   assert.deepEqual(buildResourceQuery({ search: " 请求 ", domain: "api", page: 2, pageSize: 500 }), {
@@ -15,8 +15,6 @@ test("builds resource query with search, filter and bounded pagination", () => {
 test("maps resource labels", () => {
   assert.equal(resourceDomainLabel("unclassified"), "未分类");
   assert.equal(resourceDomainLabel("media"), "媒体");
-  assert.equal(resourceTypeLabel("rate"), "比率");
-  assert.equal(resourceTypeLabel("unknown"), "unknown");
 });
 
 test("maps selected row keys", () => {

@@ -262,6 +262,73 @@ output/<task_id>/prepared/<owner_code>/
 }
 ```
 
+## 11. KPI Catalog
+
+PatrolX 将 KPI 数据拆为权威基础数据、分类状态和任务快照三层。
+
+### Git JSON
+
+路径：`deploy/data/kpi_catalog.json`。
+
+```json
+{
+  "schema_version": 1,
+  "source_csv_sha256": "<64 位十六进制>",
+  "metrics": [
+    {
+      "resource_id": "ME_21002",
+      "key": "me_21002",
+      "name_zh": "创建媒体资源请求次数",
+      "name_en": "Create Media Resource Request Count",
+      "unit_key": null
+    }
+  ],
+  "units": [],
+  "rules": {
+    "common": {"input_timezone": "Asia/Shanghai", "budgets": {"max_files": 1000, "max_records": 200000}},
+    "metric_rules": [],
+    "thresholds": [],
+    "capacity_rules": [],
+    "display_rules": []
+  }
+}
+```
+
+约束：
+
+- `metrics[].resource_id` 必须以 `ME_` 开头；`units[].resource_id` 必须以 `UNIT_` 开头。
+- 稳定 key 是资源 ID 的小写形式。
+- `metrics[].unit_key` 当前必须是 `null`；单位解析是预留能力，不进入运行时。
+- `rules` 只能引用 `metrics` 中存在的 key，公式不得循环。
+- 文件不做业务域分类；分类状态只在数据库中维护。
+
+### DB 分类模型
+
+| 表 | 说明 |
+| --- | --- |
+| `kpi_classifications` | `metric_key` 主键；`domain` 为空表示未分类；保存 UTC 创建/更新时间。 |
+| `kpi_classification_revisions` | 单行修订表；每次批量原子提交递增 `classification_version`。 |
+| `kpi_classification_audits` | 保存 `metric_key`、操作、操作人、前后域、结果和 UTC 操作时间。 |
+
+分类只改变业务域，不改变 Git JSON。被公式、阈值或容量规则引用的指标受引用保护；批量分类任一指标失败时整批回滚。
+
+### 任务快照
+
+路径：`output/<task_id>/kpi/kpi_catalog_snapshot.json`。
+
+```json
+{
+  "schema_version": 1,
+  "base_data_version": "sha256:...",
+  "classification_version": 1,
+  "captured_at": "2026-09-19T00:00:00Z",
+  "metrics": [],
+  "rules": {}
+}
+```
+
+快照在主包解压完成后生成，之后不可变。普通 KPI 规则只读取快照；单规则重跑优先复用。快照缺失时从 Git JSON + DB 原子重建，损坏时抛出错误并让任务失败。
+
 ## 11. 扩展规则
 
 新增能力时：

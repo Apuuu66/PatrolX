@@ -66,3 +66,40 @@ def init_db() -> None:
         _rebuild_legacy_tasks(engine)
     else:
         Base.metadata.create_all(engine)
+
+
+class KpiClassification(Base):
+    """KPI 指标的当前分类状态；metric_key 可指向已移除的基础资源。"""
+
+    __tablename__ = "kpi_classifications"
+
+    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiClassificationRevision(Base):
+    """KPI 分类全局修订单行表，id 固定为 1。"""
+
+    __tablename__ = "kpi_classification_revisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    revision: Mapped[int] = mapped_column(default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiClassificationAudit(Base):
+    """KPI 分类成功操作的审计流水。"""
+
+    __tablename__ = "kpi_classification_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    metric_key: Mapped[str] = mapped_column(String(128), index=True)
+    operation: Mapped[str] = mapped_column(String(32))
+    operator: Mapped[str] = mapped_column(String(128), index=True)
+    previous_domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    next_domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    result: Mapped[str] = mapped_column(String(32), default="success")
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    operated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

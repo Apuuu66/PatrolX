@@ -62,9 +62,9 @@ def _derive_rates(record: KpiRecord, domain_config: KpiDomainConfig) -> None:
     """为单条记录计算派生成功率和失败率。"""
     derived: dict[str, float] = {}
     stable_values = _stable_values(record, domain_config)
-    attempts = stable_values.get("call_attempts")
-    success = stable_values.get("call_success_count")
-    failure = stable_values.get("call_failure_count")
+    attempts = stable_values.get("me_call_attempts")
+    success = stable_values.get("me_call_success_count")
+    failure = stable_values.get("me_call_failure_count")
 
     # 自洽检查
     if attempts is not None and success is not None and failure is not None:
@@ -72,9 +72,9 @@ def _derive_rates(record: KpiRecord, domain_config: KpiDomainConfig) -> None:
 
     # 派生率公式优先；同语义直接列只保留在 record.values 中作为证据。
     if attempts is not None and success is not None and attempts > 0:
-        derived["call_success_rate"] = success / attempts * 100
+        derived["me_call_success_rate"] = success / attempts * 100
     if attempts is not None and failure is not None and attempts > 0:
-        derived["call_failure_rate"] = failure / attempts * 100
+        derived["me_call_failure_rate"] = failure / attempts * 100
 
     record.derived = derived or None
 
@@ -96,7 +96,7 @@ def _run(ctx: RuleContext) -> object:
             skip_reason="未匹配到 Call_Session_API_Statistics_*.csv 文件",
         )
     try:
-        config = load_kpi_config()
+        config = load_kpi_config(ctx.task_id)
     except KpiConfigError as exc:
         return make_result(
             inspector,
@@ -114,8 +114,8 @@ def _run(ctx: RuleContext) -> object:
             skip_reason="匹配文件不属于 Call_Session_API_Statistics_*.csv",
         )
     call_config = config.domains["call"]
-    sr_threshold = config.limits.get("call", {}).get("call_success_rate")
-    fr_threshold = config.limits.get("call", {}).get("call_failure_rate")
+    sr_threshold = config.limits.get("call", {}).get("me_call_success_rate")
+    fr_threshold = config.limits.get("call", {}).get("me_call_failure_rate")
     source_names: dict[str, str] = {}
     for f in files:
         for name in f.objects:
@@ -142,8 +142,8 @@ def _run(ctx: RuleContext) -> object:
                 diff = r.derived.get("call_count_difference")
                 if diff is not None and diff != 0:
                     consistency_error_count += 1
-                sr = r.derived.get("call_success_rate")
-                fr = r.derived.get("call_failure_rate")
+                sr = r.derived.get("me_call_success_rate")
+                fr = r.derived.get("me_call_failure_rate")
 
                 # 阈值判定（仅无解析错误时）
                 if not r.errors:
@@ -164,9 +164,9 @@ def _run(ctx: RuleContext) -> object:
 
     sr_min: int | float | str = min(success_rates) if success_rates else NA
     fr_max: int | float | str = max(failure_rates) if failure_rates else NA
-    attempts_name = source_names.get("call_attempts", "")
-    success_count_name = source_names.get("call_success_count", "")
-    failure_count_name = source_names.get("call_failure_count", "")
+    attempts_name = source_names.get("me_call_attempts", "")
+    success_count_name = source_names.get("me_call_success_count", "")
+    failure_count_name = source_names.get("me_call_failure_count", "")
 
     # 构建 findings
     findings: list[Finding] = []
@@ -209,8 +209,8 @@ def _run(ctx: RuleContext) -> object:
             # 阈值越限 finding
             if not r.errors and r.derived:
                 breaches: list[str] = []
-                sr = r.derived.get("call_success_rate")
-                fr = r.derived.get("call_failure_rate")
+                sr = r.derived.get("me_call_success_rate")
+                fr = r.derived.get("me_call_failure_rate")
                 if sr is not None and sr_threshold is not None:
                     limit = _resolve_threshold(sr_threshold, r.period_minutes)
                     if sr < limit:
@@ -228,7 +228,7 @@ def _run(ctx: RuleContext) -> object:
                             title="呼叫 KPI 阈值越限",
                             severity=Severity.MEDIUM,
                             source_file=f.path,
-                            evidence=f"行 {r.line_number}: {'；'.join(breaches)}；来源: deploy/config/kpi",
+                            evidence=f"行 {r.line_number}: {'；'.join(breaches)}；来源: Git JSON + DB 分类",
                             recommendation=inspector.recommendation,
                         )
                     )

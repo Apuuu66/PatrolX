@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { App, Button, Card, Input, Select, Space, Tag, Typography, Upload } from "antd";
-import { UploadOutlined } from "@ant-design/icons";
-import { api, type KpiResourceMetricPage } from "../api/http";
+import { App, Button, Card, Descriptions, Input, Select, Space, Table, Tag } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
+import {
+  api,
+  type KpiClassificationAudit,
+  type KpiResourceMetricPage,
+} from "../api/http";
 import { KpiResourceTable } from "../components/KpiResourceTable";
 import { RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
 
@@ -9,8 +14,6 @@ const DOMAIN_OPTIONS = (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[])
   value,
   label: RESOURCE_DOMAIN_LABELS[value],
 }));
-
-const CLASSIFICATION_OPTIONS = DOMAIN_OPTIONS.filter((item) => item.value !== "unclassified");
 
 export function KpiResourcesPage() {
   const { message } = App.useApp();
@@ -21,8 +24,14 @@ export function KpiResourcesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
-  const [targetDomain, setTargetDomain] = useState<Exclude<ResourceDomain, "unclassified"> | undefined>();
+  const [targetDomain, setTargetDomain] = useState<ResourceDomain>();
+  const [operator, setOperator] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [audits, setAudits] = useState<KpiClassificationAudit[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditPageSize, setAuditPageSize] = useState(10);
+  const [auditLoading, setAuditLoading] = useState(true);
 
   const load = useCallback(
     async (nextPage = page, nextPageSize = pageSize, nextSearch = search, nextDomain = domain) => {
@@ -44,16 +53,40 @@ export function KpiResourcesPage() {
     [domain, message, page, pageSize, search],
   );
 
+  const loadAudits = useCallback(
+    async (nextPage = auditPage, nextPageSize = auditPageSize) => {
+      setAuditLoading(true);
+      try {
+        const data = await api.listKpiClassificationAudits({
+          page: nextPage,
+          page_size: nextPageSize,
+        });
+        setAudits(data.items);
+        setAuditTotal(data.total);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "审计加载失败");
+      } finally {
+        setAuditLoading(false);
+      }
+    },
+    [auditPage, auditPageSize, message],
+  );
+
   useEffect(() => {
     void load();
     // 页面初始化只需要加载一次，后续由搜索和分页显式触发。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const refresh = (revision?: number) => {
+  useEffect(() => {
+    void loadAudits();
+  }, [loadAudits]);
+
+  const refresh = () => {
     void load(1, pageSize, search, domain);
+    void loadAudits(1, auditPageSize);
+    setAuditPage(1);
     setSelectedKeys([]);
-    return revision;
   };
 
   const handleSearch = (value: string) => {
@@ -74,31 +107,28 @@ export function KpiResourcesPage() {
     void load(nextPage, nextPageSize, search, domain);
   };
 
-  const handleImport = async (file: File) => {
-    try {
-      const report = await api.importKpiResourceMetrics(file);
-      message.success(
-        `导入完成：新增 ${report.summary.new_metrics}，更新 ${report.summary.updated_metrics}，无效 ${report.summary.invalid_rows}`,
-      );
-      setSelectedKeys([]);
-      void load(1, pageSize, search, domain);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "资源 CSV 导入失败");
-    }
-    return false;
+  const handleAuditPageChange = (nextPage: number, nextPageSize: number) => {
+    setAuditPage(nextPage);
+    setAuditPageSize(nextPageSize);
+    void loadAudits(nextPage, nextPageSize);
   };
 
   const handleClassify = async () => {
+    const normalizedOperator = operator.trim();
+    if (!normalizedOperator) {
+      message.warning("请输入操作人");
+      return;
+    }
     if (!pageData || !targetDomain || selectedKeys.length === 0) return;
     setSubmitting(true);
     try {
       const result = await api.classifyKpiResourceMetrics({
         metric_keys: selectedKeys,
         domain: targetDomain,
-        expected_revision: pageData.revision,
+        operator: normalizedOperator,
       });
-      message.success(`已分类 ${result.metric_keys.length} 个指标到 ${RESOURCE_DOMAIN_LABELS[result.domain]}`);
-      refresh(result.revision);
+      message.success(`已分类 ${result.metric_keys.length} 个指标，修订 ${result.classification_version}`);
+      refresh();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "分类失败");
     } finally {
@@ -106,66 +136,111 @@ export function KpiResourcesPage() {
     }
   };
 
+  const auditColumns: ColumnsType<KpiClassificationAudit> = [
+    { title: "指标 Key", dataIndex: "metric_key", width: 180, ellipsis: true },
+    { title: "操作", dataIndex: "operation", width: 100 },
+    { title: "操作人", dataIndex: "operator", width: 120 },
+    { title: "原业务域", dataIndex: "from_domain", width: 110 },
+    { title: "新业务域", dataIndex: "to_domain", width: 110 },
+    {
+      title: "操作时间",
+      dataIndex: "operated_at",
+      render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm:ss"),
+    },
+  ];
+
   const summary = pageData?.summary;
 
   return (
-    <Card
-      title={<Typography.Text strong>KPI 指标库</Typography.Text>}
-      extra={
-        <Space wrap>
-          <Upload accept=".csv,text/csv" beforeUpload={handleImport} showUploadList={false}>
-            <Button icon={<UploadOutlined />}>导入资源 CSV</Button>
-          </Upload>
-        </Space>
-      }
-    >
-      <Space direction="vertical" size={16} style={{ width: "100%" }}>
-        <Space wrap>
-          {summary &&
-            (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[]).map((key) => (
-              <Tag key={key}>
-                {RESOURCE_DOMAIN_LABELS[key]}: {summary[key]}
-              </Tag>
-            ))}
-        </Space>
-        <Space wrap>
-          <Input.Search
-            placeholder="搜索资源 ID / 中文名 / 英文名"
-            allowClear
-            style={{ width: 280 }}
-            onSearch={handleSearch}
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      <Card title={<strong>KPI 指标库</strong>}>
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          {pageData && (
+            <Descriptions
+              size="small"
+              column={3}
+              items={[
+                { key: "base", label: "基础数据版本", children: pageData.base_data_version },
+                { key: "classification", label: "分类修订", children: pageData.classification_version },
+                { key: "total", label: "指标总数", children: pageData.total },
+              ]}
+            />
+          )}
+          <Space wrap>
+            {summary &&
+              (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[]).map((key) => (
+                <Tag key={key}>
+                  {RESOURCE_DOMAIN_LABELS[key]}: {summary[key]}
+                </Tag>
+              ))}
+          </Space>
+          <Space wrap>
+            <Input.Search
+              placeholder="搜索资源 ID / 中文名 / 英文名"
+              allowClear
+              style={{ width: 280 }}
+              onSearch={handleSearch}
+            />
+            <Select
+              allowClear
+              placeholder="业务域"
+              style={{ width: 140 }}
+              options={DOMAIN_OPTIONS}
+              value={domain}
+              onChange={handleDomainChange}
+            />
+            <Select
+              allowClear
+              placeholder="分类到"
+              style={{ width: 140 }}
+              options={DOMAIN_OPTIONS}
+              value={targetDomain}
+              onChange={setTargetDomain}
+            />
+            <Input
+              placeholder="操作人"
+              value={operator}
+              onChange={(event) => setOperator(event.target.value)}
+              style={{ width: 140 }}
+            />
+            <Button
+              type="primary"
+              disabled={!targetDomain || selectedKeys.length === 0}
+              loading={submitting}
+              onClick={handleClassify}
+            >
+              批量分类（{selectedKeys.length}）
+            </Button>
+          </Space>
+          <KpiResourceTable
+            items={pageData?.items ?? []}
+            total={pageData?.total ?? 0}
+            page={pageData?.page ?? page}
+            pageSize={pageData?.page_size ?? pageSize}
+            loading={loading}
+            selectedKeys={selectedKeys}
+            onSelectedKeysChange={setSelectedKeys}
+            onPageChange={handlePageChange}
           />
-          <Select
-            allowClear
-            placeholder="业务域"
-            style={{ width: 140 }}
-            options={DOMAIN_OPTIONS}
-            value={domain}
-            onChange={handleDomainChange}
-          />
-          <Select
-            allowClear
-            placeholder="分类到"
-            style={{ width: 140 }}
-            options={CLASSIFICATION_OPTIONS}
-            value={targetDomain}
-            onChange={setTargetDomain}
-          />
-          <Button type="primary" disabled={!targetDomain || selectedKeys.length === 0} loading={submitting} onClick={handleClassify}>
-            批量分类（{selectedKeys.length}）
-          </Button>
         </Space>
-        <KpiResourceTable
-          items={pageData?.items ?? []}
-          total={pageData?.total ?? 0}
-          page={pageData?.page ?? page}
-          pageSize={pageData?.page_size ?? pageSize}
-          loading={loading}
-          selectedKeys={selectedKeys}
-          onSelectedKeysChange={setSelectedKeys}
-          onPageChange={handlePageChange}
+      </Card>
+      <Card title="分类审计" styles={{ body: { paddingTop: 8 } }}>
+        <Table
+          rowKey="id"
+          size="small"
+          loading={auditLoading}
+          columns={auditColumns}
+          dataSource={audits}
+          pagination={{
+            current: auditPage,
+            pageSize: auditPageSize,
+            total: auditTotal,
+            showSizeChanger: true,
+            showTotal: (value) => `共 ${value} 条`,
+            onChange: handleAuditPageChange,
+          }}
         />
-      </Space>
-    </Card>
+      </Card>
+    </Space>
   );
 }

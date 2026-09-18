@@ -6,8 +6,6 @@ import os
 import shutil
 import tempfile
 from pathlib import Path, PureWindowsPath
-from pathlib import Path as FileSystemPath
-from tempfile import NamedTemporaryFile
 from typing import Any
 
 import yaml
@@ -27,13 +25,14 @@ from app.models.schemas import (
     DictUpdateRequest,
     InspectionTask,
     InspectorInfo,
+    KpiClassificationAuditPageV3,
     KpiDisplayStatus,
     KpiPeriodMinutes,
     KpiRecordPage,
-    KpiResourceClassificationRequest,
-    KpiResourceClassificationResult,
-    KpiResourceImportReport,
-    KpiResourceMetricPage,
+    KpiResourceClassificationRequestV3,
+    KpiResourceClassificationResultV3,
+    KpiResourceMetricPageV3,
+    KpiTaskCatalogSnapshot,
     LogEntry,
     OverviewSummary,
     RerunRequest,
@@ -47,14 +46,14 @@ from app.services.kpi_records import list_kpi_records
 from app.services.kpi_resources import (
     KpiResourceError,
     classify_resource_metrics,
-    import_resource_metrics,
+    list_classification_audits,
     list_resource_metrics,
-    read_resource_csv,
 )
 from app.services.overview import build_overview
 from app.services.tasks import DeleteResult, TaskDeleteError, task_service
 
 router = APIRouter(prefix="/api/v2")
+v3_router = APIRouter(prefix="/api/v3")
 DICT_NAMES = ("province", "operator", "product", "version")
 
 
@@ -382,36 +381,63 @@ def list_kpi_records_v2(
         raise AppError("not_found", "规则结果不存在", 404) from exc
 
 
-def _kpi_resource_config_dir() -> Path:
-    """返回 KPI 资源库使用的配置目录。"""
-    return settings.config / "kpi"
-
-
-def _save_resource_upload(resource_csv: UploadFile) -> FileSystemPath:
-    """把上传 CSV 落盘到临时文件，复用统一的 CSV 编码解析。"""
-    suffix = FileSystemPath(resource_csv.filename or "resource.csv").suffix or ".csv"
-    with NamedTemporaryFile(prefix="kpi-resource-", suffix=suffix, delete=False) as handle:
-        temporary_path = FileSystemPath(handle.name)
-        resource_csv.file.seek(0)
-        shutil.copyfileobj(resource_csv.file, handle)
-    return temporary_path
-
-
-@router.get(
+@v3_router.get(
     "/kpi/resource-metrics",
-    response_model=KpiResourceMetricPage,
-    operation_id="listKpiResourceMetricsV2",
+    response_model=KpiResourceMetricPageV3,
+    operation_id="listKpiResourceMetricsV3",
 )
-def list_kpi_resource_metrics_v2(
+def list_kpi_resource_metrics_v3(
     search: str | None = Query(default=None),
+    domain: str | None = Query(default=None),
+    include_missing: bool = Query(default=False),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=200),
+) -> KpiResourceMetricPageV3:
+    try:
+        return list_resource_metrics(
+            search=search,
+            domain=domain,
+            include_missing=include_missing,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiResourceError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+
+
+@v3_router.put(
+    "/kpi/resource-metrics/classification",
+    response_model=KpiResourceClassificationResultV3,
+    operation_id="classifyKpiResourceMetricsV3",
+)
+def classify_kpi_resource_metrics_v3(body: KpiResourceClassificationRequestV3) -> KpiResourceClassificationResultV3:
+    try:
+        result = classify_resource_metrics(
+            body.metric_keys,
+            domain=body.domain,
+            operator=body.operator,
+        )
+        return KpiResourceClassificationResultV3.model_validate(result)
+    except KpiResourceError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+
+
+@v3_router.get(
+    "/kpi/resource-metrics/classification-audits",
+    response_model=KpiClassificationAuditPageV3,
+    operation_id="listKpiClassificationAuditsV3",
+)
+def list_kpi_classification_audits_v3(
+    metric_key: str | None = Query(default=None),
+    operator: str | None = Query(default=None),
     domain: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
-) -> KpiResourceMetricPage:
+) -> KpiClassificationAuditPageV3:
     try:
-        return list_resource_metrics(
-            config_dir=_kpi_resource_config_dir(),
-            search=search,
+        return list_classification_audits(
+            metric_key=metric_key,
+            operator=operator,
             domain=domain,
             page=page,
             page_size=page_size,
@@ -420,40 +446,21 @@ def list_kpi_resource_metrics_v2(
         raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
 
 
-@router.post(
-    "/kpi/resource-metrics",
-    response_model=KpiResourceImportReport,
-    operation_id="importKpiResourceMetricsV2",
+@v3_router.get(
+    "/tasks/{task_id}/kpi/catalog-snapshot",
+    response_model=KpiTaskCatalogSnapshot,
+    operation_id="getKpiCatalogSnapshotV3",
 )
-async def import_kpi_resource_metrics_v2(resource_csv: UploadFile = File(...)) -> KpiResourceImportReport:
-    temporary_path: FileSystemPath | None = None
+def get_kpi_catalog_snapshot_v3(task_id: str = PathParam()) -> KpiTaskCatalogSnapshot:
+    if not (settings.output / task_id / "task.json").is_file():
+        raise AppError("not_found", "任务不存在", 404)
+    snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
+    if not snapshot_path.is_file():
+        raise AppError("kpi_snapshot_missing", "任务 KPI 配置快照缺失", 409)
     try:
-        temporary_path = _save_resource_upload(resource_csv)
-        report = import_resource_metrics(read_resource_csv(temporary_path), config_dir=_kpi_resource_config_dir())
-        return KpiResourceImportReport.model_validate(report)
-    except KpiResourceError as exc:
-        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
-
-
-@router.put(
-    "/kpi/resource-metrics/classification",
-    response_model=KpiResourceClassificationResult,
-    operation_id="classifyKpiResourceMetricsV2",
-)
-def classify_kpi_resource_metrics_v2(body: KpiResourceClassificationRequest) -> KpiResourceClassificationResult:
-    try:
-        result = classify_resource_metrics(
-            body.metric_keys,
-            domain=body.domain,
-            expected_revision=body.expected_revision,
-            config_dir=_kpi_resource_config_dir(),
-        )
-        return KpiResourceClassificationResult.model_validate(result)
-    except KpiResourceError as exc:
-        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+        return KpiTaskCatalogSnapshot.model_validate_json(snapshot_path.read_bytes())
+    except (OSError, ValueError) as exc:
+        raise AppError("kpi_snapshot_invalid", "任务 KPI 配置快照损坏", 500) from exc
 
 
 @router.get("/inspectors", response_model=list[InspectorInfo], operation_id="listInspectorsV2")

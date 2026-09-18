@@ -39,14 +39,14 @@ def test_enriched_sample_kpi_api_remains_stable(tmp_path, monkeypatch) -> None:
     filtered = client.get(
         records_url,
         params={
-            "metric_key": "call_success_rate",
+            "metric_key": "me_call_success_rate",
             "source_file": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
             "period_minutes": 5,
         },
     )
     assert filtered.status_code == 200
     for item in filtered.json()["items"]:
-        assert item["metric_key"] == "call_success_rate"
+        assert item["metric_key"] == "me_call_success_rate"
         assert item["source_file"] == "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv"
         assert item["period_minutes"] == 5
 
@@ -78,7 +78,7 @@ def test_enriched_sample_kpi_payloads_remain_bounded(tmp_path, monkeypatch) -> N
     started = time.monotonic()
     filtered_response = client.get(
         f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records",
-        params={"metric_key": "call_success_rate", "page_size": 200},
+        params={"metric_key": "me_call_success_rate", "page_size": 200},
     )
     elapsed = time.monotonic() - started
     assert filtered_response.status_code == 200

@@ -167,7 +167,7 @@ export function parseKpiMetadata(metadata: unknown): KpiMetadata | null {
   return {
     version,
     domain: readString(record.domain, "-"),
-    config_source: readString(record.config_source, "deploy/config/kpi"),
+    config_source: readString(record.config_source, "git-json+db"),
     input_timezone: readString(record.input_timezone, "UTC"),
     metric_catalog: definitions,
     kpi_results: results,

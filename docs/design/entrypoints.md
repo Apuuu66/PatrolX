@@ -127,56 +127,13 @@ python main.py
 Windows 上推荐使用 Git Bash 或 WSL；路径可以用 `C:/data/sample.zip` 或 `/c/data/sample.zip`，
 含空格时加引号。
 
-工具脚本不直接读取压缩包。推荐先让本地入口生成任务解压现场：把压缩包放入 `local_run/`，执行
-`python main.py`，再使用对应的 `output/<task_id>/` 目录。`<task_id>` 由包名清洗后派生，例如：
-
-```text
-local_run/sample-a.zip   ->   output/task-sample_a/
-```
-
-`tools/generate_kpi_config.py --input` 可以直接传 `local_run/` 里的压缩包；工具会按包名定位
-对应的 `output/<task_id>/kpi`：
+工具脚本不直接读取压缩包。资源 CSV 的 KPI 目录维护使用独立离线命令，不从任务现场采集：
 
 ```bash
-python main.py
-
-python tools/generate_kpi_config.py --input local_run/sample-a.zip --output-dir drafts/kpi
+python -m app.tools.kpi_catalog generate --csv local_run/resource_metrics/resources.csv --output deploy/data/kpi_catalog.json
 ```
 
-也可以直接传已解压目录，例如 `--input output/task-sample_a/kpi`。工具会递归扫描 `--input` 下的
-`*.csv`，但不会自己解压 `zip` / `tar.gz`；必须先执行任务生成解压现场，或使用其他已解压目录。
-
-如果已有资源字典 CSV，可按资源 id 生成基础指标库。工具默认读取 `local_run/resource_metrics/` 下所有
-CSV；目录不存在时会自动创建。默认路径按项目根目录解析，在 Windows 上也可以从其他工作目录执行脚本。
-文件名不固定，也可以用 `--resource-csv` 显式指定文件或目录。`ME_*` 行作为指标，`UNIT_*` 行只做单位统计；
-工具不猜测业务域，也不直接写入 `call.yaml`、`api.yaml` 或 `media.yaml`。默认输出
-`resource_metrics.draft.yaml` 预览，`--apply` 才登记到 `deploy/config/kpi/resource_metrics.yaml`：
-
-```bash
-python tools/generate_kpi_config.py --output-dir drafts/kpi
-python tools/generate_kpi_config.py --resource-csv path/to/resource-directory --apply
-```
-
-`tools/generate_scan_rules.py` 也复用同一个任务解压现场，输入参数是 `--source-dir`。为了生成
-和运行时一致的 `logs/...`、`kpi/...` 相对路径，推荐传任务根目录：
-
-```bash
-python main.py
-
-python tools/generate_scan_rules.py generate --source-dir output/task-<cleaned-package-name> --output deploy/config/scan_rules.draft.yaml
-```
-
-Windows 上推荐使用 Git Bash 或 WSL；生成的 `source_patterns` 仍要写成 POSIX `/` 分隔符。
-任务根目录里包含 `.main/`、`prepared/` 等证据和派生现场，草稿中的 `matched_files` 只用于
-人工核对；整理正式扫描组时应只保留运行时需要匹配的分类工作目录文件。
-
-| 目的 | 输入位置 | 参数 |
-| --- | --- | --- |
-| 本地调试巡检 | `local_run/<package>.zip` | 无 `--input`，固定扫描顶层 |
-| KPI 指标配置生成 | `local_run/<package>.zip`，或任务现场中的 CSV 目录 | `--input` |
-| KPI 资源全集登记 | 默认 `local_run/resource_metrics/`，或用户提供的资源字典 CSV / 目录 | 无，或 `--resource-csv` |
-| 扫描规则生成 / 回验 | `output/task-<cleaned-package-name>/` | `--source-dir` |
-| CLI 全流程验证 | `uploads/<package>.zip` | 无路径参数，固定扫描顶层 |
+该命令只做 CSV -> Git JSON 的确定性转换；运行时分类和任务巡检不会在线导入 CSV。
 
 ## 4. CLI 全流程入口
 

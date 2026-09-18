@@ -21,33 +21,24 @@ export const RESOURCE_DOMAIN_LABELS: Record<ResourceDomain, string> = {
   media: "媒体",
 };
 
-export const RESOURCE_TYPE_LABELS: Record<string, string> = {
-  count: "次数",
-  rate: "比率",
-  latency: "时延",
-  capacity: "容量",
-  gauge: "状态值",
-};
-
 export function resourceDomainLabel(value: string): string {
   return RESOURCE_DOMAIN_LABELS[value as ResourceDomain] ?? value;
-}
-
-export function resourceTypeLabel(value: string): string {
-  return RESOURCE_TYPE_LABELS[value] ?? value;
 }
 
 export function buildResourceQuery(input: ResourceQueryInput = {}): ResourceQuery {
   const search = input.search?.trim();
   return {
     search: search || undefined,
-    domain: input.domain && input.domain !== "unclassified" ? input.domain : input.domain,
+    domain: input.domain,
     page: Math.max(1, input.page ?? 1),
     page_size: Math.min(200, Math.max(1, input.pageSize ?? 20)),
   };
 }
 
-export function resourceRowSelection<T extends { key: string }>(selectedKeys: string[], onChange: (keys: string[]) => void) {
+export function resourceRowSelection<T extends { key: string }>(
+  selectedKeys: string[],
+  onChange: (keys: string[]) => void,
+) {
   return {
     selectedRowKeys: selectedKeys,
     onChange: (keys: (string | number)[]) => onChange(keys.map(String)),

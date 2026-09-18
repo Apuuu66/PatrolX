@@ -17,14 +17,17 @@ export type DictsResponse = components["schemas"]["DictsResponseV2"];
 export type OverviewSummary = components["schemas"]["OverviewSummaryV2"];
 export type DictItem = components["schemas"]["DictItemV2"];
 export type LogEntry = components["schemas"]["LogEntryV2"];
-export type KpiResourceDomain = components["schemas"]["KpiResourceDomainV2"];
-export type KpiResourceMetric = components["schemas"]["KpiResourceMetricV2"];
-export type KpiResourceMetricPage = components["schemas"]["KpiResourceMetricPageV2"];
-export type KpiResourceImportReport = components["schemas"]["KpiResourceImportReportV2"];
-export type KpiResourceClassificationResult = components["schemas"]["KpiResourceClassificationResultV2"];
+export type KpiResourceDomain = components["schemas"]["KpiResourceDomainV3"];
+export type KpiResourceMetric = components["schemas"]["KpiResourceMetricV3"];
+export type KpiResourceMetricPage = components["schemas"]["KpiResourceMetricPageV3"];
+export type KpiResourceClassificationResult = components["schemas"]["KpiResourceClassificationResultV3"];
+export type KpiClassificationAudit = components["schemas"]["KpiClassificationAuditV3"];
+export type KpiClassificationAuditPage = components["schemas"]["KpiClassificationAuditPageV3"];
+export type KpiTaskCatalogSnapshot = components["schemas"]["KpiTaskCatalogSnapshotV3"];
 export type TaskDeleteError = TaskDeleteErrorDetail;
 
 const BASE = "/api/v2";
+const KPI_BASE = "/api/v3";
 
 export type TaskDeleteErrorDetail = components["schemas"]["TaskDeleteErrorDetailV2"];
 
@@ -104,7 +107,8 @@ export const api = {
       body: JSON.stringify({ rule_codes: ruleCodes }),
     }),
 
-  getTaskLogs: (taskId: string) => request<{ task_id: string; entries: LogEntry[] }>(`${BASE}/tasks/${encodeURIComponent(taskId)}/logs`),
+  getTaskLogs: (taskId: string) =>
+    request<{ task_id: string; entries: LogEntry[] }>(`${BASE}/tasks/${encodeURIComponent(taskId)}/logs`),
 
   getSystem: (taskId: string, excludeDetails = false) =>
     request<SystemInspection>(
@@ -113,7 +117,9 @@ export const api = {
 
   getRuleResult: (taskId: string, ruleCode: string, excludeRecords = false) => {
     const query = excludeRecords ? "?exclude_records=true" : "";
-    return request<RuleResult>(`${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}${query}`);
+    return request<RuleResult>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}${query}`,
+    );
   },
 
   listKpiRecords: (
@@ -154,21 +160,29 @@ export const api = {
       if (value !== undefined) params.set(key, String(value));
     });
     const qs = params.toString();
-    return request<KpiResourceMetricPage>(`${BASE}/kpi/resource-metrics${qs ? `?${qs}` : ""}`);
-  },
-
-  importKpiResourceMetrics: (file: File) => {
-    const form = new FormData();
-    form.set("resource_csv", file);
-    return request<KpiResourceImportReport>(`${BASE}/kpi/resource-metrics`, { method: "POST", body: form });
+    return request<KpiResourceMetricPage>(`${KPI_BASE}/kpi/resource-metrics${qs ? `?${qs}` : ""}`);
   },
 
   classifyKpiResourceMetrics: (payload: KpiResourceClassificationPayload) =>
-    request<KpiResourceClassificationResult>(`${BASE}/kpi/resource-metrics/classification`, {
+    request<KpiResourceClassificationResult>(`${KPI_BASE}/kpi/resource-metrics/classification`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
+
+  listKpiClassificationAudits: (query: KpiClassificationAuditQuery = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiClassificationAuditPage>(
+      `${KPI_BASE}/kpi/resource-metrics/classification-audits${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  getKpiCatalogSnapshot: (taskId: string) =>
+    request<KpiTaskCatalogSnapshot>(`${KPI_BASE}/tasks/${encodeURIComponent(taskId)}/kpi/catalog-snapshot`),
 };
 
 export const reportUrl = (taskId: string) => `${BASE}/tasks/${encodeURIComponent(taskId)}/report`;
@@ -182,6 +196,14 @@ export interface KpiResourceQuery {
 
 export interface KpiResourceClassificationPayload {
   metric_keys: string[];
-  domain: Exclude<KpiResourceDomain, "unclassified">;
-  expected_revision: number;
+  domain: KpiResourceDomain;
+  operator: string;
+}
+
+export interface KpiClassificationAuditQuery {
+  metric_key?: string;
+  operator?: string;
+  domain?: KpiResourceDomain;
+  page?: number;
+  page_size?: number;
 }

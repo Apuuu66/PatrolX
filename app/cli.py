@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.metrics import TASKS_TOTAL
 from app.inspectors.pkg import EXTRACT_MANIFEST
 from app.inspectors.registry import registry
+from app.models.db import init_db
 from app.models.schemas import (
     InspectionTask,
     RuleStatus,
@@ -26,6 +27,8 @@ from app.models.schemas import (
 )
 from app.services import store
 from app.services.executor import Executor, RuleContext
+from app.services.kpi_catalog import load_task_kpi_config
+from app.services.kpi_resources import classify_resource_metrics
 from app.services.report import render_report
 
 
@@ -144,7 +147,7 @@ def run_task(
     )
     ctx = _new_context(task_id, package)
     executor = Executor(registry)
-    results = executor.run_all(ctx)
+    results = executor.run_all(ctx, after_extract=lambda: load_task_kpi_config(task_id))
     main_result = results.get("pkg.extract.main")
     if main_result is not None and main_result.status == RuleStatus.ERROR:
         store.save_rule_result(settings.output, task_id, main_result)
@@ -171,6 +174,7 @@ def run_task(
         )
         store.save_system(settings.output, task_id, system)
         store.save_task_meta(settings.output, task)
+        return task
         store.append_log(
             settings.output,
             task_id,
@@ -251,6 +255,7 @@ def run_single_rule(
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
         store.save_rule_result(settings.output, task_id, extraction)
+    load_task_kpi_config(task_id)
     try:
         old_result = store.load_rule_result(settings.output, task_id, code)
     except (json.JSONDecodeError, OSError):
@@ -300,6 +305,9 @@ def main(argv: list[str] | None = None) -> int:
     run_one.add_argument("--rule", required=True, help="规则 code")
     run_one.add_argument("--package-dir", default=None, help="输入目录（可选）")
     run_one.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<package>）")
+    classify_kpi = sub.add_parser("classify-kpi", help="分类 KPI 基础指标")
+    classify_kpi.add_argument("--metric-key", required=True, help="KPI 指标稳定 key")
+    classify_kpi.add_argument("--domain", required=True, help="业务域：call/api/media/unclassified")
     args = parser.parse_args(argv)
 
     if args.cmd == "run-one":
@@ -309,6 +317,13 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
         for pkg in packages:
             run_single_rule(args.rule, pkg, task_id=args.task_id)
+        return 0
+    if args.cmd == "classify-kpi":
+        init_db()
+        result = classify_resource_metrics([args.metric_key], domain=args.domain, operator="cli")
+        print(
+            f"已分类 {','.join(result['metric_keys'])} 到 {result['domain']}，修订：{result['classification_version']}"
+        )
         return 0
 
     packages = find_packages()

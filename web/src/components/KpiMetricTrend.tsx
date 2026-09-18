@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import * as echarts from "echarts";
+import echarts from "../lib/echarts";
 import { Empty, Typography } from "antd";
 
 import { getKpiMetricTrendView } from "./kpiCatalogModel";
