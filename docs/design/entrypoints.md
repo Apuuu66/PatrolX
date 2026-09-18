@@ -147,9 +147,10 @@ python tools/generate_kpi_config.py --input local_run/sample-a.zip --output-dir 
 `*.csv`，但不会自己解压 `zip` / `tar.gz`；必须先执行任务生成解压现场，或使用其他已解压目录。
 
 如果已有资源字典 CSV，可按资源 id 生成基础指标库。工具默认读取 `local_run/resource_metrics/` 下所有
-CSV；目录不存在时会自动创建。文件名不固定，也可以用 `--resource-csv` 显式指定文件或目录。`ME_*` 行作为
-指标，`UNIT_*` 行只做单位统计；工具不猜测业务域，也不直接写入 `call.yaml`、`api.yaml` 或 `media.yaml`。
-默认输出 `resource_metrics.draft.yaml` 预览，`--apply` 才登记到 `deploy/config/kpi/resource_metrics.yaml`：
+CSV；目录不存在时会自动创建。默认路径按项目根目录解析，在 Windows 上也可以从其他工作目录执行脚本。
+文件名不固定，也可以用 `--resource-csv` 显式指定文件或目录。`ME_*` 行作为指标，`UNIT_*` 行只做单位统计；
+工具不猜测业务域，也不直接写入 `call.yaml`、`api.yaml` 或 `media.yaml`。默认输出
+`resource_metrics.draft.yaml` 预览，`--apply` 才登记到 `deploy/config/kpi/resource_metrics.yaml`：
 
 ```bash
 python tools/generate_kpi_config.py --output-dir drafts/kpi

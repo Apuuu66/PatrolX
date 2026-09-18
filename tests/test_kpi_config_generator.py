@@ -254,7 +254,8 @@ def test_resource_csv_generates_unclassified_preview(tmp_path: Path) -> None:
 
 def test_resource_default_directory_reads_all_csv_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     tool = _load_tool()
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tool.settings, "local_run_dir", tmp_path / "local_run")
+    monkeypatch.setattr(tool.settings, "config_dir", tmp_path / "deploy" / "config")
     _write_config(tmp_path / "deploy" / "config" / "kpi")
     resource_dir = tmp_path / "local_run" / "resource_metrics"
     resource_dir.mkdir(parents=True)
@@ -277,7 +278,8 @@ def test_resource_default_directory_reads_all_csv_files(tmp_path: Path, monkeypa
 
 def test_resource_default_directory_is_created_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     tool = _load_tool()
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tool.settings, "local_run_dir", tmp_path / "local_run")
+    monkeypatch.setattr(tool.settings, "config_dir", tmp_path / "deploy" / "config")
     _write_config(tmp_path / "deploy" / "config" / "kpi")
 
     exit_code = tool.main([])

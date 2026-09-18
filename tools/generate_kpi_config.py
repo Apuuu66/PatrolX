@@ -672,6 +672,11 @@ def _expand_cli_path(path: Path) -> Path:
     return path.expanduser()
 
 
+def _default_resource_dir() -> Path:
+    """返回项目根下的默认资源目录，避免受执行命令时工作目录影响。"""
+    return settings.local_run / "resource_metrics"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="扫描 KPI CSV 并生成未登记指标配置",
@@ -688,7 +693,7 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help=f"资源字典 CSV 或目录（资源id,中文描述,英文描述），默认 {DEFAULT_RESOURCE_DIR.as_posix()}/",
     )
-    parser.add_argument("--config-dir", type=Path, default=Path("deploy/config/kpi"), help="KPI 配置目录")
+    parser.add_argument("--config-dir", type=Path, default=settings.config / "kpi", help="KPI 配置目录")
     parser.add_argument("--output-dir", type=Path, help="草稿输出目录，默认打印预览")
     parser.add_argument("--domain", action="append", choices=("call", "api", "media"), help="只处理指定领域，可重复")
     parser.add_argument("--apply", action="store_true", help="合并新增指标到配置目录")
@@ -700,7 +705,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--input 和 --resource-csv 不能同时使用")
     else:
         if args.input is None:
-            args.resource_csv = DEFAULT_RESOURCE_DIR
+            args.resource_csv = _default_resource_dir()
             args.resource_csv = _expand_cli_path(args.resource_csv)
             args.resource_csv.mkdir(parents=True, exist_ok=True)
         else:
