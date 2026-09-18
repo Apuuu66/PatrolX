@@ -53,6 +53,7 @@ export function KpiMetricDrawer({ item, open, onClose, taskId, ruleCode }: Props
             pagination={false}
             dataSource={view.inputRows}
             columns={[
+              { title: "实际列名", dataIndex: "sourceNamesText" },
               { title: "Key", dataIndex: "key" },
               { title: "值", dataIndex: "valueText", width: 110 },
               { title: "聚合", dataIndex: "aggregation", width: 130 },

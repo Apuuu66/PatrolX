@@ -274,6 +274,23 @@ def _build_metric_series(
     return series
 
 
+def _source_names_by_metric_key(
+    files: list[KpiCsvFile],
+    domain_config: KpiDomainConfig,
+) -> dict[str, list[str]]:
+    """按稳定 key 归集真实 CSV 列名，供输入溯源展示。"""
+    source_names: dict[str, list[str]] = {}
+    for kpi_file in files:
+        for source_name in kpi_file.objects:
+            metric_key = match_metric_name(source_name, domain_config)
+            if metric_key is None:
+                continue
+            names = source_names.setdefault(metric_key, [])
+            if source_name not in names:
+                names.append(source_name)
+    return source_names
+
+
 def build_kpi_metadata(
     domain: str,
     files: list[KpiCsvFile],
@@ -282,6 +299,7 @@ def build_kpi_metadata(
     """生成目录化 KPI 元数据；历史结果不会被迁移或重算。"""
     domain_config = config.domains[domain]
     records = [record for kpi_file in files for record in kpi_file.records]
+    source_names_by_key = _source_names_by_metric_key(files, domain_config)
     stable_records = [_stable_record_values(record, domain_config) for record in records]
     metric_results: list[dict[str, object]] = []
     threshold = domain_config.thresholds
@@ -301,6 +319,10 @@ def build_kpi_metadata(
             ]
 
         aggregate = aggregate_kpi_metric(definition, input_values)
+        for input_provenance in aggregate.provenance["inputs"]:
+            key = input_provenance.get("key")
+            if isinstance(key, str):
+                input_provenance["source_names"] = list(source_names_by_key.get(key, []))
         item_threshold = threshold.get(definition.key)
         series = _build_metric_series(definition, files, domain_config)
         breach_count = sum(

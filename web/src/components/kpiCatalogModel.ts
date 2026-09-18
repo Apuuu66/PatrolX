@@ -366,6 +366,7 @@ export function getKpiMetricCardView(item: {
 
 export type KpiMetricInputRow = {
   key: string;
+  sourceNamesText: string;
   value: number | string | null;
   valueText: string;
   aggregation: string;
@@ -441,8 +442,12 @@ export function getKpiMetricDetailView(item: { definition: unknown; result?: unk
     .filter((value) => readString(value.key))
     .map((value) => {
       const inputValue = typeof value.value === "number" || typeof value.value === "string" ? value.value : null;
+      const sourceNames = asArray(value.source_names)
+        .map((sourceName) => readString(sourceName))
+        .filter(Boolean);
       return {
         key: readString(value.key),
+        sourceNamesText: sourceNames.join(" / ") || "-",
         value: inputValue,
         valueText: valueText(inputValue),
         aggregation: readString(value.aggregation, "-"),

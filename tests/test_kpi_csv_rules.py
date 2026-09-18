@@ -9,6 +9,7 @@ import yaml
 from app.inspectors.kpi.common import (
     KpiConfigError,
     KpiRecord,
+    build_kpi_metadata,
     load_kpi_config,
     match_metric_name,
     parse_csv_file,
@@ -601,4 +602,38 @@ def test_unclassified_metric_is_reported_without_changing_rule_status(tmp_path: 
             "sample_values": [88.0],
             "reason": "metric_not_registered",
         }
+    ]
+
+
+def test_kpi_metadata_input_provenance_includes_actual_column_names(tmp_path: Path) -> None:
+    parsed = _parse(
+        tmp_path,
+        "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv",
+        _content(
+            ["呼叫请求次数(次)", "呼叫请求成功次数(次)"],
+            [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 1000, 990]],
+        ),
+    )
+    metadata = build_kpi_metadata("call", [parsed], load_kpi_config())
+    result = next(item for item in metadata["kpi_results"] if item["key"] == "call_success_rate")
+
+    assert result["provenance"]["inputs"] == [
+        {
+            "key": "call_success_count",
+            "aggregation": "sum",
+            "value": 990.0,
+            "source_names": ["呼叫请求成功次数(次)"],
+        },
+        {
+            "key": "call_attempts",
+            "aggregation": "sum",
+            "value": 1000.0,
+            "source_names": ["呼叫请求次数(次)"],
+        },
+        {
+            "key": "call_failure_count",
+            "aggregation": "sum",
+            "value": None,
+            "source_names": [],
+        },
     ]

@@ -34,8 +34,18 @@ const item = {
     provenance: {
       formula: "call_success_count / call_attempts * 100",
       inputs: [
-        { key: "call_success_count", value: 900, aggregation: "sum" },
-        { key: "call_attempts", value: 1000, aggregation: "sum" },
+        {
+          key: "call_success_count",
+          value: 900,
+          aggregation: "sum",
+          source_names: ["呼叫请求成功次数(次)"],
+        },
+        {
+          key: "call_attempts",
+          value: 1000,
+          aggregation: "sum",
+          source_names: ["呼叫请求次数(次)"],
+        },
       ],
       missing_inputs: [],
       direct_cross_reference: [
@@ -55,6 +65,10 @@ test("explains definition, formula, inputs, cross reference and threshold", () =
   assert.deepEqual(view.inputRows.map((row) => [row.key, row.valueText]), [
     ["call_success_count", "900"],
     ["call_attempts", "1000"],
+  ]);
+  assert.deepEqual(view.inputRows.map((row) => row.sourceNamesText), [
+    "呼叫请求成功次数(次)",
+    "呼叫请求次数(次)",
   ]);
   assert.deepEqual(view.crossReferenceRows.map((row) => [row.sourceName, row.valueText]), [
     ["呼叫成功率", "99.9"],
