@@ -51,7 +51,7 @@ class KpiCatalogError(Exception):
 
 
 def normalize_metric_name(value: str) -> str:
-    """按配置契约归一化指标名，只支持归一化后的精确匹配。"""
+    """按配置契约归一化指标名；前缀匹配使用同一规则。"""
     normalized = unicodedata.normalize("NFKC", value).strip()
     return " ".join(normalized.split()).casefold()
 
@@ -446,18 +446,8 @@ def _validate_metric(raw: Any, domain: str, index: int) -> KpiMetricDefinition:
     ):
         raise KpiCatalogError(f"{context}.aggregation.quantile: 必须在 [0,1]")
 
-    aliases_raw = raw.get("aliases")
-    if not isinstance(aliases_raw, list) or not aliases_raw:
-        raise KpiCatalogError(f"{context}.aliases: 至少登记一个叫法")
+    # aliases 仅作为历史结果兼容字段保留；新配置不再登记别名，匹配只依赖 key 和中英文名。
     aliases: list[dict[str, str]] = []
-    for alias_index, alias_raw in enumerate(aliases_raw):
-        alias_context = f"{context}.aliases[{alias_index}]"
-        if not isinstance(alias_raw, dict) or alias_raw.get("language") not in _VALID_LANGUAGES:
-            raise KpiCatalogError(f"{alias_context}.language: 非法")
-        value = alias_raw.get("value")
-        if not isinstance(value, str) or not normalize_metric_name(value):
-            raise KpiCatalogError(f"{alias_context}.value: 缺失或非法")
-        aliases.append({"language": alias_raw["language"], "value": value})
 
     formula: KpiRatioFormula | None = None
     if raw.get("formula") is not None:
@@ -520,9 +510,10 @@ def _validate_domain_file(
             raise KpiCatalogError(f"{domain}.metrics[key={metric.key}]: 重复")
         metrics[metric.key] = metric
 
+    # 候选索引沿用 alias_index 名称，避免内部配置模型和展示契约破坏兼容。
     alias_index: dict[str, str] = {}
     for metric in metrics.values():
-        names = [metric.name_zh, metric.name_en, *(item["value"] for item in metric.aliases)]
+        names = [metric.key, metric.name_zh, metric.name_en]
         for name in names:
             normalized = normalize_metric_name(name)
             if normalized in alias_index and alias_index[normalized] != metric.key:

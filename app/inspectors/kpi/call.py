@@ -8,11 +8,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from app.inspectors.base import Inspector
 from app.inspectors.kpi.common import (
     KpiConfigError,
+    KpiDomainConfig,
     KpiRecord,
     KpiThreshold,
     build_kpi_metadata,
     finding_id,
     load_kpi_config,
+    match_metric_name,
     parse_all_files,
 )
 from app.inspectors.registry import registry
@@ -25,7 +27,7 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="1.3.0",
+    rule_version="1.4.0",
     description="解析呼叫 KPI CSV 文件，执行成功率/失败率阈值检查、请求关联一致性检查和容量指标展示",
     recommendation="检查阈值越限、数据自洽异常和容量趋势",
     source_refs=["kpi_call"],
@@ -46,15 +48,23 @@ inspector = Inspector(
 NA = "N/A"
 
 
-def _derive_rates(record: KpiRecord, alias: dict[str, str]) -> None:
+def _stable_values(record: KpiRecord, domain_config: KpiDomainConfig) -> dict[str, float]:
+    """把记录中的“指标名 + 单位”列归一到稳定 key。"""
+    values: dict[str, float] = {}
+    for source, value in record.values.items():
+        key = match_metric_name(source, domain_config)
+        if key is not None:
+            values.setdefault(key, value)
+    return values
+
+
+def _derive_rates(record: KpiRecord, domain_config: KpiDomainConfig) -> None:
     """为单条记录计算派生成功率和失败率。"""
     derived: dict[str, float] = {}
-    source_names: dict[str, str] = {}
-    for source, stable in alias.items():
-        source_names.setdefault(stable, source)
-    attempts = record.values.get(source_names.get("call_attempts", ""), None)
-    success = record.values.get(source_names.get("call_success_count", ""), None)
-    failure = record.values.get(source_names.get("call_failure_count", ""), None)
+    stable_values = _stable_values(record, domain_config)
+    attempts = stable_values.get("call_attempts")
+    success = stable_values.get("call_success_count")
+    failure = stable_values.get("call_failure_count")
 
     # 自洽检查
     if attempts is not None and success is not None and failure is not None:
@@ -103,10 +113,15 @@ def _run(ctx: RuleContext) -> object:
             summary="未发现呼叫 KPI 文件",
             skip_reason="匹配文件不属于 Call_Session_API_Statistics_*.csv",
         )
-    alias = config.aliases.get("call", {})
+    call_config = config.domains["call"]
     sr_threshold = config.limits.get("call", {}).get("call_success_rate")
     fr_threshold = config.limits.get("call", {}).get("call_failure_rate")
-    source_names = {stable: source for source, stable in alias.items()}
+    source_names: dict[str, str] = {}
+    for f in files:
+        for name in f.objects:
+            stable = match_metric_name(name, call_config)
+            if stable is not None:
+                source_names.setdefault(stable, name)
 
     file_count = len(files)
     record_count = sum(f.record_count for f in files)
@@ -122,7 +137,7 @@ def _run(ctx: RuleContext) -> object:
     # 为每条记录派生比率
     for f in files:
         for r in f.records:
-            _derive_rates(r, alias)
+            _derive_rates(r, call_config)
             if r.derived:
                 diff = r.derived.get("call_count_difference")
                 if diff is not None and diff != 0:

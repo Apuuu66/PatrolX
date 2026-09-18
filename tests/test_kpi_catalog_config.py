@@ -39,7 +39,7 @@ def test_load_kpi_config_reads_common_and_registered_domains() -> None:
     assert "call_success_rate" in call.thresholds
 
 
-def test_metric_aliases_are_indexed_by_normalized_name() -> None:
+def test_metric_candidate_names_are_indexed_by_normalized_name() -> None:
     config = load_kpi_config()
     call = config.domains["call"]
     assert call.alias_index[normalize_metric_name("呼叫请求次数")] == "call_attempts"
@@ -68,7 +68,6 @@ def test_load_kpi_config_rejects_invalid_files(tmp_path: Path, filename: str, co
 
 
 def _copy_kpi_config(tmp_path: Path) -> Path:
-    import shutil
 
     target = tmp_path / "kpi"
     shutil.copytree(KPI_CONFIG_DIR, target)
@@ -87,7 +86,33 @@ def _write_domain(config_dir: Path, raw: dict, name: str = "api.yaml") -> None:
     (config_dir / name).write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
 
 
-def test_new_metric_and_alias_only_affect_target_domain(tmp_path: Path) -> None:
+def test_metric_candidates_are_indexed_without_aliases(tmp_path: Path) -> None:
+    config_dir = _copy_kpi_config(tmp_path)
+    raw = _read_domain(config_dir)
+    raw["metrics"] = [
+        {
+            "key": "api_requests",
+            "name_zh": "API 请求次数",
+            "name_en": "API Requests",
+            "metric_type": "count",
+            "semantic_group": "traffic",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {"kind": "sum"},
+        }
+    ]
+    _write_domain(config_dir, raw)
+
+    config = load_kpi_config(config_dir)
+    api = config.domains["api"]
+    assert api.metrics["api_requests"].aliases == []
+    assert api.alias_index[normalize_metric_name("api_requests")] == "api_requests"
+    assert api.alias_index[normalize_metric_name("API 请求次数")] == "api_requests"
+    assert api.alias_index[normalize_metric_name("API Requests")] == "api_requests"
+
+
+def test_new_metric_only_affects_target_domain(tmp_path: Path) -> None:
     config_dir = _copy_kpi_config(tmp_path)
     raw = _read_domain(config_dir)
     raw["metrics"].append(
@@ -101,10 +126,6 @@ def test_new_metric_and_alias_only_affect_target_domain(tmp_path: Path) -> None:
             "unit": "次",
             "source_type": "raw",
             "aggregation": {"kind": "sum"},
-            "aliases": [
-                {"language": "zh", "value": "API请求数"},
-                {"language": "en", "value": "Total API Calls"},
-            ],
         }
     )
     _write_domain(config_dir, raw)
@@ -114,15 +135,14 @@ def test_new_metric_and_alias_only_affect_target_domain(tmp_path: Path) -> None:
     call = config.domains["call"]
 
     assert "api_requests" in api.metrics
-    assert api.alias_index[normalize_metric_name("API请求数")] == "api_requests"
-    assert api.alias_index[normalize_metric_name("  api请求数 ")] == "api_requests"
-    assert api.alias_index[normalize_metric_name("api requests")] == "api_requests"
-    assert call.alias_index.get(normalize_metric_name("API请求数")) is None
+    assert api.alias_index[normalize_metric_name("API 请求次数")] == "api_requests"
+    assert api.alias_index[normalize_metric_name("API Requests")] == "api_requests"
+    assert call.alias_index.get(normalize_metric_name("API 请求次数")) is None
     assert config.domains["api"].config_source.endswith("api.yaml")
     assert config.domains["call"].config_source.endswith("call.yaml")
 
 
-def test_metric_names_and_aliases_are_exact_after_normalization() -> None:
+def test_metric_candidate_names_are_normalized() -> None:
     config = load_kpi_config()
     call = config.domains["call"]
     assert call.alias_index[normalize_metric_name("  CALL　ATTEMPTS ")] == "call_attempts"
@@ -141,7 +161,6 @@ def _valid_api_metrics() -> list[dict]:
             "unit": "次",
             "source_type": "raw",
             "aggregation": {"kind": "sum"},
-            "aliases": [{"language": "zh", "value": "API请求次数"}],
         },
         {
             "key": "api_success_count",
@@ -153,28 +172,17 @@ def _valid_api_metrics() -> list[dict]:
             "unit": "次",
             "source_type": "raw",
             "aggregation": {"kind": "sum"},
-            "aliases": [{"language": "zh", "value": "API成功次数"}],
         },
     ]
 
 
-def test_config_rejects_duplicate_metric_key_and_alias_conflict(tmp_path: Path) -> None:
+def test_config_rejects_duplicate_metric_key(tmp_path: Path) -> None:
     config_dir = _copy_kpi_config(tmp_path)
     raw = _read_domain(config_dir)
     raw["metrics"] = _valid_api_metrics()
     raw["metrics"].append(dict(raw["metrics"][0]))
     _write_domain(config_dir, raw)
     with pytest.raises(KpiConfigError, match=": 重复"):
-        load_kpi_config(config_dir)
-
-    conflict_dir = tmp_path / "kpi-conflict"
-    shutil.copytree(KPI_CONFIG_DIR, conflict_dir)
-    config_dir = conflict_dir
-    raw = _read_domain(config_dir)
-    raw["metrics"] = _valid_api_metrics()
-    raw["metrics"][1].setdefault("aliases", []).append({"language": "zh", "value": raw["metrics"][0]["name_zh"]})
-    _write_domain(config_dir, raw)
-    with pytest.raises(KpiConfigError, match="已映射到"):
         load_kpi_config(config_dir)
 
 
@@ -192,7 +200,6 @@ def test_config_rejects_cross_domain_formula(tmp_path: Path) -> None:
             "unit": "%",
             "source_type": "derived",
             "aggregation": {"kind": "ratio_from_inputs"},
-            "aliases": [{"language": "zh", "value": "错误跨域成功率"}],
             "formula": {"kind": "ratio", "numerator": "call_success_count", "denominator": "call_attempts"},
         }
     )

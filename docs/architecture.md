@@ -543,7 +543,7 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 规则不使用私有 prepare，直接读取自己的 `source_patterns` 匹配文件。
 - 同一领域存在多个周期时按 `15 → 5 → 30 → 60` 选择一个最高优先级周期；
   只有该周期的多个文件一起聚合，其他周期不混入同一条结果。
-- KPI 指标目录、别名、公式、阈值、容量语义和解析预算配置在 `deploy/config/kpi/`；
+- KPI 指标目录、稳定 key、中英文指标名、公式、阈值、容量语义和解析预算配置在 `deploy/config/kpi/`；
   `common.yaml` 管公共配置，`call.yaml`、`api.yaml`、`media.yaml` 按领域维护。
 - 目录化结果写入 `metric_catalog`、`kpi_results`、`unclassified_metrics`；未登记列只保留来源和样例，不改变规则状态。
 - 历史结果 `metadata.version=1` 前端回退明细表，后端不迁移、不重算；分页原始记录通过 `/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records` 按需查询。

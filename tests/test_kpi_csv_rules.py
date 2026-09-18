@@ -10,6 +10,7 @@ from app.inspectors.kpi.common import (
     KpiConfigError,
     KpiRecord,
     load_kpi_config,
+    match_metric_name,
     parse_csv_file,
     parse_kpi_path,
 )
@@ -238,7 +239,6 @@ def test_config_requires_complete_call_metrics_and_thresholds(tmp_path: Path) ->
             "unit": "次",
             "source_type": "raw",
             "aggregation": {"kind": "sum"},
-            "aliases": [{"language": "zh", "value": "呼叫请求成功次数"}],
         }
     )
     del raw["thresholds"]["call_failure_rate"]
@@ -247,21 +247,10 @@ def test_config_requires_complete_call_metrics_and_thresholds(tmp_path: Path) ->
         load_kpi_config(config_dir)
 
 
-def test_config_rejects_alias_and_capacity_key_conflict(tmp_path: Path) -> None:
-    config_dir = _copy_kpi_config(tmp_path)
-    raw = _read_domain(config_dir)
-    for metric in raw["metrics"]:
-        if metric["key"] == "max_concurrency":
-            metric["aliases"].append({"language": "zh", "value": "统计峰值"})
-    _write_domain(config_dir, raw)
-    with pytest.raises(KpiConfigError, match="已映射到"):
-        load_kpi_config(config_dir)
-
-
 @pytest.mark.parametrize(
     ("path", "match"),
     [
-        (["metrics", 0, "aliases", 0, "value"], "value: 缺失或非法"),
+        (["metrics", 0, "name_zh"], "缺失或非法"),
         (["capacity_metrics", "统计峰值", "status"], "非法容量语义或状态"),
         (["thresholds", "call_success_rate", "direction"], "direction"),
     ],
@@ -321,13 +310,7 @@ def test_unknown_capacity_semantics_is_display_only(tmp_path: Path) -> None:
 def test_derive_rates_formula_priority_and_zero_denominator() -> None:
     from app.inspectors.kpi.call import _derive_rates
 
-    alias = {
-        "呼叫请求次数": "call_attempts",
-        "呼叫请求成功次数": "call_success_count",
-        "呼叫请求失败次数": "call_failure_count",
-        "呼叫成功率": "call_success_rate",
-        "呼叫失败率": "call_failure_rate",
-    }
+    call_config = load_kpi_config().domains["call"]
     record = KpiRecord(
         line_number=3,
         period_minutes=15,
@@ -335,12 +318,12 @@ def test_derive_rates_formula_priority_and_zero_denominator() -> None:
         end_at=__import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").UTC),
         values={"呼叫请求次数": 0, "呼叫请求成功次数": 0, "呼叫请求失败次数": 0},
     )
-    _derive_rates(record, alias)
+    _derive_rates(record, call_config)
     assert record.derived == {"call_count_difference": 0}
 
     record.values |= {"呼叫请求次数": 100, "呼叫请求成功次数": 90, "呼叫请求失败次数": 10}
     record.values |= {"呼叫成功率": 97.5, "呼叫失败率": 2.5}
-    _derive_rates(record, alias)
+    _derive_rates(record, call_config)
     assert record.derived == {
         "call_count_difference": 0,
         "call_success_rate": 90.0,
@@ -405,6 +388,81 @@ BasicKpi,,可信,,2026-09-14 10:00:00,2026-09-14 10:05:00,5,100,100,0
     }
 
 
+def test_kpi_call_matches_metric_names_before_unit_suffix(tmp_path: Path) -> None:
+    from app.inspectors.registry import registry
+    from app.services.executor import RuleContext
+
+    content = _content(
+        [
+            "呼叫请求次数(次)",
+            "呼叫请求成功次数(次)",
+            "呼叫请求失败次数(次)",
+            "统计峰值(个)",
+            "最大并发(路)",
+            "自定义业务指标(个)",
+        ],
+        [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 100, 95, 5, 10, 8, 66]],
+    )
+    _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
+    ctx = RuleContext(task_id="kpi-unit-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
+    ctx.files = [Path("kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv")]
+    result = registry.get("kpi.call").run(ctx)
+    metadata = result.metadata
+    results = {item["key"]: item for item in metadata["kpi_results"]}
+
+    assert results["call_attempts"]["main_value"] == 100.0
+    assert results["call_success_count"]["main_value"] == 95.0
+    assert results["call_failure_count"]["main_value"] == 5.0
+    assert results["stat_peak"]["main_value"] == 10.0
+    assert results["max_concurrency"]["main_value"] == 8.0
+    unclassified = {item["source_name"]: item for item in metadata["unclassified_metrics"]}
+    assert set(unclassified) == {"自定义业务指标(个)"}
+
+
+def test_kpi_names_use_longest_prefix_match(tmp_path: Path) -> None:
+    base = Path("deploy/config/kpi")
+    config_dir = tmp_path / "kpi"
+    shutil.copytree(base, config_dir)
+    raw = yaml.safe_load((config_dir / "api.yaml").read_text(encoding="utf-8"))
+    raw["metrics"] = [
+        {
+            "key": "request",
+            "name_zh": "请求",
+            "name_en": "Request",
+            "metric_type": "count",
+            "semantic_group": "traffic",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {"kind": "sum"},
+        },
+        {
+            "key": "request_success",
+            "name_zh": "请求成功",
+            "name_en": "Request Success",
+            "metric_type": "count",
+            "semantic_group": "quality",
+            "display_role": "context",
+            "unit": "次",
+            "source_type": "raw",
+            "aggregation": {"kind": "sum"},
+        },
+    ]
+    (config_dir / "api.yaml").write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    content = _content(
+        ["请求成功(次)", "Request Success(count)"],
+        [[15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 20, 21]],
+        "API 统计",
+    )
+    path = _write(tmp_path, "kpi/kpi-api-15.csv", content)
+    parsed = parse_csv_file(path, "kpi/kpi-api-15.csv", "api", 15, load_kpi_config(config_dir))
+    assert parsed.record_count == 1
+    assert not parsed.records[0].errors
+    config = load_kpi_config(config_dir)
+    assert match_metric_name("请求成功(次)", config.domains["api"]) == "request_success"
+    assert match_metric_name("Request Success(count)", config.domains["api"]) == "request_success"
+
+
 def test_kpi_call_emits_version_2_catalog_results_and_preserves_rule_status(tmp_path: Path) -> None:
     from app.inspectors.registry import registry
     from app.models.schemas import RuleStatus
@@ -438,7 +496,7 @@ def test_kpi_call_emits_version_2_catalog_results_and_preserves_rule_status(tmp_
     assert metadata["unclassified_metrics"] == []
 
 
-def test_kpi_call_normalizes_synonyms_and_keeps_near_name_unclassified(tmp_path: Path) -> None:
+def test_kpi_call_keeps_alternate_names_unclassified_without_aliases(tmp_path: Path) -> None:
     from app.inspectors.registry import registry
     from app.services.executor import RuleContext
 
@@ -461,11 +519,11 @@ def test_kpi_call_normalizes_synonyms_and_keeps_near_name_unclassified(tmp_path:
     metadata = result.metadata
     results = {item["key"]: item for item in metadata["kpi_results"]}
 
-    assert results["call_attempts"]["main_value"] == 140.0
-    assert results["call_success_count"]["main_value"] == 133.0
-    assert results["call_failure_count"]["main_value"] == 7.0
+    assert results["call_attempts"]["main_value"] == 100.0
+    assert results["call_success_count"]["main_value"] == 95.0
+    assert results["call_failure_count"]["main_value"] == 5.0
     unclassified = {item["source_name"]: item for item in metadata["unclassified_metrics"]}
-    assert set(unclassified) == {"近似呼叫请求"}
+    assert set(unclassified) == {"呼叫请求", "请求成功", "请求失败", "近似呼叫请求"}
     assert unclassified["近似呼叫请求"]["record_count"] == 1
     assert unclassified["近似呼叫请求"]["sample_values"] == [66.0]
     assert unclassified["近似呼叫请求"]["source_files"] == [

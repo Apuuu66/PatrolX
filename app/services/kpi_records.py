@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.inspectors.kpi.catalog import normalize_metric_name
 from app.models.schemas import (
     KpiDisplayStatus,
     KpiRecordItem,
@@ -19,17 +20,25 @@ from app.models.schemas import (
 from app.services.store import load_rule_result
 
 
-def _alias_map(catalog: dict[str, dict[str, Any]]) -> dict[str, dict[str, str]]:
-    """按稳定 key 汇总可精确匹配的原始列名。"""
-    result: dict[str, dict[str, str]] = {}
-    for key, definition in catalog.items():
-        names = {
-            definition.get("name_zh", ""),
-            definition.get("name_en", ""),
-            *(str(alias.get("value", "")) for alias in definition.get("aliases", [])),
-        }
-        result[key] = {name for name in names if name}
-    return result
+def _stable_record_values(
+    source_values: dict[str, float],
+    catalog: dict[str, dict[str, Any]],
+) -> dict[str, float]:
+    """把真实列名中的“指标名 + 单位”按最长前缀归一到稳定 key。"""
+    values: dict[str, float] = {}
+    for source_name, value in source_values.items():
+        normalized = normalize_metric_name(source_name)
+        best_key: str | None = None
+        best_length = 0
+        for key, definition in catalog.items():
+            for name in (definition.get("key"), definition.get("name_zh"), definition.get("name_en")):
+                candidate = normalize_metric_name(str(name))
+                if candidate and normalized.startswith(candidate) and len(candidate) > best_length:
+                    best_key = key
+                    best_length = len(candidate)
+        if best_key is not None:
+            values[best_key] = value
+    return values
 
 
 def _threshold_map(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -154,7 +163,6 @@ def project_kpi_records(
         return KpiRecordPage(total=0, page=page, page_size=page_size, items=[])
 
     catalog, thresholds = _build_catalog(metadata)
-    aliases = _alias_map(catalog)
     items: list[KpiRecordItem] = []
 
     kpi_files = metadata.get("kpi_files", [])
@@ -187,11 +195,7 @@ def project_kpi_records(
                         source_values[str(name)] = float(value)
                     except (TypeError, ValueError):
                         continue
-            stable_values = {
-                key: next((source_values[name] for name in aliases.get(key, ()) if name in source_values), None)
-                for key in catalog
-            }
-            stable_values = {key: value for key, value in stable_values.items() if value is not None}
+            stable_values = _stable_record_values(source_values, catalog)
 
             for key, definition in catalog.items():
                 if metric_key is not None and key != metric_key:
@@ -201,8 +205,7 @@ def project_kpi_records(
                 if formula:
                     value = _derived_value(formula, stable_values)
                 else:
-                    matched_name = next((name for name in aliases.get(key, ()) if name in source_values), None)
-                    value = source_values.get(matched_name) if matched_name else None
+                    value = stable_values.get(key)
                 display_status = _record_status(record, value, thresholds.get(key))
                 if status is not None and display_status != status:
                     continue

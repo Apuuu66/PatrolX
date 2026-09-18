@@ -21,7 +21,8 @@ import yaml
 from app.cli import generate_task_id
 from app.core.archive import is_archive
 from app.core.config import settings
-from app.inspectors.kpi.catalog import load_kpi_catalog, normalize_metric_name
+from app.inspectors.kpi.catalog import load_kpi_catalog
+from app.inspectors.kpi.common import load_kpi_config, match_metric_name, normalize_metric_name
 
 FILE_NAME_RE = re.compile(r"^kpi-(?P<domain>api|media|call)-(?P<period>5|15|30|60)\.csv$", re.IGNORECASE)
 HEADER_ALIASES: dict[str, set[str]] = {
@@ -222,11 +223,24 @@ def _candidate_to_metric(candidate: dict[str, Any], key: str, reserved_names: se
         "unit": unit,
         "source_type": "raw",
         "aggregation": {"kind": aggregation},
-        "aliases": [{"language": "zh", "value": name}],
     }
     if quantile is not None:
         metric["aggregation"]["quantile"] = quantile
     return metric
+
+
+def _match_registered_name(name: str, candidates_by_name: dict[str, dict[str, Any]], alias_index: dict[str, str]) -> str | None:
+    """按最长前缀匹配已登记名或新增候选名，兼容“指标名 + 单位”。"""
+    normalized = normalize_metric_name(name)
+    best_key: str | None = None
+    best_length = 0
+    for candidate_name, normalized_name in [
+        (candidate["source_name"], normalize_metric_name(candidate["source_name"])) for candidate in candidates_by_name.values()
+    ] + list(alias_index.items()):
+        if normalized_name and normalized.startswith(normalized_name) and len(normalized_name) > best_length:
+            best_key = str(candidate_name) if candidate_name in candidates_by_name else alias_index[str(candidate_name)]
+            best_length = len(normalized_name)
+    return best_key
 
 
 def _ratio_formula(
@@ -245,11 +259,13 @@ def _ratio_formula(
     failure_name = f"{base}失败次数"
 
     def input_key(source_name: str) -> str | None:
-        normalized = normalize_metric_name(source_name)
-        if normalized in alias_index:
-            return alias_index[normalized]
-        candidate = candidates_by_name.get(source_name)
-        return str(candidate["key"]) if candidate is not None else None
+        matched = _match_registered_name(source_name, candidates_by_name, alias_index)
+        if matched is None:
+            return None
+        candidate = candidates_by_name.get(matched)
+        if candidate is not None:
+            return str(candidate["key"])
+        return alias_index.get(normalize_metric_name(matched))
 
     numerator = input_key(numerator_name)
     denominator = input_key(denominator_name)
@@ -340,7 +356,8 @@ def scan_kpi_csv(
             "invalid_metrics": [],
         }
         report = domain_reports[domain]
-        alias_index = config.domains[domain].alias_index
+        domain_config = config.domains[domain]
+        alias_index = domain_config.alias_index
         candidates: dict[str, dict[str, Any]] = {}
         registered: set[str] = set()
         for path, relative_path, target_domain, period in (item for item in targets if item[2] == domain):
@@ -358,8 +375,7 @@ def scan_kpi_csv(
             report["file_errors"].extend({**error, "path": relative_path} for error in parsed["errors"])
             report["row_count"] += int(parsed["row_count"])
             for name in parsed["objects"]:
-                normalized = normalize_metric_name(name)
-                if normalized in alias_index:
+                if match_metric_name(name, domain_config):
                     if name not in registered:
                         registered.add(name)
                         report["registered_metrics"].append(name)
@@ -464,11 +480,7 @@ def apply_report(report: dict[str, Any], config_dir: Path) -> list[Path]:
             normalize_metric_name(str(value))
             for item in raw["metrics"]
             if isinstance(item, dict)
-            for value in (
-                item.get("name_zh"),
-                item.get("name_en"),
-                *(alias.get("value") for alias in item.get("aliases", []) if isinstance(alias, dict)),
-            )
+            for value in (item.get("name_zh"), item.get("name_en"))
             if isinstance(value, str)
         }
         for metric in draft["metrics"]:

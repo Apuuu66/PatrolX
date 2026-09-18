@@ -149,7 +149,6 @@ def test_apply_appends_new_metrics_without_changing_existing(tmp_path: Path) -> 
             "unit": "次",
             "source_type": "raw",
             "aggregation": {"kind": "sum"},
-            "aliases": [{"language": "zh", "value": "api请求次数"}],
         }
     )
     (config_dir / "api.yaml").write_text(yaml.safe_dump(api_config, allow_unicode=True), encoding="utf-8")
@@ -160,7 +159,7 @@ def test_apply_appends_new_metrics_without_changing_existing(tmp_path: Path) -> 
     config = load_kpi_catalog(config_dir)
     assert "registered_metric" in config.domains["api"].metrics
     assert len(config.domains["api"].metrics) == len(report["domains"]["api"]["metrics"]) + 1
-    assert {item["value"] for item in config.domains["api"].metrics["registered_metric"].aliases} == {"api请求次数"}
+    assert config.domains["api"].metrics["registered_metric"].aliases == []
     assert any(item.name_zh == "api请求成功率" for item in config.domains["api"].metrics.values())
 
 

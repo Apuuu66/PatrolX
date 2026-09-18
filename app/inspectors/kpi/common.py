@@ -30,7 +30,14 @@ from app.inspectors.kpi.catalog import (
 )
 
 KpiConfigError = KpiCatalogError
-__all__ = ["KpiConfigError", "KpiConfig", "KpiThreshold", "load_kpi_catalog", "normalize_metric_name"]
+__all__ = [
+    "KpiConfigError",
+    "KpiConfig",
+    "KpiThreshold",
+    "load_kpi_catalog",
+    "match_metric_name",
+    "normalize_metric_name",
+]
 
 VALID_PERIODS = {5, 15, 30, 60}
 # 展示和分析优先采用更稳定的 15 分钟粒度；缺失时按可用粒度兜底。
@@ -156,11 +163,25 @@ def parse_time(text: str, tz: zoneinfo.ZoneInfo) -> datetime:
         raise ValueError(f"无法解析时间: {text}") from None
 
 
+def match_metric_name(source_name: str, domain_config: KpiDomainConfig) -> str | None:
+    """按“指标名 + 单位”的真实列名做最长前缀匹配，返回稳定 key。"""
+    normalized = normalize_metric_name(source_name)
+    best_key: str | None = None
+    best_length = 0
+    for name, key in domain_config.alias_index.items():
+        if not name or not normalized.startswith(name):
+            continue
+        if len(name) > best_length:
+            best_key = key
+            best_length = len(name)
+    return best_key
+
+
 def _stable_record_values(record: KpiRecord, domain_config: KpiDomainConfig) -> dict[str, float]:
-    """把源列名精确归一到稳定 key；未登记列不进入已登记指标输入。"""
+    """把源列名最长前缀归一到稳定 key；未登记列不进入已登记指标输入。"""
     values: dict[str, float] = {}
     for source_name, value in record.values.items():
-        key = domain_config.alias_index.get(normalize_metric_name(source_name))
+        key = match_metric_name(source_name, domain_config)
         if key is not None:
             values[key] = value
     return values
@@ -183,7 +204,7 @@ def _unclassified_metrics(
 ) -> list[dict[str, object]]:
     grouped: dict[str, dict[str, object]] = {}
     for kpi_file in files:
-        registered = {name for name in kpi_file.objects if domain_config.alias_index.get(normalize_metric_name(name))}
+        registered = {name for name in kpi_file.objects if match_metric_name(name, domain_config)}
         unclassified = [name for name in kpi_file.objects if name not in registered]
         for name in unclassified:
             item = grouped.setdefault(
@@ -264,7 +285,7 @@ def build_kpi_metadata(
                                 "source_name": next(
                                     name
                                     for name in record.values
-                                    if domain_config.alias_index.get(normalize_metric_name(name)) == definition.key
+                                    if match_metric_name(name, domain_config) == definition.key
                                 ),
                                 "source_file": kpi_file.path,
                                 "value": stable_values[definition.key],
@@ -554,7 +575,7 @@ def parse_csv_file(
 
     kpi_file.objects = objects
 
-    # 获取容量配置和别名
+    # 获取容量配置
     cap_cfg = config.capacity_metrics.get(domain, {})
 
     # 表头之后均为数据行；表头之前的列（如服务名、实例、可信度）不作为指标。

@@ -11,11 +11,6 @@ metrics:
     source_type: raw
     aggregation:
       kind: sum
-    aliases:
-      - language: zh
-        value: 呼叫请求次数
-      - language: zh
-        value: 呼叫请求
 
   - key: call_success_count
     name_zh: 呼叫请求成功次数
@@ -27,11 +22,6 @@ metrics:
     source_type: raw
     aggregation:
       kind: sum
-    aliases:
-      - language: zh
-        value: 呼叫请求成功次数
-      - language: zh
-        value: 请求成功
 
   - key: call_failure_count
     name_zh: 呼叫请求失败次数
@@ -43,11 +33,6 @@ metrics:
     source_type: raw
     aggregation:
       kind: sum
-    aliases:
-      - language: zh
-        value: 呼叫请求失败次数
-      - language: zh
-        value: 请求失败
 
   - key: call_success_rate
     name_zh: 呼叫成功率
@@ -59,9 +44,6 @@ metrics:
     source_type: derived
     aggregation:
       kind: ratio_from_inputs
-    aliases:
-      - language: zh
-        value: 呼叫成功率
     formula:
       kind: ratio
       numerator: call_success_count
@@ -83,9 +65,6 @@ metrics:
     source_type: derived
     aggregation:
       kind: ratio_from_inputs
-    aliases:
-      - language: zh
-        value: 呼叫失败率
     formula:
       kind: ratio
       numerator: call_failure_count
@@ -107,9 +86,6 @@ metrics:
     source_type: raw
     aggregation:
       kind: max
-    aliases:
-      - language: zh
-        value: 统计峰值
 
   - key: max_concurrency
     name_zh: 最大并发
@@ -121,9 +97,6 @@ metrics:
     source_type: raw
     aggregation:
       kind: max
-    aliases:
-      - language: zh
-        value: 最大并发
 
 thresholds:
   call_success_rate:
