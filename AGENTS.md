@@ -221,6 +221,12 @@ docs(architecture): 拆分 AGENTS.md
 
 提交粒度保持单一主题。合入前必须通过 lint/test；文档变更至少检查链接和一致性。
 
+推送约定：
+
+- Agent 收到用户“推送”指令时，默认自动将当前实现分支 fast-forward 合入 `main`，再推送 `origin/main`。
+- 若存在未提交变更、非 fast-forward、合并冲突或工作分支不满足合入门槛，必须先报告并等待用户确认，不得强行推送。
+- 用户明确指定其他目标分支时，按用户指定的目标执行。
+
 ## Agent 工作流
 
 项目最高约束是 Constitution。
