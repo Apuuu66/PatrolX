@@ -252,19 +252,38 @@ def test_resource_csv_generates_unclassified_preview(tmp_path: Path) -> None:
     assert not (config_dir / "resource_metrics.yaml").exists()
 
 
-def test_resource_csv_uses_default_input_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resource_default_directory_reads_all_csv_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     tool = _load_tool()
     monkeypatch.chdir(tmp_path)
     _write_config(tmp_path / "deploy" / "config" / "kpi")
-    resource_csv = tmp_path / "local_run" / "resource_metrics.csv"
-    resource_csv.parent.mkdir(parents=True)
-    _write_resource_csv(resource_csv)
+    resource_dir = tmp_path / "local_run" / "resource_metrics"
+    resource_dir.mkdir(parents=True)
+    header = "资源id,中文描述,英文描述\n"
+    (resource_dir / "media-part.csv").write_text(
+        header + "ME_21002,创建媒体资源请求次数(次),Create Media Resource Request Count\n",
+        encoding="utf-8",
+    )
+    (resource_dir / "call-part.csv").write_text(
+        header + "ME_21003,呼叫成功率,Call Success Rate\n",
+        encoding="utf-8",
+    )
 
     exit_code = tool.main(["--output-dir", "drafts/kpi"])
 
     assert exit_code == 0
     draft = yaml.safe_load(Path("drafts/kpi/resource_metrics.draft.yaml").read_text(encoding="utf-8"))
     assert set(draft["metrics"]) == {"me_21002", "me_21003"}
+
+
+def test_resource_default_directory_is_created_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tool = _load_tool()
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path / "deploy" / "config" / "kpi")
+
+    exit_code = tool.main([])
+
+    assert exit_code == 1
+    assert (tmp_path / "local_run" / "resource_metrics").is_dir()
 
 
 def test_resource_csv_apply_imports_registry_once(tmp_path: Path) -> None:

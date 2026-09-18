@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.inspectors.kpi.catalog import load_kpi_catalog
 from app.inspectors.kpi.common import match_metric_name, normalize_metric_name
 from app.services.kpi_resources import (
+    RESOURCE_HEADER,
     import_resource_metrics,
     load_resource_registry,
     parse_resource_rows,
@@ -42,7 +43,7 @@ HEADER_ALIASES: dict[str, set[str]] = {
     "period": {"周期(分钟)", "测量周期", "period_minutes", "period minutes", "period"},
 }
 MAX_SAMPLE_VALUES = 5
-DEFAULT_RESOURCE_CSV = Path("local_run/resource_metrics.csv")
+DEFAULT_RESOURCE_DIR = Path("local_run/resource_metrics")
 
 USAGE_EXAMPLES = """\
 用法示例：
@@ -105,6 +106,32 @@ def _read_csv_rows(path: Path) -> tuple[list[list[str]], str]:
         except UnicodeDecodeError:
             continue
     raise ValueError(f"无法识别 CSV 编码: {path}")
+
+
+def _resource_csv_paths(path: Path) -> list[Path]:
+    """解析资源字典输入；文件返回单文件，目录递归收集所有 CSV。"""
+    if path.is_file():
+        return [path]
+    if path.is_dir():
+        paths = sorted(path.rglob("*.csv"), key=lambda item: item.as_posix())
+        if paths:
+            return paths
+        raise ValueError(f"资源目录中没有 CSV: {path}")
+    raise ValueError(f"资源字典输入不存在: {path}")
+
+
+def _combine_resource_rows(paths: list[Path]) -> list[list[str]]:
+    """合并多个资源 CSV；每个文件都必须使用资源字典表头。"""
+    combined: list[list[str]] = []
+    for index, path in enumerate(paths):
+        rows = read_resource_csv(path)
+        if not rows:
+            raise ValueError(f"资源 CSV 为空: {path}")
+        header = tuple(cell.strip() for cell in rows[0][: len(RESOURCE_HEADER)])
+        if header != RESOURCE_HEADER:
+            raise ValueError(f"资源 CSV 表头必须为: {','.join(RESOURCE_HEADER)}: {path}")
+        combined.extend(rows if index == 0 else rows[1:])
+    return combined
 
 
 def _match_header_columns(row: list[str]) -> dict[str, int] | None:
@@ -377,9 +404,8 @@ def scan_resource_csv(
     config_dir: Path = Path("deploy/config/kpi"),
 ) -> dict[str, Any]:
     """解析资源全集 CSV，返回基础指标预览；不写入配置。"""
-    if not path.is_file():
-        raise ValueError(f"资源字典 CSV 不存在: {path}")
-    rows = read_resource_csv(path)
+    paths = _resource_csv_paths(path)
+    rows = _combine_resource_rows(paths)
     parsed = parse_resource_rows(rows)
     registry = load_resource_registry(config_dir)
     candidates = parsed["candidates"]
@@ -390,7 +416,7 @@ def scan_resource_csv(
         "input_path": path.as_posix(),
         "config_dir": config_dir.as_posix(),
         "summary": {
-            "csv_files": 1,
+            "csv_files": len(paths),
             "row_count": parsed["row_count"],
             "new_metrics": len(new_keys),
             "updated_metrics": len(candidates) - len(new_keys),
@@ -660,7 +686,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--resource-csv",
         type=Path,
-        help=f"资源字典 CSV（资源id,中文描述,英文描述），默认 {DEFAULT_RESOURCE_CSV.as_posix()}",
+        help=f"资源字典 CSV 或目录（资源id,中文描述,英文描述），默认 {DEFAULT_RESOURCE_DIR.as_posix()}/",
     )
     parser.add_argument("--config-dir", type=Path, default=Path("deploy/config/kpi"), help="KPI 配置目录")
     parser.add_argument("--output-dir", type=Path, help="草稿输出目录，默认打印预览")
@@ -674,8 +700,9 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--input 和 --resource-csv 不能同时使用")
     else:
         if args.input is None:
-            args.resource_csv = DEFAULT_RESOURCE_CSV
+            args.resource_csv = DEFAULT_RESOURCE_DIR
             args.resource_csv = _expand_cli_path(args.resource_csv)
+            args.resource_csv.mkdir(parents=True, exist_ok=True)
         else:
             args.input = _expand_cli_path(args.input)
     args.config_dir = _expand_cli_path(args.config_dir)
@@ -687,7 +714,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.resource_csv is not None:
             report = scan_resource_csv(args.resource_csv, config_dir=args.config_dir)
             if args.apply:
-                import_resource_metrics(read_resource_csv(args.resource_csv), config_dir=args.config_dir)
+                import_resource_metrics(
+                    _combine_resource_rows(_resource_csv_paths(args.resource_csv)),
+                    config_dir=args.config_dir,
+                )
             elif args.output_dir is not None:
                 path = write_resource_preview(report, args.output_dir)
                 _print_resource_report(report, args.json)

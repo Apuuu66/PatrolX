@@ -17,6 +17,8 @@ ME_21003,媒体成功率,对应英文
 python tools/generate_kpi_config.py
 ```
 
+工具默认读取并自动创建 `local_run/resource_metrics/`；该目录下可放任意名称的资源 CSV。
+
 执行登记：
 
 ```bash

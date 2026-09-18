@@ -552,7 +552,8 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 时间输入按 `Asia/Shanghai` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
 - 配置辅助工具 `tools/generate_kpi_config.py` 按开始时间、结束时间和周期列名语义识别 KPI CSV 表头，生成未登记指标草稿；`--apply` 只追加新指标，并在合并后重新校验配置目录。
-- 资源字典 CSV 默认读取 `local_run/resource_metrics.csv`，也可通过 `--resource-csv` 指定；
+- 资源字典 CSV 默认递归读取 `local_run/resource_metrics/` 下的全部 CSV，也可通过 `--resource-csv`
+  指定文件或目录；
   `ME_*` 映射为指标并用资源 id 小写作为稳定 key，`UNIT_*` 跳过。
 - 资源全集登记到独立文件 `resource_metrics.yaml`，导入时只生成基础信息且全部保持未分类；业务域归属必须通过在线分类显式确认。
 - `--input` 推荐传 `local_run/<package>.zip`；工具按包名定位对应的 `output/<task_id>/kpi`，
