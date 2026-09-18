@@ -146,12 +146,13 @@ python tools/generate_kpi_config.py --input local_run/sample-a.zip --output-dir 
 也可以直接传已解压目录，例如 `--input output/task-sample_a/kpi`。工具会递归扫描 `--input` 下的
 `*.csv`，但不会自己解压 `zip` / `tar.gz`；必须先执行任务生成解压现场，或使用其他已解压目录。
 
-如果已有资源字典 CSV，可用 `--resource-csv` 按资源 id 生成基础指标库。`ME_*` 行作为指标，`UNIT_*`
-行只做单位统计；工具不猜测业务域，也不直接写入 `call.yaml`、`api.yaml` 或 `media.yaml`。默认输出
-`resource_metrics.draft.yaml` 预览，`--apply` 才登记到 `deploy/config/kpi/resource_metrics.yaml`：
+如果已有资源字典 CSV，可按资源 id 生成基础指标库。工具默认读取 `local_run/resource_metrics.csv`，
+也可用 `--resource-csv` 指定其他路径。`ME_*` 行作为指标，`UNIT_*` 行只做单位统计；工具不猜测业务域，
+也不直接写入 `call.yaml`、`api.yaml` 或 `media.yaml`。默认输出 `resource_metrics.draft.yaml` 预览，
+`--apply` 才登记到 `deploy/config/kpi/resource_metrics.yaml`：
 
 ```bash
-python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --output-dir drafts/kpi
+python tools/generate_kpi_config.py --output-dir drafts/kpi
 python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --apply
 ```
 
@@ -172,7 +173,7 @@ Windows 上推荐使用 Git Bash 或 WSL；生成的 `source_patterns` 仍要写
 | --- | --- | --- |
 | 本地调试巡检 | `local_run/<package>.zip` | 无 `--input`，固定扫描顶层 |
 | KPI 指标配置生成 | `local_run/<package>.zip`，或任务现场中的 CSV 目录 | `--input` |
-| KPI 资源全集登记 | 用户提供资源字典 CSV | `--resource-csv` |
+| KPI 资源全集登记 | 默认 `local_run/resource_metrics.csv`，或用户提供的资源字典 CSV | 无，或 `--resource-csv` |
 | 扫描规则生成 / 回验 | `output/task-<cleaned-package-name>/` | `--source-dir` |
 | CLI 全流程验证 | `uploads/<package>.zip` | 无路径参数，固定扫描顶层 |
 

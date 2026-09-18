@@ -14,13 +14,13 @@ ME_21003,媒体成功率,对应英文
 执行预览：
 
 ```bash
-python tools/generate_kpi_config.py --resource-csv /path/to/resource.csv
+python tools/generate_kpi_config.py
 ```
 
 执行登记：
 
 ```bash
-python tools/generate_kpi_config.py --resource-csv /path/to/resource.csv --apply
+python tools/generate_kpi_config.py --apply
 ```
 
 预期：

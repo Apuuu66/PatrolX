@@ -252,6 +252,21 @@ def test_resource_csv_generates_unclassified_preview(tmp_path: Path) -> None:
     assert not (config_dir / "resource_metrics.yaml").exists()
 
 
+def test_resource_csv_uses_default_input_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tool = _load_tool()
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path / "deploy" / "config" / "kpi")
+    resource_csv = tmp_path / "local_run" / "resource_metrics.csv"
+    resource_csv.parent.mkdir(parents=True)
+    _write_resource_csv(resource_csv)
+
+    exit_code = tool.main(["--output-dir", "drafts/kpi"])
+
+    assert exit_code == 0
+    draft = yaml.safe_load(Path("drafts/kpi/resource_metrics.draft.yaml").read_text(encoding="utf-8"))
+    assert set(draft["metrics"]) == {"me_21002", "me_21003"}
+
+
 def test_resource_csv_apply_imports_registry_once(tmp_path: Path) -> None:
     tool = _load_tool()
     config_dir = tmp_path / "config" / "kpi"

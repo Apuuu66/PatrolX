@@ -6,7 +6,7 @@
 
 用法示例：
     python tools/generate_kpi_config.py --input local_run/sample.zip --output-dir drafts/kpi
-    python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --output-dir drafts/kpi
+    python tools/generate_kpi_config.py --output-dir drafts/kpi
     python tools/generate_kpi_config.py --input local_run/sample.zip --apply
 """
 
@@ -42,12 +42,13 @@ HEADER_ALIASES: dict[str, set[str]] = {
     "period": {"周期(分钟)", "测量周期", "period_minutes", "period minutes", "period"},
 }
 MAX_SAMPLE_VALUES = 5
+DEFAULT_RESOURCE_CSV = Path("local_run/resource_metrics.csv")
 
 USAGE_EXAMPLES = """\
 用法示例：
   python tools/generate_kpi_config.py --input local_run/sample.zip --output-dir drafts/kpi
 
-  python tools/generate_kpi_config.py --resource-csv path/to/resource.csv --domain media --output-dir drafts/kpi
+  python tools/generate_kpi_config.py --output-dir drafts/kpi
 
   python tools/generate_kpi_config.py --input local_run/sample.zip --apply
 """
@@ -656,7 +657,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="KPI CSV 输入目录；也可传 local_run/<package>.zip 定位 output/<task_id>/kpi",
     )
-    parser.add_argument("--resource-csv", type=Path, help="资源字典 CSV（资源id,中文描述,英文描述）")
+    parser.add_argument(
+        "--resource-csv",
+        type=Path,
+        help=f"资源字典 CSV（资源id,中文描述,英文描述），默认 {DEFAULT_RESOURCE_CSV.as_posix()}",
+    )
     parser.add_argument("--config-dir", type=Path, default=Path("deploy/config/kpi"), help="KPI 配置目录")
     parser.add_argument("--output-dir", type=Path, help="草稿输出目录，默认打印预览")
     parser.add_argument("--domain", action="append", choices=("call", "api", "media"), help="只处理指定领域，可重复")
@@ -665,19 +670,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.resource_csv is not None:
         args.resource_csv = _expand_cli_path(args.resource_csv)
+        if args.input is not None:
+            parser.error("--input 和 --resource-csv 不能同时使用")
     else:
         if args.input is None:
-            parser.error("--input 或 --resource-csv 必须提供一个")
-        args.input = _expand_cli_path(args.input)
+            args.resource_csv = DEFAULT_RESOURCE_CSV
+            args.resource_csv = _expand_cli_path(args.resource_csv)
+        else:
+            args.input = _expand_cli_path(args.input)
     args.config_dir = _expand_cli_path(args.config_dir)
     if args.output_dir is not None:
         args.output_dir = _expand_cli_path(args.output_dir)
     if args.apply and args.output_dir is not None:
         parser.error("--apply 和 --output-dir 不能同时使用")
-    if args.resource_csv is not None:
-        if args.input is not None:
-            parser.error("--input 和 --resource-csv 不能同时使用")
-
     try:
         if args.resource_csv is not None:
             report = scan_resource_csv(args.resource_csv, config_dir=args.config_dir)
