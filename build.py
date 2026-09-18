@@ -442,7 +442,17 @@ def cmd_contract(context: BuildContext) -> int:
 
 def cmd_test(context: BuildContext) -> int:
     python = ensure_backend(context)
-    return context.run([str(python), "-m", "pytest"], context.root)
+    import time as _time
+
+    limit = int(os.environ.get("TEST_DURATION_LIMIT_SECONDS", "120"))
+    start = _time.monotonic()
+    code = context.run([str(python), "-m", "pytest"], context.root)
+    elapsed = _time.monotonic() - start
+    print(f"\n测试总耗时: {elapsed:.1f}s (上限 {limit}s)")
+    if elapsed > limit:
+        print(f"错误: 测试耗时 {elapsed:.1f}s 超过上限 {limit}s，请检查是否有测试显著恶化。")
+        return 1
+    return code
 
 
 def cmd_lint(context: BuildContext) -> int:
