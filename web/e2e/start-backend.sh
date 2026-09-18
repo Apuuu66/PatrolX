@@ -22,5 +22,7 @@ touch "$E2E_DIR/uploads/$KPI_TASK_ID/kpi.zip"
 export PATROLX_OUTPUT_DIR="$E2E_DIR/output"
 export PATROLX_UPLOADS_DIR="$E2E_DIR/uploads"
 export PATROLX_SQLITE_PATH="$E2E_DIR/patrolx.db"
+export PATROLX_KPI_CATALOG_PATH="$ROOT_DIR/web/e2e/fixtures/kpi-catalog.json"
 
+cd "$ROOT_DIR"
 exec "$ROOT_DIR/.venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8010

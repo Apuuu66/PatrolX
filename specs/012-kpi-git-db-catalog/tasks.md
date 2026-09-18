@@ -182,7 +182,7 @@ description: "KPI 基础数据入库与分类状态存储实现任务列表"
 - [x] T060 运行 `.venv/bin/python build.py contract` 和 `.venv/bin/python build.py gen-web-api`，确认最终契约与生成客户端一致。
 - [x] T061 运行 `.venv/bin/python build.py test` 和 `.venv/bin/python build.py verify`，确认全流程、CLI/API 一致性、1000 行规模测试和历史快照通过。
 - [x] T062 运行 `.venv/bin/python build.py web-build`，确认构建成功且没有 chunk 大于 500 kB 告警；若有新增告警，必须继续修复而不是调高阈值。
-- [ ] T063 按 `specs/012-kpi-git-db-catalog/quickstart.md` 执行端到端验证，记录实际命令结果；确认导航为「KPI 指标库」且无资源 CSV 上传入口。
+- [x] T063 按 `specs/012-kpi-git-db-catalog/quickstart.md` 执行端到端验证，记录实际命令结果；确认导航为「KPI 指标库」且无资源 CSV 上传入口。
 
 ---
 

@@ -57,13 +57,15 @@ export function TaskDetailPage() {
 
   const load = useCallback(async () => {
     try {
-      const [t, s, snapshot, inspectors, logs] = await Promise.all([
+      const [t, s, inspectors, logs] = await Promise.all([
         api.getTask(taskId),
         api.getSystem(taskId, true).catch(() => null),
-        api.getKpiCatalogSnapshot(taskId).catch(() => null),
         api.listInspectors(undefined, true),
         api.getTaskLogs(taskId).catch(() => null),
       ]);
+      const snapshot = (s?.rules ?? []).some((rule) => rule.category === "kpi")
+        ? await api.getKpiCatalogSnapshot(taskId).catch(() => null)
+        : null;
       setTask(t);
       setSystem(s);
       setCatalogSnapshot(snapshot);

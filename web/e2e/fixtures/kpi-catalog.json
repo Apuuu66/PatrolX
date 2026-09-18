@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "source_csv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "metrics": [
+    {
+      "resource_id": "ME_CALL_ATTEMPTS",
+      "key": "me_call_attempts",
+      "name_zh": "呼叫请求次数",
+      "name_en": "Call Attempts",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_SUCCESS_COUNT",
+      "key": "me_call_success_count",
+      "name_zh": "呼叫请求成功次数",
+      "name_en": "Call Success Count",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_FAILURE_COUNT",
+      "key": "me_call_failure_count",
+      "name_zh": "呼叫请求失败次数",
+      "name_en": "Call Failure Count",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_SUCCESS_RATE",
+      "key": "me_call_success_rate",
+      "name_zh": "呼叫成功率",
+      "name_en": "Call Success Rate",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_FAILURE_RATE",
+      "key": "me_call_failure_rate",
+      "name_zh": "呼叫失败率",
+      "name_en": "Call Failure Rate",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_STAT_PEAK",
+      "key": "me_stat_peak",
+      "name_zh": "统计峰值",
+      "name_en": "Stat Peak",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_MAX_CONCURRENCY",
+      "key": "me_max_concurrency",
+      "name_zh": "最大并发",
+      "name_en": "Max Concurrency",
+      "unit_key": null
+    }
+  ],
+  "units": [],
+  "rules": {
+    "common": {
+      "input_timezone": "Asia/Shanghai",
+      "budgets": {
+        "max_files": 1000,
+        "max_records": 200000
+      }
+    },
+    "metric_rules": [
+      {
+        "key": "me_call_attempts",
+        "metric_type": "count",
+        "semantic_group": "traffic",
+        "display_role": "context",
+        "unit": "次",
+        "source_type": "raw",
+        "aggregation": {
+          "kind": "sum"
+        },
+        "formula": null
+      },
+      {
+        "key": "me_call_success_count",
+        "metric_type": "count",
+        "semantic_group": "traffic",
+        "display_role": "context",
+        "unit": "次",
+        "source_type": "raw",
+        "aggregation": {
+          "kind": "sum"
+        },
+        "formula": null
+      },
+      {
+        "key": "me_call_failure_count",
+        "metric_type": "count",
+        "semantic_group": "traffic",
+        "display_role": "context",
+        "unit": "次",
+        "source_type": "raw",
+        "aggregation": {
+          "kind": "sum"
+        },
+        "formula": null
+      },
+      {
+        "key": "me_call_success_rate",
+        "metric_type": "rate",
+        "semantic_group": "quality",
+        "display_role": "context",
+        "unit": "%",
+        "source_type": "derived",
+        "aggregation": {
+          "kind": "sum"
+        },
+        "formula": {
+          "kind": "ratio",
+          "numerator": "me_call_success_count",
+          "denominator": "me_call_attempts",
+          "scale": 100
+        }
+      },
+      {
+        "key": "me_call_failure_rate",
+        "metric_type": "rate",
+        "semantic_group": "quality",
+        "display_role": "context",
+        "unit": "%",
+        "source_type": "derived",
+        "aggregation": {
+          "kind": "sum"
+        },
+        "formula": {
+          "kind": "ratio",
+          "numerator": "me_call_failure_count",
+          "denominator": "me_call_attempts",
+          "scale": 100
+        }
+      },
+      {
+        "key": "me_stat_peak",
+        "metric_type": "capacity",
+        "semantic_group": "capacity",
+        "display_role": "context",
+        "unit": "个",
+        "source_type": "raw",
+        "aggregation": {
+          "kind": "max"
+        },
+        "formula": null
+      },
+      {
+        "key": "me_max_concurrency",
+        "metric_type": "capacity",
+        "semantic_group": "capacity",
+        "display_role": "context",
+        "unit": "个",
+        "source_type": "raw",
+        "aggregation": {
+          "kind": "max"
+        },
+        "formula": null
+      }
+    ],
+    "thresholds": [
+      {
+        "domain": "call",
+        "metric_key": "me_call_success_rate",
+        "label": "呼叫成功率",
+        "direction": "min",
+        "unit": "%",
+        "default": 99.0,
+        "periods": {
+          "5": 99.0,
+          "15": 99.0,
+          "30": 99.0,
+          "60": 99.0
+        }
+      },
+      {
+        "domain": "call",
+        "metric_key": "me_call_failure_rate",
+        "label": "呼叫失败率",
+        "direction": "max",
+        "unit": "%",
+        "default": 1.0,
+        "periods": {}
+      }
+    ],
+    "capacity_rules": [
+      {
+        "source_name": "统计峰值",
+        "metric_key": "me_stat_peak",
+        "semantics": "peak",
+        "status": "confirmed"
+      },
+      {
+        "source_name": "最大并发",
+        "metric_key": "me_max_concurrency",
+        "semantics": "concurrency",
+        "status": "confirmed"
+      }
+    ],
+    "display_rules": []
+  }
+}

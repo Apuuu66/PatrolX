@@ -3,6 +3,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const SAMPLE_PATH = path.resolve(process.cwd(), "..", "tests/fixtures/sample/sample.zip");
+const CALL_METRIC_KEYS = [
+  "me_call_attempts",
+  "me_call_success_count",
+  "me_call_failure_count",
+  "me_call_success_rate",
+  "me_call_failure_rate",
+  "me_stat_peak",
+  "me_max_concurrency",
+];
 
 test("真实富化样例可在页面完成 KPI 查询且无接口或运行时错误", async ({ page, request }) => {
   test.setTimeout(180_000);
@@ -20,6 +29,11 @@ test("真实富化样例可在页面完成 KPI 查询且无接口或运行时错
       apiErrors.push(`${response.status()} ${response.url()}`);
     }
   });
+
+  const classifyResponse = await request.put("/api/v3/kpi/resource-metrics/classification", {
+    data: { metric_keys: CALL_METRIC_KEYS, domain: "call", operator: "kpi-real-e2e" },
+  });
+  expect(classifyResponse.status()).toBe(200);
 
   const uploadResponse = await request.post("/api/v2/tasks", {
     multipart: {
@@ -57,6 +71,10 @@ test("真实富化样例可在页面完成 KPI 查询且无接口或运行时错
 
   await page.getByText("呼叫成功率").click();
   await expect(page.getByText("原始记录")).toBeVisible({ timeout: 10_000 });
+  await page.getByText("原始记录").click();
+  await expect(page.getByText("没有匹配的原始记录").or(page.getByText("共 ").first())).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.getByText(sourceFile).first()).toBeVisible();
   await expect(page.getByText("趋势", { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(page.locator("canvas").first()).toBeVisible();

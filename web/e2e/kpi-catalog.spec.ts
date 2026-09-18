@@ -1,12 +1,6 @@
 import { expect, test } from "@playwright/test";
 
 test("KPI 详情按分组展示并可追溯派生指标和原始记录", async ({ page }) => {
-  const recordsResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/v2/tasks/task-kpi-e2e/rules/kpi.call/kpi/records") &&
-      response.request().method() === "GET",
-  );
-
   await page.goto("/tasks/task-kpi-e2e/rules/kpi.call");
 
   const focusPanel = page.getByRole("tabpanel", { name: "重点关注（1）" });
@@ -28,7 +22,13 @@ test("KPI 详情按分组展示并可追溯派生指标和原始记录", async (
 
   await expect(page.getByText("call_success_count / call_attempts * 100")).toBeVisible();
   await expect(page.getByText("call_success_count", { exact: true })).toBeVisible();
-  await expect(page.getByText("kpi/kpi-call-5.csv").first()).toBeVisible();
+  await expect(page.getByText("原始记录")).toBeVisible();
+  const recordsResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/v2/tasks/task-kpi-e2e/rules/kpi.call/kpi/records") &&
+      response.request().method() === "GET",
+  );
+  await page.getByText("原始记录").click();
   const recordsResponse = await recordsResponsePromise;
   expect(recordsResponse.status()).toBe(200);
   await expect(page.getByText("kpi/kpi-call-5.csv").first()).toBeVisible();
@@ -66,6 +66,8 @@ test("KPI 页搜索筛选和记录追溯无接口或运行时错误", async ({ p
 
   await allPanel.getByText("呼叫成功率").click();
   await expect(page.getByText("call_success_count / call_attempts * 100")).toBeVisible();
+  await expect(page.getByText("原始记录")).toBeVisible();
+  await page.getByText("原始记录").click();
   await expect(page.getByText("共 2 条")).toBeVisible();
   await page.keyboard.press("Escape");
 

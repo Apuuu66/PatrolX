@@ -160,7 +160,7 @@ export function KpiResourcesPage() {
               size="small"
               column={3}
               items={[
-                { key: "base", label: "基础数据版本", children: pageData.base_data_version },
+                { key: "base", label: "基础数据版本", children: pageData.base_data_version.slice(0, 12) },
                 { key: "classification", label: "分类修订", children: pageData.classification_version },
                 { key: "total", label: "指标总数", children: pageData.total },
               ]}
