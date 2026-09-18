@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -49,6 +50,45 @@ def backend_command(*, python: Path, host: str, port: int, reload: bool) -> list
 def web_command(*, npm: str, host: str, port: int) -> list[str]:
     """构造前端启动命令。"""
     return [npm, "run", "dev", "--", "--host", host, "--port", str(port)]
+
+
+def _port_is_bindable(host: str, port: int) -> bool:
+    """检查指定地址端口是否可以直接绑定。"""
+    try:
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError:
+        return False
+
+    for family, socktype, proto, _canonical_name, sockaddr in addresses:
+        try:
+            with socket.socket(family, socktype, proto) as sock:
+                sock.bind(sockaddr)
+        except OSError:
+            return False
+    return True
+
+
+def select_port(host: str, preferred: int) -> int:
+    """返回优先端口或从其后开始的下一个可用端口。"""
+    if preferred < 0 or preferred > 65535:
+        raise ValueError(f"端口号超出有效范围：{preferred}")
+
+    for port in range(preferred, 65536):
+        if _port_is_bindable(host, port):
+            return port
+    raise RuntimeError(f"未找到 {host} 上从 {preferred} 开始的可用端口")
+
+
+def _select_service_ports(host: str, port: int, web_host: str, web_port: int) -> tuple[int, int]:
+    """为前后端选择可用端口，并提示自动替换结果。"""
+    selected_port = select_port(host, port)
+    if selected_port != port:
+        print(f"[PatrolX] 默认后端端口 {port} 已被占用，自动使用 {selected_port}")
+
+    selected_web_port = select_port(web_host, web_port)
+    if selected_web_port != web_port:
+        print(f"[PatrolX] 默认前端端口 {web_port} 已被占用，自动使用 {selected_web_port}")
+    return selected_port, selected_web_port
 
 
 def _prepare_python(root: Path) -> Path:
@@ -117,6 +157,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("[PatrolX] 未找到 npm，请先安装 Node.js 18+", file=sys.stderr)
         return 1
 
+    port, web_port = _select_service_ports(args.host, args.port, args.web_host, args.web_port)
     python = _prepare_python(ROOT)
     _prepare_web(ROOT, npm)
 
@@ -124,20 +165,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         backend_command(
             python=python,
             host=args.host,
-            port=args.port,
+            port=port,
             reload=not args.no_reload,
         ),
         cwd=ROOT,
     )
     frontend = subprocess.Popen(
-        web_command(npm=npm, host=args.web_host, port=args.web_port),
+        web_command(npm=npm, host=args.web_host, port=web_port),
         cwd=ROOT / "web",
     )
     processes = [backend, frontend]
 
     print("[PatrolX] 在线服务启动中...")
-    print(f"[PatrolX] 后端 API：http://{args.host}:{args.port}")
-    print(f"[PatrolX] 前端页面：http://{args.web_host}:{args.web_port}")
+    print(f"[PatrolX] 后端 API：http://{args.host}:{port}")
+    print(f"[PatrolX] 前端页面：http://{args.web_host}:{web_port}")
     print("[PatrolX] 停止服务：按 Ctrl+C")
 
     exit_code = 0
