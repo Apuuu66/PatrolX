@@ -365,4 +365,4 @@ def test_all_kpi_domains_skip_without_any_kpi_files(tmp_path: Path) -> None:
 @pytest.mark.parametrize("code", ["kpi.api", "kpi.media", "kpi.call"])
 def test_kpi_rule_version_bumped_for_real_csv_format(code: str) -> None:
     registry.load_all()
-    assert registry.get(code).rule_version == "1.4.0"
+    assert registry.get(code).rule_version == "1.5.0"

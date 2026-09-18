@@ -496,6 +496,50 @@ def test_kpi_call_emits_version_2_catalog_results_and_preserves_rule_status(tmp_
     assert metadata["unclassified_metrics"] == []
 
 
+def test_kpi_call_series_aggregates_same_period_across_services(tmp_path: Path) -> None:
+    from app.inspectors.registry import registry
+    from app.services.executor import RuleContext
+
+    registry.load_all()
+    content = _content(
+        ["呼叫请求次数", "呼叫请求成功次数", "呼叫请求失败次数", "统计峰值", "最大并发"],
+        [
+            [15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 1200, 1190, 10, 120, 88],
+            [15, "2026-09-01 10:00:00", "2026-09-01 10:15:00", 1500, 1495, 5, 150, 92],
+        ],
+    )
+    _write(tmp_path, "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", content)
+    ctx = RuleContext(task_id="kpi-test", data_dir=tmp_path, log=lambda *args, **kwargs: None)
+    ctx.files = [Path("kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv")]
+    result = registry.get("kpi.call").run(ctx)
+    results = {item["key"]: item for item in result.metadata["kpi_results"]}
+
+    assert results["call_attempts"]["series"] == [
+        {
+            "start_at": "2026-09-01T02:00:00+00:00",
+            "end_at": "2026-09-01T02:15:00+00:00",
+            "period_minutes": 15,
+            "value": 2700.0,
+        }
+    ]
+    assert results["call_success_rate"]["series"] == [
+        {
+            "start_at": "2026-09-01T02:00:00+00:00",
+            "end_at": "2026-09-01T02:15:00+00:00",
+            "period_minutes": 15,
+            "value": pytest.approx(2685 / 2700 * 100),
+        }
+    ]
+    assert results["max_concurrency"]["series"] == [
+        {
+            "start_at": "2026-09-01T02:00:00+00:00",
+            "end_at": "2026-09-01T02:15:00+00:00",
+            "period_minutes": 15,
+            "value": 92.0,
+        }
+    ]
+
+
 def test_kpi_call_keeps_alternate_names_unclassified_without_aliases(tmp_path: Path) -> None:
     from app.inspectors.registry import registry
     from app.services.executor import RuleContext

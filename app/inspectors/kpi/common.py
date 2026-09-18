@@ -227,6 +227,53 @@ def _unclassified_metrics(
     return list(grouped.values())
 
 
+def _group_metric_records(
+    definition: KpiMetricDefinition,
+    files: list[KpiCsvFile],
+    domain_config: KpiDomainConfig,
+) -> dict[tuple[datetime, datetime, int], dict[str, list[float]]]:
+    """按时间窗口归并记录；同一窗口的多行服务/实例数据属于同一个采样点。"""
+    grouped: dict[tuple[datetime, datetime, int], dict[str, list[float]]] = {}
+    for kpi_file in files:
+        for record in kpi_file.records:
+            stable_values = _stable_record_values(record, domain_config)
+            if definition.source_type == "derived":
+                keys = [definition.key]
+                if definition.formula is not None:
+                    formula = definition.formula
+                    keys = [formula.numerator, formula.denominator, *formula.denominator_fallback_inputs]
+            else:
+                keys = [definition.key]
+            for key in dict.fromkeys(keys):
+                if key in stable_values:
+                    group_key = (record.start_at, record.end_at, record.period_minutes)
+                    grouped.setdefault(group_key, {}).setdefault(key, []).append(stable_values[key])
+    return grouped
+
+
+def _build_metric_series(
+    definition: KpiMetricDefinition,
+    files: list[KpiCsvFile],
+    domain_config: KpiDomainConfig,
+) -> list[dict[str, object]]:
+    """生成按时间窗口聚合的趋势序列。"""
+    series: list[dict[str, object]] = []
+    for (start_at, end_at, period_minutes), input_values in _group_metric_records(
+        definition, files, domain_config
+    ).items():
+        aggregate = aggregate_kpi_metric(definition, input_values)
+        if aggregate.value_available and aggregate.main_value is not None:
+            series.append(
+                {
+                    "start_at": start_at.isoformat(),
+                    "end_at": end_at.isoformat(),
+                    "period_minutes": period_minutes,
+                    "value": aggregate.main_value,
+                }
+            )
+    return series
+
+
 def build_kpi_metadata(
     domain: str,
     files: list[KpiCsvFile],
@@ -254,24 +301,17 @@ def build_kpi_metadata(
             ]
 
         aggregate = aggregate_kpi_metric(definition, input_values)
-        breach_count = 0
         item_threshold = threshold.get(definition.key)
-        series: list[dict[str, object]] = []
-        for kpi_file in files:
-            for record in kpi_file.records:
-                stable_values = _stable_record_values(record, domain_config)
-                value, _ = _record_metric_value(definition, stable_values)
-                if value is not None:
-                    series.append(
-                        {
-                            "start_at": record.start_at.isoformat(),
-                            "end_at": record.end_at.isoformat(),
-                            "period_minutes": record.period_minutes,
-                            "value": value,
-                        }
-                    )
-                if not record.errors and evaluate_kpi_threshold(value, item_threshold, record.period_minutes) == "fail":
-                    breach_count += 1
+        series = _build_metric_series(definition, files, domain_config)
+        breach_count = sum(
+            evaluate_kpi_threshold(
+                point["value"] if isinstance(point["value"], (int, float)) else None,
+                item_threshold,
+                point["period_minutes"] if isinstance(point["period_minutes"], int) else 0,
+            )
+            == "fail"
+            for point in series
+        )
 
         main_status = evaluate_kpi_threshold(aggregate.main_value, item_threshold, 0)
         direct_cross_reference: list[dict[str, object]] = []
