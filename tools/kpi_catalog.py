@@ -1,6 +1,31 @@
 """KPI 资源 CSV 离线导入工具。
 
-该工具只维护 `base/metrics.json` 和 `base/units.json`；规则文件始终由人工维护。
+这是基础指标和预留单位的唯一权威导入入口；规则文件始终由人工维护。
+
+使用方式：
+    .venv/bin/python -m tools.kpi_catalog
+
+默认输入：
+    local_run/resource_metrics/resources.csv
+
+默认输出：
+    deploy/data/kpi/base/metrics.json
+    deploy/data/kpi/base/units.json
+
+可选覆盖：
+    .venv/bin/python -m tools.kpi_catalog generate \
+      --csv /path/to/resources.csv \
+      --data-dir /path/to/kpi
+
+CSV 表头：
+    资源id,中文描述,英文描述
+
+行为：
+    - `ME_*` 写入 `base/metrics.json`。
+    - `UNIT_*` 写入 `base/units.json`。
+    - `unit_key` 当前固定为 null。
+    - 不修改 `rules/` 下任何文件。
+    - 任何校验或写入失败都不会产生部分替换。
 """
 
 from __future__ import annotations
@@ -22,6 +47,9 @@ class KpiCatalogGeneratorError(Exception):
 
 EXPECTED_HEADER = ["资源id", "中文描述", "英文描述"]
 BASE_FILES = ("base/metrics.json", "base/units.json")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CSV_PATH = PROJECT_ROOT / "local_run/resource_metrics/resources.csv"
+DEFAULT_DATA_DIR = PROJECT_ROOT / "deploy/data/kpi"
 RULE_FILES = (
     "rules/common.json",
     "rules/metric-rules.json",
@@ -134,12 +162,24 @@ def generate_kpi_catalog(csv_path: Path, data_dir: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="离线导入 KPI 资源 CSV")
-    sub = parser.add_subparsers(dest="command", required=True)
-    generate = sub.add_parser("generate", help="从资源 CSV 生成基础配置")
-    generate.add_argument("--csv", required=True)
-    generate.add_argument("--data-dir", required=True)
+    parser = argparse.ArgumentParser(
+        prog="python -m tools.kpi_catalog",
+        description="离线导入 KPI 资源 CSV",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "默认输入: local_run/resource_metrics/resources.csv\n"
+            "默认输出: deploy/data/kpi/base/metrics.json 和 deploy/data/kpi/base/units.json"
+        ),
+    )
+    sub = parser.add_subparsers(dest="command")
+    generate = sub.add_parser("generate", help="从默认资源 CSV 更新基础配置")
+    generate.add_argument("--csv", default=str(DEFAULT_CSV_PATH), help="资源 CSV；默认使用仓库内固定路径")
+    generate.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR), help="KPI 拆分配置目录；默认使用仓库内固定路径")
     args = parser.parse_args(argv)
+    if args.command is None:
+        args.command = "generate"
+        args.csv = DEFAULT_CSV_PATH
+        args.data_dir = DEFAULT_DATA_DIR
     try:
         generate_kpi_catalog(Path(args.csv), Path(args.data_dir))
     except KpiCatalogGeneratorError as exc:

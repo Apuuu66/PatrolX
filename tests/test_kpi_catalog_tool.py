@@ -8,8 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from app.tools.kpi_catalog import KpiCatalogGeneratorError, generate_kpi_catalog
 from tests.kpi_helpers import KPI_SPLIT_FILES, kpi_catalog_payload, write_kpi_split_config
+from tools import kpi_catalog
+from tools.kpi_catalog import (
+    DEFAULT_CSV_PATH,
+    DEFAULT_DATA_DIR,
+    PROJECT_ROOT,
+    KpiCatalogGeneratorError,
+    generate_kpi_catalog,
+    main,
+)
 
 
 def _csv(rows: list[tuple[str, str, str]]) -> bytes:
@@ -57,3 +65,50 @@ def test_invalid_input_keeps_all_files_unchanged(tmp_path: Path) -> None:
     with pytest.raises(KpiCatalogGeneratorError, match="ME_BAD!"):
         generate_kpi_catalog(csv_path, data_dir)
     assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
+
+
+def test_default_paths_are_fixed() -> None:
+    assert DEFAULT_CSV_PATH == PROJECT_ROOT / "local_run/resource_metrics/resources.csv"
+    assert DEFAULT_DATA_DIR == PROJECT_ROOT / "deploy/data/kpi"
+
+
+def test_cli_without_arguments_uses_fixed_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """零参调用只校验默认路径装配，不触碰仓库默认数据。"""
+
+    calls: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(
+        kpi_catalog,
+        "generate_kpi_catalog",
+        lambda csv, data_dir: calls.append((csv, data_dir)),
+    )
+
+    assert main([]) == 0
+    assert calls == [(DEFAULT_CSV_PATH, DEFAULT_DATA_DIR)]
+
+
+def test_cli_with_explicit_paths_updates_base_files(tmp_path: Path) -> None:
+    """真实执行统一通过显式参数指向临时路径。"""
+
+    data_dir = write_kpi_split_config(tmp_path / "kpi")
+    csv_path = tmp_path / "resources.csv"
+    csv_path.write_bytes(
+        _csv([(item["resource_id"], item["name_zh"], item["name_en"]) for item in kpi_catalog_payload()["metrics"]])
+    )
+
+    assert main(["generate", "--csv", str(csv_path), "--data-dir", str(data_dir)]) == 0
+
+    metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
+    assert metrics["source_csv_sha256"] == hashlib.sha256(csv_path.read_bytes()).hexdigest()
+
+
+def test_cli_missing_input_reports_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """缺失输入也通过显式参数测试，避免依赖或修改默认路径。"""
+
+    missing_csv = tmp_path / "resources.csv"
+    data_dir = write_kpi_split_config(tmp_path / "kpi")
+
+    assert main(["generate", "--csv", str(missing_csv), "--data-dir", str(data_dir)]) == 2
+
+    output = capsys.readouterr().out
+    assert "资源 CSV 读取或解码失败" in output
+    assert str(missing_csv) in output

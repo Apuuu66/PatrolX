@@ -10,8 +10,8 @@ from app.core.config import settings
 from app.inspectors.kpi.catalog import load_kpi_catalog
 from app.models.db import init_db
 from app.services.kpi_resources import list_resource_metrics
-from app.tools.kpi_catalog import generate_kpi_catalog
 from tests.kpi_helpers import kpi_catalog_payload, write_kpi_split_config
+from tools.kpi_catalog import generate_kpi_catalog
 
 
 def test_generator_catalog_and_pagination_support_1000_metrics(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from app.tools.kpi_catalog import KpiCatalogGeneratorError, generate_kpi_catalog
 from tests.kpi_helpers import KPI_SPLIT_FILES, kpi_catalog_payload, write_kpi_split_config
+from tools.kpi_catalog import KpiCatalogGeneratorError, generate_kpi_catalog
 
 
 def _csv(

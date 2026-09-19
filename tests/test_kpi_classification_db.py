@@ -68,7 +68,7 @@ def test_classification_is_atomic_and_audited(initialized_db, monkeypatch: pytes
 def test_reimport_same_key_preserves_classification_and_audits(
     initialized_db, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from app.tools.kpi_catalog import generate_kpi_catalog
+    from tools.kpi_catalog import generate_kpi_catalog
 
     payload = kpi_catalog_payload()
     payload["metrics"] = [
