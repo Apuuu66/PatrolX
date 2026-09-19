@@ -28,7 +28,7 @@ CSV 编码：
 
 行为：
     - 仅保留资源 ID 匹配 `ME_*` 或 `UNIT_*` 的行，其他行跳过。
-    - `ME_*` 写入 `base/metrics.json`。
+    - `ME_*` 写入 `base/metrics.json`；重复 ID 且中文名不同时保留首次 ID，并生成 `ME_<原名>_<英文名>_<指纹>` 形式的新 ID。
     - `UNIT_*` 写入 `base/units.json`；重复 UNIT 行跳过，保留首次定义。
     - `unit_key` 当前固定为 null。
     - 不修改 `rules/` 下任何文件。
@@ -88,6 +88,22 @@ def _resolve_resource_csv(input_path: Path) -> Path:
     raise KpiCatalogGeneratorError(f"资源输入不存在: {input_path}")
 
 
+def _generate_metric_resource_id(
+    resource_id: str, name_zh: str, name_en: str, seen_ids: set[str], seen_keys: set[str]
+) -> str:
+    """为中文名不同的重复指标生成可读且唯一的资源 ID。"""
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", name_en).strip("_").upper() or "RENAMED"
+    identity = f"{resource_id}|{name_zh}|{name_en}"
+    attempt = 0
+    while True:
+        digest_source = identity if attempt == 0 else f"{identity}|{attempt}"
+        digest = hashlib.sha256(digest_source.encode("utf-8")).hexdigest()[:8]
+        candidate = f"{resource_id}_{slug}_{digest}"
+        if candidate not in seen_ids and candidate.lower() not in seen_keys:
+            return candidate
+        attempt += 1
+
+
 def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
     """解析资源 CSV；按列名取值，仅保留符合 ME_/UNIT_ 规则的行。"""
     try:
@@ -124,6 +140,7 @@ def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
     rows: list[dict[str, str]] = []
     seen_ids: set[str] = set()
     seen_keys: set[str] = set()
+    name_zh_by_key: dict[str, str] = {}
     for line_number, row in enumerate(reader, start=2):
         resource_id = row[indexes["资源id"]].strip() if indexes["资源id"] < len(row) else ""
         if not RESOURCE_ID_PATTERN.fullmatch(resource_id):
@@ -132,19 +149,24 @@ def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
         name_zh = row[indexes["中文描述"]].strip() if indexes["中文描述"] < len(row) else ""
         name_en = row[indexes["英文描述"]].strip() if indexes["英文描述"] < len(row) else ""
         key = resource_id.lower()
-        if resource_id.startswith("UNIT_") and (resource_id in seen_ids or key in seen_keys):
+        is_duplicate = resource_id in seen_ids or key in seen_keys
+        if resource_id.startswith("UNIT_") and is_duplicate:
             continue
-        if resource_id in seen_ids or key in seen_keys:
-            raise KpiCatalogGeneratorError(f"{context}: 资源 ID 或稳定 key 重复")
+        if is_duplicate:
+            if resource_id.startswith("ME_") and name_zh_by_key.get(key) != name_zh:
+                resource_id = _generate_metric_resource_id(resource_id, name_zh, name_en, seen_ids, seen_keys)
+                key = resource_id.lower()
+            else:
+                raise KpiCatalogGeneratorError(f"{context}: 资源 ID 或稳定 key 重复")
         if not name_zh or not name_en:
             raise KpiCatalogGeneratorError(f"{context}: 中文名称和英文名称不能为空")
         seen_ids.add(resource_id)
         seen_keys.add(key)
+        name_zh_by_key[key] = name_zh
         rows.append({"resource_id": resource_id, "key": key, "name_zh": name_zh, "name_en": name_en})
 
     rows.sort(key=lambda item: item["key"])
     return rows, hashlib.sha256(file_bytes).hexdigest()
-
 
 def _render_json(payload: object) -> bytes:
     """生成 UTF-8、LF、缩进 2 和换行结尾的确定性 JSON。"""

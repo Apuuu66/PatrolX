@@ -100,6 +100,31 @@ def test_generator_ignores_duplicate_unit_rows(tmp_path: Path) -> None:
     assert units["units"] == [{"resource_id": "UNIT_1", "key": "unit_1", "name_zh": "秒", "name_en": "second"}]
 
 
+def test_generator_regenerates_duplicate_metric_id_for_different_name(tmp_path: Path) -> None:
+    """重复 ME_* 且中文名不同时，保留首次 ID，并为后续行生成新 ID。"""
+
+    data_dir = write_kpi_split_config(tmp_path)
+    csv_path = tmp_path / "resource.csv"
+    payload_metrics = kpi_catalog_payload()["metrics"]
+    rows = [(item["resource_id"], item["name_zh"], item["name_en"]) for item in payload_metrics]
+    first = payload_metrics[0]
+    rows.append((first["resource_id"], f"{first['name_zh']}（重复）", "duplicate"))
+    rows.append(("UNIT_1", "次", "times"))
+    csv_path.write_bytes(_csv(rows))
+
+    generate_kpi_catalog(csv_path, data_dir)
+
+    metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
+    items = {item["key"]: item for item in metrics["metrics"]}
+    assert len(metrics["metrics"]) == len(payload_metrics) + 1
+    assert items[first["key"]]["name_zh"] == first["name_zh"]
+    identity = f"{first['resource_id']}|{first['name_zh']}（重复）|duplicate"
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
+    renamed_id = f"ME_CALL_ATTEMPTS_DUPLICATE_{digest}"
+    assert items[renamed_id.lower()]["resource_id"] == renamed_id
+    assert items[renamed_id.lower()]["name_zh"] == f"{first['name_zh']}（重复）"
+
+
 def test_generator_rejects_missing_required_column(tmp_path: Path) -> None:
     data_dir = write_kpi_split_config(tmp_path)
     csv_path = tmp_path / "resource.csv"
