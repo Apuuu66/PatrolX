@@ -29,7 +29,7 @@
 - SQLite：`KpiClassification`、`KpiClassificationRevision`、`KpiClassificationAudit`。
 - 输出现场：`output/<task_id>/kpi/kpi_catalog_snapshot.json`。
 
-**测试**：pytest 覆盖拆分文件加载、目录聚合校验、CSV 完整替换、规则引用保护、缺失/损坏快照边界、API/CLI 结果一致性与现有快照兼容。
+**测试**：pytest 覆盖拆分文件加载、目录聚合校验、CSV 完整替换、规则引用保护、确定性重跑、缺失/损坏快照边界、分类状态与审计兼容、API/CLI 结果一致性与现有快照兼容。
 
 **目标平台**：本地 CLI 与在线 FastAPI/Web 共用同一套 KPI 目录服务和巡检逻辑；桌面浏览器优先。
 
@@ -113,6 +113,9 @@ tests/
 ├── test_kpi_catalog_composition.py
 ├── test_kpi_catalog_split_config.py     # 新增：拆分契约、聚合校验和内容指纹
 ├── test_kpi_catalog_tool.py             # 扩展：CSV 导入边界
+├── test_kpi_classification_db.py        # 扩展：分类状态、审计和重导入兼容
+├── test_kpi_deterministic_rerun.py      # 新增：相同输入和快照的确定性结果
+├── test_kpi_resource_api_v3.py          # 扩展：分类 API 与禁止运行时导入
 ├── test_kpi_resource_metrics.py
 ├── test_kpi_task_snapshot.py
 └── test_kpi_task_snapshot_missing.py    # 新增：指定规则重跑缺快照
