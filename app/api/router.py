@@ -35,6 +35,7 @@ from app.models.schemas import (
     KpiTaskCatalogSnapshot,
     LogEntry,
     OverviewSummary,
+    RebuildRequest,
     RerunRequest,
     RuleResult,
     SystemInspection,
@@ -50,7 +51,7 @@ from app.services.kpi_resources import (
     list_resource_metrics,
 )
 from app.services.overview import build_overview
-from app.services.tasks import DeleteResult, TaskDeleteError, task_service
+from app.services.tasks import DeleteResult, TaskDeleteError, TaskRebuildError, task_service
 
 router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
@@ -227,6 +228,27 @@ def rerun_task_v2(task_id: str = PathParam(), body: RerunRequest | None = None) 
             raise AppError("unknown_rule", f"规则不存在: {', '.join(unknown)}", 400)
     if not task_service.rerun(task_id, codes):
         raise AppError("not_found", "任务不存在或数据包缺失", 404)
+    return TaskCreated(task_id=task_id)
+
+
+@router.post(
+    "/tasks/{task_id}/rebuild",
+    response_model=TaskCreated,
+    status_code=202,
+    operation_id="rebuildTaskV2",
+)
+def rebuild_task_v2(
+    response: Response,
+    body: RebuildRequest,
+    task_id: str = PathParam(),
+) -> TaskCreated:
+    try:
+        accepted = task_service.rebuild(task_id, body)
+    except TaskRebuildError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code) from exc
+    if not accepted:
+        raise AppError("not_found", "任务不存在", 404)
+    response.headers["Location"] = f"/api/v2/tasks/{task_id}"
     return TaskCreated(task_id=task_id)
 
 

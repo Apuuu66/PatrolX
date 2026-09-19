@@ -5,8 +5,11 @@ import json
 import os
 import re
 import secrets
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from app.core.archive import is_archive
 from app.core.checksum import sha256_file
@@ -27,6 +30,7 @@ from app.models.schemas import (
 )
 from app.services import store
 from app.services.executor import Executor, RuleContext
+from app.services.extraction import WORK_CATEGORIES
 from app.services.kpi_catalog import KpiSnapshotError, load_task_kpi_config
 from app.services.kpi_resources import classify_resource_metrics
 from app.services.report import render_report
@@ -132,6 +136,7 @@ def run_task(
     task_id: str | None = None,
     mode: TaskMode = TaskMode.LOCAL,
     trigger: TaskTrigger = TaskTrigger.CLI,
+    created_at: datetime | None = None,
 ) -> InspectionTask:
     registry.load_all()
     task_id = task_id or generate_task_id(package.name)
@@ -217,7 +222,7 @@ def run_task(
         mode=mode,
         status=TaskStatus.COMPLETED,
         trigger=trigger,
-        created_at=_now(),
+        created_at=created_at or _now(),
         completed_at=_now(),
         stats=stats,
         system=system,
@@ -239,6 +244,95 @@ def run_task(
         f"| 日志: {settings.output / task_id / 'execution.log'}"
     )
     return task
+
+
+def run_incremental_rebuild(
+    rule_codes: list[str],
+    *,
+    package: Path | None = None,
+    task_id: str | None = None,
+    package_checksum: str | None = None,
+) -> list[str]:
+    """强制重建解压现场后只执行指定普通规则及其私有 prepare。"""
+    if not rule_codes:
+        raise ValueError("增量重建必须指定至少一条普通规则")
+    registry.load_all()
+    package = package or latest_package()
+    task_id = task_id or generate_task_id(package.name)
+    task_dir = settings.output / task_id
+    snapshot_path = task_dir / "kpi" / "kpi_catalog_snapshot.json"
+    if not snapshot_path.is_file():
+        raise KpiSnapshotError(f"任务 KPI 配置快照缺失: {snapshot_path}")
+    try:
+        snapshot_bytes = snapshot_path.read_bytes()
+        json.loads(snapshot_bytes)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise KpiSnapshotError(f"任务 KPI 配置快照损坏: {snapshot_path}: {exc}") from exc
+
+    checksum = package_checksum or sha256_file(package)
+    ctx = _new_context(task_id, package, checksum)
+    executor = Executor(registry)
+
+    # 只删除解压 manifest 和工作分类目录；规则结果、prepared 数据与任务元数据保留。
+    extraction_manifest = task_dir / EXTRACT_MANIFEST
+    extraction_manifest.unlink(missing_ok=True)
+    for category in WORK_CATEGORIES:
+        shutil.rmtree(task_dir / category, ignore_errors=True)
+
+    extraction = executor.run_rule("pkg.extract.main", ctx)
+    store.save_rule_result(settings.output, task_id, extraction)
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_path.write_bytes(snapshot_bytes)
+    load_task_kpi_config(task_id)
+
+    for code in rule_codes:
+        try:
+            old_result = store.load_rule_result(settings.output, task_id, code)
+        except (json.JSONDecodeError, OSError, ValidationError):
+            old_result = None
+        executor.run_rule_with_deps(code, ctx, force_prepare_rebuild=True)
+        result = executor.collected[code]
+        if old_result is not None:
+            result.execution_order = old_result.execution_order
+        store.save_rule_result(settings.output, task_id, result)
+
+    old = _load_old_task(task_id)
+    customer = (old or {}).get("system", {}).get("customer") or {}
+    version = (old or {}).get("system", {}).get("version")
+    system = _rebuild_system(task_id, package.name, customer, version)
+    store.save_system(settings.output, task_id, system)
+    if old is not None:
+        current_meta = store.load_task_meta(settings.output, task_id)
+        base = current_meta or InspectionTask.model_validate(old)
+        completed = base.model_copy(
+            update={
+                "status": TaskStatus.COMPLETED,
+                "completed_at": _now(),
+                "stats": TaskStats(
+                    total=system.summary.total,
+                    pass_=system.summary.pass_,
+                    warn=system.summary.warn,
+                    fail=system.summary.fail,
+                    error=system.summary.error,
+                    skip=system.summary.skip,
+                    systems=1,
+                ),
+                "system": system,
+            }
+        )
+        store.save_task_meta(settings.output, completed)
+    report = render_report(settings.output, task_id, system, completed_at=store.now_utc())
+    store.append_log(
+        settings.output,
+        task_id,
+        "info",
+        "增量重建规则执行完成",
+        operation="rebuild",
+        mode="incremental",
+        rule_codes=rule_codes,
+        report=str(report),
+    )
+    return rule_codes
 
 
 def run_single_rule(

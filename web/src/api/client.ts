@@ -91,6 +91,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/tasks/{task_id}/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重建重跑（全量或强制重建解压的增量） */
+        post: operations["rebuildTaskV2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/tasks/{task_id}/report": {
         parameters: {
             query?: never;
@@ -454,6 +471,20 @@ export interface components {
             /** @description 不填表示重跑该任务全部规则 */
             rule_codes?: string[];
         };
+        /** @enum {string} */
+        RebuildModeV2: "full" | "incremental";
+        RebuildRequestV2: {
+            mode: components["schemas"]["RebuildModeV2"];
+            /** @description 破坏性重建确认；必须为 true。 */
+            confirmed: boolean;
+            /** @description 增量目标普通规则；全量请求必须省略或为空。 */
+            rule_codes?: string[];
+            /**
+             * @default ui
+             * @enum {string}
+             */
+            trigger_source: "ui" | "api";
+        };
         LogEntry: {
             /** Format: date-time */
             ts: string;
@@ -775,7 +806,7 @@ export interface components {
              * @description 错误码（新增时同步契约与实现）
              * @enum {string}
              */
-            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "task_delete_failed" | "package_checksum_conflict" | "invalid_filename" | "invalid_resource_csv" | "resource_conflict" | "corrupt_data" | "validation_error";
+            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "task_delete_failed" | "package_checksum_conflict" | "invalid_filename" | "invalid_resource_csv" | "resource_conflict" | "corrupt_data" | "validation_error" | "invalid_rebuild_request" | "task_busy" | "package_missing" | "kpi_snapshot_invalid";
             message: string;
             detail?: {
                 [key: string]: unknown;
@@ -1210,6 +1241,53 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error404"];
+        };
+    };
+    rebuildTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebuildRequestV2"];
+            };
+        };
+        responses: {
+            /** @description 重建任务已受理 */
+            202: {
+                headers: {
+                    /** @description 任务详情地址 */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreatedV2"];
+                };
+            };
+            /** @description 请求无效、未确认或规则无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+            404: components["responses"]["Error404"];
+            /** @description 任务忙、原始包缺失或增量快照无效 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
         };
     };
     getReportV2: {

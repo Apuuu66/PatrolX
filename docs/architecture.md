@@ -376,7 +376,7 @@ outputs.metrics[]  声明的指标契约
 `skip` 必须填写 `skip_reason`。无数据、格式不适用或解析失败时使用 `skip`，
 不得静默通过或抛出任务级异常。
 
-### 7.6 单规则重跑
+### 7.6 重跑与重建重跑
 
 重跑会刷新、复用或不触碰的数据清单见 [`docs/design/task-rerun.md`](design/task-rerun.md)。
 
@@ -385,6 +385,14 @@ outputs.metrics[]  声明的指标契约
 - 最后按目标规则 `source_patterns` 重新匹配文件并执行目标规则。
 - 只重写目标规则 JSON，再重建任务摘要和 HTML 报告。
 - 不自动补跑其他普通规则，不建立规则间依赖图。
+
+显式重建重跑与普通重跑分离：
+
+- 全量重建删除并重建任务输出目录，强制重建解压现场、全部 prepare、普通规则和 KPI 快照。
+- 增量重建强制重建解压现场和目标规则私有 prepare，只重算指定普通规则，保留未选规则结果和既有 KPI 快照。
+- 重建预检失败时不修改任务输出；原始上传包始终只读。
+- 详细刷新范围见 [`docs/design/task-rerun.md`](design/task-rerun.md)。
+
 - 规则逻辑变化必须升级 `rule_version`。
 
 ### 7.7 日志处理

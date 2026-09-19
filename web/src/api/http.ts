@@ -25,6 +25,11 @@ export type KpiClassificationAudit = components["schemas"]["KpiClassificationAud
 export type KpiClassificationAuditPage = components["schemas"]["KpiClassificationAuditPageV3"];
 export type KpiTaskCatalogSnapshot = components["schemas"]["KpiTaskCatalogSnapshotV3"];
 export type TaskDeleteError = TaskDeleteErrorDetail;
+export type RebuildMode = components["schemas"]["RebuildModeV2"];
+export type RebuildTriggerSource = components["schemas"]["RebuildRequestV2"]["trigger_source"];
+export type RebuildRequestPayload = Omit<components["schemas"]["RebuildRequestV2"], "confirmed"> & {
+  confirmed: true;
+};
 
 const BASE = "/api/v2";
 const KPI_BASE = "/api/v3";
@@ -105,6 +110,13 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rule_codes: ruleCodes }),
+    }),
+
+  rebuildTask: (taskId: string, payload: RebuildRequestPayload) =>
+    request<{ task_id: string }>(`${BASE}/tasks/${encodeURIComponent(taskId)}/rebuild`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     }),
 
   getTaskLogs: (taskId: string) =>

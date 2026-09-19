@@ -129,7 +129,14 @@ class Executor:
             return f"metrics 契约不一致: 声明 {declared}, 实际 {actual}"
         return None
 
-    def _run_prepare(self, owner: Inspector, prepare, ctx: RuleContext) -> str:
+    def _run_prepare(
+        self,
+        owner: Inspector,
+        prepare,
+        ctx: RuleContext,
+        *,
+        force_rebuild: bool = False,
+    ) -> str:
         """执行或复用 owner 私有 prepare；状态不进入公共 RuleResult。"""
         owner_dir = ctx.prepared_dir / owner.code
         marker = marker_path(ctx, owner.code)
@@ -151,7 +158,7 @@ class Executor:
             )
             return "SKIP"
         expected_sha256 = rule_file_sha256(owner)
-        if marker.exists() and marker.read_text(encoding="utf-8") == expected_sha256:
+        if not force_rebuild and marker.exists() and marker.read_text(encoding="utf-8") == expected_sha256:
             ctx.prepare_states[owner.code] = "HIT"
             ctx.files = matched
             ctx.log(
@@ -359,13 +366,19 @@ class Executor:
         except ArchiveError as exc:
             raise ValueError(f"单规则重跑前主包解压失败: {exc}") from exc
 
-    def run_rule_with_deps(self, code: str, ctx: RuleContext) -> RuleResult:
+    def run_rule_with_deps(
+        self,
+        code: str,
+        ctx: RuleContext,
+        *,
+        force_prepare_rebuild: bool = False,
+    ) -> RuleResult:
         """单规则重跑：先保证解压现场与 owner prepare 就绪，再只执行目标 inspect。"""
         rule = self.registry.get(code)
         self._ensure_extraction_site(ctx)
         ctx.ensure_catalog()
         if rule.prepare is not None:
-            self._run_prepare(rule, rule.prepare, ctx)
+            self._run_prepare(rule, rule.prepare, ctx, force_rebuild=force_prepare_rebuild)
         return self.run_one(code, ctx)
 
     def run_rule(self, code: str, ctx: RuleContext) -> RuleResult:

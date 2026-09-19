@@ -19,6 +19,7 @@ import {
 import {
   CaretDownOutlined,
   CaretRightOutlined,
+  ClearOutlined,
   DeleteOutlined,
   PlusOutlined,
   RedoOutlined,
@@ -256,7 +257,7 @@ function PreparationPanel({
 }
 
 export function TaskListPage() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [items, setItems] = useState<TaskSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -274,6 +275,7 @@ export function TaskListPage() {
   const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
   const [deleteCollapsed, setDeleteCollapsed] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [rebuilding, setRebuilding] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -349,6 +351,33 @@ export function TaskListPage() {
     } catch (err) {
       message.error(err instanceof Error ? err.message : "重跑失败");
     }
+  };
+
+  const rebuildFull = useCallback(
+    async (taskId: string) => {
+      setRebuilding(taskId);
+      try {
+        await api.rebuildTask(taskId, { mode: "full", confirmed: true, trigger_source: "ui" });
+        message.success("已受理全量重建");
+        await load();
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "全量重建失败");
+      } finally {
+        setRebuilding(null);
+      }
+    },
+    [load, message],
+  );
+
+  const confirmRebuildFull = (taskId: string) => {
+    modal.confirm({
+      title: "全量重建该任务？",
+      content: "将删除并重建当前任务输出目录，重新解压并重算全部规则和 KPI 快照；该操作不可撤销。",
+      okText: "全量重建",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: () => rebuildFull(taskId),
+    });
   };
 
   const remove = useCallback(
@@ -563,6 +592,18 @@ export function TaskListPage() {
                       重跑
                     </Button>
                   </Popconfirm>
+                  {(record.status === "completed" || record.status === "failed") && (
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<ClearOutlined />}
+                      loading={rebuilding === record.task_id}
+                      onClick={() => confirmRebuildFull(record.task_id)}
+                    >
+                      重建
+                    </Button>
+                  )}
                   <Popconfirm title="删除任务（含现场数据）？" onConfirm={() => remove(record.task_id)}>
                     <Button type="text" size="small" danger icon={<DeleteOutlined />}>
                       删除

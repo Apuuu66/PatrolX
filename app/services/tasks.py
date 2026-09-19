@@ -6,19 +6,32 @@ import queue
 import shutil
 import threading
 import time
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
-from app.cli import generate_task_id, run_single_rule, run_task
+from app.cli import generate_task_id, run_incremental_rebuild, run_single_rule, run_task
 from app.core.checksum import sha256_file
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
+from app.inspectors.registry import registry
 from app.models.db import TaskRecord, init_db, session_factory
-from app.models.schemas import InspectionTask, TaskCreated, TaskMode, TaskStatus, TaskSummary, TaskTrigger
+from app.models.schemas import (
+    InspectionTask,
+    KpiTaskCatalogSnapshot,
+    RebuildMode,
+    RebuildRequest,
+    TaskCreated,
+    TaskMode,
+    TaskStatus,
+    TaskSummary,
+    TaskTrigger,
+)
 from app.services import preparation, store
 from app.services.extraction.layout import PathLimitPolicy
+from app.services.kpi_catalog import KpiCatalogError, load_kpi_catalog
 from app.services.store import append_log, load_task_meta
 
 logger = get_logger("patrolx.tasks")
@@ -44,6 +57,25 @@ class TaskDeleteError(Exception):
         self.path_length = path_length
         self.path_limit = path_limit
         super().__init__(reason)
+
+
+class TaskRebuildError(Exception):
+    """重建预检失败；调用方必须保持任务现场不变。"""
+
+    def __init__(self, code: str, message: str, status_code: int = 400) -> None:
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+        super().__init__(message)
+
+
+@dataclass(slots=True)
+class RebuildPlan:
+    """一次显式重建重跑的执行计划。"""
+
+    mode: RebuildMode
+    rule_codes: list[str] = field(default_factory=list)
+    trigger_source: str = "ui"
 
 
 def _delete_error_details(path: Path, *, treat_as_too_long: bool = False) -> tuple[int | None, int | None]:
@@ -113,6 +145,7 @@ class TaskService:
         self._state_lock = threading.Lock()
         self._queue: queue.Queue[str] = queue.Queue()
         self._rerun_plan: dict[str, list[str] | None] = {}
+        self._rebuild_plan: dict[str, RebuildPlan] = {}
         self._active_task: str | None = None
         self._cancelled: set[str] = set()
         self._worker = threading.Thread(target=self._worker_loop, name="patrolx-worker", daemon=True)
@@ -157,6 +190,7 @@ class TaskService:
         started = NOW(UTC)
         try:
             plan = self._rerun_plan.pop(task_id, None)
+            rebuild_plan = self._rebuild_plan.pop(task_id, None)
             if plan:
                 package_checksum = sha256_file(package)
                 for code in plan:
@@ -173,6 +207,17 @@ class TaskService:
                         update={"status": TaskStatus.COMPLETED, "completed_at": NOW(UTC)}
                     )
                     store.save_task_meta(settings.output, completed_task)
+            elif rebuild_plan is not None:
+                self._execute_rebuild(
+                    task_id,
+                    rebuild_plan,
+                    package=package,
+                    customer=customer,
+                    version=version,
+                    name=name,
+                    mode=mode,
+                    trigger=trigger,
+                )
             else:
                 executed = run_task(
                     package,
@@ -198,6 +243,52 @@ class TaskService:
             self._update_status(task_id, TaskStatus.FAILED, completed_at=NOW(UTC))
             raise
 
+    def _execute_rebuild(
+        self,
+        task_id: str,
+        plan: RebuildPlan,
+        *,
+        package: Path,
+        customer: dict,
+        version: str | None,
+        name: str | None,
+        mode: TaskMode,
+        trigger: TaskTrigger,
+    ) -> None:
+        """执行显式重建重跑；预检和输出清理已经通过 TaskService.rebuild 完成。"""
+        old_task = load_task_meta(settings.output, task_id)
+        rule_codes = list(plan.rule_codes)
+        log_detail = {
+            "operation": "rebuild",
+            "mode": plan.mode.value,
+            "rule_codes": rule_codes,
+            "trigger_source": plan.trigger_source,
+        }
+        if plan.mode == RebuildMode.FULL:
+            _remove_tree(settings.output / task_id, task_id, [f"output/{task_id}"])
+            append_log(settings.output, task_id, "info", "全量重建重跑开始", **log_detail)
+            executed = run_task(
+                package,
+                name=name,
+                customer=customer,
+                version=version,
+                task_id=task_id,
+                mode=mode,
+                trigger=trigger,
+                created_at=old_task.created_at if old_task else None,
+            )
+            if executed.status != TaskStatus.FAILED:
+                append_log(settings.output, task_id, "info", "全量重建重跑完成", **log_detail)
+            return
+
+        append_log(settings.output, task_id, "info", "增量重建重跑开始", **log_detail)
+        run_incremental_rebuild(
+            rule_codes,
+            package=package,
+            task_id=task_id,
+        )
+        append_log(settings.output, task_id, "info", "增量重建重跑完成", **log_detail)
+
     def _task_info(self, task_id: str) -> tuple[Path | None, dict, str | None, str | None, TaskMode, TaskTrigger]:
         """获取任务执行信息；本地任务从 output/ 元数据兜底。"""
         with session_factory() as session:
@@ -220,6 +311,18 @@ class TaskService:
         if not package.exists():
             package = settings.uploads / package_file
         return package, task.system.customer, task.system.version, task.name, task.mode, task.trigger
+
+    def _rebuild_package(self, task_id: str) -> tuple[InspectionTask, Path]:
+        """读取重建请求的既有任务元数据和原始上传包。"""
+        task = load_task_meta(settings.output, task_id)
+        if task is None or task.system is None:
+            raise TaskRebuildError("not_found", "任务不存在", 404)
+        package = settings.uploads / task_id / task.system.package_file
+        if not package.is_file():
+            package = settings.uploads / task.system.package_file
+        if not package.is_file() or package.stat().st_size == 0:
+            raise TaskRebuildError("package_missing", "原始上传包缺失或为空", 409)
+        return task, package
 
     # ---- 创建 / 查询 ----
 
@@ -415,6 +518,60 @@ class TaskService:
         if not package.exists():
             return False
         self._rerun_plan[task_id] = rule_codes
+        pending_task = task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
+        store.save_task_meta(settings.output, pending_task)
+        self._update_status(task_id, TaskStatus.PENDING)
+        self._queue.put(task_id)
+        return True
+
+    def rebuild(self, task_id: str, request: RebuildRequest) -> bool:
+        """预检并受理显式重建重跑；预检失败不修改任务输出。"""
+        with self._state_lock:
+            if self._active_task == task_id or task_id in self._cancelled:
+                raise TaskRebuildError("task_busy", "任务正在排队或执行，不能重建", 409)
+
+        task, package = self._rebuild_package(task_id)
+        if task.status in {TaskStatus.PENDING, TaskStatus.RUNNING}:
+            raise TaskRebuildError("task_busy", "任务正在排队或执行，不能重建", 409)
+
+        rule_codes: list[str] = []
+        if request.mode == RebuildMode.INCREMENTAL:
+            registry.load_all()
+            registered = set(registry.codes())
+            unknown = [code for code in request.rule_codes or [] if code not in registered]
+            if unknown:
+                raise TaskRebuildError("unknown_rule", f"规则不存在: {', '.join(unknown)}", 400)
+            hidden = [
+                code
+                for code in request.rule_codes or []
+                if registry.get(code).hidden or code.startswith("pkg.extract.")
+            ]
+            if hidden:
+                raise TaskRebuildError(
+                    "invalid_rebuild_request",
+                    f"增量重建只允许普通规则: {', '.join(hidden)}",
+                    400,
+                )
+            snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
+            if not snapshot_path.is_file():
+                raise TaskRebuildError("kpi_snapshot_invalid", f"任务 KPI 配置快照缺失: {snapshot_path}", 409)
+            try:
+                KpiTaskCatalogSnapshot.model_validate_json(snapshot_path.read_bytes())
+            except (OSError, ValueError) as exc:
+                raise TaskRebuildError("kpi_snapshot_invalid", "任务 KPI 配置快照损坏", 409) from exc
+            rule_codes = list(request.rule_codes or [])
+        else:
+            try:
+                load_kpi_catalog(settings.kpi_data)
+            except KpiCatalogError as exc:
+                raise TaskRebuildError("invalid_rebuild_request", f"KPI 拆分配置无效: {exc}", 400) from exc
+
+        plan = RebuildPlan(
+            mode=request.mode,
+            rule_codes=rule_codes,
+            trigger_source=request.trigger_source.value,
+        )
+        self._rebuild_plan[task_id] = plan
         pending_task = task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
         store.save_task_meta(settings.output, pending_task)
         self._update_status(task_id, TaskStatus.PENDING)

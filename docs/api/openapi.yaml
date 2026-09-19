@@ -164,6 +164,44 @@ paths:
                 $ref: '#/components/schemas/TaskCreatedV2'
         '404':
           $ref: '#/components/responses/Error404'
+  /api/v2/tasks/{task_id}/rebuild:
+    post:
+      summary: 重建重跑（全量或强制重建解压的增量）
+      operationId: rebuildTaskV2
+      parameters:
+      - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RebuildRequestV2'
+      responses:
+        '202':
+          description: 重建任务已受理
+          headers:
+            Location:
+              description: 任务详情地址
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreatedV2'
+        '400':
+          description: 请求无效、未确认或规则无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: 任务忙、原始包缺失或增量快照无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
   /api/v2/tasks/{task_id}/report:
     get:
       summary: 巡检报告（HTML 在线预览）
@@ -863,6 +901,35 @@ components:
           description: 不填表示重跑该任务全部规则
           items:
             type: string
+    RebuildModeV2:
+      type: string
+      enum:
+      - full
+      - incremental
+    RebuildRequestV2:
+      type: object
+      required:
+      - mode
+      - confirmed
+      properties:
+        mode:
+          $ref: '#/components/schemas/RebuildModeV2'
+        confirmed:
+          type: boolean
+          description: 破坏性重建确认；必须为 true。
+        rule_codes:
+          type: array
+          description: 增量目标普通规则；全量请求必须省略或为空。
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+        trigger_source:
+          type: string
+          enum:
+          - ui
+          - api
+          default: ui
     LogEntry:
       type: object
       required:
@@ -1663,6 +1730,10 @@ components:
           - resource_conflict
           - corrupt_data
           - validation_error
+          - invalid_rebuild_request
+          - task_busy
+          - package_missing
+          - kpi_snapshot_invalid
           description: 错误码（新增时同步契约与实现）
         message:
           type: string

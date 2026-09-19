@@ -8,14 +8,16 @@ import {
   Collapse,
   Descriptions,
   Empty,
+  Modal,
   Popconfirm,
+  Select,
   Space,
   Spin,
   Table,
   Tag,
   Typography,
 } from "antd";
-import { DownloadOutlined, FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined } from "@ant-design/icons";
+import { ClearOutlined, DownloadOutlined, FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -54,6 +56,9 @@ export function TaskDetailPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [rebuildOpen, setRebuildOpen] = useState(false);
+  const [rebuildRuleCodes, setRebuildRuleCodes] = useState<string[]>([]);
+  const [rebuilding, setRebuilding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -83,6 +88,7 @@ export function TaskDetailPage() {
   }, [load]);
 
   const busy = task?.status === "pending" || task?.status === "running";
+  const canRebuild = task?.status === "completed" || task?.status === "failed";
   usePolling(load, 2000, !!busy);
 
   const downloadCatalogSnapshot = () => {
@@ -113,6 +119,27 @@ export function TaskDetailPage() {
       await load();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "重跑失败");
+    }
+  };
+
+  const rebuildIncremental = async () => {
+    if (rebuildRuleCodes.length === 0) return;
+    setRebuilding(true);
+    try {
+      await api.rebuildTask(taskId, {
+        mode: "incremental",
+        confirmed: true,
+        rule_codes: rebuildRuleCodes,
+        trigger_source: "ui",
+      });
+      message.success("已受理增量重建");
+      setRebuildOpen(false);
+      setRebuildRuleCodes([]);
+      await load();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "增量重建失败");
+    } finally {
+      setRebuilding(false);
     }
   };
 
@@ -222,6 +249,14 @@ export function TaskDetailPage() {
                 重跑全部
               </Button>
             </Popconfirm>
+            <Button
+              icon={<ClearOutlined />}
+              disabled={busy || !canRebuild}
+              loading={rebuilding}
+              onClick={() => setRebuildOpen(true)}
+            >
+              增量重建
+            </Button>
           </Space>
         }
         style={{ marginBottom: 16 }}
@@ -330,6 +365,38 @@ export function TaskDetailPage() {
           />
         )}
       </Card>
+
+      <Modal
+        title="增量重建"
+        open={rebuildOpen}
+        confirmLoading={rebuilding}
+        okText="增量重建"
+        okButtonProps={{ disabled: rebuildRuleCodes.length === 0 }}
+        cancelText="取消"
+        onCancel={() => {
+          setRebuildOpen(false);
+          setRebuildRuleCodes([]);
+        }}
+        onOk={() => void rebuildIncremental()}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          message="将强制重建解压现场"
+          description="所选规则及其私有准备会重算，未选择规则结果和当前 KPI 快照保持不变。"
+          style={{ marginBottom: 16 }}
+        />
+        <Select
+          mode="multiple"
+          showSearch
+          allowClear
+          placeholder="选择要重建重跑的普通规则"
+          style={{ width: "100%" }}
+          value={rebuildRuleCodes}
+          onChange={setRebuildRuleCodes}
+          options={rules.map((rule) => ({ value: rule.code, label: `${rule.name} (${rule.code})` }))}
+        />
+      </Modal>
     </div>
   );
 }

@@ -61,6 +61,16 @@ class TaskTrigger(StrEnum):
     RERUN = "rerun"
 
 
+class RebuildMode(StrEnum):
+    FULL = "full"
+    INCREMENTAL = "incremental"
+
+
+class RebuildTriggerSource(StrEnum):
+    UI = "ui"
+    API = "api"
+
+
 class PreparationStatus(StrEnum):
     PASS = "pass"
     WARN = "warn"
@@ -345,6 +355,26 @@ class OverviewSummary(BaseModel):
 
 class RerunRequest(BaseModel):
     rule_codes: list[str] | None = None
+
+
+class RebuildRequest(BaseModel):
+    mode: RebuildMode
+    confirmed: bool
+    rule_codes: list[str] | None = None
+    trigger_source: RebuildTriggerSource = RebuildTriggerSource.UI
+
+    @model_validator(mode="after")
+    def validate_rebuild_scope(self) -> "RebuildRequest":
+        if self.confirmed is not True:
+            raise ValueError("重建重跑必须显式确认")
+        if self.mode == RebuildMode.INCREMENTAL:
+            if not self.rule_codes:
+                raise ValueError("增量重建必须指定至少一条普通规则")
+            if len(self.rule_codes) != len(set(self.rule_codes)):
+                raise ValueError("增量重建规则列表必须去重")
+        elif self.rule_codes:
+            raise ValueError("全量重建不能指定规则列表")
+        return self
 
 
 class LogEntry(BaseModel):
