@@ -29,7 +29,7 @@ CSV 编码：
 行为：
     - 仅保留资源 ID 匹配 `ME_*` 或 `UNIT_*` 的行，其他行跳过。
     - `ME_*` 写入 `base/metrics.json`。
-    - `UNIT_*` 写入 `base/units.json`。
+    - `UNIT_*` 写入 `base/units.json`；重复 UNIT 行跳过，保留首次定义。
     - `unit_key` 当前固定为 null。
     - 不修改 `rules/` 下任何文件。
     - 任何校验或写入失败都不会产生部分替换。
@@ -132,6 +132,8 @@ def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
         name_zh = row[indexes["中文描述"]].strip() if indexes["中文描述"] < len(row) else ""
         name_en = row[indexes["英文描述"]].strip() if indexes["英文描述"] < len(row) else ""
         key = resource_id.lower()
+        if resource_id.startswith("UNIT_") and (resource_id in seen_ids or key in seen_keys):
+            continue
         if resource_id in seen_ids or key in seen_keys:
             raise KpiCatalogGeneratorError(f"{context}: 资源 ID 或稳定 key 重复")
         if not name_zh or not name_en:

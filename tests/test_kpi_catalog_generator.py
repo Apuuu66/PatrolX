@@ -85,6 +85,21 @@ def test_generator_selects_required_columns_and_ignores_other_rows(tmp_path: Pat
     assert [item["resource_id"] for item in units["units"]] == ["UNIT_1"]
 
 
+def test_generator_ignores_duplicate_unit_rows(tmp_path: Path) -> None:
+    """重复 UNIT_* 行跳过，保留首次出现的定义。"""
+
+    data_dir = write_kpi_split_config(tmp_path)
+    csv_path = tmp_path / "resource.csv"
+    rows = [(item["resource_id"], item["name_zh"], item["name_en"]) for item in kpi_catalog_payload()["metrics"]]
+    rows.extend([("UNIT_1", "秒", "second"), ("UNIT_1", "次", "times")])
+    csv_path.write_bytes(_csv(rows))
+
+    generate_kpi_catalog(csv_path, data_dir)
+
+    units = json.loads((data_dir / "base/units.json").read_text(encoding="utf-8"))
+    assert units["units"] == [{"resource_id": "UNIT_1", "key": "unit_1", "name_zh": "秒", "name_en": "second"}]
+
+
 def test_generator_rejects_missing_required_column(tmp_path: Path) -> None:
     data_dir = write_kpi_split_config(tmp_path)
     csv_path = tmp_path / "resource.csv"
