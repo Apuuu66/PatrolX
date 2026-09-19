@@ -48,7 +48,7 @@ description: "KPI 基础数据入库与分类状态存储实现任务列表"
 
 **目标**：维护人员用资源 CSV 离线生成确定性 Git JSON；运行页面只读取生成后的基础定义。
 
-**独立测试**：用临时 CSV 执行生成器两次，输出字节一致；修改 `deploy/data/kpi_catalog.json` 后打开 KPI 指标库，页面展示新版本指标，数据库分类状态不被改写。
+**独立测试**：用临时 CSV 执行生成器两次，输出字节一致；修改 `deploy/data/kpi_catalog.json` 后打开基础指标配置页面展示新版本指标，数据库分类状态不被改写。
 
 ### 测试
 
@@ -174,7 +174,7 @@ description: "KPI 基础数据入库与分类状态存储实现任务列表"
 **目的**：修复前端构建告警，完善文档与质量门禁。
 
 - [x] T054 [P] [US-CLOSE] 在 `tests/test_kpi_catalog_scale.py` 编写 1000 行资源全集规模测试：生成器完成、目录加载和分页查询均成功，作为规格性能目标的功能性回归。
-- [x] T055 更新 `web/src/App.tsx`：使用 `React.lazy` + `Suspense` 对任务、KPI 指标库、规则管理、数据字典页面做路由级懒加载，并保持桌面优先和克制加载态。
+- [x] T055 更新 `web/src/App.tsx`：使用 `React.lazy` + `Suspense` 对任务、基础指标、规则管理、数据字典页面做路由级懒加载，并保持桌面优先和克制加载态。
 - [x] T056 更新 `web/vite.config.ts`：通过 `build.rollupOptions.output.manualChunks` 拆分 `react/react-dom/react-router-dom`、`antd` 和 `echarts`；不得移除业务依赖。
 - [x] T057 [P] 更新 `docs/architecture.md` 和 `docs/data-model.md`：记录 Git JSON、数据库分类/审计、任务快照、引用保护、旧 YAML 退役和 `/api/v3` 边界；接口细节引用 OpenAPI，不复制完整清单。
 - [x] T058 [P] 检查 `specs/012-kpi-git-db-catalog/` 与 `docs/` 链接一致性；确认中文文档、英文标识符和 UTC `*_at` 命名约定。
@@ -182,7 +182,7 @@ description: "KPI 基础数据入库与分类状态存储实现任务列表"
 - [x] T060 运行 `.venv/bin/python build.py contract` 和 `.venv/bin/python build.py gen-web-api`，确认最终契约与生成客户端一致。
 - [x] T061 运行 `.venv/bin/python build.py test` 和 `.venv/bin/python build.py verify`，确认全流程、CLI/API 一致性、1000 行规模测试和历史快照通过。
 - [x] T062 运行 `.venv/bin/python build.py web-build`，确认构建成功且没有 chunk 大于 500 kB 告警；若有新增告警，必须继续修复而不是调高阈值。
-- [x] T063 按 `specs/012-kpi-git-db-catalog/quickstart.md` 执行端到端验证，记录实际命令结果；确认导航为「KPI 指标库」且无资源 CSV 上传入口。
+- [x] T063 按 `specs/012-kpi-git-db-catalog/quickstart.md` 执行端到端验证，记录实际命令结果；确认导航为「基础指标」、页面标题为「基础指标配置」，且无资源 CSV 上传入口。
 
 ---
 

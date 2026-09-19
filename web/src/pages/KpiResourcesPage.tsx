@@ -153,7 +153,7 @@ export function KpiResourcesPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Card title={<strong>KPI 指标库</strong>}>
+      <Card title={<strong>基础指标配置</strong>}>
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           {pageData && (
             <Descriptions

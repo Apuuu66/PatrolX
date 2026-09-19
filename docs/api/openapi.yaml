@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: PatrolX API
   version: 3.0.0
-  description: PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）。 当前契约包含 /api/v2 巡检接口和 /api/v3 KPI 指标库接口。
+  description: PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）。 当前契约包含 /api/v2 巡检接口和 /api/v3 基础指标配置接口。
 servers:
 - url: /
 paths:
@@ -358,7 +358,7 @@ paths:
           $ref: '#/components/responses/Error400'
   /api/v3/kpi/resource-metrics:
     get:
-      summary: 分页查询 KPI 指标库
+      summary: 分页查询基础指标
       operationId: listKpiResourceMetricsV3
       parameters:
       - name: search
@@ -379,7 +379,7 @@ paths:
       - $ref: '#/components/parameters/PageSize'
       responses:
         '200':
-          description: 指标库分页和统计
+          description: 基础指标分页和统计
           content:
             application/json:
               schema:

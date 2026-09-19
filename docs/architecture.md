@@ -404,7 +404,7 @@ docs/api/openapi.yaml
 
 原则：
 
-- 任务、系统、规则等既有接口使用 `/api/v2`；KPI 指标库资源使用 `/api/v3`。
+- 任务、系统、规则等既有接口使用 `/api/v2`；基础指标配置资源使用 `/api/v3`。
 - 资源接口直接返回资源 JSON，不套壳。
 - 创建/重跑类操作返回 `202 + Location`。
 - 错误响应统一为 `{code, message, detail}`。
@@ -429,7 +429,7 @@ python build.py gen-web-api
 | `/tasks/:taskId/report` | 报告预览 |
 | `/tasks/:taskId/logs` | 执行日志 |
 | `/inspectors` | 规则管理 |
-| `/kpi-resources` | KPI 指标库 |
+| `/kpi-resources` | 基础指标配置 |
 | `/dicts` | 数据字典 |
 
 前端原则：
@@ -557,7 +557,7 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
 - 资源 CSV 只能通过离线命令生成 Git JSON：`python -m app.tools.kpi_catalog generate --csv <path> --output deploy/data/kpi_catalog.json`。
   固定表头为 `资源id,中文描述,英文描述`；`ME_*` 生成指标，`UNIT_*` 仅生成预留单位，`unit_key` 当前固定为 null。
-- KPI 指标库使用 `/api/v3/kpi/resource-metrics`、`/api/v3/kpi/resource-metrics/classification` 和审计接口；
+- 基础指标配置使用 `/api/v3/kpi/resource-metrics`、`/api/v3/kpi/resource-metrics/classification` 和审计接口；
   分类请求显式携带 `operator`，不提供乐观锁。在线 CSV 导入已退役。
 
 ### 7.9 扫描规则生成辅助

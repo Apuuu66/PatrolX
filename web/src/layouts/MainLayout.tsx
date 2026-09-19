@@ -45,7 +45,7 @@ export function MainLayout() {
           selectedKeys={[selected]}
           items={[
             { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
-            { key: "/kpi-resources", icon: <DatabaseOutlined />, label: "KPI 指标库" },
+            { key: "/kpi-resources", icon: <DatabaseOutlined />, label: "基础指标" },
             { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
             { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },
           ]}

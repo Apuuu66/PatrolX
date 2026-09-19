@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("KPI 指标库可分类基础指标并保留审计", async ({ page, request }) => {
+test("基础指标配置可分类基础指标并保留审计", async ({ page, request }) => {
   const listResponsePromise = page.waitForResponse(
     (response) =>
       response.url().includes("/api/v3/kpi/resource-metrics") &&
@@ -9,7 +9,8 @@ test("KPI 指标库可分类基础指标并保留审计", async ({ page, request
 
   await page.goto("/kpi-resources");
 
-  await expect(page.getByRole("menuitem", { name: "KPI 指标库" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "基础指标" })).toBeVisible();
+  await expect(page.getByText("基础指标配置")).toBeVisible();
   await expect(page.getByText("基础数据版本")).toBeVisible();
   await expect(page.getByText("分类修订")).toBeVisible();
   const listResponse = await listResponsePromise;

@@ -415,7 +415,7 @@ class KpiResourceDomain(StrEnum):
 
 
 class KpiResourceMetricV3(BaseModel):
-    """KPI 指标库中的基础资源与分类状态。"""
+    """基础指标配置中的基础资源与分类状态。"""
 
     key: str
     resource_id: str
@@ -428,7 +428,7 @@ class KpiResourceMetricV3(BaseModel):
 
 
 class KpiResourceMetricPageV3(BaseModel):
-    """KPI 指标库分页查询响应。"""
+    """基础指标配置分页查询响应。"""
 
     items: list[KpiResourceMetricV3] = Field(default_factory=list)
     total: int = Field(ge=0)

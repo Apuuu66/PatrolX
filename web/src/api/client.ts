@@ -251,7 +251,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 分页查询 KPI 指标库 */
+        /** 分页查询基础指标 */
         get: operations["listKpiResourceMetricsV3"];
         put?: never;
         post?: never;
@@ -1452,7 +1452,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 指标库分页和统计 */
+            /** @description 基础指标分页和统计 */
             200: {
                 headers: {
                     [name: string]: unknown;

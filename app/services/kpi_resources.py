@@ -1,4 +1,4 @@
-"""KPI 指标库查询、数据库分类和审计服务。"""
+"""基础指标配置查询、数据库分类和审计服务。"""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ VALID_DOMAINS = ("unclassified", "call", "api", "media")
 
 
 class KpiResourceError(Exception):
-    """KPI 指标库服务错误。"""
+    """基础指标配置服务错误。"""
 
     def __init__(
         self,
