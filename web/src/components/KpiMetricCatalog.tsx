@@ -25,7 +25,7 @@ export function KpiMetricCatalog({ metadata, taskId, ruleCode, focusItems, focus
   const [status, setStatus] = useState<KpiDisplayStatus | undefined>();
   const [threshold, setThreshold] = useState<"with" | "without" | undefined>();
   const [selected, setSelected] = useState<KpiCatalogItem | null>(null);
-  const [activeTab, setActiveTab] = useState("focus");
+  const [activeTab, setActiveTab] = useState(focusItems.length ? "focus" : "all");
 
   const filtered = useMemo(() => filterKpiMetricGroups(metadata, { query, status, threshold }), [metadata, query, status, threshold]);
   const summary = useMemo(() => summarizeKpiMetadata(metadata), [metadata]);
