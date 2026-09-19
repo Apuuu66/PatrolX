@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import gzip
 import io
+import math
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -35,17 +36,46 @@ KPI_HEADER = (
 
 
 def _call_kpi(period: int) -> str:
-    start = datetime(2026, 9, 2)
-    end = start + timedelta(minutes=period)
-    return (
-        "设备类型：XXX\n"
-        "测量单元名称：呼叫会话统计\n"
-        f"{KPI_HEADER}\n"
-        f"IMS-Core,ims-node-01,{start:%Y-%m-%d %H:%M:%S},{end:%Y-%m-%d %H:%M:%S},{period},"
-        "1200,1190,10,99.17,0.83,120,88\n"
-        f"Access-GW,access-node-01,{start:%Y-%m-%d %H:%M:%S},{end:%Y-%m-%d %H:%M:%S},{period},"
-        "1500,1495,5,99.67,0.33,150,92\n"
-    )
+    """生成 3 天多周期呼叫 KPI 序列，保留明确的日周期波动。"""
+    slots = 3 * 24 * 60 // period
+    lines = [
+        "设备类型：XXX",
+        "测量单元名称：呼叫会话统计",
+        KPI_HEADER,
+    ]
+    services = [
+        ("IMS-Core", "ims-node-01", 1.00, 1.05),
+        ("Access-GW", "access-node-01", 1.22, 0.82),
+    ]
+    for slot in range(slots):
+        start = datetime(2026, 9, 2) + timedelta(minutes=slot * period)
+        end = start + timedelta(minutes=period)
+        minute_of_day = slot * period % 1440
+        for service_idx, (service, instance, load_factor, quality_factor) in enumerate(services):
+            requests = int(
+                1180
+                + 520 * math.sin(2 * math.pi * (minute_of_day - 490) / 1440) * load_factor
+                + 48 * math.sin(2 * math.pi * slot / 37)
+                + service_idx * 180
+            )
+            requests = max(240, requests)
+
+            # 失败率保留明显波动但低于阈值，样例用于观察趋势而非制造告警。
+            failure_rate = 0.0012 + 0.0042 * abs(math.sin(2 * math.pi * minute_of_day / 173))
+            failures = min(requests, max(1, round(requests * failure_rate * quality_factor)))
+            successes = requests - failures
+            success_rate = round(successes / requests * 100, 2)
+            actual_failure_rate = round(failures / requests * 100, 2)
+            peak = int(120 + 72 * math.sin(2 * math.pi * (minute_of_day - 495) / 1440) * load_factor + service_idx * 22)
+            concurrency = int(
+                82 + 48 * math.sin(2 * math.pi * (minute_of_day - 513) / 1440) * load_factor + service_idx * 14
+            )
+            lines.append(
+                f"{service},{instance},{start:%Y-%m-%d %H:%M:%S},{end:%Y-%m-%d %H:%M:%S},{period},"
+                f"{requests},{successes},{failures},{success_rate:.2f},{actual_failure_rate:.2f},"
+                f"{peak},{concurrency}"
+            )
+    return "\n".join(lines) + "\n"
 
 
 def _container_resource(period: int) -> str:
@@ -165,7 +195,5 @@ def build_real_package(directory: Path) -> Path:
 
 
 if __name__ == "__main__":
-    fixture_path = build_real_package(Path(__file__).resolve().parent / "real")
     uploads_path = build_real_package(Path.cwd() / "uploads")
-    print(f"已生成样例包: {fixture_path} ({fixture_path.stat().st_size} bytes)")
     print(f"已生成上传样例: {uploads_path} ({uploads_path.stat().st_size} bytes)")
