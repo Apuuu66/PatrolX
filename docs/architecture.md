@@ -378,8 +378,10 @@ outputs.metrics[]  声明的指标契约
 
 ### 7.6 单规则重跑
 
+重跑会刷新、复用或不触碰的数据清单见 [`docs/design/task-rerun.md`](design/task-rerun.md)。
+
 - 先确保 manifest 与主包解压现场可复用；缺失或不可复用时执行主包解压。
-- 再构建 `TaskFileCatalog`，执行目标规则私有 prepare或复用其缓存。
+- 再构建 `TaskFileCatalog`，执行目标规则私有 prepare 或复用其缓存。
 - 最后按目标规则 `source_patterns` 重新匹配文件并执行目标规则。
 - 只重写目标规则 JSON，再重建任务摘要和 HTML 报告。
 - 不自动补跑其他普通规则，不建立规则间依赖图。
