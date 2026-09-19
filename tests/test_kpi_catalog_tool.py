@@ -11,8 +11,8 @@ import pytest
 from tests.kpi_helpers import KPI_SPLIT_FILES, kpi_catalog_payload, write_kpi_split_config
 from tools import kpi_catalog
 from tools.kpi_catalog import (
-    DEFAULT_CSV_PATH,
     DEFAULT_DATA_DIR,
+    DEFAULT_RESOURCE_DIR,
     PROJECT_ROOT,
     KpiCatalogGeneratorError,
     generate_kpi_catalog,
@@ -68,7 +68,7 @@ def test_invalid_input_keeps_all_files_unchanged(tmp_path: Path) -> None:
 
 
 def test_default_paths_are_fixed() -> None:
-    assert DEFAULT_CSV_PATH == PROJECT_ROOT / "local_run/resource_metrics/resources.csv"
+    assert DEFAULT_RESOURCE_DIR == PROJECT_ROOT / "local_run/resource_metrics"
     assert DEFAULT_DATA_DIR == PROJECT_ROOT / "deploy/data/kpi"
 
 
@@ -83,32 +83,68 @@ def test_cli_without_arguments_uses_fixed_defaults(monkeypatch: pytest.MonkeyPat
     )
 
     assert main([]) == 0
-    assert calls == [(DEFAULT_CSV_PATH, DEFAULT_DATA_DIR)]
+    assert calls == [(DEFAULT_RESOURCE_DIR, DEFAULT_DATA_DIR)]
 
 
-def test_cli_with_explicit_paths_updates_base_files(tmp_path: Path) -> None:
-    """真实执行统一通过显式参数指向临时路径。"""
+def test_cli_with_explicit_resource_dir_updates_base_files(tmp_path: Path) -> None:
+    """真实执行统一通过显式输入目录和输出目录指向临时路径。"""
 
+    resource_dir = tmp_path / "resource_metrics"
+    resource_dir.mkdir()
+    csv_path = resource_dir / "any-name.csv"
     data_dir = write_kpi_split_config(tmp_path / "kpi")
-    csv_path = tmp_path / "resources.csv"
     csv_path.write_bytes(
         _csv([(item["resource_id"], item["name_zh"], item["name_en"]) for item in kpi_catalog_payload()["metrics"]])
     )
 
-    assert main(["generate", "--csv", str(csv_path), "--data-dir", str(data_dir)]) == 0
+    assert main(["generate", "--input", str(resource_dir), "--data-dir", str(data_dir)]) == 0
 
     metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
     assert metrics["source_csv_sha256"] == hashlib.sha256(csv_path.read_bytes()).hexdigest()
 
 
+def test_cli_with_gbk_resource_csv_updates_base_files(tmp_path: Path) -> None:
+    """GBK 导出使用 GB18030 回退解析，输出仍保持 UTF-8。"""
+
+    resource_dir = tmp_path / "resource_metrics"
+    resource_dir.mkdir()
+    csv_path = resource_dir / "gbk.csv"
+    data_dir = write_kpi_split_config(tmp_path / "kpi")
+    rows = [(item["resource_id"], item["name_zh"], item["name_en"]) for item in kpi_catalog_payload()["metrics"]]
+    csv_path.write_bytes(_csv(rows).decode("utf-8").encode("gb18030"))
+
+    assert main(["generate", "--input", str(resource_dir), "--data-dir", str(data_dir)]) == 0
+
+    metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
+    assert metrics["source_csv_sha256"] == hashlib.sha256(csv_path.read_bytes()).hexdigest()
+    assert metrics["metrics"][0]["name_zh"] == kpi_catalog_payload()["metrics"][0]["name_zh"]
+
+
+def test_cli_with_multiple_resource_csvs_reports_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    resource_dir = tmp_path / "resource_metrics"
+    resource_dir.mkdir()
+    (resource_dir / "first.csv").write_bytes(_csv([]))
+    (resource_dir / "second.csv").write_bytes(_csv([]))
+    data_dir = write_kpi_split_config(tmp_path / "kpi")
+    before = {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES}
+
+    assert main(["generate", "--input", str(resource_dir), "--data-dir", str(data_dir)]) == 2
+
+    output = capsys.readouterr().out
+    assert "必须且只能包含一个 CSV" in output
+    assert "first.csv" in output
+    assert "second.csv" in output
+    assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
+
+
 def test_cli_missing_input_reports_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """缺失输入也通过显式参数测试，避免依赖或修改默认路径。"""
 
-    missing_csv = tmp_path / "resources.csv"
+    missing_input = tmp_path / "missing-resource-dir"
     data_dir = write_kpi_split_config(tmp_path / "kpi")
 
-    assert main(["generate", "--csv", str(missing_csv), "--data-dir", str(data_dir)]) == 2
+    assert main(["generate", "--input", str(missing_input), "--data-dir", str(data_dir)]) == 2
 
     output = capsys.readouterr().out
-    assert "资源 CSV 读取或解码失败" in output
-    assert str(missing_csv) in output
+    assert "资源输入不存在" in output
+    assert str(missing_input) in output

@@ -6,7 +6,10 @@
     .venv/bin/python -m tools.kpi_catalog
 
 默认输入：
-    local_run/resource_metrics/resources.csv
+    local_run/resource_metrics
+
+使用约束：
+    默认输入目录中必须且只能有一个 CSV 文件；不限定 CSV 文件名。
 
 默认输出：
     deploy/data/kpi/base/metrics.json
@@ -14,11 +17,14 @@
 
 可选覆盖：
     .venv/bin/python -m tools.kpi_catalog generate \
-      --csv /path/to/resources.csv \
+      --input /path/to/resource_metrics \
       --data-dir /path/to/kpi
 
 CSV 表头：
     资源id,中文描述,英文描述
+
+CSV 编码：
+    优先 UTF-8；失败时回退 GBK/GB2312/GB18030。
 
 行为：
     - `ME_*` 写入 `base/metrics.json`。
@@ -48,7 +54,7 @@ class KpiCatalogGeneratorError(Exception):
 EXPECTED_HEADER = ["资源id", "中文描述", "英文描述"]
 BASE_FILES = ("base/metrics.json", "base/units.json")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CSV_PATH = PROJECT_ROOT / "local_run/resource_metrics/resources.csv"
+DEFAULT_RESOURCE_DIR = PROJECT_ROOT / "local_run/resource_metrics"
 DEFAULT_DATA_DIR = PROJECT_ROOT / "deploy/data/kpi"
 RULE_FILES = (
     "rules/common.json",
@@ -59,13 +65,43 @@ RULE_FILES = (
 )
 
 
+def _resolve_resource_csv(input_path: Path) -> Path:
+    """解析资源输入；目录内必须恰好包含一个 CSV，不限定文件名。"""
+    try:
+        if input_path.is_file():
+            return input_path
+        if input_path.is_dir():
+            csv_paths = sorted(
+                path for path in input_path.iterdir() if path.is_file() and path.suffix.lower() == ".csv"
+            )
+            if not csv_paths:
+                raise KpiCatalogGeneratorError(f"资源目录中没有 CSV: {input_path}")
+            if len(csv_paths) > 1:
+                names = ", ".join(path.name for path in csv_paths)
+                raise KpiCatalogGeneratorError(f"资源目录必须且只能包含一个 CSV 文件: {input_path}；当前包含: {names}")
+            return csv_paths[0]
+    except OSError as exc:
+        raise KpiCatalogGeneratorError(f"资源输入读取失败: {exc}") from exc
+    raise KpiCatalogGeneratorError(f"资源输入不存在: {input_path}")
+
+
 def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
     """解析并校验资源 CSV；返回稳定排序数据与字节 SHA-256。"""
     try:
         file_bytes = csv_path.read_bytes()
-        text = file_bytes.decode("utf-8-sig")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise KpiCatalogGeneratorError(f"资源 CSV 读取或解码失败: {exc}") from exc
+    except OSError as exc:
+        raise KpiCatalogGeneratorError(f"资源 CSV 读取失败: {exc}") from exc
+
+    text: str | None = None
+    decode_error: UnicodeDecodeError | None = None
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            text = file_bytes.decode(encoding)
+            break
+        except UnicodeDecodeError as exc:
+            decode_error = exc
+    if text is None:
+        raise KpiCatalogGeneratorError(f"资源 CSV 解码失败，请使用 UTF-8 或 GBK/GB2312/GB18030 编码: {decode_error}")
     reader = csv.reader(text.splitlines())
     try:
         header = next(reader)
@@ -119,8 +155,9 @@ def _validate_candidate(data_dir: Path, candidate_files: dict[str, bytes]) -> No
         shutil.rmtree(data_dir, ignore_errors=True)
 
 
-def generate_kpi_catalog(csv_path: Path, data_dir: Path) -> None:
+def generate_kpi_catalog(resource_input: Path, data_dir: Path) -> None:
     """从资源 CSV 完整替换基础指标和预留单位，且不改写规则文件。"""
+    csv_path = _resolve_resource_csv(resource_input)
     rows, source_hash = _read_resource_csv(csv_path)
     metrics = [dict(item, unit_key=None) for item in rows if item["resource_id"].startswith("ME_")]
     units = [dict(item) for item in rows if item["resource_id"].startswith("UNIT_")]
@@ -167,21 +204,21 @@ def main(argv: list[str] | None = None) -> int:
         description="离线导入 KPI 资源 CSV",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "默认输入: local_run/resource_metrics/resources.csv\n"
+            "默认输入: local_run/resource_metrics（目录内必须且只能有一个 CSV）\n"
             "默认输出: deploy/data/kpi/base/metrics.json 和 deploy/data/kpi/base/units.json"
         ),
     )
     sub = parser.add_subparsers(dest="command")
     generate = sub.add_parser("generate", help="从默认资源 CSV 更新基础配置")
-    generate.add_argument("--csv", default=str(DEFAULT_CSV_PATH), help="资源 CSV；默认使用仓库内固定路径")
+    generate.add_argument("--input", default=str(DEFAULT_RESOURCE_DIR), help="资源目录；目录内必须且只能有一个 CSV")
     generate.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR), help="KPI 拆分配置目录；默认使用仓库内固定路径")
     args = parser.parse_args(argv)
     if args.command is None:
         args.command = "generate"
-        args.csv = DEFAULT_CSV_PATH
+        args.input = DEFAULT_RESOURCE_DIR
         args.data_dir = DEFAULT_DATA_DIR
     try:
-        generate_kpi_catalog(Path(args.csv), Path(args.data_dir))
+        generate_kpi_catalog(Path(args.input), Path(args.data_dir))
     except KpiCatalogGeneratorError as exc:
         print(f"错误: {exc}")
         return 2

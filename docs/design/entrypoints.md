@@ -133,11 +133,11 @@ Windows 上推荐使用 Git Bash 或 WSL；路径可以用 `C:/data/sample.zip` 
 .venv/bin/python -m tools.kpi_catalog
 ```
 
-默认读取 `local_run/resource_metrics/resources.csv`，默认更新 `deploy/data/kpi`。如需临时使用其他现场，可覆盖路径：
+默认读取 `local_run/resource_metrics`，并要求该目录内必须且只能有一个 CSV；不限定 CSV 文件名。CSV 支持 UTF-8 和 GBK/GB2312/GB18030。默认更新 `deploy/data/kpi`。如需临时使用其他现场，可覆盖路径：
 
 ```bash
 .venv/bin/python -m tools.kpi_catalog generate \
-  --csv /path/to/resources.csv \
+  --input /path/to/resource_metrics \
   --data-dir /path/to/kpi
 ```
 

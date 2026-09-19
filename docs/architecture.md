@@ -557,7 +557,7 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
 - 时间输入按 `rules/common.json` 的 `input_timezone` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
-- 资源 CSV 只能通过离线命令更新拆分配置基础文件：`.venv/bin/python -m tools.kpi_catalog`；默认输入 `local_run/resource_metrics/resources.csv`，默认输出 `deploy/data/kpi`。
+- 资源 CSV 只能通过离线命令更新拆分配置基础文件：`.venv/bin/python -m tools.kpi_catalog`；默认输入 `local_run/resource_metrics`，该目录必须且只能包含一个 CSV，默认输出 `deploy/data/kpi`。
   固定表头为 `资源id,中文描述,英文描述`；`ME_*` 生成指标，`UNIT_*` 仅生成预留单位，`unit_key` 当前固定为 null。
 - 基础指标配置使用 `/api/v3/kpi/resource-metrics`、`/api/v3/kpi/resource-metrics/classification` 和审计接口；
   分类请求显式携带 `operator`，不提供乐观锁。在线 CSV 导入已退役。
