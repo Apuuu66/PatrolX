@@ -52,7 +52,7 @@
 | --- | --- | --- |
 | 离线优先 | 通过 | 资源 CSV 只能通过离线命令导入，不新增运行时上传或在线采集。 |
 | 一个包、一个任务 | 通过 | 任务快照仍写入该任务唯一输出目录；全局配置不进入任务隔离边界。 |
-| 契约驱动 | 通过 | API 与快照契约不扩展业务字段；`base_data_version` 保留既有字段语义并收敛为内容指纹。 |
+| 契约驱动 | 通过 | API 与快照契约不扩展业务字段；`base_data_version` 保留既有字段，并把取值收敛为拆分配置集内容指纹。 |
 | 模式同构 | 通过 | CLI 和 API 通过同一 `load_kpi_catalog()` 与任务 KPI 配置服务读取拆分配置。 |
 | 巡检器插件架构 | 通过 | 只调整 KPI 配置加载与基础数据组织，不把 KPI 语义硬编码进调度器。 |
 | 源文件显式匹配 | 通过 | 不改变 KPI 巡检器的 `source_patterns` 和匹配方式。 |
@@ -96,6 +96,10 @@ app/
 └── tools/
     └── kpi_catalog.py                   # 离线 CSV 只写 base/，不写 rules/
 
+web/src/pages/
+├── KpiResourcesPage.tsx                # 移除配置指纹和分类修订的版本化展示
+└── TaskDetailPage.tsx                  # 移除配置指纹和分类修订的版本化展示
+
 deploy/
 └── data/
     └── kpi/
@@ -112,11 +116,12 @@ deploy/
 tests/
 ├── test_kpi_catalog_composition.py
 ├── test_kpi_catalog_split_config.py     # 新增：拆分契约、聚合校验和内容指纹
-├── test_kpi_catalog_tool.py             # 扩展：CSV 导入边界
+├── test_kpi_catalog_tool.py             # 新增：CSV 导入边界
 ├── test_kpi_classification_db.py        # 扩展：分类状态、审计和重导入兼容
 ├── test_kpi_deterministic_rerun.py      # 新增：相同输入和快照的确定性结果
 ├── test_kpi_resource_api_v3.py          # 扩展：分类 API 与禁止运行时导入
 ├── test_kpi_resource_metrics.py
+├── test_kpi_real_sample_api.py         # 扩展：未登记指标线索兼容
 ├── test_kpi_task_snapshot.py
 └── test_kpi_task_snapshot_missing.py    # 新增：指定规则重跑缺快照
 
@@ -138,7 +143,7 @@ docs/
    - 不实现运行时旧文件迁移或回退。
 
 2. **目录加载**
-   - 将 `settings.kpi_catalog_path` 调整为 KPI 配置目录，并暴露固定子路径。
+   - 将 `settings.kpi_catalog_path` 替换为 `settings.kpi_data_dir`，并暴露固定子路径。
    - `load_kpi_catalog()` 逐个读取固定文件，使用严格 JSON 解析和现有规则校验函数。
    - 聚合后的内存对象继续是 `KpiGitCatalog`，降低下游改动范围。
    - 派生 `base_data_version` 时按固定相对路径顺序和文件字节计算 SHA-256。

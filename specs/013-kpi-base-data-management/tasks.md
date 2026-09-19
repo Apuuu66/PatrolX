@@ -80,7 +80,7 @@ description: "KPI 基础数据管理实现任务列表"
 
 ### 测试
 
-- [ ] T016 [P] [US2] 在 `tests/test_kpi_task_snapshot.py` 编写快照生成测试：新任务首次需要 KPI 配置时从拆分目录组合 SQLite 分类生成 `output/<task_id>/kpi/kpi_catalog_snapshot.json`；`metrics` 和 `rules` 为完整有效配置，`captured_at` 使用 UTC。
+- [ ] T016 [P] [US2] 在 `tests/test_kpi_task_snapshot.py` 编写快照生成测试：新任务首次需要 KPI 配置时从拆分目录组合 SQLite 分类生成 `output/<task_id>/kpi/kpi_catalog_snapshot.json`；`metrics` 和 `rules` 为完整有效配置，`captured_at` 使用 UTC；配置内容不变时两次生成的 `base_data_version` 和有效配置一致，仅 `captured_at` 可不同。
 - [ ] T017 [P] [US2] 在 `tests/test_kpi_task_snapshot.py` 编写不可变测试：已有有效快照时修改 `deploy/data/kpi/` 配置和分类状态，再次全量重跑和指定规则重跑都复用快照，快照文件字节不变。
 - [ ] T018 [P] [US2] 在 `tests/test_kpi_task_snapshot_missing.py` 编写缺失快照测试：已有任务缺少 `kpi_catalog_snapshot.json` 时，指定规则重跑失败并提示快照缺失；全量重跑缺少快照可初始化补写一次，已有快照仍不被覆盖。
 - [ ] T019 [P] [US2] 在 `tests/test_kpi_deterministic_rerun.py` 编写确定性回归：使用相同输入包和相同 KPI 快照执行 KPI 巡检两次，剥离 `task_id`、执行时间、耗时和运行态标识后断言规则结果一致。
@@ -89,7 +89,7 @@ description: "KPI 基础数据管理实现任务列表"
 
 - [ ] T020 [US2] 在 `app/services/kpi_catalog.py` 中保持快照路径和 `KpiTaskCatalogSnapshot` 契约不变；新任务首次需要 KPI 配置时生成快照，已有有效快照永远复用，损坏快照显式失败。
 - [ ] T021 [US2] 在 `app/cli.py` 的 `run_single_rule()` 中区分已有任务快照缺失场景：任务已完成且 `output/<task_id>/kpi/kpi_catalog_snapshot.json` 缺失时立即失败；不调用当前目录配置补写历史快照。
-- [ ] T022 [US2] 在 `app/cli.py`、`app/services/tasks.py` 和 `app/api/router.py` 的任务/重跑路径中确认全量重跑不覆盖有效快照；统一错误上下文包含 `task_id` 和快照相对路径，不新增业务 API 字段。
+- [ ] T022 [US2] 在 `app/cli.py`、`app/services/tasks.py` 和 `app/api/router.py` 的任务/重跑路径中确认全量重跑不覆盖有效快照；统一错误上下文包含 `task_id` 和快照相对路径，不新增业务 API 字段。同步调整 `web/src/pages/TaskDetailPage.tsx`，不把 `base_data_version` 或 `classification_version` 展示为配置版本。
 - [ ] T023 [US2] 执行 US2 独立验证：完成任务 -> 修改规则 -> 新任务；比较新旧快照，确认旧快照不变且新快照包含新规则；运行 T019 确定性回归。
 
 **检查点**：历史结果可追溯，配置变化不会污染旧任务。
@@ -135,8 +135,8 @@ description: "KPI 基础数据管理实现任务列表"
 ### 实现
 
 - [ ] T035 [US4] 在 `app/services/kpi_catalog.py` 中确认 `_effective_metrics()` 只把存在且已分类指标写入任务快照；移除指标保留数据库分类记录，未分类指标保留在拆分基础数据但不进入业务域。
-- [ ] T036 [US4] 在 `app/services/kpi_resources.py` 和 `app/inspectors/kpi/common.py` 中保持现有分类状态、审计、`missing_from_base` 和未登记指标线索语义；不新增在线导入能力，不改变 KPI 规则状态映射。
-- [ ] T037 [US4] 使用测试环境执行 US4 独立验证：通过现有 API 和基础指标配置页面完成分类，检查审计、重新导入分类保留、移除指标分类记录保留以及待分类线索展示。
+- [ ] T036 [US4] 在 `app/services/kpi_resources.py` 和 `app/inspectors/kpi/common.py` 中保持现有分类状态、审计、`missing_from_base` 和未登记指标线索语义；不新增在线导入能力，不改变 KPI 规则状态映射。同步调整 `web/src/pages/KpiResourcesPage.tsx`，不把 `base_data_version` 或 `classification_version` 展示为配置版本。
+- [ ] T037 [US4] 使用测试环境执行 US4 独立验证：通过现有 API 和基础指标配置页面完成分类，检查审计、重新导入分类保留、移除指标分类记录保留以及待分类线索展示；确认页面不再展示配置版本或分类修订。
 
 **检查点**：拆分配置不改变日常分类操作和历史分类审计。
 
@@ -150,7 +150,7 @@ description: "KPI 基础数据管理实现任务列表"
 - [ ] T039 [P] 更新 `docs/design/entrypoints.md` 和 `docs/design/task-rerun.md`：替换离线导入命令为 `--data-dir deploy/data/kpi`，更新快照复用、指定规则重跑缺失快照失败和全量重跑初始化补写语义。
 - [ ] T040 [P] 检查 `specs/013-kpi-base-data-management/` 与 `docs/` 中的链接和术语一致性：使用“拆分配置”“任务快照”“内容指纹”，不引入“目录版本/组合版本”概念。
 - [ ] T041 运行 `.venv/bin/python build.py lint`，修复所有 Ruff check/format 问题。
-- [ ] T042 运行 `.venv/bin/python build.py test`，确认目录加载、CSV 导入、资源接口、分类兼容、任务快照、重跑和现有 KPI 巡检回归全部通过。
+- [ ] T042 运行 `.venv/bin/python build.py test`，确认目录加载、CSV 导入、资源接口、分类兼容、任务快照、重跑和现有 KPI 巡检回归全部通过；T022/T036 触碰前端后另运行 `cd web && npm run build`。
 - [ ] T043 运行 `.venv/bin/python build.py verify`，确认本地全流程可使用拆分配置完成任务并生成快照；若输出契约意外变化，先停止并回到 Speckit review，不得静默修改契约。
 - [ ] T044 按 `specs/013-kpi-base-data-management/quickstart.md` 执行最终验证：确认离线导入只改基础文件、旧任务快照不变、新任务使用新配置、现有分类界面仍可用。
 
