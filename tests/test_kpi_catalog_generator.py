@@ -42,10 +42,8 @@ def test_generator_is_deterministic_and_parses_units(tmp_path: Path) -> None:
     ("rows", "header", "match"),
     [
         ([], "resource,description\n", "表头"),
-        ([("BAD_1", "中", "en")], None, "BAD_1"),
         ([("ME_1", "", "en")], None, "ME_1"),
         ([("ME_1", "中", "en"), ("ME_1", "中", "en")], None, "重复"),
-        ([("NEW_1", "中", "en")], None, "NEW_1"),
     ],
 )
 def test_generator_rejects_invalid_input_without_output(
@@ -60,6 +58,58 @@ def test_generator_rejects_invalid_input_without_output(
     with pytest.raises(KpiCatalogGeneratorError, match=match):
         generate_kpi_catalog(csv_path, data_dir)
     assert (data_dir / "base/metrics.json").read_text(encoding="utf-8").startswith('{\n  "schema_version"')
+
+
+def test_generator_selects_required_columns_and_ignores_other_rows(tmp_path: Path) -> None:
+    """按列名取值，忽略额外列和非 ME_/UNIT_ 行。"""
+
+    data_dir = write_kpi_split_config(tmp_path)
+    csv_path = tmp_path / "resource.csv"
+    payload_metrics = kpi_catalog_payload()["metrics"]
+    csv_path.write_bytes(
+        (
+            "备注,英文描述,资源id,中文描述,扩展列\n"
+            "忽略1,Ignored,BAD_1,无效,忽略2\n"
+            + "".join(
+                f"扩展,{item['name_en']},{item['resource_id']},{item['name_zh']},扩展\n" for item in payload_metrics
+            )
+            + "备注2,times,UNIT_1,次,扩展\n"
+        ).encode()
+    )
+
+    generate_kpi_catalog(csv_path, data_dir)
+
+    metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
+    units = json.loads((data_dir / "base/units.json").read_text(encoding="utf-8"))
+    assert {item["resource_id"] for item in metrics["metrics"]} == {item["resource_id"] for item in payload_metrics}
+    assert [item["resource_id"] for item in units["units"]] == ["UNIT_1"]
+
+
+def test_generator_rejects_missing_required_column(tmp_path: Path) -> None:
+    data_dir = write_kpi_split_config(tmp_path)
+    csv_path = tmp_path / "resource.csv"
+    csv_path.write_bytes("资源id,中文描述\nME_1,指标\n".encode())
+
+    with pytest.raises(KpiCatalogGeneratorError, match="英文描述"):
+        generate_kpi_catalog(csv_path, data_dir)
+
+
+def test_generator_rejects_duplicate_required_column(tmp_path: Path) -> None:
+    data_dir = write_kpi_split_config(tmp_path)
+    csv_path = tmp_path / "resource.csv"
+    csv_path.write_bytes("资源id,中文描述,英文描述,英文描述\nME_1,中,en,en\n".encode())
+
+    with pytest.raises(KpiCatalogGeneratorError, match="重复"):
+        generate_kpi_catalog(csv_path, data_dir)
+
+
+def test_generator_rejects_matching_row_with_missing_name(tmp_path: Path) -> None:
+    data_dir = write_kpi_split_config(tmp_path)
+    csv_path = tmp_path / "resource.csv"
+    csv_path.write_bytes("资源id,中文描述,英文描述,备注\nME_1,,en,extra\n".encode())
+
+    with pytest.raises(KpiCatalogGeneratorError, match="ME_1"):
+        generate_kpi_catalog(csv_path, data_dir)
 
 
 def test_generator_preserves_rule_file_bytes(tmp_path: Path) -> None:

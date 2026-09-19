@@ -57,12 +57,12 @@ def test_removed_referenced_metric_is_rejected_without_changes(tmp_path: Path) -
     assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
 
 
-def test_invalid_input_keeps_all_files_unchanged(tmp_path: Path) -> None:
+def test_non_matching_row_is_skipped_without_changes(tmp_path: Path) -> None:
     data_dir = write_kpi_split_config(tmp_path)
     before = {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES}
     csv_path = tmp_path / "resource.csv"
     csv_path.write_bytes(_csv([("ME_BAD!", "坏名称", "Bad")]))
-    with pytest.raises(KpiCatalogGeneratorError, match="ME_BAD!"):
+    with pytest.raises(KpiCatalogGeneratorError, match="引用未知基础指标"):
         generate_kpi_catalog(csv_path, data_dir)
     assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
 

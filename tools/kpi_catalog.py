@@ -21,12 +21,13 @@
       --data-dir /path/to/kpi
 
 CSV 表头：
-    资源id,中文描述,英文描述
+    必须包含 资源id、中文描述、英文描述；顺序不限，额外列忽略。
 
 CSV 编码：
     优先 UTF-8；失败时回退 GBK/GB2312/GB18030。
 
 行为：
+    - 仅保留资源 ID 匹配 `ME_*` 或 `UNIT_*` 的行，其他行跳过。
     - `ME_*` 写入 `base/metrics.json`。
     - `UNIT_*` 写入 `base/units.json`。
     - `unit_key` 当前固定为 null。
@@ -40,6 +41,7 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -51,7 +53,8 @@ class KpiCatalogGeneratorError(Exception):
     """资源 CSV 离线导入错误。"""
 
 
-EXPECTED_HEADER = ["资源id", "中文描述", "英文描述"]
+REQUIRED_HEADER = ("资源id", "中文描述", "英文描述")
+RESOURCE_ID_PATTERN = re.compile(r"(?:ME|UNIT)_[A-Za-z0-9_]+")
 BASE_FILES = ("base/metrics.json", "base/units.json")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESOURCE_DIR = PROJECT_ROOT / "local_run/resource_metrics"
@@ -86,7 +89,7 @@ def _resolve_resource_csv(input_path: Path) -> Path:
 
 
 def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
-    """解析并校验资源 CSV；返回稳定排序数据与字节 SHA-256。"""
+    """解析资源 CSV；按列名取值，仅保留符合 ME_/UNIT_ 规则的行。"""
     try:
         file_bytes = csv_path.read_bytes()
     except OSError as exc:
@@ -104,28 +107,37 @@ def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
         raise KpiCatalogGeneratorError(f"资源 CSV 解码失败，请使用 UTF-8 或 GBK/GB2312/GB18030 编码: {decode_error}")
     reader = csv.reader(text.splitlines())
     try:
-        header = next(reader)
+        raw_header = next(reader)
     except StopIteration as exc:
         raise KpiCatalogGeneratorError("资源 CSV 不能为空") from exc
-    if header != EXPECTED_HEADER:
-        raise KpiCatalogGeneratorError("资源 CSV 表头必须是 资源id,中文描述,英文描述")
+
+    header = [value.strip() for value in raw_header]
+    indexes: dict[str, int] = {}
+    for name in REQUIRED_HEADER:
+        found = [index for index, value in enumerate(header) if value == name]
+        if not found:
+            raise KpiCatalogGeneratorError(f"资源 CSV 表头缺少必需列: {name}")
+        if len(found) > 1:
+            raise KpiCatalogGeneratorError(f"资源 CSV 表头存在重复必需列: {name}")
+        indexes[name] = found[0]
 
     rows: list[dict[str, str]] = []
     seen_ids: set[str] = set()
+    seen_keys: set[str] = set()
     for line_number, row in enumerate(reader, start=2):
-        if len(row) != 3:
-            raise KpiCatalogGeneratorError(f"第 {line_number} 行: 资源 CSV 必须有三列")
-        resource_id, name_zh, name_en = (value.strip() for value in row)
-        context = f"第 {line_number} 行 {resource_id or '<empty>'}"
-        suffix = resource_id[3:] if resource_id.startswith(("ME_", "UNIT_")) else ""
-        if not suffix or not all(ch.isalnum() or ch == "_" for ch in suffix):
-            raise KpiCatalogGeneratorError(f"{context}: 资源 ID 必须以 ME_ 或 UNIT_ 开头且仅包含 A-Z/a-z/0-9/_")
+        resource_id = row[indexes["资源id"]].strip() if indexes["资源id"] < len(row) else ""
+        if not RESOURCE_ID_PATTERN.fullmatch(resource_id):
+            continue
+        context = f"第 {line_number} 行 {resource_id}"
+        name_zh = row[indexes["中文描述"]].strip() if indexes["中文描述"] < len(row) else ""
+        name_en = row[indexes["英文描述"]].strip() if indexes["英文描述"] < len(row) else ""
         key = resource_id.lower()
-        if resource_id in seen_ids or key in {item["key"] for item in rows}:
+        if resource_id in seen_ids or key in seen_keys:
             raise KpiCatalogGeneratorError(f"{context}: 资源 ID 或稳定 key 重复")
         if not name_zh or not name_en:
             raise KpiCatalogGeneratorError(f"{context}: 中文名称和英文名称不能为空")
         seen_ids.add(resource_id)
+        seen_keys.add(key)
         rows.append({"resource_id": resource_id, "key": key, "name_zh": name_zh, "name_en": name_en})
 
     rows.sort(key=lambda item: item["key"])
