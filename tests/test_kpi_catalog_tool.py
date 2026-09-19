@@ -82,11 +82,11 @@ def test_cli_without_arguments_uses_fixed_defaults(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(
         kpi_catalog,
         "generate_kpi_catalog",
-        lambda csv, data_dir: calls.append((csv, data_dir)),
+        lambda csv, data_dir, clear_rules=False: calls.append((csv, data_dir, clear_rules)),
     )
 
     assert main([]) == 0
-    assert calls == [(DEFAULT_RESOURCE_DIR, DEFAULT_DATA_DIR)]
+    assert calls == [(DEFAULT_RESOURCE_DIR, DEFAULT_DATA_DIR, False)]
 
 
 def test_cli_with_explicit_resource_dir_updates_base_files(tmp_path: Path) -> None:
@@ -104,6 +104,37 @@ def test_cli_with_explicit_resource_dir_updates_base_files(tmp_path: Path) -> No
 
     metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
     assert metrics["source_csv_sha256"] == hashlib.sha256(csv_path.read_bytes()).hexdigest()
+
+
+def test_cli_with_clear_rules_resets_rule_arrays(tmp_path: Path) -> None:
+    """显式 --clear-rules 清空规则数组，但保留 common.json。"""
+
+    resource_dir = tmp_path / "resource_metrics"
+    resource_dir.mkdir()
+    data_dir = write_kpi_split_config(tmp_path / "kpi")
+    common_before = (data_dir / "rules/common.json").read_bytes()
+    csv_path = resource_dir / "resource.csv"
+    csv_path.write_bytes(_csv([]))
+
+    assert main(["generate", "--input", str(resource_dir), "--data-dir", str(data_dir), "--clear-rules"]) == 0
+
+    assert json.loads((data_dir / "rules/metric-rules.json").read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "metric_rules": [],
+    }
+    assert json.loads((data_dir / "rules/thresholds.json").read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "thresholds": [],
+    }
+    assert json.loads((data_dir / "rules/capacity-rules.json").read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "capacity_rules": [],
+    }
+    assert json.loads((data_dir / "rules/display-rules.json").read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "display_rules": [],
+    }
+    assert (data_dir / "rules/common.json").read_bytes() == common_before
 
 
 def test_cli_with_gbk_resource_csv_updates_base_files(tmp_path: Path) -> None:
