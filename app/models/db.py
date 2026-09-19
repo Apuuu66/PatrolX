@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import JSON, DateTime, Engine, String, create_engine, inspect, text
+from sqlalchemy import JSON, DateTime, Engine, Float, String, UniqueConstraint, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.core.config import settings
@@ -101,5 +101,123 @@ class KpiClassificationAudit(Base):
     previous_domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
     next_domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
     result: Mapped[str] = mapped_column(String(32), default="success")
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    operated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class KpiMetricRule(Base):
+    """KPI 指标的动态计算口径；基础资源仍只能离线维护。"""
+
+    __tablename__ = "kpi_metric_rules"
+
+    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    metric_type: Mapped[str] = mapped_column(String(32), default="count")
+    semantic_group: Mapped[str] = mapped_column(String(32), default="other")
+    display_role: Mapped[str] = mapped_column(String(32), default="context")
+    unit: Mapped[str] = mapped_column(String(64), default="")
+    source_type: Mapped[str] = mapped_column(String(16), default="raw")
+    aggregation_kind: Mapped[str] = mapped_column(String(32), default="sum")
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiMetricFormula(Base):
+    """KPI 受控比率公式；与指标规则一对一。"""
+
+    __tablename__ = "kpi_metric_formulas"
+
+    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    numerator: Mapped[str] = mapped_column(String(128))
+    denominator: Mapped[str] = mapped_column(String(128))
+    denominator_fallback_inputs: Mapped[list] = mapped_column(JSON, default=list)
+    scale: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiThresholdRule(Base):
+    """按业务域和指标维护的默认与周期阈值。"""
+
+    __tablename__ = "kpi_thresholds"
+    __table_args__ = (UniqueConstraint("domain", "metric_key", name="uq_kpi_threshold_domain_metric"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    domain: Mapped[str] = mapped_column(String(32), index=True)
+    metric_key: Mapped[str] = mapped_column(String(128), index=True)
+    label: Mapped[str] = mapped_column(String(128))
+    direction: Mapped[str] = mapped_column(String(8))
+    unit: Mapped[str] = mapped_column(String(64))
+    default_value: Mapped[float] = mapped_column(Float)
+    periods: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiCapacityRule(Base):
+    """KPI 容量列映射规则。"""
+
+    __tablename__ = "kpi_capacity_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    source_name: Mapped[str] = mapped_column(String(256), unique=True)
+    metric_key: Mapped[str] = mapped_column(String(128), index=True)
+    domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    semantics: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="unknown")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiDisplayRule(Base):
+    """KPI 展示角色规则。"""
+
+    __tablename__ = "kpi_display_rules"
+    __table_args__ = (UniqueConstraint("domain", "metric_key", name="uq_kpi_display_domain_metric"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    domain: Mapped[str] = mapped_column(String(32), index=True)
+    metric_key: Mapped[str] = mapped_column(String(128), index=True)
+    role: Mapped[str] = mapped_column(String(16), default="context")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiCommonConfig(Base):
+    """KPI 输入时区与解析预算的单行配置。"""
+
+    __tablename__ = "kpi_common_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    input_timezone: Mapped[str] = mapped_column(String(64), default="Asia/Shanghai")
+    max_files: Mapped[int] = mapped_column(default=1000)
+    max_records: Mapped[int] = mapped_column(default=200000)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiRuleConfigRevision(Base):
+    """KPI 动态配置全局修订单行表。"""
+
+    __tablename__ = "kpi_rule_config_revisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    revision: Mapped[int] = mapped_column(default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiRuleConfigAudit(Base):
+    """KPI 动态配置成功变更的审计流水。"""
+
+    __tablename__ = "kpi_rule_config_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    entity_type: Mapped[str] = mapped_column(String(32), index=True)
+    entity_key: Mapped[str] = mapped_column(String(256), index=True)
+    operation: Mapped[str] = mapped_column(String(16))
+    operator: Mapped[str] = mapped_column(String(128), index=True)
+    before: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    after: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    result: Mapped[str] = mapped_column(String(16), default="success")
+    rule_config_version: Mapped[int] = mapped_column(default=0)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     operated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

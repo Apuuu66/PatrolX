@@ -19,13 +19,25 @@ from app.inspectors.kpi.catalog import (
     KpiConfig,
     KpiGitCatalog,
     KpiRuleSet,
+    _validate_rules,
     build_kpi_config_from_catalog,
     load_kpi_catalog,
 )
-from app.models.db import KpiClassification, KpiClassificationRevision, session_factory
+from app.models.db import (
+    KpiCapacityRule,
+    KpiClassification,
+    KpiClassificationRevision,
+    KpiCommonConfig,
+    KpiDisplayRule,
+    KpiMetricFormula,
+    KpiMetricRule,
+    KpiRuleConfigRevision,
+    KpiThresholdRule,
+    session_factory,
+)
 from app.models.schemas import KpiTaskCatalogSnapshot
 
-SNAPSHOT_SCHEMA_VERSION = 1
+SNAPSHOT_SCHEMA_VERSION = 2
 SNAPSHOT_RELATIVE_PATH = Path("kpi") / "kpi_catalog_snapshot.json"
 
 
@@ -33,15 +45,111 @@ class KpiSnapshotError(KpiCatalogError):
     """任务 KPI 配置快照服务错误。"""
 
 
-def _read_classifications() -> tuple[dict[str, str], int]:
+def _read_catalog_state() -> tuple[
+    dict[str, str],
+    int,
+    dict[str, dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any],
+    int,
+]:
+    """读取分类、动态规则、公共配置和两个权威版本。"""
     try:
         with session_factory() as session:
-            rows = session.query(KpiClassification).all()
-            revision = session.get(KpiClassificationRevision, 1)
-            classifications = {row.metric_key: row.domain for row in rows if row.domain in REGISTERED_DOMAINS}
-            return classifications, int(revision.revision) if revision is not None else 0
+            classification_rows = session.query(KpiClassification).all()
+            classifications = {
+                row.metric_key: row.domain for row in classification_rows if row.domain in REGISTERED_DOMAINS
+            }
+            classification_revision = session.get(KpiClassificationRevision, 1)
+            classification_version = int(classification_revision.revision) if classification_revision else 0
+
+            metric_rules: dict[str, dict[str, Any]] = {}
+            for row in session.query(KpiMetricRule).order_by(KpiMetricRule.metric_key).all():
+                formula = session.get(KpiMetricFormula, row.metric_key)
+                metric_rules[row.metric_key] = {
+                    "key": row.metric_key,
+                    "metric_type": row.metric_type,
+                    "semantic_group": row.semantic_group,
+                    "display_role": row.display_role,
+                    "unit": row.unit,
+                    "source_type": row.source_type,
+                    "description": row.description,
+                    "aggregation": {"kind": row.aggregation_kind, "quantile": None},
+                    "formula": None,
+                }
+                if formula is not None:
+                    metric_rules[row.metric_key]["formula"] = {
+                        "kind": "ratio",
+                        "numerator": formula.numerator,
+                        "denominator": formula.denominator,
+                        "scale": float(formula.scale),
+                        **(
+                            {
+                                "denominator_fallback": {
+                                    "kind": "sum",
+                                    "inputs": list(formula.denominator_fallback_inputs or []),
+                                }
+                            }
+                            if formula.denominator_fallback_inputs
+                            else {}
+                        ),
+                    }
+
+            thresholds = [
+                {
+                    "domain": row.domain,
+                    "metric_key": row.metric_key,
+                    "label": row.label,
+                    "direction": row.direction,
+                    "unit": row.unit,
+                    "default": float(row.default_value),
+                    "periods": dict(row.periods or {}),
+                }
+                for row in session.query(KpiThresholdRule).order_by(KpiThresholdRule.id).all()
+            ]
+            capacity_rules = [
+                {
+                    "source_name": row.source_name,
+                    "metric_key": row.metric_key,
+                    "semantics": row.semantics,
+                    "status": row.status,
+                }
+                for row in session.query(KpiCapacityRule).order_by(KpiCapacityRule.id).all()
+            ]
+            display_rules = [
+                {
+                    "domain": row.domain,
+                    "metric_key": row.metric_key,
+                    "role": row.role,
+                }
+                for row in session.query(KpiDisplayRule).order_by(KpiDisplayRule.id).all()
+            ]
+
+            common_row = session.get(KpiCommonConfig, 1)
+            if common_row is None:
+                common = {"input_timezone": "Asia/Shanghai", "budgets": {"max_files": 1000, "max_records": 200000}}
+            else:
+                common = {
+                    "input_timezone": common_row.input_timezone,
+                    "budgets": {"max_files": common_row.max_files, "max_records": common_row.max_records},
+                }
+
+            rule_revision = session.get(KpiRuleConfigRevision, 1)
+            rule_config_version = int(rule_revision.revision) if rule_revision else 0
+            return (
+                classifications,
+                classification_version,
+                metric_rules,
+                thresholds,
+                capacity_rules,
+                display_rules,
+                common,
+                rule_config_version,
+            )
     except (OSError, SQLAlchemyError) as exc:
-        raise KpiSnapshotError(f"KPI 分类数据库不可用: {exc}") from exc
+        raise KpiSnapshotError(f"KPI 分类或规则配置数据库不可用: {exc}") from exc
 
 
 def _default_rule() -> dict[str, Any]:
@@ -134,6 +242,19 @@ def _config_from_snapshot(snapshot: KpiTaskCatalogSnapshot) -> KpiConfig:
     return build_kpi_config_from_catalog(catalog, classifications, snapshot.classification_version)
 
 
+def _base_metric_items(catalog: KpiGitCatalog) -> list[dict[str, Any]]:
+    return [
+        {
+            "resource_id": metric.resource_id,
+            "key": metric.key,
+            "name_zh": metric.name_zh,
+            "name_en": metric.name_en,
+            "unit_key": metric.unit_key,
+        }
+        for _, metric in sorted(catalog.metrics.items())
+    ]
+
+
 def load_task_kpi_config(task_id: str) -> KpiConfig:
     """读取或补写任务 KPI 快照，并返回任务执行用有效目录。"""
     path = _snapshot_path(task_id)
@@ -146,18 +267,37 @@ def load_task_kpi_config(task_id: str) -> KpiConfig:
 
     try:
         catalog = load_kpi_catalog(settings.kpi_data)
-        classifications, revision = _read_classifications()
+        (
+            classifications,
+            classification_version,
+            metric_rules,
+            thresholds,
+            capacity_rules,
+            display_rules,
+            common,
+            rule_config_version,
+        ) = _read_catalog_state()
+        catalog.rules = KpiRuleSet(
+            common=common,
+            metric_rules=metric_rules,
+            thresholds=thresholds,
+            capacity_rules=capacity_rules,
+            display_rules=display_rules,
+        )
+        _validate_rules(catalog.rules.to_dict(), set(catalog.metrics))
         snapshot = KpiTaskCatalogSnapshot(
             schema_version=SNAPSHOT_SCHEMA_VERSION,
             base_data_version=catalog.base_data_version,
-            classification_version=revision,
+            classification_version=classification_version,
+            rule_config_version=rule_config_version,
             captured_at=datetime.now(UTC),
+            base_metrics=_base_metric_items(catalog),
             metrics=_effective_metrics(catalog, classifications),
             rules=catalog.rules.to_dict(),
         )
         _atomic_write_snapshot(task_id, snapshot)
-        return build_kpi_config_from_catalog(catalog, classifications, revision)
+        return build_kpi_config_from_catalog(catalog, classifications, classification_version)
     except KpiCatalogError as exc:
-        raise KpiSnapshotError(f"KPI 拆分配置无效: {exc}") from exc
+        raise KpiSnapshotError(f"KPI 基础资源或动态配置无效: {exc}") from exc
     except (OSError, SQLAlchemyError) as exc:
         raise KpiSnapshotError(f"任务 KPI 配置快照写入失败: {exc}") from exc

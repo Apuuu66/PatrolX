@@ -52,16 +52,6 @@ class Settings(BaseSettings):
     def kpi_units_file(self) -> Path:
         return self.kpi_data / "base" / "units.json"
 
-    def kpi_rule_file(self, kind: str) -> Path:
-        names = {
-            "common": "common.json",
-            "metric": "metric-rules.json",
-            "threshold": "thresholds.json",
-            "capacity": "capacity-rules.json",
-            "display": "display-rules.json",
-        }
-        return self.kpi_data / "rules" / names[kind]
-
     @property
     def scan_rules(self) -> Path:
         return self.config / "scan_rules.yaml"

@@ -34,6 +34,7 @@ import { SummaryCards } from "../components/SummaryCards";
 import { usePolling } from "../hooks/usePolling";
 import { latestTaskFailure } from "../utils/taskFailure";
 import { countByStatus, filterByStatus, toggleStatusFilter, type StatusFilter } from "../utils/taskFilter";
+import { KpiClassificationClues } from "../components/KpiClassificationClues";
 
 const CATEGORY_LABELS: Record<string, string> = {
   log: "日志",
@@ -330,6 +331,12 @@ export function TaskDetailPage() {
           />
         )}
       </Card>
+
+      {catalogSnapshot && (
+        <div style={{ marginBottom: 16 }}>
+          <KpiClassificationClues taskId={taskId} />
+        </div>
+      )}
 
       {task.status === "failed" && failure && (
         <Alert type="error" showIcon message="任务失败" description={failure} style={{ marginBottom: 16 }} />

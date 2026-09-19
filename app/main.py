@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from app import __version__
-from app.api.router import AppError, router, v3_router
+from app.api.router import AppError, router, v3_router, v4_router
 from app.core.logging import configure_logging, get_logger
 from app.core.metrics import render_metrics
 from app.models.schemas import Error
@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(router)
     app.include_router(v3_router)
+    app.include_router(v4_router)
 
     @app.middleware("http")
     async def access_log(request, call_next):

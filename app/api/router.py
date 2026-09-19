@@ -25,14 +25,36 @@ from app.models.schemas import (
     DictUpdateRequest,
     InspectionTask,
     InspectorInfo,
+    KpiCapacityRulePageV4,
+    KpiCapacityRuleRequestV4,
+    KpiCapacityRuleV4,
     KpiClassificationAuditPageV3,
+    KpiClassificationCluePageV4,
+    KpiClueStatusV4,
+    KpiCommonConfigRequestV4,
+    KpiCommonConfigV4,
+    KpiConfigAuditPageV4,
+    KpiConfigAuditV4,
+    KpiConfigDeleteResultV4,
+    KpiConfigEntityTypeV4,
+    KpiDisplayRulePageV4,
+    KpiDisplayRuleRequestV4,
+    KpiDisplayRuleV4,
     KpiDisplayStatus,
+    KpiMetricRulePageV4,
+    KpiMetricRuleRequestV4,
+    KpiMetricRuleV4,
     KpiPeriodMinutes,
     KpiRecordPage,
+    KpiRegisteredDomainV4,
     KpiResourceClassificationRequestV3,
     KpiResourceClassificationResultV3,
     KpiResourceMetricPageV3,
+    KpiSourceTypeV4,
     KpiTaskCatalogSnapshot,
+    KpiThresholdPageV4,
+    KpiThresholdRequestV4,
+    KpiThresholdV4,
     LogEntry,
     OverviewSummary,
     RebuildRequest,
@@ -42,6 +64,28 @@ from app.models.schemas import (
     TaskCreated,
     TaskListResponse,
     TaskLogs,
+)
+from app.services.kpi_classification_clues import KpiClassificationClueError, list_classification_clues
+from app.services.kpi_config import (
+    KpiConfigError,
+    create_threshold,
+    delete_capacity_rule,
+    delete_display_rule,
+    delete_metric_rule,
+    delete_threshold,
+    get_common_config,
+    get_metric_rule,
+    get_threshold,
+    list_capacity_rules,
+    list_config_audits,
+    list_display_rules,
+    list_metric_rules,
+    list_thresholds,
+    update_common_config,
+    update_threshold,
+    upsert_capacity_rule,
+    upsert_display_rule,
+    upsert_metric_rule,
 )
 from app.services.kpi_records import list_kpi_records
 from app.services.kpi_resources import (
@@ -55,6 +99,7 @@ from app.services.tasks import DeleteResult, TaskDeleteError, TaskRebuildError, 
 
 router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
+v4_router = APIRouter(prefix="/api/v4")
 DICT_NAMES = ("province", "operator", "product", "version")
 
 
@@ -67,6 +112,14 @@ class AppError(Exception):
         self.message = message
         self.status_code = status_code
         self.detail = detail
+
+
+def _convert_kpi_config_error(exc: KpiConfigError) -> AppError:
+    return AppError(exc.code, exc.message, exc.status_code, exc.detail)
+
+
+def _convert_kpi_clue_error(exc: KpiClassificationClueError) -> AppError:
+    return AppError(exc.code, exc.message, exc.status_code)
 
 
 async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
@@ -537,3 +590,295 @@ def update_dict_v2(dict_name: str = PathParam(), body: DictUpdateRequest | None 
     raw[dict_name] = items
     path.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return [DictItem(code=i["code"], name=i["name"]) for i in items]
+
+
+# ---- /api/v4 KPI 动态口径配置契约路由 ----
+
+
+@v4_router.get("/kpi/config/metric-rules", response_model=KpiMetricRulePageV4, operation_id="listKpiMetricRulesV4")
+def list_kpi_metric_rules_v4(
+    search: str | None = None,
+    source_type: KpiSourceTypeV4 | None = None,
+    domain: KpiRegisteredDomainV4 | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiMetricRulePageV4:
+    return list_metric_rules(
+        search=search,
+        source_type=source_type.value if source_type else None,
+        domain=domain.value if domain else None,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@v4_router.get(
+    "/kpi/config/metric-rules/{metric_key}", response_model=KpiMetricRuleV4, operation_id="getKpiMetricRuleV4"
+)
+def get_kpi_metric_rule_v4(metric_key: str = PathParam()) -> KpiMetricRuleV4:
+    try:
+        return get_metric_rule(metric_key)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.put(
+    "/kpi/config/metric-rules/{metric_key}", response_model=KpiMetricRuleV4, operation_id="upsertKpiMetricRuleV4"
+)
+def upsert_kpi_metric_rule_v4(
+    metric_key: str = PathParam(), body: KpiMetricRuleRequestV4 | None = None
+) -> KpiMetricRuleV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        return upsert_metric_rule(metric_key, body)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.delete(
+    "/kpi/config/metric-rules/{metric_key}",
+    response_model=KpiConfigDeleteResultV4,
+    operation_id="deleteKpiMetricRuleV4",
+)
+def delete_kpi_metric_rule_v4(
+    metric_key: str = PathParam(), operator: str = Query(min_length=1)
+) -> KpiConfigDeleteResultV4:
+    try:
+        return delete_metric_rule(metric_key, operator)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.get("/kpi/config/thresholds", response_model=KpiThresholdPageV4, operation_id="listKpiThresholdsV4")
+def list_kpi_thresholds_v4(
+    domain: KpiRegisteredDomainV4 | None = None,
+    search: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiThresholdPageV4:
+    return list_thresholds(domain=domain.value if domain else None, search=search, page=page, page_size=page_size)
+
+
+@v4_router.post(
+    "/kpi/config/thresholds", response_model=KpiThresholdV4, status_code=202, operation_id="createKpiThresholdV4"
+)
+def create_kpi_threshold_v4(response: Response, body: KpiThresholdRequestV4 | None = None) -> KpiThresholdV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        item = create_threshold(body)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+    response.headers["Location"] = f"/api/v4/kpi/config/thresholds/{item.id}"
+    return item
+
+
+@v4_router.get("/kpi/config/thresholds/{threshold_id}", response_model=KpiThresholdV4, operation_id="getKpiThresholdV4")
+def get_kpi_threshold_v4(threshold_id: int = PathParam()) -> KpiThresholdV4:
+    try:
+        return get_threshold(threshold_id)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.put(
+    "/kpi/config/thresholds/{threshold_id}", response_model=KpiThresholdV4, operation_id="updateKpiThresholdV4"
+)
+def update_kpi_threshold_v4(
+    threshold_id: int = PathParam(), body: KpiThresholdRequestV4 | None = None
+) -> KpiThresholdV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        return update_threshold(threshold_id, body)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.delete(
+    "/kpi/config/thresholds/{threshold_id}",
+    response_model=KpiConfigDeleteResultV4,
+    operation_id="deleteKpiThresholdV4",
+)
+def delete_kpi_threshold_v4(
+    threshold_id: int = PathParam(), operator: str = Query(min_length=1)
+) -> KpiConfigDeleteResultV4:
+    try:
+        return delete_threshold(threshold_id, operator)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.get(
+    "/kpi/config/capacity-rules", response_model=KpiCapacityRulePageV4, operation_id="listKpiCapacityRulesV4"
+)
+def list_kpi_capacity_rules_v4(
+    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=200)
+) -> KpiCapacityRulePageV4:
+    return list_capacity_rules(page=page, page_size=page_size)
+
+
+@v4_router.post(
+    "/kpi/config/capacity-rules",
+    response_model=KpiCapacityRuleV4,
+    status_code=202,
+    operation_id="createKpiCapacityRuleV4",
+)
+def create_kpi_capacity_rule_v4(response: Response, body: KpiCapacityRuleRequestV4 | None = None) -> KpiCapacityRuleV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        item = upsert_capacity_rule(body)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+    response.headers["Location"] = f"/api/v4/kpi/config/capacity-rules/{item.id}"
+    return item
+
+
+@v4_router.put(
+    "/kpi/config/capacity-rules/{capacity_rule_id}",
+    response_model=KpiCapacityRuleV4,
+    operation_id="updateKpiCapacityRuleV4",
+)
+def update_kpi_capacity_rule_v4(
+    capacity_rule_id: int = PathParam(), body: KpiCapacityRuleRequestV4 | None = None
+) -> KpiCapacityRuleV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        return upsert_capacity_rule(body, capacity_rule_id)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.delete(
+    "/kpi/config/capacity-rules/{capacity_rule_id}",
+    response_model=KpiConfigDeleteResultV4,
+    operation_id="deleteKpiCapacityRuleV4",
+)
+def delete_kpi_capacity_rule_v4(
+    capacity_rule_id: int = PathParam(), operator: str = Query(min_length=1)
+) -> KpiConfigDeleteResultV4:
+    try:
+        return delete_capacity_rule(capacity_rule_id, operator)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.get("/kpi/config/display-rules", response_model=KpiDisplayRulePageV4, operation_id="listKpiDisplayRulesV4")
+def list_kpi_display_rules_v4(
+    domain: KpiRegisteredDomainV4 | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiDisplayRulePageV4:
+    return list_display_rules(domain=domain.value if domain else None, page=page, page_size=page_size)
+
+
+@v4_router.post(
+    "/kpi/config/display-rules",
+    response_model=KpiDisplayRuleV4,
+    status_code=202,
+    operation_id="createKpiDisplayRuleV4",
+)
+def create_kpi_display_rule_v4(response: Response, body: KpiDisplayRuleRequestV4 | None = None) -> KpiDisplayRuleV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        item = upsert_display_rule(body)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+    response.headers["Location"] = f"/api/v4/kpi/config/display-rules/{item.id}"
+    return item
+
+
+@v4_router.put(
+    "/kpi/config/display-rules/{display_rule_id}",
+    response_model=KpiDisplayRuleV4,
+    operation_id="updateKpiDisplayRuleV4",
+)
+def update_kpi_display_rule_v4(
+    display_rule_id: int = PathParam(), body: KpiDisplayRuleRequestV4 | None = None
+) -> KpiDisplayRuleV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        return upsert_display_rule(body, display_rule_id)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.delete(
+    "/kpi/config/display-rules/{display_rule_id}",
+    response_model=KpiConfigDeleteResultV4,
+    operation_id="deleteKpiDisplayRuleV4",
+)
+def delete_kpi_display_rule_v4(
+    display_rule_id: int = PathParam(), operator: str = Query(min_length=1)
+) -> KpiConfigDeleteResultV4:
+    try:
+        return delete_display_rule(display_rule_id, operator)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.get("/kpi/config/common", response_model=KpiCommonConfigV4, operation_id="getKpiCommonConfigV4")
+def get_kpi_common_config_v4() -> KpiCommonConfigV4:
+    try:
+        return get_common_config()
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.put("/kpi/config/common", response_model=KpiCommonConfigV4, operation_id="updateKpiCommonConfigV4")
+def update_kpi_common_config_v4(body: KpiCommonConfigRequestV4 | None = None) -> KpiCommonConfigV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        return update_common_config(body)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.get("/kpi/config/audits", response_model=KpiConfigAuditPageV4, operation_id="listKpiConfigAuditsV4")
+def list_kpi_config_audits_v4(
+    entity_type: KpiConfigEntityTypeV4 | None = None,
+    operator: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiConfigAuditPageV4:
+    try:
+        rows, total, version = list_config_audits(
+            entity_type=entity_type.value if entity_type else None,
+            operator=operator,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+    items = [KpiConfigAuditV4.model_validate(row) for row in rows]
+    return KpiConfigAuditPageV4(items=items, total=total, page=page, page_size=page_size, rule_config_version=version)
+
+
+@v4_router.get(
+    "/tasks/{task_id}/kpi/classification-clues",
+    response_model=KpiClassificationCluePageV4,
+    operation_id="listKpiClassificationCluesV4",
+)
+def list_kpi_classification_clues_v4(
+    task_id: str = PathParam(),
+    clue_status: KpiClueStatusV4 | None = None,
+    search: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiClassificationCluePageV4:
+    try:
+        return list_classification_clues(
+            task_id,
+            clue_status=clue_status.value if clue_status else None,
+            search=search,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiClassificationClueError as exc:
+        raise _convert_kpi_clue_error(exc) from exc

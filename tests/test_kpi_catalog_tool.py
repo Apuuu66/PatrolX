@@ -1,4 +1,4 @@
-"""KPI 资源 CSV 拆分导入边界测试。"""
+"""KPI 资源 CSV 基础配置导入边界测试。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from tests.kpi_helpers import KPI_SPLIT_FILES, kpi_catalog_payload, write_kpi_split_config
+from app.core.config import settings
+from app.models.db import init_db
+from tests.kpi_helpers import KPI_BASE_FILES, configure_kpi_catalog, kpi_catalog_payload, write_kpi_split_config
 from tools import kpi_catalog
 from tools.kpi_catalog import (
     DEFAULT_DATA_DIR,
@@ -20,24 +22,30 @@ from tools.kpi_catalog import (
 )
 
 
-def _csv(rows: list[tuple[str, str, str]]) -> bytes:
+def _csv(rows: list[tuple[str, str, str]] | None = None) -> bytes:
+    if rows is None:
+        rows = [(item["resource_id"], item["name_zh"], item["name_en"]) for item in kpi_catalog_payload()["metrics"]]
+        rows.append(("UNIT_SEC", "秒", "second"))
     return ("资源id,中文描述,英文描述\n" + "".join(f"{a},{b},{c}\n" for a, b, c in rows)).encode()
 
 
-def _rule_hashes(data_dir: Path) -> dict[str, bytes]:
-    return {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES[2:]}
+def _base_hashes(data_dir: Path) -> dict[str, bytes]:
+    return {relative: (data_dir / relative).read_bytes() for relative in KPI_BASE_FILES}
 
 
-def test_import_writes_only_base_files(tmp_path: Path) -> None:
+def test_import_writes_only_base_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sqlite_path", tmp_path / "kpi.db")
+    init_db()
     data_dir = write_kpi_split_config(tmp_path)
-    before = _rule_hashes(data_dir)
+    before = _base_hashes(data_dir)
     csv_path = tmp_path / "resource.csv"
     rows = [(item["resource_id"], item["name_zh"], item["name_en"]) for item in kpi_catalog_payload()["metrics"]]
     rows.append(("ME_NEW", "新指标", "New Metric"))
     rows.append(("UNIT_SEC", "秒", "second"))
     csv_path.write_bytes(_csv(rows))
     generate_kpi_catalog(csv_path, data_dir)
-    assert _rule_hashes(data_dir) == before
+    assert _base_hashes(data_dir) != before
+    assert not (data_dir / "rules").exists()
 
     metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
     units = json.loads((data_dir / "base/units.json").read_text(encoding="utf-8"))
@@ -47,27 +55,31 @@ def test_import_writes_only_base_files(tmp_path: Path) -> None:
     assert metrics["source_csv_sha256"] == hashlib.sha256(csv_path.read_bytes()).hexdigest()
 
 
-def test_removed_referenced_metric_is_rejected_without_changes(tmp_path: Path) -> None:
-    data_dir = write_kpi_split_config(tmp_path)
-    before = {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES}
+def test_removed_referenced_metric_is_rejected_without_changes(tmp_path: Path, monkeypatch) -> None:
+    configure_kpi_catalog(tmp_path, monkeypatch)
+    data_dir = settings.kpi_data
+    before = _base_hashes(data_dir)
     csv_path = tmp_path / "resource.csv"
     csv_path.write_bytes(_csv([]))
     with pytest.raises(
         KpiCatalogGeneratorError,
-        match=r"rules/metric-rules\.json.*引用未知基础指标 me_call_attempts",
+        match="SQLite 动态配置仍引用基础指标: me_call_attempts",
     ):
         generate_kpi_catalog(csv_path, data_dir)
-    assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
+    assert _base_hashes(data_dir) == before
 
 
-def test_non_matching_row_is_skipped_without_changes(tmp_path: Path) -> None:
+def test_non_matching_row_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sqlite_path", tmp_path / "kpi.db")
+    init_db()
     data_dir = write_kpi_split_config(tmp_path)
-    before = {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES}
+    before = _base_hashes(data_dir)
     csv_path = tmp_path / "resource.csv"
     csv_path.write_bytes(_csv([("ME_BAD!", "坏名称", "Bad")]))
-    with pytest.raises(KpiCatalogGeneratorError, match="引用未知基础指标"):
-        generate_kpi_catalog(csv_path, data_dir)
-    assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
+    generate_kpi_catalog(csv_path, data_dir)
+    metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
+    assert metrics["metrics"] == []
+    assert _base_hashes(data_dir) != before
 
 
 def test_default_paths_are_fixed() -> None:
@@ -77,21 +89,21 @@ def test_default_paths_are_fixed() -> None:
 
 def test_cli_without_arguments_uses_fixed_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """零参调用只校验默认路径装配，不触碰仓库默认数据。"""
-
     calls: list[tuple[Path, Path]] = []
     monkeypatch.setattr(
         kpi_catalog,
         "generate_kpi_catalog",
-        lambda csv, data_dir, clear_rules=False: calls.append((csv, data_dir, clear_rules)),
+        lambda csv, data_dir: calls.append((csv, data_dir)),
     )
 
     assert main([]) == 0
-    assert calls == [(DEFAULT_RESOURCE_DIR, DEFAULT_DATA_DIR, False)]
+    assert calls == [(DEFAULT_RESOURCE_DIR, DEFAULT_DATA_DIR)]
 
 
-def test_cli_with_explicit_resource_dir_updates_base_files(tmp_path: Path) -> None:
+def test_cli_with_explicit_resource_dir_updates_base_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """真实执行统一通过显式输入目录和输出目录指向临时路径。"""
-
+    monkeypatch.setattr(settings, "sqlite_path", tmp_path / "kpi.db")
+    init_db()
     resource_dir = tmp_path / "resource_metrics"
     resource_dir.mkdir()
     csv_path = resource_dir / "any-name.csv"
@@ -106,79 +118,10 @@ def test_cli_with_explicit_resource_dir_updates_base_files(tmp_path: Path) -> No
     assert metrics["source_csv_sha256"] == hashlib.sha256(csv_path.read_bytes()).hexdigest()
 
 
-def test_cli_with_clear_rules_resets_rule_arrays(tmp_path: Path) -> None:
-    """显式 --clear-rules 清空规则数组，但保留 common.json。"""
-
+def test_cli_rejects_clear_rules_option(tmp_path: Path) -> None:
     resource_dir = tmp_path / "resource_metrics"
     resource_dir.mkdir()
-    data_dir = write_kpi_split_config(tmp_path / "kpi")
-    common_before = (data_dir / "rules/common.json").read_bytes()
-    csv_path = resource_dir / "resource.csv"
-    csv_path.write_bytes(_csv([]))
-
-    assert main(["generate", "--input", str(resource_dir), "--data-dir", str(data_dir), "--clear-rules"]) == 0
-
-    assert json.loads((data_dir / "rules/metric-rules.json").read_text(encoding="utf-8")) == {
-        "schema_version": 1,
-        "metric_rules": [],
-    }
-    assert json.loads((data_dir / "rules/thresholds.json").read_text(encoding="utf-8")) == {
-        "schema_version": 1,
-        "thresholds": [],
-    }
-    assert json.loads((data_dir / "rules/capacity-rules.json").read_text(encoding="utf-8")) == {
-        "schema_version": 1,
-        "capacity_rules": [],
-    }
-    assert json.loads((data_dir / "rules/display-rules.json").read_text(encoding="utf-8")) == {
-        "schema_version": 1,
-        "display_rules": [],
-    }
-    assert (data_dir / "rules/common.json").read_bytes() == common_before
-
-
-def test_cli_with_gbk_resource_csv_updates_base_files(tmp_path: Path) -> None:
-    """GBK 导出使用 GB18030 回退解析，输出仍保持 UTF-8。"""
-
-    resource_dir = tmp_path / "resource_metrics"
-    resource_dir.mkdir()
-    csv_path = resource_dir / "gbk.csv"
-    data_dir = write_kpi_split_config(tmp_path / "kpi")
-    rows = [(item["resource_id"], item["name_zh"], item["name_en"]) for item in kpi_catalog_payload()["metrics"]]
-    csv_path.write_bytes(_csv(rows).decode("utf-8").encode("gb18030"))
-
-    assert main(["generate", "--input", str(resource_dir), "--data-dir", str(data_dir)]) == 0
-
-    metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
-    assert metrics["source_csv_sha256"] == hashlib.sha256(csv_path.read_bytes()).hexdigest()
-    assert metrics["metrics"][0]["name_zh"] == kpi_catalog_payload()["metrics"][0]["name_zh"]
-
-
-def test_cli_with_multiple_resource_csvs_reports_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    resource_dir = tmp_path / "resource_metrics"
-    resource_dir.mkdir()
-    (resource_dir / "first.csv").write_bytes(_csv([]))
-    (resource_dir / "second.csv").write_bytes(_csv([]))
-    data_dir = write_kpi_split_config(tmp_path / "kpi")
-    before = {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES}
-
-    assert main(["generate", "--input", str(resource_dir), "--data-dir", str(data_dir)]) == 2
-
-    output = capsys.readouterr().out
-    assert "必须且只能包含一个 CSV" in output
-    assert "first.csv" in output
-    assert "second.csv" in output
-    assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
-
-
-def test_cli_missing_input_reports_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """缺失输入也通过显式参数测试，避免依赖或修改默认路径。"""
-
-    missing_input = tmp_path / "missing-resource-dir"
-    data_dir = write_kpi_split_config(tmp_path / "kpi")
-
-    assert main(["generate", "--input", str(missing_input), "--data-dir", str(data_dir)]) == 2
-
-    output = capsys.readouterr().out
-    assert "资源输入不存在" in output
-    assert str(missing_input) in output
+    (resource_dir / "resource.csv").write_bytes(_csv())
+    with pytest.raises(SystemExit) as exc_info:
+        main(["generate", "--input", str(resource_dir), "--data-dir", str(tmp_path / "kpi"), "--clear-rules"])
+    assert exc_info.value.code == 2

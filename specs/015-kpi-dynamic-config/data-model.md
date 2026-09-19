@@ -64,7 +64,7 @@ SQLite 动态配置
 | `display_role` | enum | `highlight`、`context` |
 | `unit` | string | 非空 |
 | `source_type` | enum | `raw`、`derived` |
-| `aggregation_kind` | enum | `min`、`max`、`mean`、`success_rate` |
+| `aggregation_kind` | enum | `sum`、`min`、`max`、`mean`、`count`、`success_rate` |
 | `description` | string \| null | 可选 |
 | `created_at` / `updated_at` | datetime | UTC |
 

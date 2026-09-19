@@ -273,24 +273,20 @@ PatrolX 将 KPI 数据拆为权威基础数据、分类状态和任务快照三�
 ```text
 base/metrics.json
 base/units.json
-rules/common.json
-rules/metric-rules.json
-rules/thresholds.json
-rules/capacity-rules.json
-rules/display-rules.json
 ```
 
-`base/metrics.json` 保存完整基础指标快照；`base/units.json` 只保存 `UNIT_*` 预留单位；
-五个规则文件分别保存通用设置、指标规则、阈值、容量规则和展示规则。所有文件要求 UTF-8、LF、
-严格 JSON 和 `schema_version: 1`；加载器按固定顺序读取，不回退旧 `deploy/data/kpi_catalog.json`。
+`base/metrics.json` 保存完整基础指标快照；`base/units.json` 只保存 `UNIT_*` 预留单位。
+两个基础资源文件要求 UTF-8、LF、严格 JSON 和 `schema_version: 1`；加载器不回退旧
+`deploy/data/kpi_catalog.json`。指标规则、公式、阈值、容量规则、展示规则和公共配置保存在 SQLite，
+`deploy/data/kpi/rules/*.json` 不再被运行时读取，仅可作为过渡期备份。
 
 约束：
 
 - `metrics[].resource_id` 必须以 `ME_` 开头；`units[].resource_id` 必须以 `UNIT_` 开头。
 - 稳定 key 是资源 ID 的小写形式；`resource_id` 和 `key` 全局唯一。
 - `metrics[].unit_key` 当前必须是 `null`；单位解析是预留能力，不进入运行时。
-- 指标规则、公式、阈值、容量规则和展示规则只能引用 `metrics` 中存在的 key，公式不得循环。
-- 资源 CSV 离线导入是完整替换；被移除指标仍被规则引用时导入失败，规则文件和基础文件都不替换。
+- SQLite 动态口径只能引用 `metrics` 中存在的 key，派生公式不得循环。
+- 资源 CSV 离线导入是基础资源完整替换；被移除指标仍被 SQLite 动态配置引用时导入失败，两个基础文件都不替换。
 - 文件不做业务域分类；分类状态只在数据库中维护。
 ### DB 分类模型
 
@@ -308,18 +304,24 @@ rules/display-rules.json
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "base_data_version": "sha256:...",
   "classification_version": 1,
+  "rule_config_version": 3,
   "captured_at": "2026-09-19T00:00:00Z",
+  "base_metrics": [],
   "metrics": [],
   "rules": {}
 }
 ```
 
-快照在主包解压完成后生成，之后不可变。普通 KPI 规则只读取快照；单规则重跑优先复用。快照缺失时从拆分配置 + DB 原子重建，损坏时抛出错误并让任务失败。
+快照在主包解压完成后生成，之后不可变。普通 KPI 规则只读取快照；单规则重跑优先复用。快照缺失时从基础资源 + SQLite 原子重建，损坏或当前配置校验失败时抛出错误并让任务失败。
 
-全量重建会删除旧快照并按当前拆分配置和数据库分类状态生成新快照；增量重建在预检时要求既有快照可解析，重建解压现场后原样保留快照。
+全量重建会删除旧快照并按当前基础资源、分类和动态口径生成新快照；增量重建在预检时要求既有快照可解析，重建解压现场后原样保留快照。
+
+### 动态口径配置
+
+SQLite 保存分类之外的 KPI 动态配置：指标规则与受控 ratio 公式、阈值（默认值和 5/15/30/60 分钟周期）、容量规则、展示规则、公共配置、配置修订和配置审计。每次原子保存或删除会记录审计并递增 `rule_config_version`。分类线索只读展示，不改变规则状态；配置或分类变更后必须手动重跑受影响的 KPI 规则。
 
 ## 11. 扩展规则
 

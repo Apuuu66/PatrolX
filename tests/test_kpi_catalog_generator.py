@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.kpi_helpers import KPI_SPLIT_FILES, kpi_catalog_payload, write_kpi_split_config
+from tests.kpi_helpers import kpi_catalog_payload, write_kpi_split_config
 from tools.kpi_catalog import KpiCatalogGeneratorError, generate_kpi_catalog
 
 
@@ -169,10 +169,17 @@ def test_generator_rejects_matching_row_with_missing_name(tmp_path: Path) -> Non
         generate_kpi_catalog(csv_path, data_dir)
 
 
-def test_generator_preserves_rule_file_bytes(tmp_path: Path) -> None:
+def test_generator_does_not_touch_runtime_rules_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import settings
+    from app.models.db import init_db
+
+    monkeypatch.setattr(settings, "sqlite_path", tmp_path / "kpi.db")
+    init_db()
     data_dir = write_kpi_split_config(tmp_path)
-    before = {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES[2:]}
+    (data_dir / "rules").mkdir()
+    marker = data_dir / "rules" / "marker.txt"
+    marker.write_text("runtime", encoding="utf-8")
     csv_path = tmp_path / "resource.csv"
     csv_path.write_bytes(_csv())
     generate_kpi_catalog(csv_path, data_dir)
-    assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES[2:]} == before
+    assert marker.read_text(encoding="utf-8") == "runtime"

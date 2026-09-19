@@ -18,6 +18,7 @@ from app.models.schemas import (
     KpiResourceMetricPageV3,
     KpiResourceMetricV3,
 )
+from app.services.kpi_config import KpiConfigError, assert_metric_classifiable
 
 VALID_DOMAINS = ("unclassified", "call", "api", "media")
 
@@ -210,6 +211,13 @@ def classify_resource_metrics(
     catalog = _load_catalog()
     protected = _protected_metric_keys(catalog)
     next_domain = _domain_for(domain)
+    for metric_key in metric_keys:
+        if metric_key not in catalog.metrics:
+            raise KpiResourceError("metric_not_found", "指标不在当前基础数据中", 404, {"metric_keys": [metric_key]})
+        try:
+            assert_metric_classifiable(metric_key)
+        except KpiConfigError as exc:
+            raise KpiResourceError(exc.code, exc.message, exc.status_code, exc.detail) from exc
     try:
         with session_factory() as session:
             missing = sorted(key for key in metric_keys if key not in catalog.metrics)

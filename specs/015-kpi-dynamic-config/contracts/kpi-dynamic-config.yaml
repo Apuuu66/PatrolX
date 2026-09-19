@@ -499,7 +499,7 @@ components:
 
     KpiAggregationKindV4:
       type: string
-      enum: [min, max, mean, success_rate]
+      enum: [sum, min, max, mean, count, median, stddev, success_rate]
 
     KpiThresholdDirectionV4:
       type: string

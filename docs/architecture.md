@@ -34,7 +34,7 @@ PatrolX 是离线巡检系统：
        │
        ▼
 ┌──────────────┐    ┌────────────────┐
-│ 规则执行器   │───▶│ rules/*.json   │
+│ 规则执行器   │───▶│ rules/<code>.json │
 │ P1/P2        │    │ report.html    │
 └──────┬───────┘    └────────────────┘
        │
@@ -480,8 +480,8 @@ InspectionTask
 
 默认存储：
 
-- SQLite：任务元数据、轻量状态、KPI 分类状态/修订/审计。
-- KPI 拆分配置：`deploy/data/kpi/base/` 保存基础指标和预留单位，`deploy/data/kpi/rules/` 保存五类规则；Git 是权威来源。
+- SQLite：任务元数据、轻量状态、KPI 分类状态/修订/审计，以及 KPI 指标口径、公式、阈值、容量、展示、公共配置和配置审计。
+- KPI 基础资源：`deploy/data/kpi/base/` 只保存基础指标和预留单位；Git 是基础资源权威来源，SQLite 是动态口径权威来源。
 - 文件：原始包、解压数据、规则结果、报告、执行日志、任务 KPI 快照。
 - 结果文档按任务 → 规则平铺组织。
 
@@ -555,20 +555,22 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 - 规则不使用私有 prepare，直接读取自己的 `source_patterns` 匹配文件。
 - 同一领域存在多个周期时按 `15 → 5 → 30 → 60` 选择一个最高优先级周期；
   只有该周期的多个文件一起聚合，其他周期不混入同一条结果。
-- KPI 基础指标、公式、阈值、容量语义和解析预算的权威来源是 `deploy/data/kpi/` 七个固定 JSON 文件；
-  业务域分类状态、修订和审计保存在 SQLite。
+- KPI 基础指标和预留单位来自 `deploy/data/kpi/base/` 两个固定 JSON 文件；业务域分类、指标口径、公式、阈值、容量语义、
+  展示规则和解析预算的权威来源是 SQLite。`deploy/data/kpi/rules/*.json` 不再是运行时依赖，仅可作为过渡期备份。
 - 任务执行在解压完成后生成 `output/<task_id>/kpi/kpi_catalog_snapshot.json`。普通规则只读取任务快照；
-  快照不可变，单规则重跑优先复用。快照缺失时从拆分配置 + DB 重建，损坏时任务失败，不回退旧配置。
+  快照不可变，单规则重跑优先复用。快照缺失时从基础资源 + SQLite 重建，损坏时任务失败，不回退旧配置。
 - 目录化结果写入 `metric_catalog`、`kpi_results`、`unclassified_metrics`；未登记列只保留来源和样例，不改变规则状态。
 - 历史结果 `metadata.version=1` 前端回退明细表，后端不迁移、不重算；分页原始记录通过 `/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records` 按需查询。
 - `统计峰值`、`最大并发` 等容量指标只展示和追溯，不参与成功/失败率判断。
 - 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
-- 时间输入按 `rules/common.json` 的 `input_timezone` 解释，持久化为 UTC。
+- 时间输入按 SQLite 公共配置中的 `input_timezone` 解释，持久化为 UTC。
 - 旧的通用 `kpi.threshold` 规则已下线，不再注册。
-- 资源 CSV 只能通过离线命令更新拆分配置基础文件：`.venv/bin/python -m tools.kpi_catalog`；默认输入 `local_run/resource_metrics`，该目录必须且只能包含一个 CSV，默认输出 `deploy/data/kpi`。默认不修改规则文件；显式传入 `--clear-rules` 时原子清空指标/阈值/容量/展示规则数组并保留 `rules/common.json`。
+- 资源 CSV 只能通过离线命令更新基础资源文件：`.venv/bin/python -m tools.kpi_catalog`；默认输入 `local_run/resource_metrics`，该目录必须且只能包含一个 CSV，默认输出 `deploy/data/kpi`。命令只原子替换 `base/metrics.json` 和 `base/units.json`，并在目标指标仍被 SQLite 动态配置引用时拒绝移除。
   CSV 必须包含 `资源id`、`中文描述`、`英文描述` 三列；顺序不限，额外列忽略。仅保留 `ME_*` 和 `UNIT_*` 行，其他行跳过；`ME_*` 生成指标，重复 ID 且中文名不同时保留首次 ID，并生成 `ME_<原名>_<英文名>_<指纹>` 形式的新 ID；`UNIT_*` 仅生成预留单位且重复行跳过并保留首次定义，`unit_key` 当前固定为 null。
 - 基础指标配置使用 `/api/v3/kpi/resource-metrics`、`/api/v3/kpi/resource-metrics/classification` 和审计接口；
   分类请求显式携带 `operator`，不提供乐观锁。在线 CSV 导入已退役。
+- 动态口径配置、审计和任务分类线索使用 `/api/v4`；聚合支持简单最值、均值、计数、中位数、标准差和受控成功率 ratio，
+  不提供任意表达式 DSL。
 
 ### 7.9 扫描规则生成辅助
 

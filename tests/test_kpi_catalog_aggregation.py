@@ -49,19 +49,19 @@ def test_raw_count_and_capacity_metrics_aggregate_by_declared_kind() -> None:
     assert capacity.actual_aggregation == "max"
 
 
-def test_latency_metric_supports_max_and_configured_quantile() -> None:
-    maximum = aggregate_kpi_metric(
-        _metric("latency_ms", metric_type="latency", aggregation="max"),
+def test_latency_metric_supports_median_and_standard_deviation() -> None:
+    median = aggregate_kpi_metric(
+        _metric("latency_ms", metric_type="latency", aggregation="median"),
+        {"latency_ms": [30, 10, 20]},
+    )
+    stddev = aggregate_kpi_metric(
+        _metric("latency_ms", metric_type="latency", aggregation="stddev"),
         {"latency_ms": [10, 20, 30]},
     )
-    quantile = aggregate_kpi_metric(
-        _metric("latency_ms", metric_type="latency", aggregation="percentile", quantile=0.95),
-        {"latency_ms": list(range(1, 101))},
-    )
-    assert maximum.main_value == 30
-    assert maximum.actual_aggregation == "max"
-    assert quantile.main_value == pytest.approx(95.05)
-    assert quantile.actual_aggregation == "p95"
+    assert median.main_value == 20
+    assert median.actual_aggregation == "median"
+    assert stddev.main_value == pytest.approx((200 / 3) ** 0.5)
+    assert stddev.actual_aggregation == "stddev"
 
 
 def test_ratio_aggregates_inputs_first_and_does_not_average_ratios() -> None:
@@ -74,7 +74,7 @@ def test_ratio_aggregates_inputs_first_and_does_not_average_ratios() -> None:
         "call_success_rate",
         metric_type="rate",
         source_type="derived",
-        aggregation="ratio_from_inputs",
+        aggregation="success_rate",
         formula=formula,
     )
     result = aggregate_kpi_metric(
@@ -86,7 +86,7 @@ def test_ratio_aggregates_inputs_first_and_does_not_average_ratios() -> None:
     )
     assert result.value_available is True
     assert result.main_value == pytest.approx(90.0)
-    assert result.actual_aggregation == "ratio_from_inputs"
+    assert result.actual_aggregation == "success_rate"
     assert result.provenance["inputs"] == [
         {"key": "call_success_count", "aggregation": "sum", "value": 270},
         {"key": "call_attempts", "aggregation": "sum", "value": 300},
@@ -106,7 +106,7 @@ def test_ratio_uses_declared_denominator_fallback_only_when_denominator_is_absen
         "call_success_rate",
         metric_type="rate",
         source_type="derived",
-        aggregation="ratio_from_inputs",
+        aggregation="success_rate",
         formula=formula,
     )
     result = aggregate_kpi_metric(
@@ -123,7 +123,7 @@ def test_ratio_uses_declared_denominator_fallback_only_when_denominator_is_absen
 def test_ratio_is_unavailable_for_zero_or_missing_formula_inputs() -> None:
     zero_formula = KpiRatioFormula(numerator="success", denominator="attempts", scale=100)
     zero_metric = _metric(
-        "rate", metric_type="rate", source_type="derived", aggregation="ratio_from_inputs", formula=zero_formula
+        "rate", metric_type="rate", source_type="derived", aggregation="success_rate", formula=zero_formula
     )
     zero = aggregate_kpi_metric(
         zero_metric,

@@ -141,13 +141,12 @@ Windows 上推荐使用 Git Bash 或 WSL；路径可以用 `C:/data/sample.zip` 
   --data-dir /path/to/kpi
 ```
 
-如需从空规则重建，可显式传入 `--clear-rules`；该操作只清空指标、阈值、容量和展示规则数组，并保留 `rules/common.json`：
+基础资源导入不再提供 `--clear-rules`；动态口径由 SQLite 和 `/api/v4` 配置中心维护。如需临时使用其他现场，只需覆盖基础资源路径：
 
 ```bash
 .venv/bin/python -m tools.kpi_catalog generate \
   --input /path/to/resource_metrics \
-  --data-dir /path/to/kpi \
-  --clear-rules
+  --data-dir /path/to/kpi
 ```
 
 该命令只做 CSV -> 拆分配置基础文件的确定性转换；运行时分类和任务巡检不会在线导入 CSV。

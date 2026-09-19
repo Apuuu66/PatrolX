@@ -520,6 +520,272 @@ class KpiTaskCatalogSnapshot(BaseModel):
     schema_version: int = 1
     base_data_version: str
     classification_version: int = Field(ge=0)
+    rule_config_version: int = Field(default=0, ge=0)
     captured_at: datetime
+    base_metrics: list[dict[str, Any]] = Field(default_factory=list)
     metrics: list[dict[str, Any]] = Field(default_factory=list)
     rules: dict[str, Any]
+
+
+class KpiMetricTypeV4(StrEnum):
+    COUNT = "count"
+    RATE = "rate"
+    CAPACITY = "capacity"
+    LATENCY = "latency"
+    GAUGE = "gauge"
+
+
+class KpiSemanticGroupV4(StrEnum):
+    TRAFFIC = "traffic"
+    QUALITY = "quality"
+    LATENCY = "latency"
+    CAPACITY = "capacity"
+    OTHER = "other"
+
+
+class KpiDisplayRoleV4(StrEnum):
+    HIGHLIGHT = "highlight"
+    CONTEXT = "context"
+
+
+class KpiSourceTypeV4(StrEnum):
+    RAW = "raw"
+    DERIVED = "derived"
+
+
+class KpiAggregationKindV4(StrEnum):
+    SUM = "sum"
+    MIN = "min"
+    MAX = "max"
+    MEAN = "mean"
+    COUNT = "count"
+    MEDIAN = "median"
+    STDDEV = "stddev"
+    SUCCESS_RATE = "success_rate"
+
+
+class KpiRegisteredDomainV4(StrEnum):
+    CALL = "call"
+    API = "api"
+    MEDIA = "media"
+
+
+class KpiThresholdDirectionV4(StrEnum):
+    MIN = "min"
+    MAX = "max"
+
+
+class KpiCapacityStatusV4(StrEnum):
+    CONFIRMED = "confirmed"
+    UNKNOWN = "unknown"
+
+
+class KpiCapacitySemanticsV4(StrEnum):
+    PEAK = "peak"
+    CONCURRENCY = "concurrency"
+    GAUGE = "gauge"
+
+
+class KpiConfigEntityTypeV4(StrEnum):
+    METRIC_RULE = "metric_rule"
+    THRESHOLD = "threshold"
+    CAPACITY_RULE = "capacity_rule"
+    DISPLAY_RULE = "display_rule"
+    COMMON_CONFIG = "common_config"
+
+
+class KpiClueStatusV4(StrEnum):
+    UNCLASSIFIED = "unclassified"
+    CLASSIFIED = "classified"
+    UNREGISTERED = "unregistered"
+    AMBIGUOUS = "ambiguous"
+
+
+class KpiFormulaV4(BaseModel):
+    kind: Literal["ratio"]
+    numerator: str
+    denominator: str
+    denominator_fallback_inputs: list[str] = Field(default_factory=list)
+    scale: float
+
+
+class KpiMetricRuleRequestV4(BaseModel):
+    metric_type: KpiMetricTypeV4
+    semantic_group: KpiSemanticGroupV4
+    display_role: KpiDisplayRoleV4
+    unit: str = Field(min_length=1)
+    source_type: KpiSourceTypeV4
+    aggregation_kind: KpiAggregationKindV4
+    description: str | None = None
+    formula: KpiFormulaV4 | None = None
+    operator: str = Field(min_length=1)
+
+
+class KpiMetricRuleV4(BaseModel):
+    metric_key: str
+    metric_type: KpiMetricTypeV4
+    semantic_group: KpiSemanticGroupV4
+    display_role: KpiDisplayRoleV4
+    unit: str
+    source_type: KpiSourceTypeV4
+    aggregation_kind: KpiAggregationKindV4
+    description: str | None = None
+    formula: KpiFormulaV4 | None = None
+    domain: KpiRegisteredDomainV4 | None = None
+    updated_at: datetime
+    rule_config_version: int
+
+
+class KpiMetricRulePageV4(BaseModel):
+    items: list[KpiMetricRuleV4] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    rule_config_version: int = Field(ge=0)
+
+
+class KpiThresholdRequestV4(BaseModel):
+    domain: KpiRegisteredDomainV4
+    metric_key: str
+    label: str = Field(min_length=1)
+    direction: KpiThresholdDirectionV4
+    unit: str = Field(min_length=1)
+    default: float
+    periods: dict[str, float]
+    operator: str = Field(min_length=1)
+
+
+class KpiThresholdV4(BaseModel):
+    id: int
+    domain: KpiRegisteredDomainV4
+    metric_key: str
+    label: str
+    direction: KpiThresholdDirectionV4
+    unit: str
+    default: float
+    periods: dict[str, float]
+    updated_at: datetime
+    rule_config_version: int
+
+
+class KpiThresholdPageV4(BaseModel):
+    items: list[KpiThresholdV4] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    rule_config_version: int = Field(ge=0)
+
+
+class KpiCapacityRuleRequestV4(BaseModel):
+    source_name: str = Field(min_length=1)
+    metric_key: str
+    domain: KpiRegisteredDomainV4 | None = None
+    status: KpiCapacityStatusV4
+    semantics: KpiCapacitySemanticsV4 | None = None
+    operator: str = Field(min_length=1)
+
+
+class KpiCapacityRuleV4(BaseModel):
+    id: int
+    source_name: str
+    metric_key: str
+    domain: KpiRegisteredDomainV4 | None = None
+    status: KpiCapacityStatusV4
+    semantics: KpiCapacitySemanticsV4 | None = None
+    updated_at: datetime
+    rule_config_version: int
+
+
+class KpiCapacityRulePageV4(BaseModel):
+    items: list[KpiCapacityRuleV4] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    rule_config_version: int = Field(ge=0)
+
+
+class KpiDisplayRuleRequestV4(BaseModel):
+    domain: KpiRegisteredDomainV4
+    metric_key: str
+    role: KpiDisplayRoleV4
+    operator: str = Field(min_length=1)
+
+
+class KpiDisplayRuleV4(BaseModel):
+    id: int
+    domain: KpiRegisteredDomainV4
+    metric_key: str
+    role: KpiDisplayRoleV4
+    updated_at: datetime
+    rule_config_version: int
+
+
+class KpiDisplayRulePageV4(BaseModel):
+    items: list[KpiDisplayRuleV4] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    rule_config_version: int = Field(ge=0)
+
+
+class KpiCommonConfigRequestV4(BaseModel):
+    input_timezone: str = Field(min_length=1)
+    max_files: int = Field(ge=1)
+    max_records: int = Field(ge=1)
+    operator: str = Field(min_length=1)
+
+
+class KpiCommonConfigV4(BaseModel):
+    input_timezone: str
+    max_files: int
+    max_records: int
+    updated_at: datetime
+    rule_config_version: int
+
+
+class KpiConfigDeleteResultV4(BaseModel):
+    deleted: bool
+    entity_type: KpiConfigEntityTypeV4
+    entity_key: str
+    rule_config_version: int
+
+
+class KpiConfigAuditV4(BaseModel):
+    id: int
+    entity_type: KpiConfigEntityTypeV4
+    entity_key: str
+    operation: Literal["upsert", "delete"]
+    operator: str
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+    result: str
+    rule_config_version: int
+    detail: dict[str, Any] | None = None
+    operated_at: datetime
+
+
+class KpiConfigAuditPageV4(BaseModel):
+    items: list[KpiConfigAuditV4] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+
+
+class KpiClassificationClueV4(BaseModel):
+    source_name: str
+    metric_key: str | None = None
+    candidates: list[dict[str, str]] = Field(default_factory=list)
+    clue_status: KpiClueStatusV4
+    rule_code: str
+    domain: str
+    source_files: list[str] = Field(default_factory=list)
+    record_count: int = Field(ge=0)
+    sample_values: list[Any] = Field(default_factory=list)
+    resolution_note: str | None = None
+
+
+class KpiClassificationCluePageV4(BaseModel):
+    items: list[KpiClassificationClueV4] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)

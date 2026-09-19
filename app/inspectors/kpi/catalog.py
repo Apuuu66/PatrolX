@@ -14,14 +14,9 @@ from typing import Any
 from app.core.config import settings
 
 REGISTERED_DOMAINS = ("call", "api", "media")
-KPI_SPLIT_FILES = (
+KPI_BASE_FILES = (
     "base/metrics.json",
     "base/units.json",
-    "rules/common.json",
-    "rules/metric-rules.json",
-    "rules/thresholds.json",
-    "rules/capacity-rules.json",
-    "rules/display-rules.json",
 )
 _METRIC_RESOURCE_RE = re.compile(r"^ME_[A-Za-z0-9_]+$")
 _UNIT_RESOURCE_RE = re.compile(r"^UNIT_[A-Za-z0-9_]+$")
@@ -29,7 +24,8 @@ _STABLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _VALID_METRIC_TYPES = {"count", "rate", "capacity", "latency", "gauge"}
 _VALID_SOURCE_TYPES = {"raw", "derived"}
 _VALID_DISPLAY_ROLES = {"highlight", "context"}
-_VALID_AGGREGATIONS = {"sum", "max", "percentile", "ratio_from_inputs", "last"}
+_VALID_RAW_AGGREGATIONS = {"sum", "min", "max", "mean", "count", "median", "stddev"}
+_VALID_AGGREGATIONS = _VALID_RAW_AGGREGATIONS | {"success_rate"}
 _VALID_DIRECTIONS = {"min", "max"}
 _VALID_CAPACITY_STATUS = {"confirmed", "unknown"}
 _VALID_SEMANTICS = {"peak", "concurrency", "gauge"}
@@ -188,35 +184,31 @@ def _numeric_values(values: list[Any]) -> tuple[list[float], bool]:
     return numbers, has_missing
 
 
-def _actual_aggregation(kind: str, quantile: float | None) -> str:
-    if kind == "percentile" and quantile is not None:
-        return f"p{int(quantile * 100)}"
+def _actual_aggregation(kind: str, quantile: float | None = None) -> str:
     return kind
 
 
-def _aggregate_values(kind: str, values: list[float], quantile: float | None) -> float:
+def _aggregate_values(kind: str, values: list[float], quantile: float | None = None) -> float:
     if not values:
         raise ValueError("values 不能为空")
     if kind == "sum":
         return sum(values)
-    if kind in {"avg", "average", "mean"}:
+    if kind == "mean":
         return sum(values) / len(values)
-    if kind == "max":
-        return max(values)
-    if kind == "min":
-        return min(values)
     if kind == "count":
         return float(len(values))
-    if kind == "percentile" and quantile is not None:
+    if kind in {"max", "min"}:
+        return max(values) if kind == "max" else min(values)
+    if kind == "median":
         ordered = sorted(values)
-        if len(ordered) == 1:
-            return ordered[0]
-        position = (len(ordered) - 1) * quantile
-        lower = int(position)
-        upper = min(lower + 1, len(ordered) - 1)
-        weight = position - lower
-        return ordered[lower] * (1 - weight) + ordered[upper] * weight
-    raise KpiCatalogError(f"不支持的聚合类型: {kind}")
+        middle = len(ordered) // 2
+        if len(ordered) % 2:
+            return ordered[middle]
+        return (ordered[middle - 1] + ordered[middle]) / 2
+    if kind == "stddev":
+        mean = sum(values) / len(values)
+        return (sum((value - mean) ** 2 for value in values) / len(values)) ** 0.5
+    raise KpiCatalogError(f"不支持的 raw 聚合类型: {kind}")
 
 
 def _sum_input(values: list[Any]) -> float | None:
@@ -544,7 +536,17 @@ def _validate_metric_rule(value: Any, context: str, metric_keys: set[str]) -> tu
     raw = _require_object(value, context)
     _require_keys(
         raw,
-        {"key", "metric_type", "semantic_group", "display_role", "unit", "source_type", "aggregation", "formula"},
+        {
+            "key",
+            "metric_type",
+            "semantic_group",
+            "display_role",
+            "unit",
+            "source_type",
+            "aggregation",
+            "formula",
+            "description",
+        },
         context,
     )
     if "description" not in raw:
@@ -563,7 +565,7 @@ def _validate_metric_rule(value: Any, context: str, metric_keys: set[str]) -> tu
             raise KpiCatalogError(f"{context}.{field_name}: 非法值")
     _require_non_empty_str(raw["unit"], f"{context}.unit")
     aggregation = _require_object(raw["aggregation"], f"{context}.aggregation")
-    _require_keys(aggregation, {"kind"}, f"{context}.aggregation")
+    _require_keys(aggregation, {"kind", "quantile"}, f"{context}.aggregation")
     aggregation.setdefault("quantile", None)
     if aggregation["kind"] not in _VALID_AGGREGATIONS:
         raise KpiCatalogError(f"{context}.aggregation.kind: 非法聚合")
@@ -573,11 +575,13 @@ def _validate_metric_rule(value: Any, context: str, metric_keys: set[str]) -> tu
         if not 0 <= number <= 1:
             raise KpiCatalogError(f"{context}.aggregation.quantile: 必须在 [0,1]")
     if raw["source_type"] == "derived":
+        if raw["aggregation"]["kind"] != "success_rate":
+            raise KpiCatalogError(f"{context}.aggregation.kind: derived 指标必须使用 success_rate")
         if raw["formula"] is None:
             raise KpiCatalogError(f"{context}.formula: derived 指标必须配置公式")
         _validate_formula(raw["formula"], f"{context}.formula", metric_keys)
-    elif raw["formula"] is not None:
-        raise KpiCatalogError(f"{context}.formula: raw 指标不应配置公式")
+    elif raw["formula"] is not None or raw["aggregation"]["kind"] not in _VALID_RAW_AGGREGATIONS:
+        raise KpiCatalogError(f"{context}.aggregation.kind: raw 指标只支持受控聚合")
     if raw["description"] is not None:
         _require_non_empty_str(raw["description"], f"{context}.description")
     return key, raw
@@ -737,25 +741,15 @@ def _validate_split_file(raw: dict[str, Any], relative: str, container: str, *, 
 
 
 def load_kpi_catalog(path: Path | None = None) -> KpiGitCatalog:
-    """读取并严格校验固定 KPI 拆分配置目录。"""
+    """读取并严格校验离线 KPI 基础资源；业务规则一律来自数据库。"""
     data_dir = path or settings.kpi_data
     raw_files: dict[str, dict[str, Any]] = {}
     file_bytes: dict[str, bytes] = {}
-    for relative in KPI_SPLIT_FILES:
+    for relative in KPI_BASE_FILES:
         raw_files[relative], file_bytes[relative] = _read_split_json(data_dir, relative)
 
     metric_items = _validate_split_file(raw_files["base/metrics.json"], "base/metrics.json", "metrics", with_hash=True)
     unit_items = _validate_split_file(raw_files["base/units.json"], "base/units.json", "units")
-    for relative in KPI_SPLIT_FILES[2:]:
-        container = {
-            "rules/common.json": None,
-            "rules/metric-rules.json": "metric_rules",
-            "rules/thresholds.json": "thresholds",
-            "rules/capacity-rules.json": "capacity_rules",
-            "rules/display-rules.json": "display_rules",
-        }[relative]
-        if container is not None:
-            _validate_split_file(raw_files[relative], relative, container)
 
     metrics: dict[str, KpiBaseMetric] = {}
     used_ids: set[str] = set()
@@ -776,32 +770,14 @@ def load_kpi_catalog(path: Path | None = None) -> KpiGitCatalog:
         used_ids.add(resource_id)
         units[key] = KpiReservedUnit(resource_id, key, name_zh, name_en)
 
-    common_raw = raw_files["rules/common.json"]
-    _require_keys(common_raw, {"schema_version", "input_timezone", "budgets"}, "rules/common.json")
-    if common_raw["schema_version"] != 1 or isinstance(common_raw["schema_version"], bool):
-        raise KpiCatalogError("rules/common.json.schema_version: 当前只支持 1")
-    combined_rules = {
-        "common": {"input_timezone": common_raw["input_timezone"], "budgets": common_raw["budgets"]},
-        "metric_rules": raw_files["rules/metric-rules.json"]["metric_rules"],
-        "thresholds": raw_files["rules/thresholds.json"]["thresholds"],
-        "capacity_rules": raw_files["rules/capacity-rules.json"]["capacity_rules"],
-        "display_rules": raw_files["rules/display-rules.json"]["display_rules"],
-    }
-    try:
-        rules = _validate_rules(combined_rules, set(metrics))
-    except KpiCatalogError as exc:
-        message = str(exc).removeprefix("rules.")
-        raise KpiCatalogError(message) from exc
-
     digest = hashlib.sha256()
-    for relative in KPI_SPLIT_FILES:
+    for relative in KPI_BASE_FILES:
         digest.update(relative.encode("utf-8") + b"\x00" + file_bytes[relative] + b"\x00")
     return KpiGitCatalog(
         schema_version=1,
         source_csv_sha256=raw_files["base/metrics.json"]["source_csv_sha256"],
         metrics=metrics,
         units=units,
-        rules=rules,
         base_data_version=f"sha256:{digest.hexdigest()}",
     )
 
@@ -838,7 +814,7 @@ def build_kpi_config_from_catalog(
                 display_role="context",
                 unit="",
                 source_type="raw",
-                aggregation=KpiAggregation("sum"),
+                aggregation=KpiAggregation("mean"),
                 aliases=[],
             )
         else:

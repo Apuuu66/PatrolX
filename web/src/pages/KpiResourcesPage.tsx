@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { App, Button, Card, Descriptions, Input, Select, Space, Table, Tag } from "antd";
+import { Alert, App, Button, Card, Descriptions, Input, Select, Space, Table, Tabs, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { useSearchParams } from "react-router-dom";
 import {
   api,
   type KpiClassificationAudit,
@@ -9,6 +10,14 @@ import {
 } from "../api/http";
 import { KpiResourceTable } from "../components/KpiResourceTable";
 import { RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
+import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
+import { KpiThresholdEditor } from "../components/KpiThresholdEditor";
+import {
+  KpiCapacityRuleEditor,
+  KpiCommonConfigEditor,
+  KpiConfigAuditTable,
+  KpiDisplayRuleEditor,
+} from "../components/KpiOperationalConfig";
 
 const DOMAIN_OPTIONS = (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[]).map((value) => ({
   value,
@@ -17,9 +26,10 @@ const DOMAIN_OPTIONS = (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[])
 
 export function KpiResourcesPage() {
   const { message } = App.useApp();
+  const [searchParams] = useSearchParams();
   const [pageData, setPageData] = useState<KpiResourceMetricPage | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [domain, setDomain] = useState<ResourceDomain | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -237,6 +247,51 @@ export function KpiResourcesPage() {
           }}
         />
       </Card>
+
+      {!operator.trim() ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="动态口径配置需要在上方输入操作人"
+          description="操作人用于配置审计追溯。输入后即可维护指标公式、阈值、容量规则、展示规则和公共配置。"
+        />
+      ) : (
+        <Tabs
+          defaultActiveKey="formula"
+          items={[
+            {
+              key: "formula",
+              label: "指标公式",
+              children: <KpiFormulaEditor operator={operator.trim()} />,
+            },
+            {
+              key: "thresholds",
+              label: "阈值",
+              children: <KpiThresholdEditor operator={operator.trim()} />,
+            },
+            {
+              key: "rules",
+              label: "容量与展示",
+              children: (
+                <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                  <KpiCapacityRuleEditor operator={operator.trim()} />
+                  <KpiDisplayRuleEditor operator={operator.trim()} />
+                </Space>
+              ),
+            },
+            {
+              key: "common",
+              label: "公共配置",
+              children: <KpiCommonConfigEditor operator={operator.trim()} />,
+            },
+            {
+              key: "audits",
+              label: "配置审计",
+              children: <KpiConfigAuditTable />,
+            },
+          ]}
+        />
+      )}
     </Space>
   );
 }

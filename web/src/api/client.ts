@@ -329,6 +329,203 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v4/kpi/config/metric-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询指标规则 */
+        get: operations["listKpiMetricRulesV4"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/metric-rules/{metric_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询指标规则 */
+        get: operations["getKpiMetricRuleV4"];
+        /** 创建或更新指标规则与公式 */
+        put: operations["upsertKpiMetricRuleV4"];
+        post?: never;
+        /** 删除自定义指标规则并回退默认规则 */
+        delete: operations["deleteKpiMetricRuleV4"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/thresholds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询阈值 */
+        get: operations["listKpiThresholdsV4"];
+        put?: never;
+        /** 创建阈值 */
+        post: operations["createKpiThresholdV4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/thresholds/{threshold_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询阈值 */
+        get: operations["getKpiThresholdV4"];
+        /** 更新阈值 */
+        put: operations["updateKpiThresholdV4"];
+        post?: never;
+        /** 删除阈值 */
+        delete: operations["deleteKpiThresholdV4"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/capacity-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询容量规则 */
+        get: operations["listKpiCapacityRulesV4"];
+        put?: never;
+        /** 创建容量规则 */
+        post: operations["createKpiCapacityRuleV4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/capacity-rules/{capacity_rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新容量规则 */
+        put: operations["updateKpiCapacityRuleV4"];
+        post?: never;
+        /** 删除容量规则 */
+        delete: operations["deleteKpiCapacityRuleV4"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/display-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询展示规则 */
+        get: operations["listKpiDisplayRulesV4"];
+        put?: never;
+        /** 创建展示规则 */
+        post: operations["createKpiDisplayRuleV4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/display-rules/{display_rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新展示规则 */
+        put: operations["updateKpiDisplayRuleV4"];
+        post?: never;
+        /** 删除展示规则 */
+        delete: operations["deleteKpiDisplayRuleV4"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/common": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询公共配置 */
+        get: operations["getKpiCommonConfigV4"];
+        /** 更新公共配置 */
+        put: operations["updateKpiCommonConfigV4"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询动态配置审计 */
+        get: operations["listKpiConfigAuditsV4"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/tasks/{task_id}/kpi/classification-clues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询任务按需分类线索 */
+        get: operations["listKpiClassificationCluesV4"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -972,6 +1169,228 @@ export interface components {
             rules: {
                 [key: string]: unknown;
             };
+        };
+        /** @enum {string} */
+        KpiRegisteredDomainV4: "call" | "api" | "media";
+        /** @enum {string} */
+        KpiSourceTypeV4: "raw" | "derived";
+        /** @enum {string} */
+        KpiMetricTypeV4: "count" | "rate" | "capacity" | "latency" | "gauge";
+        /** @enum {string} */
+        KpiSemanticGroupV4: "traffic" | "quality" | "latency" | "capacity" | "other";
+        /** @enum {string} */
+        KpiDisplayRoleV4: "highlight" | "context";
+        /** @enum {string} */
+        KpiAggregationKindV4: "sum" | "min" | "max" | "mean" | "count" | "median" | "stddev" | "success_rate";
+        /** @enum {string} */
+        KpiThresholdDirectionV4: "min" | "max";
+        /** @enum {string} */
+        KpiCapacityStatusV4: "confirmed" | "unknown";
+        /** @enum {string} */
+        KpiCapacitySemanticsV4: "peak" | "concurrency" | "gauge";
+        /** @enum {string} */
+        KpiConfigEntityTypeV4: "metric_rule" | "threshold" | "capacity_rule" | "display_rule" | "common_config";
+        /** @enum {string} */
+        KpiClueStatusV4: "unclassified" | "classified" | "unregistered" | "ambiguous";
+        KpiMetricRuleRequestV4: {
+            metric_type: components["schemas"]["KpiMetricTypeV4"];
+            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
+            display_role: components["schemas"]["KpiDisplayRoleV4"];
+            unit: string;
+            source_type: components["schemas"]["KpiSourceTypeV4"];
+            aggregation_kind: components["schemas"]["KpiAggregationKindV4"];
+            description?: string | null;
+            formula?: components["schemas"]["KpiFormulaRequestV4"] | null;
+            operator: string;
+        };
+        KpiFormulaRequestV4: {
+            /** @enum {string} */
+            kind: "ratio";
+            numerator: string;
+            denominator: string;
+            denominator_fallback_inputs?: string[];
+            scale: number;
+        };
+        KpiMetricRuleV4: {
+            metric_key: string;
+            metric_type: components["schemas"]["KpiMetricTypeV4"];
+            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
+            display_role: components["schemas"]["KpiDisplayRoleV4"];
+            unit: string;
+            source_type: components["schemas"]["KpiSourceTypeV4"];
+            aggregation_kind: components["schemas"]["KpiAggregationKindV4"];
+            description?: string | null;
+            formula?: components["schemas"]["KpiFormulaV4"] | null;
+            domain?: components["schemas"]["KpiRegisteredDomainV4"] | null;
+            /** Format: date-time */
+            updated_at: string;
+            rule_config_version: number;
+        };
+        KpiMetricRulePageV4: {
+            items: components["schemas"]["KpiMetricRuleV4"][];
+            total: number;
+            page: number;
+            page_size: number;
+            rule_config_version: number;
+        };
+        KpiFormulaV4: {
+            /** @enum {string} */
+            kind: "ratio";
+            numerator: string;
+            denominator: string;
+            denominator_fallback_inputs?: string[];
+            scale: number;
+        };
+        KpiThresholdRequestV4: {
+            domain: components["schemas"]["KpiRegisteredDomainV4"];
+            metric_key: string;
+            label: string;
+            direction: components["schemas"]["KpiThresholdDirectionV4"];
+            unit: string;
+            default: number;
+            periods: {
+                [key: string]: number;
+            };
+            operator: string;
+        };
+        KpiThresholdV4: {
+            id: number;
+            domain: components["schemas"]["KpiRegisteredDomainV4"];
+            metric_key: string;
+            label: string;
+            direction: components["schemas"]["KpiThresholdDirectionV4"];
+            unit: string;
+            default: number;
+            periods: {
+                [key: string]: number;
+            };
+            /** Format: date-time */
+            updated_at: string;
+            rule_config_version: number;
+        };
+        KpiThresholdPageV4: {
+            items: components["schemas"]["KpiThresholdV4"][];
+            total: number;
+            page: number;
+            page_size: number;
+            rule_config_version: number;
+        };
+        KpiCapacityRuleRequestV4: {
+            source_name: string;
+            metric_key: string;
+            domain?: components["schemas"]["KpiRegisteredDomainV4"] | null;
+            semantics?: components["schemas"]["KpiCapacitySemanticsV4"] | null;
+            status: components["schemas"]["KpiCapacityStatusV4"];
+            operator: string;
+        };
+        KpiCapacityRuleV4: {
+            id: number;
+            source_name: string;
+            metric_key: string;
+            domain?: components["schemas"]["KpiRegisteredDomainV4"] | null;
+            semantics?: components["schemas"]["KpiCapacitySemanticsV4"] | null;
+            status: components["schemas"]["KpiCapacityStatusV4"];
+            /** Format: date-time */
+            updated_at: string;
+            rule_config_version: number;
+        };
+        KpiCapacityRulePageV4: {
+            items: components["schemas"]["KpiCapacityRuleV4"][];
+            total: number;
+            page: number;
+            page_size: number;
+            rule_config_version: number;
+        };
+        KpiDisplayRuleRequestV4: {
+            domain: components["schemas"]["KpiRegisteredDomainV4"];
+            metric_key: string;
+            role: components["schemas"]["KpiDisplayRoleV4"];
+            operator: string;
+        };
+        KpiDisplayRuleV4: {
+            id: number;
+            domain: components["schemas"]["KpiRegisteredDomainV4"];
+            metric_key: string;
+            role: components["schemas"]["KpiDisplayRoleV4"];
+            /** Format: date-time */
+            updated_at: string;
+            rule_config_version: number;
+        };
+        KpiDisplayRulePageV4: {
+            items: components["schemas"]["KpiDisplayRuleV4"][];
+            total: number;
+            page: number;
+            page_size: number;
+            rule_config_version: number;
+        };
+        KpiCommonConfigRequestV4: {
+            input_timezone: string;
+            max_files: number;
+            max_records: number;
+            operator: string;
+        };
+        KpiCommonConfigV4: {
+            input_timezone: string;
+            max_files: number;
+            max_records: number;
+            /** Format: date-time */
+            updated_at: string;
+            rule_config_version: number;
+        };
+        KpiConfigDeleteResultV4: {
+            deleted: boolean;
+            entity_type: components["schemas"]["KpiConfigEntityTypeV4"];
+            entity_key: string;
+            rule_config_version: number;
+        };
+        KpiConfigAuditV4: {
+            id: number;
+            entity_type: components["schemas"]["KpiConfigEntityTypeV4"];
+            entity_key: string;
+            /** @enum {string} */
+            operation: "upsert" | "delete";
+            operator: string;
+            before?: {
+                [key: string]: unknown;
+            } | null;
+            after?: {
+                [key: string]: unknown;
+            } | null;
+            result: string;
+            rule_config_version: number;
+            detail?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: date-time */
+            operated_at: string;
+        };
+        KpiConfigAuditPageV4: {
+            items: components["schemas"]["KpiConfigAuditV4"][];
+            total: number;
+            page: number;
+            page_size: number;
+        };
+        KpiClassificationClueV4: {
+            source_name: string;
+            metric_key?: string | null;
+            candidates?: {
+                metric_key: string;
+                name_zh: string;
+                name_en: string;
+            }[];
+            clue_status: components["schemas"]["KpiClueStatusV4"];
+            rule_code: string;
+            domain: string;
+            source_files: string[];
+            record_count: number;
+            sample_values: unknown[];
+            resolution_note?: string | null;
+        };
+        KpiClassificationCluePageV4: {
+            items: components["schemas"]["KpiClassificationClueV4"][];
+            total: number;
+            page: number;
+            page_size: number;
         };
     };
     responses: {
@@ -1636,6 +2055,564 @@ export interface operations {
                 };
             };
             500: components["responses"]["Error500"];
+        };
+    };
+    listKpiMetricRulesV4: {
+        parameters: {
+            query?: {
+                search?: string;
+                source_type?: components["schemas"]["KpiSourceTypeV4"];
+                domain?: components["schemas"]["KpiRegisteredDomainV4"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 指标规则分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricRulePageV4"];
+                };
+            };
+        };
+    };
+    getKpiMetricRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 指标规则 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricRuleV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    upsertKpiMetricRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiMetricRuleRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 保存成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricRuleV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            404: components["responses"]["Error404"];
+            /** @description 引用保护、公式循环或配置冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+        };
+    };
+    deleteKpiMetricRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 删除成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    listKpiThresholdsV4: {
+        parameters: {
+            query?: {
+                domain?: components["schemas"]["KpiRegisteredDomainV4"];
+                search?: string;
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 阈值分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiThresholdPageV4"];
+                };
+            };
+        };
+    };
+    createKpiThresholdV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiThresholdRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 已受理创建 */
+            202: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiThresholdV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            /** @description domain+metric_key 重复 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+        };
+    };
+    getKpiThresholdV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threshold_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 阈值 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiThresholdV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    updateKpiThresholdV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threshold_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiThresholdRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 保存成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiThresholdV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            404: components["responses"]["Error404"];
+        };
+    };
+    deleteKpiThresholdV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threshold_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 删除成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    listKpiCapacityRulesV4: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 容量规则分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiCapacityRulePageV4"];
+                };
+            };
+        };
+    };
+    createKpiCapacityRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiCapacityRuleRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 已受理创建 */
+            202: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiCapacityRuleV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            /** @description source_name 重复 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+        };
+    };
+    updateKpiCapacityRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                capacity_rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiCapacityRuleRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 保存成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiCapacityRuleV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    deleteKpiCapacityRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                capacity_rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 删除成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    listKpiDisplayRulesV4: {
+        parameters: {
+            query?: {
+                domain?: components["schemas"]["KpiRegisteredDomainV4"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 展示规则分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDisplayRulePageV4"];
+                };
+            };
+        };
+    };
+    createKpiDisplayRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiDisplayRuleRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 已受理创建 */
+            202: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDisplayRuleV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            /** @description domain+metric_key 重复 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+        };
+    };
+    updateKpiDisplayRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                display_rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiDisplayRuleRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 保存成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDisplayRuleV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    deleteKpiDisplayRuleV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                display_rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 删除成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    getKpiCommonConfigV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 公共配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiCommonConfigV4"];
+                };
+            };
+        };
+    };
+    updateKpiCommonConfigV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiCommonConfigRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 保存成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiCommonConfigV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+        };
+    };
+    listKpiConfigAuditsV4: {
+        parameters: {
+            query?: {
+                entity_type?: components["schemas"]["KpiConfigEntityTypeV4"];
+                operator?: string;
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 配置审计分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiConfigAuditPageV4"];
+                };
+            };
+        };
+    };
+    listKpiClassificationCluesV4: {
+        parameters: {
+            query?: {
+                clue_status?: components["schemas"]["KpiClueStatusV4"];
+                search?: string;
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 线索分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiClassificationCluePageV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
         };
     };
 }

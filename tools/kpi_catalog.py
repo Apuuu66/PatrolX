@@ -28,10 +28,11 @@ CSV 编码：
 
 行为：
     - 仅保留资源 ID 匹配 `ME_*` 或 `UNIT_*` 的行，其他行跳过。
-    - `ME_*` 写入 `base/metrics.json`；重复 ID 且中文名相同时跳过，保留首次定义；中文名不同时保留首次 ID，并生成 `ME_<原名>_<英文名>_<指纹>` 形式的新 ID。
+    - `ME_*` 写入 `base/metrics.json`；重复 ID 且中文名相同时跳过，保留首次定义。
+    - 中文名不同时保留首次 ID，并生成带指纹的新资源 ID。
     - `UNIT_*` 写入 `base/units.json`；重复 UNIT 行跳过，保留首次定义。
     - `unit_key` 当前固定为 null。
-    - 默认不修改 `rules/` 下任何文件；显式使用 `--clear-rules` 时，仅清空可重建规则数组并保留 `rules/common.json`。
+    - 只替换 `base/` 基础资源；SQLite 仍引用的指标不允许移除。
     - 任何校验或写入失败都不会产生部分替换。
 """
 
@@ -47,6 +48,7 @@ import tempfile
 from pathlib import Path
 
 from app.inspectors.kpi.catalog import KpiCatalogError, load_kpi_catalog
+from app.services.kpi_config import referenced_metric_keys
 
 
 class KpiCatalogGeneratorError(Exception):
@@ -59,19 +61,6 @@ BASE_FILES = ("base/metrics.json", "base/units.json")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESOURCE_DIR = PROJECT_ROOT / "local_run/resource_metrics"
 DEFAULT_DATA_DIR = PROJECT_ROOT / "deploy/data/kpi"
-CLEARABLE_RULE_FILES = (
-    "rules/metric-rules.json",
-    "rules/thresholds.json",
-    "rules/capacity-rules.json",
-    "rules/display-rules.json",
-)
-RULE_FILES = (
-    "rules/common.json",
-    "rules/metric-rules.json",
-    "rules/thresholds.json",
-    "rules/capacity-rules.json",
-    "rules/display-rules.json",
-)
 
 
 def _resolve_resource_csv(input_path: Path) -> Path:
@@ -176,47 +165,32 @@ def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
     rows.sort(key=lambda item: item["key"])
     return rows, hashlib.sha256(file_bytes).hexdigest()
 
+
 def _render_json(payload: object) -> bytes:
     """生成 UTF-8、LF、缩进 2 和换行结尾的确定性 JSON。"""
     return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
-def _validate_candidate(data_dir: Path, candidate_files: dict[str, bytes]) -> None:
-    """在临时目录中聚合校验候选基础文件和既有规则文件。"""
+def _validate_candidate(data_dir: Path, candidate_files: dict[str, bytes]) -> set[str]:
+    """在临时目录中校验候选基础资源，并返回候选指标 key。"""
     try:
         data_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError as exc:
-        raise KpiCatalogGeneratorError(f"KPI 拆分配置目录已存在: {data_dir}") from exc
+        raise KpiCatalogGeneratorError(f"KPI 配置目录已存在: {data_dir}") from exc
     try:
         for relative, content in candidate_files.items():
             path = data_dir / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
-        load_kpi_catalog(data_dir)
+        return set(load_kpi_catalog(data_dir).metrics)
     except (KpiCatalogError, OSError) as exc:
-        reason = str(exc)
-        rule_file_by_prefix = {
-            "metric_rules": "rules/metric-rules.json",
-            "thresholds": "rules/thresholds.json",
-            "capacity_rules": "rules/capacity-rules.json",
-            "display_rules": "rules/display-rules.json",
-        }
-        for prefix, relative in rule_file_by_prefix.items():
-            if reason.startswith(prefix):
-                reason = f"{relative}: {reason}"
-                break
-        raise KpiCatalogGeneratorError(
-            "生成结果校验失败：新基础数据与既有规则文件不一致，未替换任何文件。"
-            "请先修改规则文件中对不存在基础指标的引用；如需从空规则重建，"
-            "可将对应规则文件中的规则数组清空（保留 schema_version）。"
-            f"原因: {reason}"
-        ) from exc
+        raise KpiCatalogGeneratorError(f"生成结果校验失败，未替换任何文件。原因: {exc}") from exc
     finally:
         shutil.rmtree(data_dir, ignore_errors=True)
 
 
-def generate_kpi_catalog(resource_input: Path, data_dir: Path, *, clear_rules: bool = False) -> None:
-    """从资源 CSV 完整替换基础指标和预留单位；默认不改写规则文件。"""
+def generate_kpi_catalog(resource_input: Path, data_dir: Path) -> None:
+    """从资源 CSV 完整替换基础指标和预留单位。"""
     csv_path = _resolve_resource_csv(resource_input)
     rows, source_hash = _read_resource_csv(csv_path)
     metrics = [dict(item, unit_key=None) for item in rows if item["resource_id"].startswith("ME_")]
@@ -225,31 +199,24 @@ def generate_kpi_catalog(resource_input: Path, data_dir: Path, *, clear_rules: b
         "base/metrics.json": _render_json({"schema_version": 1, "source_csv_sha256": source_hash, "metrics": metrics}),
         "base/units.json": _render_json({"schema_version": 1, "units": units}),
     }
-    for relative in RULE_FILES:
-        source_path = data_dir / relative
-        if clear_rules and relative in CLEARABLE_RULE_FILES:
-            container = {
-                "rules/metric-rules.json": "metric_rules",
-                "rules/thresholds.json": "thresholds",
-                "rules/capacity-rules.json": "capacity_rules",
-                "rules/display-rules.json": "display_rules",
-            }[relative]
-            candidate_files[relative] = _render_json({"schema_version": 1, container: []})
-            continue
-        try:
-            candidate_files[relative] = source_path.read_bytes()
-        except OSError as exc:
-            raise KpiCatalogGeneratorError(f"既有规则文件读取失败: {relative}: {exc}") from exc
 
     staging_root = Path(tempfile.mkdtemp(prefix=".kpi-import.", dir=data_dir.parent))
     candidate_dir = staging_root / "candidate"
-    _validate_candidate(candidate_dir, candidate_files)
+    candidate_keys = _validate_candidate(candidate_dir, candidate_files)
 
-    output_files = BASE_FILES + (CLEARABLE_RULE_FILES if clear_rules else ())
+    old_keys = set(load_kpi_catalog(data_dir).metrics)
+    referenced = referenced_metric_keys()
+    removed_referenced = sorted(old_keys & referenced - candidate_keys)
+    if removed_referenced:
+        shutil.rmtree(staging_root, ignore_errors=True)
+        raise KpiCatalogGeneratorError(
+            "基础配置替换失败：SQLite 动态配置仍引用基础指标: " + ", ".join(removed_referenced)
+        )
+
     previous: dict[str, bytes] = {}
     replaced: list[str] = []
     try:
-        for relative in output_files:
+        for relative in BASE_FILES:
             target = data_dir / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             previous[relative] = target.read_bytes()
@@ -282,19 +249,13 @@ def main(argv: list[str] | None = None) -> int:
     generate = sub.add_parser("generate", help="从默认资源 CSV 更新基础配置")
     generate.add_argument("--input", default=str(DEFAULT_RESOURCE_DIR), help="资源目录；目录内必须且只能有一个 CSV")
     generate.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR), help="KPI 拆分配置目录；默认使用仓库内固定路径")
-    generate.add_argument(
-        "--clear-rules",
-        action="store_true",
-        help="清空指标/阈值/容量/展示规则数组；保留 rules/common.json",
-    )
     args = parser.parse_args(argv)
     if args.command is None:
         args.command = "generate"
         args.input = DEFAULT_RESOURCE_DIR
         args.data_dir = DEFAULT_DATA_DIR
-        args.clear_rules = False
     try:
-        generate_kpi_catalog(Path(args.input), Path(args.data_dir), clear_rules=args.clear_rules)
+        generate_kpi_catalog(Path(args.input), Path(args.data_dir))
     except KpiCatalogGeneratorError as exc:
         print(f"错误: {exc}")
         return 2
