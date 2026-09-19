@@ -1,4 +1,4 @@
-"""KPI 新目录测试助手。"""
+"""KPI 拆分配置测试助手。"""
 
 from __future__ import annotations
 
@@ -122,6 +122,59 @@ def kpi_catalog_payload() -> dict:
     }
 
 
+KPI_SPLIT_FILES = (
+    "base/metrics.json",
+    "base/units.json",
+    "rules/common.json",
+    "rules/metric-rules.json",
+    "rules/thresholds.json",
+    "rules/capacity-rules.json",
+    "rules/display-rules.json",
+)
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def split_kpi_payload(payload: dict) -> dict[str, dict]:
+    """把旧聚合 payload 拆成固定文件相对路径到内容的映射。"""
+    return {
+        "base/metrics.json": {
+            "schema_version": payload["schema_version"],
+            "source_csv_sha256": payload["source_csv_sha256"],
+            "metrics": payload["metrics"],
+        },
+        "base/units.json": {"schema_version": payload["schema_version"], "units": payload["units"]},
+        "rules/common.json": {"schema_version": payload["schema_version"], **payload["rules"]["common"]},
+        "rules/metric-rules.json": {
+            "schema_version": payload["schema_version"],
+            "metric_rules": payload["rules"]["metric_rules"],
+        },
+        "rules/thresholds.json": {
+            "schema_version": payload["schema_version"],
+            "thresholds": payload["rules"]["thresholds"],
+        },
+        "rules/capacity-rules.json": {
+            "schema_version": payload["schema_version"],
+            "capacity_rules": payload["rules"]["capacity_rules"],
+        },
+        "rules/display-rules.json": {
+            "schema_version": payload["schema_version"],
+            "display_rules": payload["rules"]["display_rules"],
+        },
+    }
+
+
+def write_kpi_split_config(root: Path, payload: dict | None = None) -> Path:
+    """写入七类固定拆分配置文件。"""
+    payload = payload or kpi_catalog_payload()
+    for relative, content in split_kpi_payload(payload).items():
+        _write_json(root / relative, content)
+    return root
+
+
 def configure_kpi_catalog(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -129,24 +182,24 @@ def configure_kpi_catalog(
     output_dir: Path | None = None,
     sqlite_path: Path | None = None,
 ) -> Path:
-    """初始化测试数据库、写入并分类标准 KPI 目录。"""
+    """初始化测试数据库、写入并分类标准 KPI 拆分目录。"""
     monkeypatch.setattr(settings, "output_dir", output_dir or tmp_path / "output")
     monkeypatch.setattr(settings, "sqlite_path", sqlite_path or tmp_path / "kpi.db")
     init_db()
-    path = tmp_path / "kpi_catalog.json"
-    path.write_text(json.dumps(kpi_catalog_payload(), ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(settings, "kpi_catalog_path", path)
+    data_dir = tmp_path / "kpi"
+    write_kpi_split_config(data_dir)
+    monkeypatch.setattr(settings, "kpi_data_dir", data_dir)
     classify_resource_metrics(
         [resource_id.lower() for resource_id, _, _ in _CALL_METRICS],
         domain="call",
         operator="test",
     )
-    return path
+    return data_dir
 
 
 def write_kpi_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, payload: dict) -> Path:
-    """覆盖 Git JSON 路径，用于测试特定目录规则。"""
-    path = tmp_path / "kpi_catalog_override.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(settings, "kpi_catalog_path", path)
-    return path
+    """兼容旧测试名，写入并指向拆分配置目录。"""
+    data_dir = tmp_path / "kpi"
+    write_kpi_split_config(data_dir, payload)
+    monkeypatch.setattr(settings, "kpi_data_dir", data_dir)
+    return data_dir

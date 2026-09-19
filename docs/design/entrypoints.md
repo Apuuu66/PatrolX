@@ -130,10 +130,10 @@ Windows 上推荐使用 Git Bash 或 WSL；路径可以用 `C:/data/sample.zip` 
 工具脚本不直接读取压缩包。资源 CSV 的 KPI 目录维护使用独立离线命令，不从任务现场采集：
 
 ```bash
-python -m app.tools.kpi_catalog generate --csv local_run/resource_metrics/resources.csv --output deploy/data/kpi_catalog.json
+python -m app.tools.kpi_catalog generate --csv local_run/resource_metrics/resources.csv --data-dir deploy/data/kpi
 ```
 
-该命令只做 CSV -> Git JSON 的确定性转换；运行时分类和任务巡检不会在线导入 CSV。
+该命令只做 CSV -> 拆分配置基础文件的确定性转换；运行时分类和任务巡检不会在线导入 CSV。
 
 ## 4. CLI 全流程入口
 

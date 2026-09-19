@@ -27,7 +27,7 @@ from app.models.schemas import (
 )
 from app.services import store
 from app.services.executor import Executor, RuleContext
-from app.services.kpi_catalog import load_task_kpi_config
+from app.services.kpi_catalog import KpiSnapshotError, load_task_kpi_config
 from app.services.kpi_resources import classify_resource_metrics
 from app.services.report import render_report
 
@@ -250,6 +250,10 @@ def run_single_rule(
     registry.load_all()
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
+    task_path = settings.output / task_id / "task.json"
+    snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
+    if task_path.exists() and not snapshot_path.exists():
+        raise KpiSnapshotError(f"任务 KPI 配置快照缺失: {snapshot_path}")
     ctx = _new_context(task_id, package, package_checksum)
     executor = Executor(registry)
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():

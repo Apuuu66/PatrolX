@@ -276,8 +276,6 @@ export function TaskDetailPage() {
             title="KPI 快照"
             style={{ marginTop: 16 }}
             items={[
-              { key: "base", label: "基础数据版本", children: catalogSnapshot.base_data_version.slice(0, 12) },
-              { key: "classification", label: "分类修订", children: catalogSnapshot.classification_version },
               {
                 key: "captured_at",
                 label: "生成时间",

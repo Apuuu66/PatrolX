@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "source_csv_sha256": "401b665479e862b2e7d2057ade94f0690bef0396295ab00a38fdc18598787bd2",
+  "metrics": [
+    {
+      "resource_id": "ME_CALL_ATTEMPTS",
+      "key": "me_call_attempts",
+      "name_zh": "呼叫请求次数",
+      "name_en": "Call Attempts",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_FAILURE_COUNT",
+      "key": "me_call_failure_count",
+      "name_zh": "呼叫请求失败次数",
+      "name_en": "Call Failure Count",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_FAILURE_RATE",
+      "key": "me_call_failure_rate",
+      "name_zh": "呼叫失败率",
+      "name_en": "Call Failure Rate",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_SUCCESS_COUNT",
+      "key": "me_call_success_count",
+      "name_zh": "呼叫请求成功次数",
+      "name_en": "Call Success Count",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_CALL_SUCCESS_RATE",
+      "key": "me_call_success_rate",
+      "name_zh": "呼叫成功率",
+      "name_en": "Call Success Rate",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_MAX_CONCURRENCY",
+      "key": "me_max_concurrency",
+      "name_zh": "最大并发",
+      "name_en": "Max Concurrency",
+      "unit_key": null
+    },
+    {
+      "resource_id": "ME_STAT_PEAK",
+      "key": "me_stat_peak",
+      "name_zh": "统计峰值",
+      "name_en": "Stat Peak",
+      "unit_key": null
+    }
+  ]
+}

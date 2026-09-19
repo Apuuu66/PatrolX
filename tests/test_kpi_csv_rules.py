@@ -1,6 +1,5 @@
 """KPI CSV 共享解析器、配置校验、关联派生和容量指标测试。"""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,7 @@ from app.inspectors.kpi.common import (
     parse_csv_file,
     parse_kpi_path,
 )
-from tests.kpi_helpers import configure_kpi_catalog, kpi_catalog_payload, write_kpi_catalog
+from tests.kpi_helpers import configure_kpi_catalog, kpi_catalog_payload, write_kpi_catalog, write_kpi_split_config
 
 
 @pytest.fixture(autouse=True)
@@ -393,9 +392,9 @@ def test_kpi_names_use_longest_prefix_match(tmp_path: Path) -> None:
     ]
     payload["rules"]["thresholds"] = []
     payload["rules"]["capacity_rules"] = []
-    path = tmp_path / "kpi_catalog.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    catalog = load_kpi_catalog(path)
+    data_dir = tmp_path / "kpi"
+    write_kpi_split_config(data_dir, payload)
+    catalog = load_kpi_catalog(data_dir)
     config = build_kpi_config_from_catalog(catalog, {"me_request": "api", "me_request_success": "api"})
     content = _content(
         ["请求成功(次)", "Request Success(count)"],

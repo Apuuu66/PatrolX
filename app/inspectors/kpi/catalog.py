@@ -14,7 +14,15 @@ from typing import Any
 from app.core.config import settings
 
 REGISTERED_DOMAINS = ("call", "api", "media")
-DEFAULT_KPI_CATALOG_PATH = Path("deploy/data/kpi_catalog.json")
+KPI_SPLIT_FILES = (
+    "base/metrics.json",
+    "base/units.json",
+    "rules/common.json",
+    "rules/metric-rules.json",
+    "rules/thresholds.json",
+    "rules/capacity-rules.json",
+    "rules/display-rules.json",
+)
 _METRIC_RESOURCE_RE = re.compile(r"^ME_[A-Za-z0-9_]+$")
 _UNIT_RESOURCE_RE = re.compile(r"^UNIT_[A-Za-z0-9_]+$")
 _STABLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -543,7 +551,7 @@ def _validate_metric_rule(value: Any, context: str, metric_keys: set[str]) -> tu
         raw["description"] = None
     key = _require_non_empty_str(raw["key"], f"{context}.key")
     if key not in metric_keys:
-        raise KpiCatalogError(f"{context}.key: 引用未知基础指标")
+        raise KpiCatalogError(f"{context}.key: 引用未知基础指标 {key}")
     for field_name, valid in (
         ("metric_type", _VALID_METRIC_TYPES),
         ("semantic_group", {"traffic", "quality", "latency", "capacity", "other"}),
@@ -640,7 +648,7 @@ def _validate_rules(raw: Any, metric_keys: set[str]) -> KpiRuleSet:
         _require_non_empty_str(raw["unit"], f"{context}.unit")
         metric_key = _require_non_empty_str(raw["metric_key"], f"{context}.metric_key")
         if metric_key not in metric_keys:
-            raise KpiCatalogError(f"{context}.metric_key: 引用未知基础指标")
+            raise KpiCatalogError(f"{context}.metric_key: 引用未知基础指标 {raw['metric_key']}")
         if (domain, metric_key) in threshold_keys:
             raise KpiCatalogError(f"{context}: domain+metric_key 重复")
         threshold_keys.add((domain, metric_key))
@@ -669,7 +677,7 @@ def _validate_rules(raw: Any, metric_keys: set[str]) -> KpiRuleSet:
             raise KpiCatalogError(f"{context}.source_name: 重复源列名")
         source_names.add(source_name)
         if raw["metric_key"] not in metric_keys:
-            raise KpiCatalogError(f"{context}.metric_key: 引用未知基础指标")
+            raise KpiCatalogError(f"{context}.metric_key: 引用未知基础指标 {raw['metric_key']}")
         if raw["status"] not in _VALID_CAPACITY_STATUS:
             raise KpiCatalogError(f"{context}.status: 非法状态")
         if raw["status"] == "confirmed" and raw["semantics"] not in _VALID_SEMANTICS:
@@ -687,7 +695,7 @@ def _validate_rules(raw: Any, metric_keys: set[str]) -> KpiRuleSet:
         if raw["domain"] not in REGISTERED_DOMAINS:
             raise KpiCatalogError(f"{context}.domain: 非法业务域")
         if raw["metric_key"] not in metric_keys:
-            raise KpiCatalogError(f"{context}.metric_key: 引用未知基础指标")
+            raise KpiCatalogError(f"{context}.metric_key: 引用未知基础指标 {raw['metric_key']}")
         if (raw["domain"], raw["metric_key"]) in display_keys:
             raise KpiCatalogError(f"{context}: domain+metric_key 重复")
         display_keys.add((raw["domain"], raw["metric_key"]))
@@ -704,27 +712,55 @@ def _validate_rules(raw: Any, metric_keys: set[str]) -> KpiRuleSet:
     )
 
 
-def load_kpi_catalog(path: Path | None = None) -> KpiGitCatalog:
-    """读取并严格校验 Git 权威 KPI JSON。"""
-    catalog_path = path or settings.resolved(settings.kpi_catalog_path)
+def _read_split_json(data_dir: Path, relative: str) -> tuple[dict[str, Any], bytes]:
+    """读取一个固定拆分 JSON，拒绝重复字段并附带文件上下文。"""
+    path = data_dir / relative
     try:
-        file_bytes = catalog_path.read_bytes()
+        file_bytes = path.read_bytes()
         raw = json.loads(file_bytes.decode("utf-8"), object_pairs_hook=_strict_object)
-    except KpiCatalogError:
-        raise
+    except KpiCatalogError as exc:
+        raise KpiCatalogError(f"{relative}: {exc}") from exc
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise KpiCatalogError(f"KPI Git JSON 读取或解析失败: {catalog_path}: {exc}") from exc
+        raise KpiCatalogError(f"{relative}: 读取或解析失败: {exc}") from exc
+    return _require_object(raw, relative), file_bytes
 
-    root = _require_object(raw, "KPI Git JSON")
-    _require_keys(root, {"schema_version", "source_csv_sha256", "metrics", "units", "rules"}, "KPI Git JSON")
-    if root["schema_version"] != 1:
-        raise KpiCatalogError("KPI Git JSON.schema_version: 当前只支持 1")
-    _require_sha256(root["source_csv_sha256"], "KPI Git JSON.source_csv_sha256")
+
+def _validate_split_file(raw: dict[str, Any], relative: str, container: str, *, with_hash: bool = False) -> list[Any]:
+    """校验拆分文件公共顶层字段并返回配置数组。"""
+    expected = {"schema_version", container, *({"source_csv_sha256"} if with_hash else set())}
+    _require_keys(raw, expected, relative)
+    if raw["schema_version"] != 1 or isinstance(raw["schema_version"], bool):
+        raise KpiCatalogError(f"{relative}.schema_version: 当前只支持 1")
+    if with_hash:
+        _require_sha256(raw["source_csv_sha256"], f"{relative}.source_csv_sha256")
+    return _require_array(raw[container], f"{relative}.{container}")
+
+
+def load_kpi_catalog(path: Path | None = None) -> KpiGitCatalog:
+    """读取并严格校验固定 KPI 拆分配置目录。"""
+    data_dir = path or settings.kpi_data
+    raw_files: dict[str, dict[str, Any]] = {}
+    file_bytes: dict[str, bytes] = {}
+    for relative in KPI_SPLIT_FILES:
+        raw_files[relative], file_bytes[relative] = _read_split_json(data_dir, relative)
+
+    metric_items = _validate_split_file(raw_files["base/metrics.json"], "base/metrics.json", "metrics", with_hash=True)
+    unit_items = _validate_split_file(raw_files["base/units.json"], "base/units.json", "units")
+    for relative in KPI_SPLIT_FILES[2:]:
+        container = {
+            "rules/common.json": None,
+            "rules/metric-rules.json": "metric_rules",
+            "rules/thresholds.json": "thresholds",
+            "rules/capacity-rules.json": "capacity_rules",
+            "rules/display-rules.json": "display_rules",
+        }[relative]
+        if container is not None:
+            _validate_split_file(raw_files[relative], relative, container)
 
     metrics: dict[str, KpiBaseMetric] = {}
     used_ids: set[str] = set()
-    for index, item in enumerate(_require_array(root["metrics"], "metrics")):
-        context = f"metrics[{index}]"
+    for index, item in enumerate(metric_items):
+        context = f"base/metrics.json: metrics[{index}]"
         resource_id, key, name_zh, name_en, unit_key = _validate_resource(item, context, "ME_", _METRIC_RESOURCE_RE)
         if resource_id in used_ids or key in metrics:
             raise KpiCatalogError(f"{context}: 资源 ID 或稳定 key 重复")
@@ -732,21 +768,41 @@ def load_kpi_catalog(path: Path | None = None) -> KpiGitCatalog:
         metrics[key] = KpiBaseMetric(resource_id, key, name_zh, name_en, unit_key)
 
     units: dict[str, KpiReservedUnit] = {}
-    for index, item in enumerate(_require_array(root["units"], "units")):
-        context = f"units[{index}]"
+    for index, item in enumerate(unit_items):
+        context = f"base/units.json: units[{index}]"
         resource_id, key, name_zh, name_en, _ = _validate_resource(item, context, "UNIT_", _UNIT_RESOURCE_RE)
         if resource_id in used_ids or key in metrics or key in units:
             raise KpiCatalogError(f"{context}: 资源 ID 或稳定 key 重复")
         used_ids.add(resource_id)
         units[key] = KpiReservedUnit(resource_id, key, name_zh, name_en)
 
+    common_raw = raw_files["rules/common.json"]
+    _require_keys(common_raw, {"schema_version", "input_timezone", "budgets"}, "rules/common.json")
+    if common_raw["schema_version"] != 1 or isinstance(common_raw["schema_version"], bool):
+        raise KpiCatalogError("rules/common.json.schema_version: 当前只支持 1")
+    combined_rules = {
+        "common": {"input_timezone": common_raw["input_timezone"], "budgets": common_raw["budgets"]},
+        "metric_rules": raw_files["rules/metric-rules.json"]["metric_rules"],
+        "thresholds": raw_files["rules/thresholds.json"]["thresholds"],
+        "capacity_rules": raw_files["rules/capacity-rules.json"]["capacity_rules"],
+        "display_rules": raw_files["rules/display-rules.json"]["display_rules"],
+    }
+    try:
+        rules = _validate_rules(combined_rules, set(metrics))
+    except KpiCatalogError as exc:
+        message = str(exc).removeprefix("rules.")
+        raise KpiCatalogError(message) from exc
+
+    digest = hashlib.sha256()
+    for relative in KPI_SPLIT_FILES:
+        digest.update(relative.encode("utf-8") + b"\x00" + file_bytes[relative] + b"\x00")
     return KpiGitCatalog(
         schema_version=1,
-        source_csv_sha256=root["source_csv_sha256"],
+        source_csv_sha256=raw_files["base/metrics.json"]["source_csv_sha256"],
         metrics=metrics,
         units=units,
-        rules=_validate_rules(root["rules"], set(metrics)),
-        base_data_version=f"sha256:{hashlib.sha256(file_bytes).hexdigest()}",
+        rules=rules,
+        base_data_version=f"sha256:{digest.hexdigest()}",
     )
 
 

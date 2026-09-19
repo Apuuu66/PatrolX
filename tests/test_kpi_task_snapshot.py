@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.db import init_db
 from app.services.kpi_catalog import KpiSnapshotError, load_task_kpi_config
 from app.services.kpi_resources import classify_resource_metrics
+from tests.kpi_helpers import write_kpi_split_config
 
 
 def _write_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, metric_count: int = 2) -> Path:
@@ -48,10 +49,10 @@ def _write_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, metric_co
             "display_rules": [],
         },
     }
-    path = tmp_path / "kpi_catalog.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(settings, "kpi_catalog_path", path)
-    return path
+    data_dir = tmp_path / "kpi"
+    write_kpi_split_config(data_dir, payload)
+    monkeypatch.setattr(settings, "kpi_data_dir", data_dir)
+    return data_dir
 
 
 @pytest.fixture()
@@ -75,6 +76,10 @@ def test_snapshot_written_and_reused(db_catalog: Path, tmp_path: Path) -> None:
     assert snapshot["rules"]["metric_rules"][0]["key"] == "me_2"
     assert config.classification_version == 1
 
+    common_path = db_catalog / "rules/common.json"
+    common = json.loads(common_path.read_text(encoding="utf-8"))
+    common["budgets"]["max_files"] = 99
+    common_path.write_text(json.dumps(common, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     classify_resource_metrics(["me_1"], domain="api", operator="bob")
     load_task_kpi_config(task_id)
     unchanged = json.loads(snapshot_path.read_text(encoding="utf-8"))
@@ -104,3 +109,40 @@ def test_database_unavailable_fails_without_yaml(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(KpiSnapshotError, match="数据库不可用"):
         load_task_kpi_config("task-db-failure")
     assert not (settings.output / "task-db-failure" / "kpi" / "kpi_catalog_snapshot.json").exists()
+
+
+def test_invalid_config_does_not_create_snapshot(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    data_dir = write_kpi_split_config(tmp_path)
+    path = data_dir / "base/metrics.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["schema_version"] = 2
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    monkeypatch.setattr(settings, "output_dir", tmp_path / "output")
+    monkeypatch.setattr(settings, "sqlite_path", tmp_path / "db.sqlite")
+    monkeypatch.setattr(settings, "kpi_data_dir", data_dir)
+    init_db()
+    with pytest.raises(KpiSnapshotError, match="KPI 拆分配置无效"):
+        load_task_kpi_config("task-invalid")
+    assert not (settings.output / "task-invalid" / "kpi" / "kpi_catalog_snapshot.json").exists()
+
+
+def test_removed_unclassified_metric_keeps_database_record(db_catalog: Path) -> None:
+    from app.models.db import KpiClassification, session_factory
+    from app.services.kpi_catalog import load_task_kpi_config
+    from tests.kpi_helpers import kpi_catalog_payload, write_kpi_split_config
+
+    classify_resource_metrics(["me_1"], domain="call", operator="alice")
+    payload = kpi_catalog_payload()
+    payload["metrics"] = []
+    payload["rules"]["metric_rules"] = []
+    payload["rules"]["thresholds"] = []
+    payload["rules"]["capacity_rules"] = []
+    write_kpi_split_config(db_catalog, payload)
+    load_task_kpi_config("task-removed")
+    snapshot_path = settings.output / "task-removed" / "kpi" / "kpi_catalog_snapshot.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert snapshot["metrics"] == []
+    with session_factory() as session:
+        record = session.get(KpiClassification, "me_1")
+        assert record is not None
+        assert record.domain == "call"

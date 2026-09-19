@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "capacity_rules": [
+    {
+      "source_name": "统计峰值",
+      "metric_key": "me_stat_peak",
+      "semantics": "peak",
+      "status": "confirmed"
+    },
+    {
+      "source_name": "最大并发",
+      "metric_key": "me_max_concurrency",
+      "semantics": "concurrency",
+      "status": "confirmed"
+    }
+  ]
+}

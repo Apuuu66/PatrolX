@@ -127,7 +127,7 @@ export function KpiResourcesPage() {
         domain: targetDomain,
         operator: normalizedOperator,
       });
-      message.success(`已分类 ${result.metric_keys.length} 个指标，修订 ${result.classification_version}`);
+      message.success(`已分类 ${result.metric_keys.length} 个指标`);
       refresh();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "分类失败");
@@ -159,11 +159,7 @@ export function KpiResourcesPage() {
             <Descriptions
               size="small"
               column={3}
-              items={[
-                { key: "base", label: "基础数据版本", children: pageData.base_data_version.slice(0, 12) },
-                { key: "classification", label: "分类修订", children: pageData.classification_version },
-                { key: "total", label: "指标总数", children: pageData.total },
-              ]}
+              items={[{ key: "total", label: "指标总数", children: pageData.total }]}
             />
           )}
           <Space wrap>

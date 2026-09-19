@@ -65,7 +65,7 @@ prepare 缓存不是按原始包内容校验的全量缓存；它只做 owner �
 ### 2.4 KPI 任务快照
 
 `kpi/kpi_catalog_snapshot.json` 是任务级不可变快照，记录该任务启动/首次需要 KPI 配置时的
-有效 KPI 目录和规则集合。它保存的是配置，不保存 KPI 检查结果或 CSV 数据。
+有效 KPI 拆分配置和规则集合。它保存的是配置，不保存 KPI 检查结果或 CSV 数据。
 
 “有效快照”指该文件存在，且能被 `KpiTaskCatalogSnapshot` 契约模型解析并用于构建任务级
 KPI 配置。重跑不会校验其 `base_data_version` 或 `classification_version` 是否仍是当前最新版本。
@@ -75,7 +75,7 @@ KPI 配置。重跑不会校验其 `base_data_version` 或 `classification_versi
 | 字段 | 内容 |
 | --- | --- |
 | `schema_version` | 快照结构版本，当前为 `1` |
-| `base_data_version` | 生成快照时的 Git JSON KPI 目录版本 |
+| `base_data_version` | 生成快照时拆分配置集的内容指纹 |
 | `classification_version` | 生成快照时的 KPI 业务域分类版本 |
 | `captured_at` | 快照生成时间，UTC |
 | `metrics[]` | 任务可用的 KPI 指标定义，含 `key`、`resource_id`、中英文名、业务域 `domain` 和计算规则 `rule` |
@@ -87,9 +87,9 @@ KPI 配置。重跑不会校验其 `base_data_version` 或 `classification_versi
 
 | 条件 | 行为 |
 | --- | --- |
-| 快照存在且可解析 | 复用快照，不因 Git JSON 或数据库分类状态后来变化而重建 |
-| 快照缺失 | 从 Git JSON + 数据库分类状态补写 |
-| 快照损坏 | 重跑失败，不回退旧 YAML，也不静默重建 |
+| 快照存在且可解析 | 复用快照，不因拆分配置或数据库分类状态后来变化而重建 |
+| 快照缺失 | 从拆分配置 + 数据库分类状态补写 |
+| 快照损坏 | 重跑失败，不回退当前拆分配置，也不静默重建 |
 
 ## 3. 指定规则重跑
 

@@ -300,7 +300,7 @@ def test_kpi_call_reports_consistency_and_parsing_separately(tmp_path: Path) -> 
 
 
 def test_kpi_call_config_error_is_not_silently_skipped(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("app.core.config.settings.kpi_catalog_path", tmp_path / "bad.json")
+    monkeypatch.setattr("app.core.config.settings.kpi_data_dir", tmp_path / "bad")
     ctx = _ctx(tmp_path, {"kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": _GOOD_CALL})
     result = _run_rule("kpi.call", ctx)
     assert result.status == RuleStatus.ERROR

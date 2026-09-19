@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "input_timezone": "Asia/Shanghai",
+  "budgets": {
+    "max_files": 1000,
+    "max_records": 200000
+  }
+}

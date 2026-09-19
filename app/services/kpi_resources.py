@@ -41,7 +41,7 @@ class KpiResourceError(Exception):
 
 def _load_catalog() -> KpiGitCatalog:
     try:
-        return load_kpi_catalog(settings.kpi_catalog)
+        return load_kpi_catalog(settings.kpi_data)
     except KpiCatalogError as exc:
         raise KpiResourceError("kpi_catalog_invalid", str(exc), 500) from exc
 

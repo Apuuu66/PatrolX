@@ -145,7 +145,7 @@ def load_task_kpi_config(task_id: str) -> KpiConfig:
             raise KpiSnapshotError(f"任务 KPI 配置快照损坏: {path}: {exc}") from exc
 
     try:
-        catalog = load_kpi_catalog(settings.kpi_catalog)
+        catalog = load_kpi_catalog(settings.kpi_data)
         classifications, revision = _read_classifications()
         snapshot = KpiTaskCatalogSnapshot(
             schema_version=SNAPSHOT_SCHEMA_VERSION,
@@ -158,6 +158,6 @@ def load_task_kpi_config(task_id: str) -> KpiConfig:
         _atomic_write_snapshot(task_id, snapshot)
         return build_kpi_config_from_catalog(catalog, classifications, revision)
     except KpiCatalogError as exc:
-        raise KpiSnapshotError(f"KPI Git JSON 无效: {exc}") from exc
+        raise KpiSnapshotError(f"KPI 拆分配置无效: {exc}") from exc
     except (OSError, SQLAlchemyError) as exc:
         raise KpiSnapshotError(f"任务 KPI 配置快照写入失败: {exc}") from exc

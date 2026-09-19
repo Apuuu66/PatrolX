@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "metric_rules": [
+    {
+      "key": "me_call_attempts",
+      "metric_type": "count",
+      "semantic_group": "traffic",
+      "display_role": "context",
+      "unit": "次",
+      "source_type": "raw",
+      "aggregation": {
+        "kind": "sum"
+      },
+      "formula": null
+    },
+    {
+      "key": "me_call_success_count",
+      "metric_type": "count",
+      "semantic_group": "traffic",
+      "display_role": "context",
+      "unit": "次",
+      "source_type": "raw",
+      "aggregation": {
+        "kind": "sum"
+      },
+      "formula": null
+    },
+    {
+      "key": "me_call_failure_count",
+      "metric_type": "count",
+      "semantic_group": "traffic",
+      "display_role": "context",
+      "unit": "次",
+      "source_type": "raw",
+      "aggregation": {
+        "kind": "sum"
+      },
+      "formula": null
+    },
+    {
+      "key": "me_call_success_rate",
+      "metric_type": "rate",
+      "semantic_group": "quality",
+      "display_role": "context",
+      "unit": "%",
+      "source_type": "derived",
+      "aggregation": {
+        "kind": "sum"
+      },
+      "formula": {
+        "kind": "ratio",
+        "numerator": "me_call_success_count",
+        "denominator": "me_call_attempts",
+        "scale": 100
+      }
+    },
+    {
+      "key": "me_call_failure_rate",
+      "metric_type": "rate",
+      "semantic_group": "quality",
+      "display_role": "context",
+      "unit": "%",
+      "source_type": "derived",
+      "aggregation": {
+        "kind": "sum"
+      },
+      "formula": {
+        "kind": "ratio",
+        "numerator": "me_call_failure_count",
+        "denominator": "me_call_attempts",
+        "scale": 100
+      }
+    },
+    {
+      "key": "me_stat_peak",
+      "metric_type": "capacity",
+      "semantic_group": "capacity",
+      "display_role": "context",
+      "unit": "个",
+      "source_type": "raw",
+      "aggregation": {
+        "kind": "max"
+      },
+      "formula": null
+    },
+    {
+      "key": "me_max_concurrency",
+      "metric_type": "capacity",
+      "semantic_group": "capacity",
+      "display_role": "context",
+      "unit": "个",
+      "source_type": "raw",
+      "aggregation": {
+        "kind": "max"
+      },
+      "formula": null
+    }
+  ]
+}

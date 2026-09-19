@@ -20,6 +20,9 @@ def test_enriched_sample_kpi_api_remains_stable(tmp_path, monkeypatch) -> None:
     assert rule["metadata"]["metric_catalog"]
     assert rule["metadata"]["kpi_results"]
     assert not any(file.get("records") for file in rule["metadata"]["kpi_files"])
+    unclassified = rule["metadata"]["unclassified_metrics"]
+    assert any(item["source_name"].startswith("x业务请求") for item in unclassified)
+    assert all(item["reason"] == "metric_not_registered" for item in unclassified)
 
     records_url = f"/api/v2/tasks/{task_id}/rules/kpi.call/kpi/records"
     first = client.get(records_url, params={"page": 1, "page_size": 50})

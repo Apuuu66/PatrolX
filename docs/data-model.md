@@ -266,42 +266,32 @@ output/<task_id>/prepared/<owner_code>/
 
 PatrolX 将 KPI 数据拆为权威基础数据、分类状态和任务快照三层。
 
-### Git JSON
+### 拆分配置
 
-路径：`deploy/data/kpi_catalog.json`。
+路径：`deploy/data/kpi/`。
 
-```json
-{
-  "schema_version": 1,
-  "source_csv_sha256": "<64 位十六进制>",
-  "metrics": [
-    {
-      "resource_id": "ME_21002",
-      "key": "me_21002",
-      "name_zh": "创建媒体资源请求次数",
-      "name_en": "Create Media Resource Request Count",
-      "unit_key": null
-    }
-  ],
-  "units": [],
-  "rules": {
-    "common": {"input_timezone": "Asia/Shanghai", "budgets": {"max_files": 1000, "max_records": 200000}},
-    "metric_rules": [],
-    "thresholds": [],
-    "capacity_rules": [],
-    "display_rules": []
-  }
-}
+```text
+base/metrics.json
+base/units.json
+rules/common.json
+rules/metric-rules.json
+rules/thresholds.json
+rules/capacity-rules.json
+rules/display-rules.json
 ```
+
+`base/metrics.json` 保存完整基础指标快照；`base/units.json` 只保存 `UNIT_*` 预留单位；
+五个规则文件分别保存通用设置、指标规则、阈值、容量规则和展示规则。所有文件要求 UTF-8、LF、
+严格 JSON 和 `schema_version: 1`；加载器按固定顺序读取，不回退旧 `deploy/data/kpi_catalog.json`。
 
 约束：
 
 - `metrics[].resource_id` 必须以 `ME_` 开头；`units[].resource_id` 必须以 `UNIT_` 开头。
-- 稳定 key 是资源 ID 的小写形式。
+- 稳定 key 是资源 ID 的小写形式；`resource_id` 和 `key` 全局唯一。
 - `metrics[].unit_key` 当前必须是 `null`；单位解析是预留能力，不进入运行时。
-- `rules` 只能引用 `metrics` 中存在的 key，公式不得循环。
+- 指标规则、公式、阈值、容量规则和展示规则只能引用 `metrics` 中存在的 key，公式不得循环。
+- 资源 CSV 离线导入是完整替换；被移除指标仍被规则引用时导入失败，规则文件和基础文件都不替换。
 - 文件不做业务域分类；分类状态只在数据库中维护。
-
 ### DB 分类模型
 
 | 表 | 说明 |
@@ -310,7 +300,7 @@ PatrolX 将 KPI 数据拆为权威基础数据、分类状态和任务快照三�
 | `kpi_classification_revisions` | 单行修订表；每次批量原子提交递增 `classification_version`。 |
 | `kpi_classification_audits` | 保存 `metric_key`、操作、操作人、前后域、结果和 UTC 操作时间。 |
 
-分类只改变业务域，不改变 Git JSON。被公式、阈值或容量规则引用的指标受引用保护；批量分类任一指标失败时整批回滚。
+分类只改变业务域，不改变拆分配置文件。被公式、阈值或容量规则引用的指标受引用保护；批量分类任一指标失败时整批回滚。
 
 ### 任务快照
 
@@ -327,7 +317,7 @@ PatrolX 将 KPI 数据拆为权威基础数据、分类状态和任务快照三�
 }
 ```
 
-快照在主包解压完成后生成，之后不可变。普通 KPI 规则只读取快照；单规则重跑优先复用。快照缺失时从 Git JSON + DB 原子重建，损坏时抛出错误并让任务失败。
+快照在主包解压完成后生成，之后不可变。普通 KPI 规则只读取快照；单规则重跑优先复用。快照缺失时从拆分配置 + DB 原子重建，损坏时抛出错误并让任务失败。
 
 ## 11. 扩展规则
 
