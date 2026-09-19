@@ -258,4 +258,19 @@ Speckit 实现禁止默认在主工作区进行。tasks review 通过后必须�
 
 已有对应分支的 worktree 必须复用；已有实现分支但没有对应 worktree 时，将该分支检出到 worktree；没有实现分支时，从包含 Speckit 产物的基线分支创建实现分支和 worktree。禁止将未跟踪的 Speckit 产物复制到 worktree。
 
+每个 Speckit 实现回合必须在修改任何实现文件前执行 preflight：
+
+```bash
+git worktree list
+git branch --show-current
+```
+
+Agent 必须确认：
+
+1. 当前目录是对应实现分支的 worktree。
+2. 当前分支是该 worktree 的检出分支。
+3. Speckit 产物已在基线上提交。
+
+任一条件不满足时，只允许执行只读检查、切换分支或创建/复用 worktree；不得修改源代码、测试或契约。用户要求继续当前分支不构成豁免，只有用户明确声明本次豁免时才可例外。回合结束报告必须包含 preflight 结果。
+
 目录固定为 `<repo-root>/.worktrees/<分支名，/ 替换为 ->`，必须保留在 `.gitignore` 中；同一分支最多一个 worktree。回合结束报告路径、分支、变更和验证结果；合入并确认后清理。
