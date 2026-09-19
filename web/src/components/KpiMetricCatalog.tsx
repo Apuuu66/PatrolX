@@ -117,7 +117,9 @@ export function KpiMetricCatalog({ metadata, taskId, ruleCode, focusItems, focus
         activeKey={activeTab}
         onChange={setActiveTab}
         items={[
-          { key: "focus", label: `重点关注（${focusTotal}）`, children: focusTab },
+          ...(focusTotal > 0
+            ? [{ key: "focus", label: `重点关注（${focusTotal}）`, children: focusTab }]
+            : []),
           { key: "all", label: `全部指标（${summary.total}）`, children: allTab },
         ]}
       />
