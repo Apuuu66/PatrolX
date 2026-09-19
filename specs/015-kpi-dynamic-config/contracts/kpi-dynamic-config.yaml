@@ -1,0 +1,968 @@
+# 本文件是 docs/api/openapi.yaml 中本功能新增片段的设计契约。
+# 实现时必须先合并到唯一契约源 docs/api/openapi.yaml，再生成前端客户端。
+
+paths:
+  /api/v4/kpi/config/metric-rules:
+    get:
+      summary: 分页查询指标规则
+      operationId: listKpiMetricRulesV4
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: source_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/KpiSourceTypeV4'
+        - name: domain
+          in: query
+          schema:
+            $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 指标规则分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricRulePageV4'
+
+  /api/v4/kpi/config/metric-rules/{metric_key}:
+    get:
+      summary: 查询指标规则
+      operationId: getKpiMetricRuleV4
+      parameters:
+        - name: metric_key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 指标规则
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricRuleV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+    put:
+      summary: 创建或更新指标规则与公式
+      operationId: upsertKpiMetricRuleV4
+      parameters:
+        - name: metric_key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiMetricRuleRequestV4'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricRuleV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: 引用保护、公式循环或配置冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+    delete:
+      summary: 删除自定义指标规则并回退默认规则
+      operationId: deleteKpiMetricRuleV4
+      parameters:
+        - name: metric_key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /api/v4/kpi/config/thresholds:
+    get:
+      summary: 分页查询阈值
+      operationId: listKpiThresholdsV4
+      parameters:
+        - name: domain
+          in: query
+          schema:
+            $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 阈值分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiThresholdPageV4'
+    post:
+      summary: 创建阈值
+      operationId: createKpiThresholdV4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiThresholdRequestV4'
+      responses:
+        '202':
+          description: 已受理创建
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiThresholdV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
+          description: domain+metric_key 重复
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+
+  /api/v4/kpi/config/thresholds/{threshold_id}:
+    get:
+      summary: 查询阈值
+      operationId: getKpiThresholdV4
+      parameters:
+        - name: threshold_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 阈值
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiThresholdV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+    put:
+      summary: 更新阈值
+      operationId: updateKpiThresholdV4
+      parameters:
+        - name: threshold_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiThresholdRequestV4'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiThresholdV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '404':
+          $ref: '#/components/responses/Error404'
+    delete:
+      summary: 删除阈值
+      operationId: deleteKpiThresholdV4
+      parameters:
+        - name: threshold_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /api/v4/kpi/config/capacity-rules:
+    get:
+      summary: 分页查询容量规则
+      operationId: listKpiCapacityRulesV4
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 容量规则分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiCapacityRulePageV4'
+    post:
+      summary: 创建容量规则
+      operationId: createKpiCapacityRuleV4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiCapacityRuleRequestV4'
+      responses:
+        '202':
+          description: 已受理创建
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiCapacityRuleV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
+          description: source_name 重复
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+
+  /api/v4/kpi/config/capacity-rules/{capacity_rule_id}:
+    put:
+      summary: 更新容量规则
+      operationId: updateKpiCapacityRuleV4
+      parameters:
+        - name: capacity_rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiCapacityRuleRequestV4'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiCapacityRuleV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+    delete:
+      summary: 删除容量规则
+      operationId: deleteKpiCapacityRuleV4
+      parameters:
+        - name: capacity_rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /api/v4/kpi/config/display-rules:
+    get:
+      summary: 分页查询展示规则
+      operationId: listKpiDisplayRulesV4
+      parameters:
+        - name: domain
+          in: query
+          schema:
+            $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 展示规则分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDisplayRulePageV4'
+    post:
+      summary: 创建展示规则
+      operationId: createKpiDisplayRuleV4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiDisplayRuleRequestV4'
+      responses:
+        '202':
+          description: 已受理创建
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDisplayRuleV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
+          description: domain+metric_key 重复
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+
+  /api/v4/kpi/config/display-rules/{display_rule_id}:
+    put:
+      summary: 更新展示规则
+      operationId: updateKpiDisplayRuleV4
+      parameters:
+        - name: display_rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiDisplayRuleRequestV4'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDisplayRuleV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+    delete:
+      summary: 删除展示规则
+      operationId: deleteKpiDisplayRuleV4
+      parameters:
+        - name: display_rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /api/v4/kpi/config/common:
+    get:
+      summary: 查询公共配置
+      operationId: getKpiCommonConfigV4
+      responses:
+        '200':
+          description: 公共配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiCommonConfigV4'
+    put:
+      summary: 更新公共配置
+      operationId: updateKpiCommonConfigV4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiCommonConfigRequestV4'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiCommonConfigV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+
+  /api/v4/kpi/config/audits:
+    get:
+      summary: 分页查询动态配置审计
+      operationId: listKpiConfigAuditsV4
+      parameters:
+        - name: entity_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/KpiConfigEntityTypeV4'
+        - name: operator
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 配置审计分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiConfigAuditPageV4'
+
+  /api/v4/tasks/{task_id}/kpi/classification-clues:
+    get:
+      summary: 分页查询任务按需分类线索
+      operationId: listKpiClassificationCluesV4
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: clue_status
+          in: query
+          schema:
+            $ref: '#/components/schemas/KpiClueStatusV4'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 线索分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiClassificationCluePageV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+components:
+  schemas:
+    KpiRegisteredDomainV4:
+      type: string
+      enum: [call, api, media]
+
+    KpiSourceTypeV4:
+      type: string
+      enum: [raw, derived]
+
+    KpiMetricTypeV4:
+      type: string
+      enum: [count, rate, capacity, latency, gauge]
+
+    KpiSemanticGroupV4:
+      type: string
+      enum: [traffic, quality, latency, capacity, other]
+
+    KpiDisplayRoleV4:
+      type: string
+      enum: [highlight, context]
+
+    KpiAggregationKindV4:
+      type: string
+      enum: [min, max, mean, success_rate]
+
+    KpiThresholdDirectionV4:
+      type: string
+      enum: [min, max]
+
+    KpiCapacityStatusV4:
+      type: string
+      enum: [confirmed, unknown]
+
+    KpiCapacitySemanticsV4:
+      type: string
+      enum: [peak, concurrency, gauge]
+
+    KpiConfigEntityTypeV4:
+      type: string
+      enum: [metric_rule, threshold, capacity_rule, display_rule, common_config]
+
+    KpiClueStatusV4:
+      type: string
+      enum: [unclassified, classified, unregistered, ambiguous]
+
+    KpiMetricRuleRequestV4:
+      type: object
+      required: [metric_type, semantic_group, display_role, unit, source_type, aggregation_kind, operator]
+      properties:
+        metric_type:
+          $ref: '#/components/schemas/KpiMetricTypeV4'
+        semantic_group:
+          $ref: '#/components/schemas/KpiSemanticGroupV4'
+        display_role:
+          $ref: '#/components/schemas/KpiDisplayRoleV4'
+        unit:
+          type: string
+        source_type:
+          $ref: '#/components/schemas/KpiSourceTypeV4'
+        aggregation_kind:
+          $ref: '#/components/schemas/KpiAggregationKindV4'
+          type: number
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        formula:
+          allOf:
+            - $ref: '#/components/schemas/KpiFormulaRequestV4'
+          nullable: true
+        operator:
+          type: string
+
+    KpiFormulaRequestV4:
+      type: object
+      required: [kind, numerator, denominator, scale]
+      properties:
+        kind:
+          type: string
+          enum: [ratio]
+        numerator:
+          type: string
+        denominator:
+          type: string
+        denominator_fallback_inputs:
+          type: array
+          items:
+            type: string
+        scale:
+          type: number
+
+    KpiMetricRuleV4:
+      type: object
+      required: [metric_key, metric_type, semantic_group, display_role, unit, source_type, aggregation_kind, updated_at, rule_config_version]
+      properties:
+        metric_key:
+          type: string
+        metric_type:
+          $ref: '#/components/schemas/KpiMetricTypeV4'
+        semantic_group:
+          $ref: '#/components/schemas/KpiSemanticGroupV4'
+        display_role:
+          $ref: '#/components/schemas/KpiDisplayRoleV4'
+        unit:
+          type: string
+        source_type:
+          $ref: '#/components/schemas/KpiSourceTypeV4'
+        aggregation_kind:
+          $ref: '#/components/schemas/KpiAggregationKindV4'
+          type: number
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        formula:
+          allOf:
+            - $ref: '#/components/schemas/KpiFormulaV4'
+          nullable: true
+        domain:
+          allOf:
+            - $ref: '#/components/schemas/KpiRegisteredDomainV4'
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        rule_config_version:
+          type: integer
+
+    KpiMetricRulePageV4:
+      type: object
+      required: [items, total, page, page_size, rule_config_version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiMetricRuleV4'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        rule_config_version:
+          type: integer
+
+    KpiFormulaV4:
+      type: object
+      required: [kind, numerator, denominator, scale]
+      properties:
+        kind:
+          type: string
+          enum: [ratio]
+        numerator:
+          type: string
+        denominator:
+          type: string
+        denominator_fallback_inputs:
+          type: array
+          items:
+            type: string
+        scale:
+          type: number
+
+    KpiThresholdRequestV4:
+      type: object
+      required: [domain, metric_key, label, direction, unit, default, periods, operator]
+      properties:
+        domain:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        metric_key:
+          type: string
+        label:
+          type: string
+        direction:
+          $ref: '#/components/schemas/KpiThresholdDirectionV4'
+        unit:
+          type: string
+        default:
+          type: number
+        periods:
+          type: object
+          additionalProperties:
+            type: number
+        operator:
+          type: string
+
+    KpiThresholdV4:
+      type: object
+      required: [id, domain, metric_key, label, direction, unit, default, periods, updated_at, rule_config_version]
+      properties:
+        id:
+          type: integer
+        domain:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        metric_key:
+          type: string
+        label:
+          type: string
+        direction:
+          $ref: '#/components/schemas/KpiThresholdDirectionV4'
+        unit:
+          type: string
+        default:
+          type: number
+        periods:
+          type: object
+          additionalProperties:
+            type: number
+        updated_at:
+          type: string
+          format: date-time
+        rule_config_version:
+          type: integer
+
+    KpiThresholdPageV4:
+      type: object
+      required: [items, total, page, page_size, rule_config_version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiThresholdV4'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        rule_config_version:
+          type: integer
+
+    KpiCapacityRuleRequestV4:
+      type: object
+      required: [source_name, metric_key, status, operator]
+      properties:
+        source_name:
+          type: string
+        metric_key:
+          type: string
+        domain:
+          allOf:
+            - $ref: '#/components/schemas/KpiRegisteredDomainV4'
+          nullable: true
+        semantics:
+          allOf:
+            - $ref: '#/components/schemas/KpiCapacitySemanticsV4'
+          nullable: true
+        status:
+          $ref: '#/components/schemas/KpiCapacityStatusV4'
+        operator:
+          type: string
+
+    KpiCapacityRuleV4:
+      type: object
+      required: [id, source_name, metric_key, status, updated_at, rule_config_version]
+      properties:
+        id:
+          type: integer
+        source_name:
+          type: string
+        metric_key:
+          type: string
+        domain:
+          allOf:
+            - $ref: '#/components/schemas/KpiRegisteredDomainV4'
+          nullable: true
+        semantics:
+          allOf:
+            - $ref: '#/components/schemas/KpiCapacitySemanticsV4'
+          nullable: true
+        status:
+          $ref: '#/components/schemas/KpiCapacityStatusV4'
+        updated_at:
+          type: string
+          format: date-time
+        rule_config_version:
+          type: integer
+
+    KpiCapacityRulePageV4:
+      type: object
+      required: [items, total, page, page_size, rule_config_version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiCapacityRuleV4'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        rule_config_version:
+          type: integer
+
+    KpiDisplayRuleRequestV4:
+      type: object
+      required: [domain, metric_key, role, operator]
+      properties:
+        domain:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        metric_key:
+          type: string
+        role:
+          $ref: '#/components/schemas/KpiDisplayRoleV4'
+        operator:
+          type: string
+
+    KpiDisplayRuleV4:
+      type: object
+      required: [id, domain, metric_key, role, updated_at, rule_config_version]
+      properties:
+        id:
+          type: integer
+        domain:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        metric_key:
+          type: string
+        role:
+          $ref: '#/components/schemas/KpiDisplayRoleV4'
+        updated_at:
+          type: string
+          format: date-time
+        rule_config_version:
+          type: integer
+
+    KpiDisplayRulePageV4:
+      type: object
+      required: [items, total, page, page_size, rule_config_version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiDisplayRuleV4'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        rule_config_version:
+          type: integer
+
+    KpiCommonConfigRequestV4:
+      type: object
+      required: [input_timezone, max_files, max_records, operator]
+      properties:
+        input_timezone:
+          type: string
+        max_files:
+          type: integer
+          minimum: 1
+        max_records:
+          type: integer
+          minimum: 1
+        operator:
+          type: string
+
+    KpiCommonConfigV4:
+      type: object
+      required: [input_timezone, max_files, max_records, updated_at, rule_config_version]
+      properties:
+        input_timezone:
+          type: string
+        max_files:
+          type: integer
+        max_records:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+        rule_config_version:
+          type: integer
+
+    KpiConfigDeleteResultV4:
+      type: object
+      required: [deleted, entity_type, entity_key, rule_config_version]
+      properties:
+        deleted:
+          type: boolean
+        entity_type:
+          $ref: '#/components/schemas/KpiConfigEntityTypeV4'
+        entity_key:
+          type: string
+        rule_config_version:
+          type: integer
+
+    KpiConfigAuditV4:
+      type: object
+      required: [id, entity_type, entity_key, operation, operator, result, rule_config_version, operated_at]
+      properties:
+        id:
+          type: integer
+        entity_type:
+          $ref: '#/components/schemas/KpiConfigEntityTypeV4'
+        entity_key:
+          type: string
+        operation:
+          type: string
+          enum: [upsert, delete]
+        operator:
+          type: string
+        before:
+          type: object
+          additionalProperties: true
+          nullable: true
+        after:
+          type: object
+          additionalProperties: true
+          nullable: true
+        result:
+          type: string
+        rule_config_version:
+          type: integer
+        detail:
+          type: object
+          additionalProperties: true
+          nullable: true
+        operated_at:
+          type: string
+          format: date-time
+
+    KpiConfigAuditPageV4:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiConfigAuditV4'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+    KpiClassificationClueV4:
+      type: object
+      required: [source_name, clue_status, rule_code, domain, source_files, record_count, sample_values]
+      properties:
+        source_name:
+          type: string
+        metric_key:
+          type: string
+          nullable: true
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [metric_key, name_zh, name_en]
+            properties:
+              metric_key:
+                type: string
+              name_zh:
+                type: string
+              name_en:
+                type: string
+        clue_status:
+          $ref: '#/components/schemas/KpiClueStatusV4'
+        rule_code:
+          type: string
+        domain:
+          type: string
+        source_files:
+          type: array
+          items:
+            type: string
+        record_count:
+          type: integer
+        sample_values:
+          type: array
+        resolution_note:
+          type: string
+          nullable: true
+
+    KpiClassificationCluePageV4:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiClassificationClueV4'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
