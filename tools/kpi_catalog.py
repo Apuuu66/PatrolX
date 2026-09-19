@@ -188,7 +188,23 @@ def _validate_candidate(data_dir: Path, candidate_files: dict[str, bytes]) -> No
             path.write_bytes(content)
         load_kpi_catalog(data_dir)
     except (KpiCatalogError, OSError) as exc:
-        raise KpiCatalogGeneratorError(f"生成结果校验失败: {exc}") from exc
+        reason = str(exc)
+        rule_file_by_prefix = {
+            "metric_rules": "rules/metric-rules.json",
+            "thresholds": "rules/thresholds.json",
+            "capacity_rules": "rules/capacity-rules.json",
+            "display_rules": "rules/display-rules.json",
+        }
+        for prefix, relative in rule_file_by_prefix.items():
+            if reason.startswith(prefix):
+                reason = f"{relative}: {reason}"
+                break
+        raise KpiCatalogGeneratorError(
+            "生成结果校验失败：新基础数据与既有规则文件不一致，未替换任何文件。"
+            "请先修改规则文件中对不存在基础指标的引用；如需从空规则重建，"
+            "可将对应规则文件中的规则数组清空（保留 schema_version）。"
+            f"原因: {reason}"
+        ) from exc
     finally:
         shutil.rmtree(data_dir, ignore_errors=True)
 

@@ -52,7 +52,10 @@ def test_removed_referenced_metric_is_rejected_without_changes(tmp_path: Path) -
     before = {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES}
     csv_path = tmp_path / "resource.csv"
     csv_path.write_bytes(_csv([]))
-    with pytest.raises(KpiCatalogGeneratorError, match="校验失败"):
+    with pytest.raises(
+        KpiCatalogGeneratorError,
+        match=r"rules/metric-rules\.json.*引用未知基础指标 me_call_attempts",
+    ):
         generate_kpi_catalog(csv_path, data_dir)
     assert {relative: (data_dir / relative).read_bytes() for relative in KPI_SPLIT_FILES} == before
 
