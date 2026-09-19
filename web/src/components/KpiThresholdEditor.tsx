@@ -10,6 +10,8 @@ import {
   type KpiThresholdV4,
 } from "../api/http";
 import { buildThresholdPayload, KPI_THRESHOLD_PERIODS as PERIODS } from "./kpiConfigModel";
+import { KpiMetricName, KpiMetricSelect, useKpiMetricCatalog } from "./KpiMetricSelect";
+import { toKpiRegisteredDomain } from "./kpiMetricCatalogModel";
 
 const DOMAINS: { value: KpiRegisteredDomainV4; label: string }[] = [
   { value: "call", label: "呼叫" },
@@ -42,6 +44,7 @@ export function KpiThresholdEditor({ operator, onChanged }: { operator: string; 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<ThresholdFormValues>();
+  const { metricIndex } = useKpiMetricCatalog();
 
   const load = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true);
@@ -108,7 +111,13 @@ export function KpiThresholdEditor({ operator, onChanged }: { operator: string; 
 
   const columns: ColumnsType<KpiThresholdV4> = [
     { title: "业务域", dataIndex: "domain", width: 90 },
-    { title: "指标 Key", dataIndex: "metric_key", ellipsis: true },
+    {
+      title: "指标",
+      dataIndex: "metric_key",
+      width: 240,
+      ellipsis: true,
+      render: (_, record) => <KpiMetricName metricKey={record.metric_key} />,
+    },
     { title: "名称", dataIndex: "label", width: 160, ellipsis: true },
     { title: "方向", dataIndex: "direction", width: 80 },
     { title: "默认值", dataIndex: "default", width: 100 },
@@ -181,13 +190,25 @@ export function KpiThresholdEditor({ operator, onChanged }: { operator: string; 
         onCancel={() => setOpen(false)}
         width={680}
       >
-        <Form form={form} layout="vertical">
+        <Form
+          form={form}
+          layout="vertical"
+          onValuesChange={(changed) => {
+            if (typeof changed.metric_key !== "string") return;
+            const metric = metricIndex.get(changed.metric_key);
+            const domain = toKpiRegisteredDomain(metric?.domain ?? "unclassified");
+            form.setFieldsValue({
+              ...(domain ? { domain } : {}),
+              label: form.getFieldValue("label") || metric?.name_zh || metric?.name_en,
+            });
+          }}
+        >
           <Space wrap style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", width: "100%" }}>
             <Form.Item name="domain" label="业务域" rules={[{ required: true }]}>
               <Select options={DOMAINS} />
             </Form.Item>
-            <Form.Item name="metric_key" label="指标 Key" rules={[{ required: true, message: "请输入指标 Key" }]}>
-              <Input aria-label="指标 Key" />
+            <Form.Item name="metric_key" label="指标" rules={[{ required: true, message: "请选择指标" }]}>
+              <KpiMetricSelect id="metric_key" testId="threshold-metric-select" />
             </Form.Item>
             <Form.Item name="label" label="阈值名称" rules={[{ required: true, message: "请输入阈值名称" }]}>
               <Input />

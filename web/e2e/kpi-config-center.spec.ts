@@ -14,9 +14,19 @@ test("KPI 配置中心可维护公式、阈值并查看配置审计", async ({ p
 
   const dialog = page.locator(".ant-modal:visible");
   await page.getByRole("button", { name: "新增指标口径" }).click();
-  await dialog.getByLabel("指标 Key").fill("me_max_concurrency");
-  await dialog.getByText("求和 (sum)").click();
-  await page.getByTitle("最小值 (min)").click();
+  const formulaMetricInput = dialog.getByRole("combobox", { name: "* 指标", exact: true });
+  await formulaMetricInput.click();
+  await formulaMetricInput.fill("最大并发");
+  const formulaMetricOption = page.locator(".ant-select-item-option").filter({ hasText: "最大并发" });
+  await expect(formulaMetricOption).toBeVisible();
+  await expect(formulaMetricOption.getByText("me_max_concurrency")).toBeVisible();
+  await formulaMetricInput.press("Enter");
+  const aggregationSelect = dialog
+    .locator(".ant-form-item")
+    .filter({ hasText: "聚合公式" })
+    .locator(".ant-select");
+  await aggregationSelect.click();
+  await page.locator(".ant-select-item-option").filter({ hasText: "最小值 (min)" }).click();
   await dialog.getByLabel("单位").fill("个");
   await dialog.getByRole("button", { name: /保\s?存/ }).click();
   const formulaCard = page.locator(".ant-card").filter({ hasText: "指标聚合与公式" });
@@ -24,14 +34,20 @@ test("KPI 配置中心可维护公式、阈值并查看配置审计", async ({ p
 
   await page.getByRole("tab", { name: "阈值" }).click();
   await page.getByRole("button", { name: "新增阈值" }).click();
-  await dialog.getByLabel("指标 Key").fill("me_max_concurrency");
+  const thresholdMetricInput = dialog.getByTestId("threshold-metric-select").getByRole("combobox");
+  await thresholdMetricInput.click();
+  await thresholdMetricInput.fill("最大并发");
+  const thresholdMetricOption = page.getByTitle("最大并发").last();
+  await expect(thresholdMetricOption).toBeVisible();
+  await expect(thresholdMetricOption.getByText("me_max_concurrency")).toBeVisible();
+  await thresholdMetricInput.press("Enter");
   await dialog.getByLabel("阈值名称").fill("最大并发下限");
   await dialog.getByLabel("单位").fill("个");
   await dialog.getByLabel("默认阈值").fill("1000");
   await dialog.getByLabel("5 分钟", { exact: true }).fill("900");
   await dialog.getByRole("button", { name: /保\s?存/ }).click();
   const thresholdCard = page.locator(".ant-card").filter({ hasText: "阈值规则" });
-  await expect(thresholdCard.getByRole("row", { name: /me_max_concurrency 最大并发下限/ })).toBeVisible({
+  await expect(thresholdCard.getByRole("row", { name: /最大并发.*最大并发下限/ })).toBeVisible({
     timeout: 10_000,
   });
 

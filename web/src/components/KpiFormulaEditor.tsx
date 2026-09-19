@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { App, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -11,6 +11,7 @@ import {
   type KpiDisplayRoleV4,
   type KpiSourceTypeV4,
 } from "../api/http";
+import { KpiMetricName, KpiMetricSelect } from "./KpiMetricSelect";
 import {
   buildMetricRulePayload,
   KPI_AGGREGATION_OPTIONS as AGGREGATIONS,
@@ -59,6 +60,14 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<FormulaFormValues>();
   const sourceType = Form.useWatch("source_type", form);
+  const existingMetricKeys = useMemo(
+    () => new Set((pageData?.items ?? []).map((item) => item.metric_key)),
+    [pageData],
+  );
+  const derivedMetricKeys = useMemo(
+    () => new Set((pageData?.items ?? []).filter((item) => item.source_type === "derived").map((item) => item.metric_key)),
+    [pageData],
+  );
 
   const load = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true);
@@ -139,13 +148,13 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
 
   const columns: ColumnsType<KpiMetricRuleV4> = [
     {
-      title: "指标 Key",
+      title: "指标",
       dataIndex: "metric_key",
-      width: 220,
+      width: 240,
       ellipsis: true,
-      render: (value: string, record) => (
+      render: (_, record) => (
         <Space size={4}>
-          <span>{value}</span>
+          <KpiMetricName metricKey={record.metric_key} />
           {record.source_type === "derived" && <Tag color="blue">派生</Tag>}
         </Space>
       ),
@@ -222,8 +231,8 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
         width={680}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="metric_key" label="指标 Key" rules={[{ required: true, message: "请输入指标 Key" }]}>
-            <Input placeholder="me_call_attempts" disabled={Boolean(form.getFieldValue("metric_key") && pageData?.items.some((item) => item.metric_key === form.getFieldValue("metric_key")))} />
+          <Form.Item name="metric_key" label="指标" rules={[{ required: true, message: "请选择指标" }]}>
+            <KpiMetricSelect id="metric_key" excludedKeys={existingMetricKeys} />
           </Form.Item>
           <Space wrap style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", width: "100%" }}>
             <Form.Item name="source_type" label="来源类型" rules={[{ required: true }]}>
@@ -254,11 +263,11 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
           </Form.Item>
           {sourceType === "derived" && (
             <Card size="small" title="受控成功率公式：分子 / 分母 × scale">
-              <Form.Item name="numerator" label="分子指标 Key" rules={[{ required: true, message: "请输入分子指标" }]}>
-                <Input placeholder="me_call_success_count" />
+              <Form.Item name="numerator" label="分子指标" rules={[{ required: true, message: "请选择分子指标" }]}>
+                <KpiMetricSelect excludedKeys={derivedMetricKeys} />
               </Form.Item>
-              <Form.Item name="denominator" label="分母指标 Key" rules={[{ required: true, message: "请输入分母指标" }]}>
-                <Input placeholder="me_call_attempts" />
+              <Form.Item name="denominator" label="分母指标" rules={[{ required: true, message: "请选择分母指标" }]}>
+                <KpiMetricSelect excludedKeys={derivedMetricKeys} />
               </Form.Item>
               <Form.Item name="denominator_fallback_inputs" label="分母回退输入（逗号分隔，可选）">
                 <Input placeholder="me_call_success_count,me_call_failure_count" />

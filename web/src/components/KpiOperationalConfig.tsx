@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { App, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { KpiMetricName, KpiMetricSelect, useKpiMetricCatalog } from "./KpiMetricSelect";
+import { toKpiRegisteredDomain } from "./kpiMetricCatalogModel";
 import {
   api,
   type KpiCapacityRulePageV4,
@@ -41,6 +43,7 @@ const DISPLAY_ROLES: { value: KpiDisplayRoleV4; label: string }[] = [
 
 export function KpiCapacityRuleEditor({ operator, onChanged }: { operator: string; onChanged?: () => void }) {
   const { message } = App.useApp();
+  const { metricIndex } = useKpiMetricCatalog();
   const [pageData, setPageData] = useState<KpiCapacityRulePageV4 | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -100,7 +103,13 @@ export function KpiCapacityRuleEditor({ operator, onChanged }: { operator: strin
 
   const columns: ColumnsType<KpiCapacityRuleV4> = [
     { title: "源列名", dataIndex: "source_name", width: 180, ellipsis: true },
-    { title: "指标 Key", dataIndex: "metric_key", ellipsis: true },
+    {
+      title: "指标",
+      dataIndex: "metric_key",
+      width: 240,
+      ellipsis: true,
+      render: (_, record) => <KpiMetricName metricKey={record.metric_key} />,
+    },
     { title: "业务域", dataIndex: "domain", width: 90, render: (value) => value ?? "-" },
     { title: "语义", dataIndex: "semantics", width: 100, render: (value) => value ?? "-" },
     { title: "状态", dataIndex: "status", width: 100 },
@@ -123,12 +132,21 @@ export function KpiCapacityRuleEditor({ operator, onChanged }: { operator: strin
     <Card title="容量规则" extra={<Button type="primary" onClick={() => { form.resetFields(); form.setFieldsValue({ status: "confirmed" }); setOpen(true); }}>新增</Button>} styles={{ body: { paddingTop: 8 } }}>
       <Table rowKey="id" size="small" loading={loading} columns={columns} dataSource={pageData?.items ?? []} pagination={false} />
       <Modal title="容量规则" open={open} confirmLoading={saving} okText="保存" cancelText="取消" onOk={() => void submit()} onCancel={() => setOpen(false)}>
-        <Form form={form} layout="vertical">
+        <Form
+          form={form}
+          layout="vertical"
+          onValuesChange={(changed) => {
+            if (typeof changed.metric_key !== "string") return;
+            const metric = metricIndex.get(changed.metric_key);
+            const domain = toKpiRegisteredDomain(metric?.domain ?? "unclassified");
+            if (domain) form.setFieldValue("domain", domain);
+          }}
+        >
           <Form.Item name="source_name" label="源列名" rules={[{ required: true, message: "请输入源列名" }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="metric_key" label="指标 Key" rules={[{ required: true, message: "请输入指标 Key" }]}>
-            <Input />
+          <Form.Item name="metric_key" label="指标" rules={[{ required: true, message: "请选择指标" }]}>
+            <KpiMetricSelect />
           </Form.Item>
           <Form.Item name="domain" label="业务域（可选）">
             <Select allowClear options={DOMAINS} />
@@ -147,6 +165,7 @@ export function KpiCapacityRuleEditor({ operator, onChanged }: { operator: strin
 
 export function KpiDisplayRuleEditor({ operator, onChanged }: { operator: string; onChanged?: () => void }) {
   const { message } = App.useApp();
+  const { metricIndex } = useKpiMetricCatalog();
   const [pageData, setPageData] = useState<KpiDisplayRulePageV4 | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -199,7 +218,13 @@ export function KpiDisplayRuleEditor({ operator, onChanged }: { operator: string
 
   const columns: ColumnsType<KpiDisplayRuleV4> = [
     { title: "业务域", dataIndex: "domain", width: 100 },
-    { title: "指标 Key", dataIndex: "metric_key", ellipsis: true },
+    {
+      title: "指标",
+      dataIndex: "metric_key",
+      width: 240,
+      ellipsis: true,
+      render: (_, record) => <KpiMetricName metricKey={record.metric_key} />,
+    },
     { title: "展示角色", dataIndex: "role", width: 120 },
     {
       title: "操作",
@@ -218,12 +243,20 @@ export function KpiDisplayRuleEditor({ operator, onChanged }: { operator: string
     <Card title="展示规则" extra={<Button type="primary" onClick={() => { form.resetFields(); setOpen(true); }}>新增</Button>} styles={{ body: { paddingTop: 8 } }}>
       <Table rowKey="id" size="small" loading={loading} columns={columns} dataSource={pageData?.items ?? []} pagination={false} />
       <Modal title="展示规则" open={open} confirmLoading={saving} okText="保存" cancelText="取消" onOk={() => void submit()} onCancel={() => setOpen(false)}>
-        <Form form={form} layout="vertical">
+        <Form
+          form={form}
+          layout="vertical"
+          onValuesChange={(changed) => {
+            if (typeof changed.metric_key !== "string") return;
+            const metric = metricIndex.get(changed.metric_key);
+            form.setFieldValue("domain", toKpiRegisteredDomain(metric?.domain ?? "unclassified"));
+          }}
+        >
           <Form.Item name="domain" label="业务域" rules={[{ required: true }]}>
             <Select options={DOMAINS} />
           </Form.Item>
-          <Form.Item name="metric_key" label="指标 Key" rules={[{ required: true, message: "请输入指标 Key" }]}>
-            <Input />
+          <Form.Item name="metric_key" label="指标" rules={[{ required: true, message: "请选择指标" }]}>
+            <KpiMetricSelect />
           </Form.Item>
           <Form.Item name="role" label="展示角色" rules={[{ required: true }]}>
             <Select options={DISPLAY_ROLES} />

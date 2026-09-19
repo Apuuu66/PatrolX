@@ -12,6 +12,7 @@ import { KpiResourceTable } from "../components/KpiResourceTable";
 import { RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
 import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
 import { KpiThresholdEditor } from "../components/KpiThresholdEditor";
+import { KpiMetricCatalogProvider } from "../components/KpiMetricSelect";
 import {
   KpiCapacityRuleEditor,
   KpiCommonConfigEditor,
@@ -162,6 +163,7 @@ export function KpiResourcesPage() {
   const summary = pageData?.summary;
 
   return (
+    <KpiMetricCatalogProvider>
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <Card title={<strong>基础指标配置</strong>}>
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -293,5 +295,6 @@ export function KpiResourcesPage() {
         />
       )}
     </Space>
+    </KpiMetricCatalogProvider>
   );
 }
