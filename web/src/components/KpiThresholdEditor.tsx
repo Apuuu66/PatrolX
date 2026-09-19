@@ -9,6 +9,7 @@ import {
   type KpiThresholdPageV4,
   type KpiThresholdV4,
 } from "../api/http";
+import { buildThresholdPayload, KPI_THRESHOLD_PERIODS as PERIODS } from "./kpiConfigModel";
 
 const DOMAINS: { value: KpiRegisteredDomainV4; label: string }[] = [
   { value: "call", label: "呼叫" },
@@ -20,8 +21,6 @@ const DIRECTIONS: { value: KpiThresholdDirectionV4; label: string }[] = [
   { value: "min", label: "下限（低于告警）" },
   { value: "max", label: "上限（超过告警）" },
 ];
-
-const PERIODS = ["5", "15", "30", "60"] as const;
 
 interface ThresholdFormValues {
   domain: KpiRegisteredDomainV4;
@@ -80,20 +79,7 @@ export function KpiThresholdEditor({ operator, onChanged }: { operator: string; 
 
   const submit = async () => {
     const values = await form.validateFields();
-    const payload = {
-      domain: values.domain,
-      metric_key: values.metric_key.trim(),
-      label: values.label.trim(),
-      direction: values.direction,
-      unit: values.unit.trim(),
-      default: values.default,
-      periods: Object.fromEntries(
-        PERIODS.filter((period) => values.periods?.[period] !== null && values.periods?.[period] !== undefined).map(
-          (period) => [period, Number(values.periods?.[period])],
-        ),
-      ),
-      operator,
-    };
+    const payload = buildThresholdPayload(values, operator);
     setSaving(true);
     try {
       if (values.threshold_id) await api.updateKpiThresholdV4(values.threshold_id, payload);
@@ -201,7 +187,7 @@ export function KpiThresholdEditor({ operator, onChanged }: { operator: string; 
               <Select options={DOMAINS} />
             </Form.Item>
             <Form.Item name="metric_key" label="指标 Key" rules={[{ required: true, message: "请输入指标 Key" }]}>
-              <Input />
+              <Input aria-label="指标 Key" />
             </Form.Item>
             <Form.Item name="label" label="阈值名称" rules={[{ required: true, message: "请输入阈值名称" }]}>
               <Input />
@@ -210,7 +196,7 @@ export function KpiThresholdEditor({ operator, onChanged }: { operator: string; 
               <Select options={DIRECTIONS} />
             </Form.Item>
             <Form.Item name="unit" label="单位" rules={[{ required: true, message: "请输入单位" }]}>
-              <Input />
+              <Input aria-label="单位" />
             </Form.Item>
             <Form.Item name="default" label="默认阈值" rules={[{ required: true, message: "请输入默认阈值" }]}>
               <InputNumber style={{ width: "100%" }} />

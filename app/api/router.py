@@ -856,7 +856,7 @@ def list_kpi_config_audits_v4(
         )
     except KpiConfigError as exc:
         raise _convert_kpi_config_error(exc) from exc
-    items = [KpiConfigAuditV4.model_validate(row) for row in rows]
+    items = [KpiConfigAuditV4.model_validate(row, from_attributes=True) for row in rows]
     return KpiConfigAuditPageV4(items=items, total=total, page=page, page_size=page_size, rule_config_version=version)
 
 

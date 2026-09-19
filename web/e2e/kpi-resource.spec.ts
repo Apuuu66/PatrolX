@@ -11,8 +11,7 @@ test("基础指标配置可分类基础指标并保留审计", async ({ page, re
 
   await expect(page.getByRole("menuitem", { name: "基础指标" })).toBeVisible();
   await expect(page.getByText("基础指标配置")).toBeVisible();
-  await expect(page.getByText("基础数据版本")).toBeVisible();
-  await expect(page.getByText("分类修订")).toBeVisible();
+  await expect(page.getByText("指标总数")).toBeVisible();
   const listResponse = await listResponsePromise;
   expect(listResponse.status()).toBe(200);
   await expect(page.getByText("共 7 条").first()).toBeVisible();
@@ -25,10 +24,15 @@ test("基础指标配置可分类基础指标并保留审计", async ({ page, re
   await page.locator(".ant-select").nth(1).click();
   await page.getByTitle("呼叫", { exact: true }).click();
   await page.getByPlaceholder("操作人").fill("kpi-resource-e2e");
+  await expect(page.getByRole("tab", { name: "指标公式" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "阈值" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "容量与展示" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "公共配置" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "配置审计" })).toBeVisible();
   await page.getByRole("button", { name: /批量分类/ }).click();
 
   await expect(row.getByText("呼叫", { exact: true })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("分类修订")).toBeVisible();
+  await expect(page.getByText("分类审计")).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole("row", { name: /ME_CALL_ATTEMPTS/ }).getByText("呼叫", { exact: true }),

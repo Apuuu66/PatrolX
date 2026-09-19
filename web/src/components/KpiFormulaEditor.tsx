@@ -4,7 +4,6 @@ import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import {
   api,
-  type KpiAggregationKindV4,
   type KpiMetricRuleV4,
   type KpiMetricRulePageV4,
   type KpiMetricTypeV4,
@@ -12,17 +11,12 @@ import {
   type KpiDisplayRoleV4,
   type KpiSourceTypeV4,
 } from "../api/http";
+import {
+  buildMetricRulePayload,
+  KPI_AGGREGATION_OPTIONS as AGGREGATIONS,
+  type KpiMetricRuleFormValues,
+} from "./kpiConfigModel";
 
-const AGGREGATIONS: { value: KpiAggregationKindV4; label: string }[] = [
-  { value: "sum", label: "求和 (sum)" },
-  { value: "min", label: "最小值 (min)" },
-  { value: "max", label: "最大值 (max)" },
-  { value: "mean", label: "均值 (mean)" },
-  { value: "count", label: "计数 (count)" },
-  { value: "median", label: "中位数 (median)" },
-  { value: "stddev", label: "标准差 (stddev)" },
-  { value: "success_rate", label: "成功率 (success_rate)" },
-];
 
 const METRIC_TYPES: { value: KpiMetricTypeV4; label: string }[] = [
   { value: "count", label: "次数" },
@@ -50,19 +44,9 @@ const SOURCE_TYPES: { value: KpiSourceTypeV4; label: string }[] = [
   { value: "derived", label: "派生公式" },
 ];
 
-interface FormulaFormValues {
+interface FormulaFormValues extends Omit<KpiMetricRuleFormValues, "unit"> {
   metric_key: string;
-  metric_type: KpiMetricTypeV4;
-  semantic_group: KpiSemanticGroupV4;
-  display_role: KpiDisplayRoleV4;
   unit: string;
-  source_type: KpiSourceTypeV4;
-  aggregation_kind: KpiAggregationKindV4;
-  description?: string;
-  numerator?: string;
-  denominator?: string;
-  scale?: number;
-  denominator_fallback_inputs?: string;
 }
 
 export function KpiFormulaEditor({ operator, onChanged }: { operator: string; onChanged?: () => void }) {
@@ -127,29 +111,10 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
     const values = await form.validateFields();
     setSaving(true);
     try {
-      const derived = values.source_type === "derived";
-      await api.upsertKpiMetricRuleV4(values.metric_key.trim(), {
-        metric_type: values.metric_type,
-        semantic_group: values.semantic_group,
-        display_role: values.display_role,
-        unit: values.unit,
-        source_type: values.source_type,
-        aggregation_kind: values.aggregation_kind,
-        description: values.description || null,
-        operator,
-        formula: derived
-          ? {
-              kind: "ratio",
-              numerator: values.numerator?.trim() ?? "",
-              denominator: values.denominator?.trim() ?? "",
-              denominator_fallback_inputs: (values.denominator_fallback_inputs ?? "")
-                .split(",")
-                .map((item) => item.trim())
-                .filter(Boolean),
-              scale: values.scale ?? 100,
-            }
-          : null,
-      });
+      await api.upsertKpiMetricRuleV4(
+        values.metric_key.trim(),
+        buildMetricRulePayload(values.metric_key, values, operator),
+      );
       message.success("指标公式已保存，受影响的 KPI 规则需手动重跑");
       setOpen(false);
       await load();

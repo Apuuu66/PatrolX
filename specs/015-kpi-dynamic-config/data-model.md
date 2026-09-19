@@ -64,7 +64,7 @@ SQLite 动态配置
 | `display_role` | enum | `highlight`、`context` |
 | `unit` | string | 非空 |
 | `source_type` | enum | `raw`、`derived` |
-| `aggregation_kind` | enum | `sum`、`min`、`max`、`mean`、`count`、`success_rate` |
+| `aggregation_kind` | enum | `sum`、`min`、`max`、`mean`、`count`、`median`、`stddev`、`success_rate` |
 | `description` | string \| null | 可选 |
 | `created_at` / `updated_at` | datetime | UTC |
 
@@ -89,7 +89,7 @@ SQLite 动态配置
 
 约束：
 
-- `aggregation_kind=success_rate` 只用于已配置受控 `ratio` 公式的派生指标；`min`、`max`、`mean` 用于 raw 指标。
+- `aggregation_kind=success_rate` 只用于已配置受控 `ratio` 公式的派生指标；`min`、`max`、`mean`、`median`、`stddev` 用于 raw 指标。
 - 分子、分母和兜底输入不得形成循环。
 - 派生指标及其输入应属于同一有效业务域；未分类输入导致快照配置无效。
 - 被公式引用的指标不得重新分类。

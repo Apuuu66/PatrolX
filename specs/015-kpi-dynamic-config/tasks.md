@@ -11,7 +11,7 @@ description: "KPI 按需分类与动态口径配置任务列表"
 - [x] T001 在 `docs/api/openapi.yaml` 固化 `/api/v4` KPI 配置、审计、按需分类线索和快照响应契约。
 - [x] T002 在 `app/models/db.py` 增加 KPI 指标规则、公式、阈值、容量规则、展示规则、公共配置、规则配置修订和审计表。
 - [x] T003 在 `app/models/schemas.py` 增加 `/api/v4` 请求/响应模型和 `schema_version=2` 快照模型。
-- [x] T004 在 `app/inspectors/kpi/catalog.py` 将聚合能力收敛为 `sum`、`min`、`max`、`mean`、`count`、`success_rate`，保留受控 `ratio` 公式。
+- [x] T004 在 `app/inspectors/kpi/catalog.py` 将聚合能力收敛为 `sum`、`min`、`max`、`mean`、`count`、`median`、`stddev`、`success_rate`，保留受控 `ratio` 公式。
 
 **检查点**：契约、持久化模型、API 模型和受控聚合基础就绪。
 
@@ -39,7 +39,7 @@ description: "KPI 按需分类与动态口径配置任务列表"
 
 - [x] T015 生成并接入 `/api/v4` OpenAPI 客户端。
 - [x] T016 将 `web/src/pages/KpiResourcesPage.tsx` 升级为 KPI 配置中心入口。
-- [x] T017 在 `web/src/components/KpiFormulaEditor.tsx` 实现 raw 聚合 `sum`、`min`、`max`、`mean`、`count` 和派生 `success_rate` 的受控 ratio 编辑。
+- [x] T017 在 `web/src/components/KpiFormulaEditor.tsx` 实现 raw 聚合 `sum`、`min`、`max`、`mean`、`count`、`median`、`stddev` 和派生 `success_rate` 的受控 ratio 编辑。
 - [x] T018 在 `web/src/components/KpiThresholdEditor.tsx` 实现默认阈值和 5/15/30/60 分钟周期阈值编辑。
 - [x] T019 实现容量规则、展示规则、公共配置和审计管理界面。
 - [x] T020 在 `web/src/components/KpiClassificationClues.tsx` 和任务详情实现线索展示、分类跳转和手动重跑提示。
