@@ -52,3 +52,7 @@ web/test-results/
 web/playwright-report/
 web/e2e/.tmp/
 .venv
+
+# 本地草稿与包管理器锁文件
+drafts/
+uv.lock
