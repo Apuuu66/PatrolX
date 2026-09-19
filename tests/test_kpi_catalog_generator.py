@@ -43,7 +43,6 @@ def test_generator_is_deterministic_and_parses_units(tmp_path: Path) -> None:
     [
         ([], "resource,description\n", "表头"),
         ([("ME_1", "", "en")], None, "ME_1"),
-        ([("ME_1", "中", "en"), ("ME_1", "中", "en")], None, "重复"),
     ],
 )
 def test_generator_rejects_invalid_input_without_output(
@@ -123,6 +122,24 @@ def test_generator_regenerates_duplicate_metric_id_for_different_name(tmp_path: 
     renamed_id = f"ME_CALL_ATTEMPTS_DUPLICATE_{digest}"
     assert items[renamed_id.lower()]["resource_id"] == renamed_id
     assert items[renamed_id.lower()]["name_zh"] == f"{first['name_zh']}（重复）"
+
+
+def test_generator_ignores_duplicate_metric_rows_with_same_name(tmp_path: Path) -> None:
+    """重复 ME_* 且中文名相同时跳过，保留首次定义。"""
+
+    data_dir = write_kpi_split_config(tmp_path)
+    csv_path = tmp_path / "resource.csv"
+    payload_metrics = kpi_catalog_payload()["metrics"]
+    rows = [(item["resource_id"], item["name_zh"], item["name_en"]) for item in payload_metrics]
+    first = payload_metrics[0]
+    rows.append((first["resource_id"], first["name_zh"], "duplicate-en"))
+    csv_path.write_bytes(_csv(rows))
+
+    generate_kpi_catalog(csv_path, data_dir)
+
+    metrics = json.loads((data_dir / "base/metrics.json").read_text(encoding="utf-8"))
+    assert len(metrics["metrics"]) == len(payload_metrics)
+    assert next(item for item in metrics["metrics"] if item["key"] == first["key"])["name_en"] == first["name_en"]
 
 
 def test_generator_rejects_missing_required_column(tmp_path: Path) -> None:

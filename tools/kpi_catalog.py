@@ -28,7 +28,7 @@ CSV 编码：
 
 行为：
     - 仅保留资源 ID 匹配 `ME_*` 或 `UNIT_*` 的行，其他行跳过。
-    - `ME_*` 写入 `base/metrics.json`；重复 ID 且中文名不同时保留首次 ID，并生成 `ME_<原名>_<英文名>_<指纹>` 形式的新 ID。
+    - `ME_*` 写入 `base/metrics.json`；重复 ID 且中文名相同时跳过，保留首次定义；中文名不同时保留首次 ID，并生成 `ME_<原名>_<英文名>_<指纹>` 形式的新 ID。
     - `UNIT_*` 写入 `base/units.json`；重复 UNIT 行跳过，保留首次定义。
     - `unit_key` 当前固定为 null。
     - 不修改 `rules/` 下任何文件。
@@ -153,7 +153,9 @@ def _read_resource_csv(csv_path: Path) -> tuple[list[dict[str, str]], str]:
         if resource_id.startswith("UNIT_") and is_duplicate:
             continue
         if is_duplicate:
-            if resource_id.startswith("ME_") and name_zh_by_key.get(key) != name_zh:
+            if resource_id.startswith("ME_"):
+                if name_zh_by_key.get(key) == name_zh:
+                    continue
                 resource_id = _generate_metric_resource_id(resource_id, name_zh, name_en, seen_ids, seen_keys)
                 key = resource_id.lower()
             else:
