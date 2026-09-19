@@ -83,11 +83,11 @@ OpenAPI 是在线 API 结构的唯一事实来源。后端接口变更前或变�
 ### 工具与工作流
 
 Python 构建入口 `build.py` 是构建、环境安装、锁维护、质量门禁、本地全流程和项目工作流的唯一权威入口；当前工作流不得引入或依赖 GNU Make、uv 或第二套构建入口。前端子命令仍由 `build.py` 统一调度，前端工具链语义不变。
-大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Speckit；小修复可以省略 Speckit。Speckit 是需求规格、实现方案和任务清单的唯一规划来源；规划产物在进入实现前提交，实现阶段只更新任务完成状态。Superpowers 只负责实现执行、调试、TDD 和完成前验证。
-大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Speckit；小修复可以省略 Speckit。Speckit 是需求规格、实现方案和任务清单的唯一规划来源；规划产物在进入实现前提交，实现阶段只更新任务完成状态。Speckit 必须按 `specify → clarify → review → plan → review → tasks → analyze → review → implement` 执行。`clarify` 用于在进入 review 和 plan 前消除 spec 歧义，并将结论回写 `spec.md`。`analyze` 在任务生成后、实现前以只读方式校验 `spec.md`、`plan.md` 和 `tasks.md` 的一致性；发现问题时必须先修正对应产物并重新 review，不得进入实现。Superpowers 只负责实现执行、调试、TDD 和完成前验证。
-Speckit 实现禁止默认在主工作区进行。tasks review 通过后必须创建实现分支，先提交全部 Speckit 产物（`spec.md`、`plan.md`、`tasks.md` 及检查清单），再创建或复用对应 worktree；实现、测试、调试和提交都必须在该 worktree 内完成。创建 worktree 前必须执行 `git worktree list`；禁止将未跟踪的规格产物复制到 worktree 中。
 
-每个实现回合开始时，Agent 必须先运行 `git worktree list` 并完成实现前置检查：当前目录必须是实现分支对应的 worktree，当前分支必须是该 worktree 的检出分支。检查未通过时，Agent 只能执行只读检查或切换/创建 worktree，不得修改源代码、测试或契约。用户要求继续当前分支不构成豁免；只有用户明确声明本次豁免时才可例外。
+Speckit 的第一原则是“规划在 `main`，实现在 worktree”：`specify`、`clarify`、`plan`、`tasks`、`analyze` 及对应 review 都在检出 `main` 的主工作区进行，此阶段禁止创建实现分支或 worktree；tasks 生成后的 `analyze` 和 review 通过后，先把全部 Speckit 产物提交到 `main`，再从 `main` 创建实现分支和 worktree，实现、测试、调试和提交都在该 worktree 内完成。只有 Speckit 流程最终创建实现 worktree；小改动不创建 worktree。每个实现回合开始时必须运行 `git worktree list` 并确认当前目录和分支是对应实现 worktree，未通过时只能执行只读检查或创建/复用 worktree，不得修改源代码、测试或契约。
+
+大型功能、契约变更、数据模型演进、调度器变更和复杂交互设计必须走 Speckit；小修复可以省略 Speckit，且不创建 worktree。Speckit 是需求规格、实现方案和任务清单的唯一规划来源，必须按 `specify → clarify → review → plan → review → tasks → analyze → review → implement` 执行。`clarify` 用于在进入 review 和 plan 前消除 spec 歧义，并将结论回写 `spec.md`。`analyze` 在任务生成后、实现前以只读方式校验 `spec.md`、`plan.md` 和 `tasks.md` 的一致性；发现问题时必须先修正对应产物并重新 review，不得进入实现。Superpowers 只负责实现执行、调试、TDD 和完成前验证。
+
 合入主分支后，必须先在主分支上运行全部验证（`python build.py lint`、`python build.py test`，涉及前端变更时加 `python build.py e2e` 和 `python build.py web-build`，涉及全流程时加 `python build.py verify`），全部通过后才能删除 worktree 和实现分支。具体目录、复用和清理规则由 Agent 指南维护。
 
 ### 必须验证
@@ -110,4 +110,4 @@ Speckit 实现禁止默认在主工作区进行。tasks review 通过后必须�
 
 审查者和 Agent 在合入前必须验证宪法合规性。功能计划与本宪法冲突时，必须通过修改计划解决，除非项目先正式修正宪法。
 
-**版本**：2.4.1 | **批准日期**：2026-09-12 | **最后修正**：2026-09-19
+**版本**：2.5.0 | **批准日期**：2026-09-12 | **最后修正**：2026-09-19

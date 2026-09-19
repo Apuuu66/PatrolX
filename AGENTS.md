@@ -231,10 +231,19 @@ docs(architecture): 拆分 AGENTS.md
 
 项目最高约束是 Constitution。
 
+### 第一原则
+
+- Speckit 的所有规划与讨论（`specify`、`clarify`、`plan`、`tasks`、`analyze` 及对应 review）都在检出 `main` 的主工作区进行；此阶段禁止创建实现分支或 worktree。
+- tasks 生成后的 `analyze` 和 review 通过后，先把全部 Speckit 产物提交到 `main`，再从 `main` 创建实现分支和实现 worktree。
+- 只有 Speckit 流程最终创建实现 worktree；小改动不创建 worktree。
+- 实现、测试、调试和提交只能在实现分支对应的 worktree 内完成；主工作区不承载 Speckit 实现。
+- spec 元数据中的“功能分支”只是实现目标名称，不是提前建分支的授权。
+- 若主工作区未检出 `main`，或存在会影响切换的其他任务现场，必须报告并等待用户处理，不得擅自切分支。
+
 ### 变更分类
 
 - Speckit：新增大功能、修改 OpenAPI 契约、修改数据模型、修改规则执行器/任务/存储模型、复杂前端交互、新增运行模式或部署形态。
-- 小改动：小修复、文档调整、单规则调试、测试补齐；可不走 Speckit。
+- 小改动：小修复、文档调整、单规则调试、测试补齐；可不走 Speckit，且不创建 worktree。
 
 ### Speckit
 
@@ -252,13 +261,9 @@ specify → clarify → review → plan → review → tasks → analyze → rev
 
 明确改动边界，使用测试验证，按项目质量门禁执行验证，并遵守 Constitution。
 
-### 实现与 Worktree
+### 实现前置检查
 
-Speckit 实现禁止默认在主工作区进行。tasks review 通过后必须创建遵循分支命名的实现分支，先提交全部 Speckit 产物（`spec.md`、`plan.md`、`tasks.md` 及检查清单），再创建或复用对应 worktree；实现、测试、调试和提交都必须在该 worktree 内完成。使用回合必须先执行 `git worktree list`。
-
-已有对应分支的 worktree 必须复用；已有实现分支但没有对应 worktree 时，将该分支检出到 worktree；没有实现分支时，从包含 Speckit 产物的基线分支创建实现分支和 worktree。禁止将未跟踪的 Speckit 产物复制到 worktree。
-
-每个 Speckit 实现回合必须在修改任何实现文件前执行 preflight：
+每个 Speckit 实现回合在修改实现文件前必须执行：
 
 ```bash
 git worktree list
@@ -269,8 +274,9 @@ Agent 必须确认：
 
 1. 当前目录是对应实现分支的 worktree。
 2. 当前分支是该 worktree 的检出分支。
-3. Speckit 产物已在基线上提交。
+3. Speckit 产物已在 `main` 提交。
+4. 已有对应 worktree 时必须复用，不得重复创建。
 
-任一条件不满足时，只允许执行只读检查、切换分支或创建/复用 worktree；不得修改源代码、测试或契约。用户要求继续当前分支不构成豁免，只有用户明确声明本次豁免时才可例外。回合结束报告必须包含 preflight 结果。
+任一条件不满足时，只允许执行只读检查或按第一原则创建/复用 worktree；不得修改源代码、测试或契约。用户要求继续当前分支不构成豁免，只有用户明确声明本次豁免时才可例外。回合结束报告必须包含前置检查结果。
 
 目录固定为 `<repo-root>/.worktrees/<分支名，/ 替换为 ->`，必须保留在 `.gitignore` 中；同一分支最多一个 worktree。回合结束报告路径、分支、变更和验证结果；合入并确认后清理。
