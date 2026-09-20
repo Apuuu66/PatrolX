@@ -66,10 +66,10 @@ function KpiClassificationClueContent({ taskId }: { taskId: string }) {
     {
       title: "源名称",
       dataIndex: "source_name",
-      width: 240,
-      ellipsis: true,
+      width: 360,
+      ellipsis: { showTitle: true },
       render: (value: string, record) => (
-        <Space size={4}>
+        <Space size={8}>
           <span>{value}</span>
           <Tag color={STATUS_COLORS[record.clue_status]}>{STATUS_LABELS[record.clue_status]}</Tag>
         </Space>
