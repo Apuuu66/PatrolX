@@ -66,9 +66,26 @@ from app.models.schemas import (
     TaskCreated,
     TaskListResponse,
     TaskLogs,
+    UserCreateRequestV1,
     UserInfoV1,
+    UserListResponseV1,
+    UserPasswordRequestV1,
+    UserRoleRequestV1,
+    UserV1,
 )
-from app.services.auth import AuthError, AuthSession, get_current_user, login, logout, require_role
+from app.services.auth import (
+    AuthError,
+    AuthSession,
+    create_user,
+    delete_user,
+    get_current_user,
+    list_users,
+    login,
+    logout,
+    require_role,
+    reset_user_password,
+    update_user_role,
+)
 from app.services.kpi_classification_clues import KpiClassificationClueError, list_classification_clues
 from app.services.kpi_config import (
     KpiConfigError,
@@ -949,3 +966,65 @@ def auth_logout(authorization: str | None = Header(None)) -> dict:
 @v1_router.get("/auth/me", response_model=UserInfoV1, operation_id="getMeV1")
 def auth_me(user=Depends(get_current_user)) -> UserInfoV1:
     return UserInfoV1(username=user.username, role=user.role)
+
+
+@v1_router.get("/users", response_model=UserListResponseV1, operation_id="listUsersV1")
+def list_users_v1(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> UserListResponseV1:
+    try:
+        return UserListResponseV1(**list_users(page, page_size))
+    except AuthError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+
+
+@v1_router.post("/users", response_model=UserV1, status_code=201, operation_id="createUserV1")
+def create_user_v1(
+    body: UserCreateRequestV1,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> UserV1:
+    try:
+        user = create_user(body.username, body.password, body.role)
+    except AuthError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return UserV1(**user)
+
+
+@v1_router.patch("/users/{username}", response_model=UserV1, operation_id="updateUserV1")
+def update_user_v1(
+    body: UserRoleRequestV1,
+    username: str = PathParam(),
+    auth: AuthSession = Depends(require_role("admin")),
+) -> UserV1:
+    try:
+        user = update_user_role(username, body.role, auth.username)
+    except AuthError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return UserV1(**user)
+
+
+@v1_router.put("/users/{username}/password", response_model=UserV1, operation_id="resetUserPasswordV1")
+def reset_user_password_v1(
+    body: UserPasswordRequestV1,
+    username: str = PathParam(),
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> UserV1:
+    try:
+        user = reset_user_password(username, body.new_password)
+    except AuthError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return UserV1(**user)
+
+
+@v1_router.delete("/users/{username}", status_code=204, operation_id="deleteUserV1")
+def delete_user_v1(
+    username: str = PathParam(),
+    auth: AuthSession = Depends(require_role("admin")),
+) -> Response:
+    try:
+        delete_user(username, auth.username)
+    except AuthError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return Response(status_code=204)

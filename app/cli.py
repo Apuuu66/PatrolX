@@ -1,6 +1,7 @@
 """本地开发模式 CLI：python main.py 一键离线全流程 / 单规则调试。"""
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -29,7 +30,7 @@ from app.models.schemas import (
     TaskTrigger,
 )
 from app.services import store
-from app.services.auth import AuthError, create_user
+from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext
 from app.services.extraction import WORK_CATEGORIES
 from app.services.kpi_catalog import KpiSnapshotError, load_task_kpi_config
@@ -411,6 +412,17 @@ def main(argv: list[str] | None = None) -> int:
     create_user_parser.add_argument("--username", required=True, help="用户名")
     create_user_parser.add_argument("--password", required=True, help="密码")
     create_user_parser.add_argument("--role", default="viewer", choices=["admin", "viewer"], help="角色（默认 viewer）")
+    create_default_admin_parser = sub.add_parser(
+        "create-default-admin",
+        help="初始化或重置默认管理员密码",
+    )
+    create_default_admin_parser.add_argument("--username", default="admin", help="管理员用户名（默认 admin）")
+    create_default_admin_parser.add_argument("--password", default=None, help="密码；未提供时读取环境变量或交互输入")
+    create_default_admin_parser.add_argument(
+        "--password-env",
+        default="PATROLX_INITIAL_ADMIN_PASSWORD",
+        help="密码环境变量名（默认 PATROLX_INITIAL_ADMIN_PASSWORD）",
+    )
     args = parser.parse_args(argv)
 
     if args.cmd == "run-one":
@@ -429,6 +441,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"错误 [{exc.code}]: {exc.message}")
             return 1
         print(f"已创建用户 {args.username}（角色：{args.role}）")
+        return 0
+    if args.cmd == "create-default-admin":
+        init_db()
+        password = args.password or os.environ.get(args.password_env) or getpass.getpass("管理员密码：")
+        try:
+            action = ensure_default_admin(args.username, password)
+        except AuthError as exc:
+            print(f"错误 [{exc.code}]: {exc.message}")
+            return 1
+        if action == "password_updated":
+            print(f"已重置管理员密码 {args.username}")
+        else:
+            print(f"已创建默认管理员 {args.username}")
         return 0
     if args.cmd == "classify-kpi":
         init_db()

@@ -23,6 +23,7 @@ const DictsPage = lazy(() => import("./pages/DictsPage").then(({ DictsPage }) =>
 const KpiResourcesPage = lazy(() =>
   import("./pages/KpiResourcesPage").then(({ KpiResourcesPage }) => ({ default: KpiResourcesPage })),
 );
+const UsersPage = lazy(() => import("./pages/UsersPage").then(({ UsersPage }) => ({ default: UsersPage })));
 
 const PageFallback = (
   <div style={{ display: "grid", placeItems: "center", minHeight: 320 }}>
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
       { path: "inspectors", element: <InspectorsPage /> },
       { path: "kpi-resources", element: <KpiResourcesPage /> },
       { path: "dicts", element: <DictsPage /> },
+      { path: "users", element: <UsersPage /> },
     ],
   },
 ]);

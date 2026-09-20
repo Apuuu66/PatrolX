@@ -11,6 +11,7 @@ WORKDIR /app
 COPY requirements-lock.txt pyproject.toml ./
 COPY app ./app
 COPY deploy ./deploy
+COPY scripts ./scripts
 
 RUN pip install --no-cache-dir setuptools \
     && pip install --no-cache-dir -r requirements-lock.txt \

@@ -54,6 +54,11 @@ export type KpiConfigAuditV4 = components["schemas"]["KpiConfigAuditV4"];
 export type KpiConfigAuditPageV4 = components["schemas"]["KpiConfigAuditPageV4"];
 export type KpiClassificationClueV4 = components["schemas"]["KpiClassificationClueV4"];
 export type KpiClassificationCluePageV4 = components["schemas"]["KpiClassificationCluePageV4"];
+export type User = components["schemas"]["UserV1"];
+export type UserPage = components["schemas"]["UserListResponseV1"];
+export type UserCreatePayload = components["schemas"]["UserCreateRequestV1"];
+export type UserRolePayload = components["schemas"]["UserRoleRequestV1"];
+export type UserPasswordPayload = components["schemas"]["UserPasswordRequestV1"];
 export type TaskDeleteError = TaskDeleteErrorDetail;
 export type RebuildMode = components["schemas"]["RebuildModeV2"];
 export type RebuildTriggerSource = components["schemas"]["RebuildRequestV2"]["trigger_source"];
@@ -64,6 +69,7 @@ export type RebuildRequestPayload = Omit<components["schemas"]["RebuildRequestV2
 const BASE = "/api/v2";
 const KPI_BASE = "/api/v3";
 const KPI_V4_BASE = "/api/v4";
+const AUTH_BASE = "/api/v1";
 
 export type TaskDeleteErrorDetail = components["schemas"]["TaskDeleteErrorDetailV2"];
 
@@ -377,6 +383,39 @@ export const api = {
       `${KPI_V4_BASE}/tasks/${encodeURIComponent(taskId)}/kpi/classification-clues${qs ? `?${qs}` : ""}`,
     );
   },
+
+  listUsers: (query: { page?: number; page_size?: number } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<UserPage>(`${AUTH_BASE}/users${qs ? `?${qs}` : ""}`);
+  },
+
+  createUser: (payload: UserCreatePayload) =>
+    request<User>(`${AUTH_BASE}/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  updateUserRole: (username: string, payload: UserRolePayload) =>
+    request<User>(`${AUTH_BASE}/users/${encodeURIComponent(username)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  resetUserPassword: (username: string, payload: UserPasswordPayload) =>
+    request<User>(`${AUTH_BASE}/users/${encodeURIComponent(username)}/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  deleteUser: (username: string) =>
+    request<void>(`${AUTH_BASE}/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
 };
 
 export const reportUrl = (taskId: string) => `${BASE}/tasks/${encodeURIComponent(taskId)}/report`;

@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, Header
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.db import AuthSession, AuthUser, session_factory
@@ -46,8 +47,8 @@ def verify_password(password: str, stored: str) -> bool:
     return secrets.compare_digest(digest.hex(), expected)
 
 
-def create_user(username: str, password: str, role: str = "viewer") -> None:
-    """CLI 使用：创建用户。用户名已存在时抛出异常。"""
+def create_user(username: str, password: str, role: str = "viewer") -> dict[str, object]:
+    """创建用户。用户名已存在时抛出异常。"""
     if role not in VALID_ROLES:
         raise AuthError("invalid_role", f"非法角色: {role}", 400)
     now = datetime.now(UTC)
@@ -61,6 +62,12 @@ def create_user(username: str, password: str, role: str = "viewer") -> None:
                 )
             )
             session.commit()
+            return {
+                "username": username,
+                "role": role,
+                "created_at": now,
+                "updated_at": now,
+            }
     except SQLAlchemyError as exc:
         raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
 
@@ -77,6 +84,140 @@ def change_password(username: str, old_password: str, new_password: str) -> None
             user.password_hash = hash_password(new_password)
             user.updated_at = datetime.now(UTC)
             session.commit()
+    except SQLAlchemyError as exc:
+        raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
+
+
+def list_users(page: int = 1, page_size: int = 20) -> dict[str, object]:
+    """返回认证用户台账；仅认证管理服务使用。"""
+    offset = (page - 1) * page_size
+    try:
+        with session_factory() as session:
+            total = session.scalar(select(func.count()).select_from(AuthUser)) or 0
+            query = select(AuthUser).order_by(AuthUser.username).offset(offset).limit(page_size)
+            records = session.scalars(query).all()
+            items = [
+                {
+                    "username": record.username,
+                    "role": record.role,
+                    "created_at": record.created_at,
+                    "updated_at": record.updated_at,
+                }
+                for record in records
+            ]
+            return {"items": items, "total": total, "page": page, "page_size": page_size}
+    except SQLAlchemyError as exc:
+        raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
+
+
+def update_user_role(username: str, role: str, current_username: str) -> dict[str, object]:
+    """更新用户角色，并使其旧会话立即失效。"""
+    if role not in VALID_ROLES:
+        raise AuthError("invalid_role", f"非法角色: {role}", 400)
+    if username == current_username:
+        raise AuthError("self_role_change_forbidden", "不能修改自己的角色", 403)
+    now = datetime.now(UTC)
+    try:
+        with session_factory() as session:
+            user = session.get(AuthUser, username)
+            if user is None:
+                raise AuthError("user_not_found", f"用户不存在: {username}", 404)
+            admin_count = (
+                session.scalar(select(func.count()).select_from(AuthUser).where(AuthUser.role == "admin")) or 0
+            )
+            if user.role == "admin" and role != "admin" and admin_count <= 1:
+                raise AuthError("last_admin_protected", "至少保留一个管理员", 409)
+            user.role = role
+            user.updated_at = now
+            session.execute(delete(AuthSession).where(AuthSession.username == username))
+            session.commit()
+            return {
+                "username": user.username,
+                "role": user.role,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at,
+            }
+    except SQLAlchemyError as exc:
+        raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
+
+
+def reset_user_password(username: str, new_password: str) -> dict[str, object]:
+    """管理员重置密码，并使目标用户全部旧会话失效。"""
+    now = datetime.now(UTC)
+    try:
+        with session_factory() as session:
+            user = session.get(AuthUser, username)
+            if user is None:
+                raise AuthError("user_not_found", f"用户不存在: {username}", 404)
+            user.password_hash = hash_password(new_password)
+            user.updated_at = now
+            session.execute(delete(AuthSession).where(AuthSession.username == username))
+            session.commit()
+            return {
+                "username": user.username,
+                "role": user.role,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at,
+            }
+    except SQLAlchemyError as exc:
+        raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
+
+
+def delete_user(username: str, current_username: str) -> None:
+    """删除用户；保护当前登录账号和最后一个管理员。"""
+    if username == current_username:
+        raise AuthError("self_delete_forbidden", "不能删除当前登录账号", 403)
+    try:
+        with session_factory() as session:
+            user = session.get(AuthUser, username)
+            if user is None:
+                raise AuthError("user_not_found", f"用户不存在: {username}", 404)
+            if user.role == "admin":
+                admin_count = (
+                    session.scalar(select(func.count()).select_from(AuthUser).where(AuthUser.role == "admin")) or 0
+                )
+                if admin_count <= 1:
+                    raise AuthError("last_admin_protected", "至少保留一个管理员", 409)
+            session.execute(delete(AuthSession).where(AuthSession.username == username))
+            session.delete(user)
+            session.commit()
+    except SQLAlchemyError as exc:
+        raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
+
+
+def ensure_default_admin(username: str, password: str) -> Literal["created", "password_updated"]:
+    """初始化默认管理员；目标管理员已存在时直接重置密码。"""
+    if len(password) < 8:
+        raise AuthError("weak_password", "管理员密码至少 8 位", 400)
+    now = datetime.now(UTC)
+    try:
+        with session_factory() as session:
+            user = session.get(AuthUser, username)
+            if user is not None:
+                if user.role != "admin":
+                    raise AuthError("target_not_admin", f"目标用户不是管理员: {username}", 409)
+                user.password_hash = hash_password(password)
+                user.updated_at = now
+                session.execute(delete(AuthSession).where(AuthSession.username == username))
+                session.commit()
+                return "password_updated"
+
+            admin_count = (
+                session.scalar(select(func.count()).select_from(AuthUser).where(AuthUser.role == "admin")) or 0
+            )
+            if admin_count > 0:
+                raise AuthError("admin_not_found", f"管理员不存在: {username}", 409)
+            session.add(
+                AuthUser(
+                    username=username,
+                    password_hash=hash_password(password),
+                    role="admin",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.commit()
+            return "created"
     except SQLAlchemyError as exc:
         raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
 

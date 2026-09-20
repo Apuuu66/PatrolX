@@ -61,6 +61,28 @@ python build.py gen-web-api    # 由 docs/api/openapi.yaml 重新生成 web/src/
 
 页面：任务列表（上传/重跑/删除）、任务详情（摘要/规则分组/单规则重跑）、规则详情（指标图表/发现/建议）、报告预览（iframe）、执行日志、规则管理（只读）、数据字典。本地与在线模式共用同一套页面与 API。
 
+## 用户与认证
+
+系统支持访客浏览与任务执行；基础指标分类和 KPI 动态口径等配置修改仅管理员可操作。账号不支持在线注册，管理员可在 Web 页面的「用户管理」中创建用户、重置密码、调整角色或删除用户。
+
+首次部署可用脚本初始化默认管理员；目标管理员已存在时，脚本会直接重置该管理员密码，并使其旧登录会话失效：
+
+```bash
+.venv/bin/python scripts/create_default_admin.py --username admin --password '请输入至少 8 位密码'
+```
+
+脚本会检查目标用户名；目标用户不是管理员、或已有其他管理员但目标账号不存在时会报错。也可以通过环境变量传入密码：
+
+```bash
+PATROLX_INITIAL_ADMIN_PASSWORD='请输入至少 8 位密码' .venv/bin/python scripts/create_default_admin.py
+```
+
+Docker 部署可执行：
+
+```bash
+docker compose exec api python scripts/create_default_admin.py --username admin --password '请输入至少 8 位密码'
+```
+
 ## 可观测
 
 - `GET /healthz`：健康检查；`GET /metrics`：Prometheus 指标（任务/规则计数、任务耗时直方图）。

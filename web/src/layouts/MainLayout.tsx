@@ -6,6 +6,7 @@ import {
   FileSearchOutlined,
   LogoutOutlined,
   SafetyCertificateOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -83,7 +84,17 @@ export function MainLayout() {
         ? "/kpi-resources"
       : location.pathname.startsWith("/inspectors")
         ? "/inspectors"
+      : location.pathname.startsWith("/users")
+        ? "/users"
         : "/dicts";
+
+  const menuItems = [
+    { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
+    { key: "/kpi-resources", icon: <DatabaseOutlined />, label: "基础指标" },
+    { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
+    { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },
+    ...(user?.role === "admin" ? [{ key: "/users", icon: <UserOutlined />, label: "用户管理" }] : []),
+  ];
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -107,12 +118,7 @@ export function MainLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[selected]}
-          items={[
-            { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
-            { key: "/kpi-resources", icon: <DatabaseOutlined />, label: "基础指标" },
-            { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
-            { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },
-          ]}
+          items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
       </Sider>

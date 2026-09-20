@@ -806,3 +806,31 @@ class LoginResponseV1(BaseModel):
 class UserInfoV1(BaseModel):
     username: str
     role: str
+
+
+class UserV1(BaseModel):
+    username: str
+    role: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserListResponseV1(BaseModel):
+    items: list[UserV1] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+
+
+class UserCreateRequestV1(BaseModel):
+    username: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=8, max_length=256)
+    role: Literal["admin", "viewer"]
+
+
+class UserPasswordRequestV1(BaseModel):
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+class UserRoleRequestV1(BaseModel):
+    role: Literal["admin", "viewer"]

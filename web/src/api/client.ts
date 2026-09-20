@@ -55,6 +55,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 用户台账分页 */
+        get: operations["listUsersV1"];
+        put?: never;
+        /** 创建用户 */
+        post: operations["createUserV1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除用户 */
+        delete: operations["deleteUserV1"];
+        options?: never;
+        head?: never;
+        /** 更新用户角色 */
+        patch: operations["updateUserV1"];
+        trace?: never;
+    };
+    "/api/v1/users/{username}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 重置用户密码 */
+        put: operations["resetUserPasswordV1"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -593,6 +646,34 @@ export interface components {
         };
         UserInfoV1: {
             username: string;
+            /** @enum {string} */
+            role: "admin" | "viewer";
+        };
+        UserV1: {
+            username: string;
+            /** @enum {string} */
+            role: "admin" | "viewer";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        UserListResponseV1: {
+            items: components["schemas"]["UserV1"][];
+            total: number;
+            page: number;
+            page_size: number;
+        };
+        UserCreateRequestV1: {
+            username: string;
+            password: string;
+            /** @enum {string} */
+            role: "admin" | "viewer";
+        };
+        UserPasswordRequestV1: {
+            new_password: string;
+        };
+        UserRoleRequestV1: {
             /** @enum {string} */
             role: "admin" | "viewer";
         };
@@ -1491,6 +1572,24 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description 没有执行该操作的权限 */
+        Error403: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 资源冲突 */
+        Error409: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description 文件过大 */
         Error413: {
             headers: {
@@ -1524,6 +1623,8 @@ export interface components {
         RuleCode: string;
         Page: number;
         PageSize: number;
+        UserPageSize: number;
+        Username: string;
         KpiRecordPageSize: number;
     };
     requestBodies: never;
@@ -1595,6 +1696,143 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error401"];
+        };
+    };
+    listUsersV1: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["UserPageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 用户台账 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListResponseV1"];
+                };
+            };
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+        };
+    };
+    createUserV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreateRequestV1"];
+            };
+        };
+        responses: {
+            /** @description 用户已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserV1"];
+                };
+            };
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+            409: components["responses"]["Error409"];
+            422: components["responses"]["Error422"];
+        };
+    };
+    deleteUserV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 用户已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+            404: components["responses"]["Error404"];
+            409: components["responses"]["Error409"];
+        };
+    };
+    updateUserV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserRoleRequestV1"];
+            };
+        };
+        responses: {
+            /** @description 用户角色已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserV1"];
+                };
+            };
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+            404: components["responses"]["Error404"];
+            409: components["responses"]["Error409"];
+        };
+    };
+    resetUserPasswordV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPasswordRequestV1"];
+            };
+        };
+        responses: {
+            /** @description 用户密码已重置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserV1"];
+                };
+            };
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+            404: components["responses"]["Error404"];
+            422: components["responses"]["Error422"];
         };
     };
     healthz: {
