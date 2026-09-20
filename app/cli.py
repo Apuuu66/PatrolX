@@ -29,6 +29,7 @@ from app.models.schemas import (
     TaskTrigger,
 )
 from app.services import store
+from app.services.auth import AuthError, create_user
 from app.services.executor import Executor, RuleContext
 from app.services.extraction import WORK_CATEGORIES
 from app.services.kpi_catalog import KpiSnapshotError, load_task_kpi_config
@@ -406,6 +407,10 @@ def main(argv: list[str] | None = None) -> int:
     classify_kpi = sub.add_parser("classify-kpi", help="分类 KPI 基础指标")
     classify_kpi.add_argument("--metric-key", required=True, help="KPI 指标稳定 key")
     classify_kpi.add_argument("--domain", required=True, help="业务域：call/api/media/unclassified")
+    create_user_parser = sub.add_parser("create-user", help="创建认证用户（不支持在线注册）")
+    create_user_parser.add_argument("--username", required=True, help="用户名")
+    create_user_parser.add_argument("--password", required=True, help="密码")
+    create_user_parser.add_argument("--role", default="viewer", choices=["admin", "viewer"], help="角色（默认 viewer）")
     args = parser.parse_args(argv)
 
     if args.cmd == "run-one":
@@ -415,6 +420,15 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
         for pkg in packages:
             run_single_rule(args.rule, pkg, task_id=args.task_id)
+        return 0
+    if args.cmd == "create-user":
+        init_db()
+        try:
+            create_user(args.username, args.password, args.role)
+        except AuthError as exc:
+            print(f"错误 [{exc.code}]: {exc.message}")
+            return 1
+        print(f"已创建用户 {args.username}（角色：{args.role}）")
         return 0
     if args.cmd == "classify-kpi":
         init_db()

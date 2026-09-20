@@ -13,6 +13,7 @@ import { RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiRe
 import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
 import { KpiThresholdEditor } from "../components/KpiThresholdEditor";
 import { KpiMetricCatalogProvider } from "../components/KpiMetricSelect";
+import { useAuth } from "../auth/AuthContext";
 import {
   KpiCapacityRuleEditor,
   KpiCommonConfigEditor,
@@ -27,6 +28,7 @@ const DOMAIN_OPTIONS = (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[])
 
 export function KpiResourcesPage() {
   const { message } = App.useApp();
+  const { user, canWrite } = useAuth();
   const [searchParams] = useSearchParams();
   const [pageData, setPageData] = useState<KpiResourceMetricPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,10 @@ export function KpiResourcesPage() {
     },
     [auditPage, auditPageSize, message],
   );
+
+  useEffect(() => {
+    setOperator(user?.username ?? "");
+  }, [user?.username]);
 
   useEffect(() => {
     void load();
@@ -199,28 +205,32 @@ export function KpiResourcesPage() {
               value={domain}
               onChange={handleDomainChange}
             />
-            <Select
-              allowClear
-              placeholder="分类到"
-              style={{ width: 140 }}
-              options={DOMAIN_OPTIONS}
-              value={targetDomain}
-              onChange={setTargetDomain}
-            />
-            <Input
-              placeholder="操作人"
-              value={operator}
-              onChange={(event) => setOperator(event.target.value)}
-              style={{ width: 140 }}
-            />
-            <Button
-              type="primary"
-              disabled={!targetDomain || selectedKeys.length === 0}
-              loading={submitting}
-              onClick={handleClassify}
-            >
-              批量分类（{selectedKeys.length}）
-            </Button>
+            {canWrite && (
+              <>
+                <Select
+                  allowClear
+                  placeholder="分类到"
+                  style={{ width: 140 }}
+                  options={DOMAIN_OPTIONS}
+                  value={targetDomain}
+                  onChange={setTargetDomain}
+                />
+                <Input
+                  placeholder="操作人"
+                  value={operator}
+                  disabled
+                  style={{ width: 140 }}
+                />
+                <Button
+                  type="primary"
+                  disabled={!targetDomain || selectedKeys.length === 0}
+                  loading={submitting}
+                  onClick={handleClassify}
+                >
+                  批量分类（{selectedKeys.length}）
+                </Button>
+              </>
+            )}
           </Space>
           <KpiResourceTable
             items={pageData?.items ?? []}
@@ -228,6 +238,7 @@ export function KpiResourcesPage() {
             page={pageData?.page ?? page}
             pageSize={pageData?.page_size ?? pageSize}
             loading={loading}
+            selectable={canWrite}
             selectedKeys={selectedKeys}
             onSelectedKeysChange={setSelectedKeys}
             onPageChange={handlePageChange}
@@ -252,7 +263,7 @@ export function KpiResourcesPage() {
         />
       </Card>
 
-      {!operator.trim() ? (
+      {!canWrite ? null : !operator.trim() ? (
         <Alert
           type="warning"
           showIcon

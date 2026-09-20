@@ -6,6 +6,51 @@ info:
 servers:
 - url: /
 paths:
+  /api/v1/auth/login:
+    post:
+      summary: 登录并创建会话
+      operationId: loginV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequestV1'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponseV1'
+        '401':
+          $ref: '#/components/responses/Error401'
+  /api/v1/auth/logout:
+    post:
+      summary: 登出并失效当前会话
+      operationId: logoutV1
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 已登出
+        '401':
+          $ref: '#/components/responses/Error401'
+  /api/v1/auth/me:
+    get:
+      summary: 查询当前登录用户
+      operationId: getMeV1
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfoV1'
+        '401':
+          $ref: '#/components/responses/Error401'
   /healthz:
     get:
       summary: 健康检查
@@ -37,6 +82,8 @@ paths:
     post:
       summary: 创建巡检任务（同名同 checksum 复用；同名不同 checksum 冲突）
       operationId: createTaskV2
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -125,6 +172,8 @@ paths:
     delete:
       summary: 删除任务（级联删除 uploads/ 与 output/ 现场数据）
       operationId: deleteTaskV2
+      security:
+        - BearerAuth: []
       parameters:
       - $ref: '#/components/parameters/TaskId'
       responses:
@@ -148,6 +197,8 @@ paths:
     post:
       summary: 增量重跑（全部或指定规则）
       operationId: rerunTaskV2
+      security:
+        - BearerAuth: []
       parameters:
       - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -168,6 +219,8 @@ paths:
     post:
       summary: 重建重跑（全量或强制重建解压的增量）
       operationId: rebuildTaskV2
+      security:
+        - BearerAuth: []
       parameters:
       - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -366,6 +419,8 @@ paths:
     put:
       summary: 维护字典项（纯内部开放）
       operationId: updateDictV2
+      security:
+        - BearerAuth: []
       parameters:
       - name: dict_name
         in: path
@@ -430,6 +485,8 @@ paths:
     put:
       summary: 批量分类 KPI 指标
       operationId: classifyKpiResourceMetricsV3
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -553,6 +610,8 @@ paths:
     put:
       summary: 创建或更新指标规则与公式
       operationId: upsertKpiMetricRuleV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: metric_key
           in: path
@@ -585,6 +644,8 @@ paths:
     delete:
       summary: 删除自定义指标规则并回退默认规则
       operationId: deleteKpiMetricRuleV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: metric_key
           in: path
@@ -626,6 +687,8 @@ paths:
     post:
       summary: 创建阈值
       operationId: createKpiThresholdV4
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -674,6 +737,8 @@ paths:
     put:
       summary: 更新阈值
       operationId: updateKpiThresholdV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: threshold_id
           in: path
@@ -700,6 +765,8 @@ paths:
     delete:
       summary: 删除阈值
       operationId: deleteKpiThresholdV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: threshold_id
           in: path
@@ -733,6 +800,8 @@ paths:
     post:
       summary: 创建容量规则
       operationId: createKpiCapacityRuleV4
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -763,6 +832,8 @@ paths:
     put:
       summary: 更新容量规则
       operationId: updateKpiCapacityRuleV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: capacity_rule_id
           in: path
@@ -787,6 +858,8 @@ paths:
     delete:
       summary: 删除容量规则
       operationId: deleteKpiCapacityRuleV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: capacity_rule_id
           in: path
@@ -824,6 +897,8 @@ paths:
     post:
       summary: 创建展示规则
       operationId: createKpiDisplayRuleV4
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -854,6 +929,8 @@ paths:
     put:
       summary: 更新展示规则
       operationId: updateKpiDisplayRuleV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: display_rule_id
           in: path
@@ -878,6 +955,8 @@ paths:
     delete:
       summary: 删除展示规则
       operationId: deleteKpiDisplayRuleV4
+      security:
+        - BearerAuth: []
       parameters:
         - name: display_rule_id
           in: path
@@ -908,6 +987,8 @@ paths:
     put:
       summary: 更新公共配置
       operationId: updateKpiCommonConfigV4
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -978,6 +1059,11 @@ paths:
           $ref: '#/components/responses/Error404'
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: 登录接口返回的 opaque token。
   parameters:
     TaskId:
       name: task_id
@@ -1021,6 +1107,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Error401:
+      description: 未登录或会话已失效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorV2'
     Error404:
       description: 资源不存在
       content:
@@ -1046,6 +1138,49 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorV2'
   schemas:
+    LoginRequestV1:
+      type: object
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 128
+        password:
+          type: string
+          minLength: 1
+          maxLength: 256
+    LoginResponseV1:
+      type: object
+      required:
+      - token
+      - username
+      - role
+      properties:
+        token:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum:
+          - admin
+          - viewer
+    UserInfoV1:
+      type: object
+      required:
+      - username
+      - role
+      properties:
+        username:
+          type: string
+        role:
+          type: string
+          enum:
+          - admin
+          - viewer
     TaskStatus:
       type: string
       enum:

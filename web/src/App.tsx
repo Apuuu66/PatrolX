@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { App as AntApp, ConfigProvider, Spin } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { MainLayout } from "./layouts/MainLayout";
+import { AuthProvider } from "./auth/AuthContext";
 
 const TaskListPage = lazy(() =>
   import("./pages/TaskListPage").then(({ TaskListPage }) => ({ default: TaskListPage })),
@@ -50,11 +51,13 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <ConfigProvider locale={zhCN}>
-      <AntApp>
-        <Suspense fallback={PageFallback}>
-          <RouterProvider router={router} />
-        </Suspense>
-      </AntApp>
+      <AuthProvider>
+        <AntApp>
+          <Suspense fallback={PageFallback}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </AntApp>
+      </AuthProvider>
     </ConfigProvider>
   );
 }

@@ -9,7 +9,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import yaml
-from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
@@ -56,6 +56,8 @@ from app.models.schemas import (
     KpiThresholdRequestV4,
     KpiThresholdV4,
     LogEntry,
+    LoginRequestV1,
+    LoginResponseV1,
     OverviewSummary,
     RebuildRequest,
     RerunRequest,
@@ -64,7 +66,9 @@ from app.models.schemas import (
     TaskCreated,
     TaskListResponse,
     TaskLogs,
+    UserInfoV1,
 )
+from app.services.auth import AuthError, AuthSession, get_current_user, login, logout, require_role
 from app.services.kpi_classification_clues import KpiClassificationClueError, list_classification_clues
 from app.services.kpi_config import (
     KpiConfigError,
@@ -97,6 +101,7 @@ from app.services.kpi_resources import (
 from app.services.overview import build_overview
 from app.services.tasks import DeleteResult, TaskDeleteError, TaskRebuildError, task_service
 
+v1_router = APIRouter(prefix="/api/v1")
 router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
 v4_router = APIRouter(prefix="/api/v4")
@@ -156,6 +161,7 @@ async def create_task_v2(
     province: str | None = Form(None),
     operator: str | None = Form(None),
     product: str | None = Form(None),
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> TaskCreated:
     filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
     if len(filename.encode("utf-8")) > 255:
@@ -247,7 +253,7 @@ def get_task_v2(task_id: str = PathParam()) -> InspectionTask:
 
 
 @router.delete("/tasks/{task_id}", status_code=204, operation_id="deleteTaskV2")
-def delete_task_v2(task_id: str = PathParam()) -> Response:
+def delete_task_v2(task_id: str = PathParam(), _auth: AuthSession = Depends(require_role("admin"))) -> Response:
     try:
         result = task_service.delete(task_id)
     except TaskDeleteError as exc:
@@ -271,7 +277,9 @@ def delete_task_v2(task_id: str = PathParam()) -> Response:
 
 
 @router.post("/tasks/{task_id}/rerun", response_model=TaskCreated, status_code=202, operation_id="rerunTaskV2")
-def rerun_task_v2(task_id: str = PathParam(), body: RerunRequest | None = None) -> TaskCreated:
+def rerun_task_v2(
+    task_id: str = PathParam(), body: RerunRequest | None = None, _auth: AuthSession = Depends(require_role("admin"))
+) -> TaskCreated:
     codes = body.rule_codes if body else None
     if codes:
         registry.load_all()
@@ -294,6 +302,7 @@ def rebuild_task_v2(
     response: Response,
     body: RebuildRequest,
     task_id: str = PathParam(),
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> TaskCreated:
     try:
         accepted = task_service.rebuild(task_id, body)
@@ -485,7 +494,9 @@ def list_kpi_resource_metrics_v3(
     response_model=KpiResourceClassificationResultV3,
     operation_id="classifyKpiResourceMetricsV3",
 )
-def classify_kpi_resource_metrics_v3(body: KpiResourceClassificationRequestV3) -> KpiResourceClassificationResultV3:
+def classify_kpi_resource_metrics_v3(
+    body: KpiResourceClassificationRequestV3, _auth: AuthSession = Depends(require_role("admin"))
+) -> KpiResourceClassificationResultV3:
     try:
         result = classify_resource_metrics(
             body.metric_keys,
@@ -571,7 +582,11 @@ def list_dicts_v2() -> DictsResponse:
 
 
 @router.put("/dicts/{dict_name}", response_model=list[DictItem], operation_id="updateDictV2")
-def update_dict_v2(dict_name: str = PathParam(), body: DictUpdateRequest | None = None) -> list[DictItem]:
+def update_dict_v2(
+    dict_name: str = PathParam(),
+    body: DictUpdateRequest | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> list[DictItem]:
     if dict_name not in DICT_NAMES:
         raise AppError("invalid_dict", f"字典不存在: {dict_name}", 400)
     if body is None:
@@ -626,7 +641,9 @@ def get_kpi_metric_rule_v4(metric_key: str = PathParam()) -> KpiMetricRuleV4:
     "/kpi/config/metric-rules/{metric_key}", response_model=KpiMetricRuleV4, operation_id="upsertKpiMetricRuleV4"
 )
 def upsert_kpi_metric_rule_v4(
-    metric_key: str = PathParam(), body: KpiMetricRuleRequestV4 | None = None
+    metric_key: str = PathParam(),
+    body: KpiMetricRuleRequestV4 | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiMetricRuleV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
@@ -642,7 +659,9 @@ def upsert_kpi_metric_rule_v4(
     operation_id="deleteKpiMetricRuleV4",
 )
 def delete_kpi_metric_rule_v4(
-    metric_key: str = PathParam(), operator: str = Query(min_length=1)
+    metric_key: str = PathParam(),
+    operator: str = Query(min_length=1),
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
         return delete_metric_rule(metric_key, operator)
@@ -663,7 +682,9 @@ def list_kpi_thresholds_v4(
 @v4_router.post(
     "/kpi/config/thresholds", response_model=KpiThresholdV4, status_code=202, operation_id="createKpiThresholdV4"
 )
-def create_kpi_threshold_v4(response: Response, body: KpiThresholdRequestV4 | None = None) -> KpiThresholdV4:
+def create_kpi_threshold_v4(
+    response: Response, body: KpiThresholdRequestV4 | None = None, _auth: AuthSession = Depends(require_role("admin"))
+) -> KpiThresholdV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
     try:
@@ -686,7 +707,9 @@ def get_kpi_threshold_v4(threshold_id: int = PathParam()) -> KpiThresholdV4:
     "/kpi/config/thresholds/{threshold_id}", response_model=KpiThresholdV4, operation_id="updateKpiThresholdV4"
 )
 def update_kpi_threshold_v4(
-    threshold_id: int = PathParam(), body: KpiThresholdRequestV4 | None = None
+    threshold_id: int = PathParam(),
+    body: KpiThresholdRequestV4 | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiThresholdV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
@@ -702,7 +725,9 @@ def update_kpi_threshold_v4(
     operation_id="deleteKpiThresholdV4",
 )
 def delete_kpi_threshold_v4(
-    threshold_id: int = PathParam(), operator: str = Query(min_length=1)
+    threshold_id: int = PathParam(),
+    operator: str = Query(min_length=1),
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
         return delete_threshold(threshold_id, operator)
@@ -725,7 +750,11 @@ def list_kpi_capacity_rules_v4(
     status_code=202,
     operation_id="createKpiCapacityRuleV4",
 )
-def create_kpi_capacity_rule_v4(response: Response, body: KpiCapacityRuleRequestV4 | None = None) -> KpiCapacityRuleV4:
+def create_kpi_capacity_rule_v4(
+    response: Response,
+    body: KpiCapacityRuleRequestV4 | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> KpiCapacityRuleV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
     try:
@@ -742,7 +771,9 @@ def create_kpi_capacity_rule_v4(response: Response, body: KpiCapacityRuleRequest
     operation_id="updateKpiCapacityRuleV4",
 )
 def update_kpi_capacity_rule_v4(
-    capacity_rule_id: int = PathParam(), body: KpiCapacityRuleRequestV4 | None = None
+    capacity_rule_id: int = PathParam(),
+    body: KpiCapacityRuleRequestV4 | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiCapacityRuleV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
@@ -758,7 +789,9 @@ def update_kpi_capacity_rule_v4(
     operation_id="deleteKpiCapacityRuleV4",
 )
 def delete_kpi_capacity_rule_v4(
-    capacity_rule_id: int = PathParam(), operator: str = Query(min_length=1)
+    capacity_rule_id: int = PathParam(),
+    operator: str = Query(min_length=1),
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
         return delete_capacity_rule(capacity_rule_id, operator)
@@ -781,7 +814,9 @@ def list_kpi_display_rules_v4(
     status_code=202,
     operation_id="createKpiDisplayRuleV4",
 )
-def create_kpi_display_rule_v4(response: Response, body: KpiDisplayRuleRequestV4 | None = None) -> KpiDisplayRuleV4:
+def create_kpi_display_rule_v4(
+    response: Response, body: KpiDisplayRuleRequestV4 | None = None, _auth: AuthSession = Depends(require_role("admin"))
+) -> KpiDisplayRuleV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
     try:
@@ -798,7 +833,9 @@ def create_kpi_display_rule_v4(response: Response, body: KpiDisplayRuleRequestV4
     operation_id="updateKpiDisplayRuleV4",
 )
 def update_kpi_display_rule_v4(
-    display_rule_id: int = PathParam(), body: KpiDisplayRuleRequestV4 | None = None
+    display_rule_id: int = PathParam(),
+    body: KpiDisplayRuleRequestV4 | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiDisplayRuleV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
@@ -814,7 +851,9 @@ def update_kpi_display_rule_v4(
     operation_id="deleteKpiDisplayRuleV4",
 )
 def delete_kpi_display_rule_v4(
-    display_rule_id: int = PathParam(), operator: str = Query(min_length=1)
+    display_rule_id: int = PathParam(),
+    operator: str = Query(min_length=1),
+    _auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
         return delete_display_rule(display_rule_id, operator)
@@ -831,7 +870,9 @@ def get_kpi_common_config_v4() -> KpiCommonConfigV4:
 
 
 @v4_router.put("/kpi/config/common", response_model=KpiCommonConfigV4, operation_id="updateKpiCommonConfigV4")
-def update_kpi_common_config_v4(body: KpiCommonConfigRequestV4 | None = None) -> KpiCommonConfigV4:
+def update_kpi_common_config_v4(
+    body: KpiCommonConfigRequestV4 | None = None, _auth: AuthSession = Depends(require_role("admin"))
+) -> KpiCommonConfigV4:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
     try:
@@ -882,3 +923,30 @@ def list_kpi_classification_clues_v4(
         )
     except KpiClassificationClueError as exc:
         raise _convert_kpi_clue_error(exc) from exc
+
+
+# --- Auth (v1) ---
+
+
+@v1_router.post("/auth/login", response_model=LoginResponseV1, operation_id="loginV1")
+def auth_login(body: LoginRequestV1) -> LoginResponseV1:
+    try:
+        result = login(body.username, body.password)
+    except AuthError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return LoginResponseV1(**result)
+
+
+@v1_router.post("/auth/logout", operation_id="logoutV1")
+def auth_logout(authorization: str | None = Header(None)) -> dict:
+    token = authorization.removeprefix("Bearer ").strip() if authorization else ""
+    try:
+        logout(token)
+    except AuthError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return {"ok": True}
+
+
+@v1_router.get("/auth/me", response_model=UserInfoV1, operation_id="getMeV1")
+def auth_me(user=Depends(get_current_user)) -> UserInfoV1:
+    return UserInfoV1(username=user.username, role=user.role)

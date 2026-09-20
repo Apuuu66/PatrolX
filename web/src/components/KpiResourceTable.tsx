@@ -16,6 +16,7 @@ interface Props {
   page: number;
   pageSize: number;
   loading?: boolean;
+  selectable?: boolean;
   selectedKeys: string[];
   onSelectedKeysChange: (keys: string[]) => void;
   onPageChange: (page: number, pageSize: number) => void;
@@ -27,6 +28,7 @@ export function KpiResourceTable({
   page,
   pageSize,
   loading,
+  selectable = true,
   selectedKeys,
   onSelectedKeysChange,
   onPageChange,
@@ -51,10 +53,14 @@ export function KpiResourceTable({
       loading={loading}
       columns={columns}
       dataSource={items}
-      rowSelection={{
-        selectedRowKeys: selectedKeys,
-        onChange: (keys) => onSelectedKeysChange(keys.map(String)),
-      }}
+      rowSelection={
+        selectable
+          ? {
+              selectedRowKeys: selectedKeys,
+              onChange: (keys) => onSelectedKeysChange(keys.map(String)),
+            }
+          : undefined
+      }
       pagination={{
         current: page,
         pageSize,

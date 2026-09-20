@@ -35,6 +35,7 @@ import { usePolling } from "../hooks/usePolling";
 import { latestTaskFailure } from "../utils/taskFailure";
 import { countByStatus, filterByStatus, toggleStatusFilter, type StatusFilter } from "../utils/taskFilter";
 import { KpiClassificationClues } from "../components/KpiClassificationClues";
+import { useAuth } from "../auth/AuthContext";
 
 const CATEGORY_LABELS: Record<string, string> = {
   log: "日志",
@@ -49,6 +50,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export function TaskDetailPage() {
   const { taskId = "" } = useParams();
   const { message } = App.useApp();
+  const { canWrite } = useAuth();
   const navigate = useNavigate();
   const [task, setTask] = useState<TaskSummary | null>(null);
   const [system, setSystem] = useState<SystemInspection | null>(null);
@@ -199,11 +201,13 @@ export function TaskDetailPage() {
           <Button size="small" type="link" onClick={() => navigate(`/tasks/${taskId}/rules/${record.code}`)}>
             详情
           </Button>
-          <Popconfirm title={`重跑规则 ${record.code}？`} onConfirm={() => rerunOne(record.code)}>
-            <Button size="small" type="link" icon={<RedoOutlined />}>
-              重跑
-            </Button>
-          </Popconfirm>
+          {canWrite && (
+            <Popconfirm title={`重跑规则 ${record.code}？`} onConfirm={() => rerunOne(record.code)}>
+              <Button size="small" type="link" icon={<RedoOutlined />}>
+                重跑
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -245,19 +249,23 @@ export function TaskDetailPage() {
             <Button icon={<UnorderedListOutlined />} onClick={() => navigate(`/tasks/${taskId}/logs`)}>
               执行日志
             </Button>
-            <Popconfirm title="重跑全部规则？" onConfirm={() => void rerunAll()}>
-              <Button type="primary" icon={<RedoOutlined />}>
-                重跑全部
+            {canWrite && (
+            <>
+              <Popconfirm title="重跑全部规则？" onConfirm={() => void rerunAll()}>
+                <Button type="primary" icon={<RedoOutlined />}>
+                  重跑全部
+                </Button>
+              </Popconfirm>
+              <Button
+                icon={<ClearOutlined />}
+                disabled={busy || !canRebuild}
+                loading={rebuilding}
+                onClick={() => setRebuildOpen(true)}
+              >
+                增量重建
               </Button>
-            </Popconfirm>
-            <Button
-              icon={<ClearOutlined />}
-              disabled={busy || !canRebuild}
-              loading={rebuilding}
-              onClick={() => setRebuildOpen(true)}
-            >
-              增量重建
-            </Button>
+            </>
+          )}
           </Space>
         }
         style={{ marginBottom: 16 }}

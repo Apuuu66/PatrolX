@@ -1,4 +1,5 @@
 import type { components } from "./client";
+import { clearSession, getToken } from "./auth.ts";
 
 export type TaskStatus = components["schemas"]["TaskStatusV2"];
 export type TaskSummary = components["schemas"]["TaskSummaryV2"];
@@ -80,7 +81,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(url, init);
+  const headers = new Headers(init?.headers);
+  const token = getToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const resp = await fetch(url, { ...init, headers });
   if (!resp.ok) {
     let message = `请求失败（HTTP ${resp.status}）`;
     let code = "http_error";
@@ -98,6 +104,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       }
     } catch {
       /* 非 JSON 响应 */
+    }
+    if (resp.status === 401) {
+      clearSession();
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
     }
     throw new ApiError(code, message, resp.status, detail);
   }

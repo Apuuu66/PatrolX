@@ -790,3 +790,19 @@ class KpiClassificationCluePageV4(BaseModel):
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, le=200)
     summary: dict[KpiClueStatusV4, int] = Field(default_factory=dict)
+
+
+class LoginRequestV1(BaseModel):
+    username: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class LoginResponseV1(BaseModel):
+    token: str
+    username: str
+    role: str
+
+
+class UserInfoV1(BaseModel):
+    username: str
+    role: str

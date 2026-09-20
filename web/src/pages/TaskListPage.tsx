@@ -45,6 +45,7 @@ import {
 import { TaskStatusTag } from "../components/StatusBadge";
 import { RESULT_STATUS_META } from "../components/statusLabels";
 import { usePolling } from "../hooks/usePolling";
+import { useAuth } from "../auth/AuthContext";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "排队中" },
@@ -258,6 +259,7 @@ function PreparationPanel({
 
 export function TaskListPage() {
   const { message, modal } = App.useApp();
+  const { canWrite } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<TaskSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -495,20 +497,22 @@ export function TaskListPage() {
                 setPage(1);
               }}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-              const last = items[0];
-              if (last) {
-                form.setFieldsValue({
-                  province: last.customer_province ?? undefined,
-                  operator: last.customer_operator ?? undefined,
-                  product: last.customer_product ?? undefined,
-                  version: last.customer_version ?? undefined,
-                });
-              }
-              setOpen(true);
-            }}>
-              上传数据包
-            </Button>
+            {canWrite && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+                const last = items[0];
+                if (last) {
+                  form.setFieldsValue({
+                    province: last.customer_province ?? undefined,
+                    operator: last.customer_operator ?? undefined,
+                    product: last.customer_product ?? undefined,
+                    version: last.customer_version ?? undefined,
+                  });
+                }
+                setOpen(true);
+              }}>
+                上传数据包
+              </Button>
+            )}
           </Space>
         }
       >
@@ -587,28 +591,32 @@ export function TaskListPage() {
                   <Button type="text" size="small" onClick={() => navigate(`/tasks/${record.task_id}/report`)}>
                     报告
                   </Button>
-                  <Popconfirm title="重跑该任务全部规则？" onConfirm={() => rerun(record.task_id)}>
-                    <Button type="text" size="small" icon={<RedoOutlined />}>
-                      重跑
-                    </Button>
-                  </Popconfirm>
-                  {(record.status === "completed" || record.status === "failed") && (
-                    <Button
-                      type="text"
-                      size="small"
-                      danger
-                      icon={<ClearOutlined />}
-                      loading={rebuilding === record.task_id}
-                      onClick={() => confirmRebuildFull(record.task_id)}
-                    >
-                      重建
-                    </Button>
+                  {canWrite && (
+                    <>
+                      <Popconfirm title="重跑该任务全部规则？" onConfirm={() => rerun(record.task_id)}>
+                        <Button type="text" size="small" icon={<RedoOutlined />}>
+                          重跑
+                        </Button>
+                      </Popconfirm>
+                      {(record.status === "completed" || record.status === "failed") && (
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          icon={<ClearOutlined />}
+                          loading={rebuilding === record.task_id}
+                          onClick={() => confirmRebuildFull(record.task_id)}
+                        >
+                          重建
+                        </Button>
+                      )}
+                      <Popconfirm title="删除任务（含现场数据）？" onConfirm={() => remove(record.task_id)}>
+                        <Button type="text" size="small" danger icon={<DeleteOutlined />}>
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    </>
                   )}
-                  <Popconfirm title="删除任务（含现场数据）？" onConfirm={() => remove(record.task_id)}>
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />}>
-                      删除
-                    </Button>
-                  </Popconfirm>
                 </Space>
               </Flex>
               </div>

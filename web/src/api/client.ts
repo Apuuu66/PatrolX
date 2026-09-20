@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 登录并创建会话 */
+        post: operations["loginV1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 登出并失效当前会话 */
+        post: operations["logoutV1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询当前登录用户 */
+        get: operations["getMeV1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -530,6 +581,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        LoginRequestV1: {
+            username: string;
+            password: string;
+        };
+        LoginResponseV1: {
+            token: string;
+            username: string;
+            /** @enum {string} */
+            role: "admin" | "viewer";
+        };
+        UserInfoV1: {
+            username: string;
+            /** @enum {string} */
+            role: "admin" | "viewer";
+        };
         /** @enum {string} */
         TaskStatus: "pending" | "running" | "completed" | "failed";
         /** @enum {string} */
@@ -1407,6 +1473,15 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description 未登录或会话已失效 */
+        Error401: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorV2"];
+            };
+        };
         /** @description 资源不存在 */
         Error404: {
             headers: {
@@ -1457,6 +1532,71 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    loginV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequestV1"];
+            };
+        };
+        responses: {
+            /** @description 登录成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponseV1"];
+                };
+            };
+            401: components["responses"]["Error401"];
+        };
+    };
+    logoutV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已登出 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error401"];
+        };
+    };
+    getMeV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前用户 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInfoV1"];
+                };
+            };
+            401: components["responses"]["Error401"];
+        };
+    };
     healthz: {
         parameters: {
             query?: never;

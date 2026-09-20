@@ -11,10 +11,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from app import __version__
-from app.api.router import AppError, router, v3_router, v4_router
+from app.api.router import AppError, router, v1_router, v3_router, v4_router
 from app.core.logging import configure_logging, get_logger
 from app.core.metrics import render_metrics
 from app.models.schemas import Error
+from app.services.auth import AuthError
 
 _logging_configured = False
 
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         description="PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）",
     )
+    app.include_router(v1_router)
     app.include_router(router)
     app.include_router(v3_router)
     app.include_router(v4_router)
@@ -61,6 +63,13 @@ def create_app() -> FastAPI:
             duration_ms=duration_ms,
         )
         return response
+
+    @app.exception_handler(AuthError)
+    async def auth_error_handler(_request, exc: AuthError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"code": exc.code, "message": exc.message, "detail": exc.detail},
+        )
 
     @app.exception_handler(AppError)
     async def app_error_handler(_request, exc: AppError) -> JSONResponse:

@@ -221,3 +221,27 @@ class KpiRuleConfigAudit(Base):
     rule_config_version: Mapped[int] = mapped_column(default=0)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     operated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class AuthUser(Base):
+    """认证用户；由 CLI 创建，不支持在线注册。"""
+
+    __tablename__ = "auth_users"
+
+    username: Mapped[str] = mapped_column(String(128), primary_key=True)
+    password_hash: Mapped[str] = mapped_column(String(256), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="viewer")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AuthSession(Base):
+    """登录会话；服务重启即全部失效（内存外 SQLite，重启后 token 不匹配）。"""
+
+    __tablename__ = "auth_sessions"
+
+    token: Mapped[str] = mapped_column(String(128), primary_key=True)
+    username: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
