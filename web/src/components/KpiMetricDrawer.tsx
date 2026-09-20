@@ -10,9 +10,11 @@ interface Props {
   onClose: () => void;
   taskId?: string;
   ruleCode?: string;
+  metricNames?: Map<string, string>;
 }
 
-export function KpiMetricDrawer({ item, open, onClose, taskId, ruleCode }: Props) {
+export function KpiMetricDrawer({ item, open, onClose, taskId, ruleCode, metricNames }: Props) {
+  const displayName = (key: string) => metricNames?.get(key) ?? key;
   if (!item) {
     return <Drawer open={open} onClose={onClose} width={760} title="指标详情" />;
   }
@@ -68,7 +70,18 @@ export function KpiMetricDrawer({ item, open, onClose, taskId, ruleCode }: Props
             dataSource={view.inputRows}
             columns={[
               { title: "实际列名", dataIndex: "sourceNamesText" },
-              { title: "Key", dataIndex: "key" },
+              {
+                title: "指标",
+                dataIndex: "key",
+                render: (_, record) => (
+                  <div style={{ minWidth: 0 }}>
+                    <div>{displayName(record.key)}</div>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {record.key}
+                    </Typography.Text>
+                  </div>
+                ),
+              },
               { title: "值", dataIndex: "valueText", width: 110 },
               { title: "聚合", dataIndex: "aggregation", width: 130 },
             ]}

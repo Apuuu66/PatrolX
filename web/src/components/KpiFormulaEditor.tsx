@@ -11,7 +11,8 @@ import {
   type KpiDisplayRoleV4,
   type KpiSourceTypeV4,
 } from "../api/http";
-import { KpiMetricName, KpiMetricSelect } from "./KpiMetricSelect";
+import { KpiMetricName, KpiMetricSelect, useKpiMetricCatalog } from "./KpiMetricSelect";
+import { formatKpiMetricFormula } from "./kpiMetricCatalogModel";
 import {
   buildMetricRulePayload,
   KPI_AGGREGATION_OPTIONS as AGGREGATIONS,
@@ -52,6 +53,7 @@ interface FormulaFormValues extends Omit<KpiMetricRuleFormValues, "unit"> {
 
 export function KpiFormulaEditor({ operator, onChanged }: { operator: string; onChanged?: () => void }) {
   const { message } = App.useApp();
+  const { metrics, metricIndex } = useKpiMetricCatalog();
   const [pageData, setPageData] = useState<KpiMetricRulePageV4 | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -167,7 +169,9 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
       title: "公式",
       key: "formula",
       render: (_, record) =>
-        record.formula ? `${record.formula.numerator} / ${record.formula.denominator} × ${record.formula.scale}` : "-",
+        record.formula
+          ? formatKpiMetricFormula(record.formula, metrics, metricIndex)
+          : "-",
     },
     {
       title: "更新时间",

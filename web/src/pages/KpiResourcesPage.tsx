@@ -8,6 +8,7 @@ import {
   type KpiClassificationAudit,
   type KpiResourceMetricPage,
 } from "../api/http";
+import { KpiMetricName } from "../components/KpiMetricSelect";
 import { KpiResourceTable } from "../components/KpiResourceTable";
 import { RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
 import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
@@ -154,7 +155,13 @@ export function KpiResourcesPage() {
   };
 
   const auditColumns: ColumnsType<KpiClassificationAudit> = [
-    { title: "指标 Key", dataIndex: "metric_key", width: 180, ellipsis: true },
+    {
+      title: "指标",
+      dataIndex: "metric_key",
+      width: 200,
+      ellipsis: true,
+      render: (_, record) => <KpiMetricName metricKey={record.metric_key} />,
+    },
     { title: "操作", dataIndex: "operation", width: 100 },
     { title: "操作人", dataIndex: "operator", width: 120 },
     { title: "原业务域", dataIndex: "from_domain", width: 110 },

@@ -3,6 +3,7 @@ import { Button, Col, Empty, Input, Row, Select, Space, Tabs, Typography } from 
 
 import type { KpiCatalogItem, KpiDisplayStatus } from "./kpiCatalogModel";
 import {
+  buildKpiMetricNameIndex,
   filterKpiMetricGroups,
   KPI_STATUS_OPTIONS,
   summarizeKpiMetadata,
@@ -29,6 +30,7 @@ export function KpiMetricCatalog({ metadata, taskId, ruleCode, focusItems, focus
 
   const filtered = useMemo(() => filterKpiMetricGroups(metadata, { query, status, threshold }), [metadata, query, status, threshold]);
   const summary = useMemo(() => summarizeKpiMetadata(metadata), [metadata]);
+  const metricNames = useMemo(() => buildKpiMetricNameIndex(metadata), [metadata]);
 
   const renderCards = (items: KpiCatalogItem[]) => (
     <Row gutter={[12, 12]}>
@@ -129,6 +131,7 @@ export function KpiMetricCatalog({ metadata, taskId, ruleCode, focusItems, focus
         onClose={() => setSelected(null)}
         taskId={taskId}
         ruleCode={ruleCode}
+        metricNames={metricNames}
       />
     </div>
   );

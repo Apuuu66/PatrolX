@@ -5,6 +5,8 @@ import {
   buildKpiMetricOptions,
   getKpiMetricDisplayName,
   matchesKpiMetric,
+  formatKpiMetricFormula,
+  formatKpiMetricNames,
   toKpiRegisteredDomain,
 } from "./kpiMetricCatalogModel.ts";
 import type { KpiResourceMetric } from "../api/http";
@@ -74,4 +76,35 @@ test("maps resource domains to registered config domains", () => {
   assert.equal(toKpiRegisteredDomain("api"), "api");
   assert.equal(toKpiRegisteredDomain("media"), "media");
   assert.equal(toKpiRegisteredDomain("unclassified"), undefined);
+});
+
+test("formats derived formulas with metric names", () => {
+  assert.equal(
+    formatKpiMetricFormula(
+      { numerator: "me_call_success_rate", denominator: "me_call_attempts", scale: 1 },
+      metrics,
+    ),
+    "呼叫成功率 / 呼叫请求次数",
+  );
+  assert.equal(
+    formatKpiMetricFormula(
+      { numerator: "me_call_success_rate", denominator: "me_call_attempts", scale: 100 },
+      metrics,
+    ),
+    "呼叫成功率 / 呼叫请求次数 × 100",
+  );
+  assert.equal(
+    formatKpiMetricFormula(
+      { numerator: "missing", denominator: "me_call_attempts", scale: 1 },
+      metrics,
+    ),
+    "missing / 呼叫请求次数",
+  );
+});
+
+test("maps metric key lists to display names", () => {
+  assert.deepEqual(
+    formatKpiMetricNames(["me_call_success_rate", "missing", "me_api_success_rate"], metrics),
+    ["呼叫成功率", "missing", "API Success Rate"],
+  );
 });

@@ -52,3 +52,23 @@ export function buildKpiMetricOptions(
 export function toKpiRegisteredDomain(domain: KpiResourceDomain): KpiRegisteredDomainV4 | undefined {
   return domain === "call" || domain === "api" || domain === "media" ? domain : undefined;
 }
+
+export function formatKpiMetricFormula(
+  formula: { numerator: string; denominator: string; scale?: number },
+  metrics: KpiResourceMetric[],
+  index?: Map<string, KpiResourceMetric>,
+): string {
+  const numerator = getKpiMetricDisplayName(metrics, formula.numerator, index);
+  const denominator = getKpiMetricDisplayName(metrics, formula.denominator, index);
+  const scale = formula.scale ?? 1;
+  const base = `${numerator} / ${denominator}`;
+  return scale === 1 ? base : `${base} × ${scale}`;
+}
+
+export function formatKpiMetricNames(
+  keys: string[],
+  metrics: KpiResourceMetric[],
+  index?: Map<string, KpiResourceMetric>,
+): string[] {
+  return keys.map((key) => getKpiMetricDisplayName(metrics, key, index));
+}

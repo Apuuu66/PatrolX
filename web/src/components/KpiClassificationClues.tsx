@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Input, Segmented, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Input, Segmented, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import { api, type KpiClassificationCluePageV4, type KpiClassificationClueV4, type KpiClueStatusV4 } from "../api/http";
+import { KpiMetricCatalogProvider, KpiMetricName, useKpiMetricCatalog } from "./KpiMetricSelect";
+import { formatKpiMetricNames } from "./kpiMetricCatalogModel";
 
 const STATUS_KEYS: KpiClueStatusV4[] = ["unclassified", "classified", "unregistered", "ambiguous"];
 
@@ -20,13 +22,14 @@ const STATUS_COLORS: Record<KpiClueStatusV4, string> = {
   ambiguous: "purple",
 };
 
-export function KpiClassificationClues({ taskId }: { taskId: string }) {
+function KpiClassificationClueContent({ taskId }: { taskId: string }) {
   const [pageData, setPageData] = useState<KpiClassificationCluePageV4 | null>(null);
   const [loading, setLoading] = useState(true);
   const [clueStatus, setClueStatus] = useState<KpiClueStatusV4>("unclassified");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const { metrics, metricIndex } = useKpiMetricCatalog();
 
   const summary: Partial<Record<KpiClueStatusV4, number>> = pageData?.summary ?? {};
   const actionableCount = (summary["unclassified"] ?? 0) + (summary["unregistered"] ?? 0) + (summary["ambiguous"] ?? 0);
@@ -77,12 +80,22 @@ export function KpiClassificationClues({ taskId }: { taskId: string }) {
       dataIndex: "metric_key",
       width: 220,
       render: (value, record) => {
-        if (value) return value;
+        if (value) return <KpiMetricName metricKey={value} />;
         if (record.candidates?.length) {
+          const candidateNames = formatKpiMetricNames(
+            record.candidates.slice(0, 3).map((candidate) => candidate.metric_key),
+            metrics,
+            metricIndex,
+          );
           return (
             <Space wrap size={4}>
-              {record.candidates.slice(0, 3).map((candidate) => (
-                <Tag key={candidate.metric_key}>{candidate.metric_key}</Tag>
+              {record.candidates.slice(0, 3).map((candidate, index) => (
+                <Tag key={candidate.metric_key}>
+                  <div>{candidateNames[index]}</div>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {candidate.metric_key}
+                  </Typography.Text>
+                </Tag>
               ))}
             </Space>
           );
@@ -182,5 +195,13 @@ export function KpiClassificationClues({ taskId }: { taskId: string }) {
         }}
       />
     </Card>
+  );
+}
+
+export function KpiClassificationClues({ taskId }: { taskId: string }) {
+  return (
+    <KpiMetricCatalogProvider>
+      <KpiClassificationClueContent taskId={taskId} />
+    </KpiMetricCatalogProvider>
   );
 }

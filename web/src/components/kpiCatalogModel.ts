@@ -178,6 +178,16 @@ export function parseKpiMetadata(metadata: unknown): KpiMetadata | null {
   };
 }
 
+export function buildKpiMetricNameIndex(metadata: unknown): Map<string, string> {
+  const parsed = parseKpiMetadata(metadata);
+  return new Map(
+    (parsed?.metric_catalog ?? []).map((definition) => [
+      definition.key,
+      definition.name_zh || definition.name_en || definition.key,
+    ]),
+  );
+}
+
 export function buildKpiMetricItems(metadata: unknown): KpiCatalogItem[] {
   const parsed = parseKpiMetadata(metadata);
   if (!parsed) return [];

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildKpiMetricGroups, filterKpiMetricGroups, parseKpiMetadata } from "./kpiCatalogModel.ts";
+import {
+  buildKpiMetricGroups,
+  buildKpiMetricNameIndex,
+  filterKpiMetricGroups,
+  parseKpiMetadata,
+} from "./kpiCatalogModel.ts";
 
 const metadata = {
   version: 2,
@@ -165,4 +170,12 @@ import { summarizeKpiMetadata } from "./kpiCatalogModel.ts";
 
 test("summarizes abnormal indicators by fail and unavailable status", () => {
   assert.equal(summarizeKpiMetadata(metadata).abnormal, 2);
+});
+
+test("builds metric display names from task snapshot", () => {
+  const names = buildKpiMetricNameIndex(metadata);
+  assert.equal(names.get("call_success_rate"), "呼叫成功率");
+  assert.equal(names.get("call_attempts"), "呼叫请求次数");
+  assert.equal(names.get("stat_peak"), "统计峰值");
+  assert.equal(names.size, 3);
 });
