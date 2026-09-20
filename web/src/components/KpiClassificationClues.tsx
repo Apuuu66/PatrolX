@@ -4,12 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import { api, type KpiClassificationCluePageV4, type KpiClassificationClueV4, type KpiClueStatusV4 } from "../api/http";
 
-const STATUS_OPTIONS: { value: KpiClueStatusV4; label: string }[] = [
-  { value: "unclassified", label: "待分类" },
-  { value: "classified", label: "已分类" },
-  { value: "unregistered", label: "未注册" },
-  { value: "ambiguous", label: "歧义" },
-];
+const STATUS_KEYS: KpiClueStatusV4[] = ["unclassified", "classified", "unregistered", "ambiguous"];
 
 const STATUS_LABELS: Record<KpiClueStatusV4, string> = {
   unclassified: "待分类",
@@ -32,6 +27,9 @@ export function KpiClassificationClues({ taskId }: { taskId: string }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+
+  const summary: Partial<Record<KpiClueStatusV4, number>> = pageData?.summary ?? {};
+  const actionableCount = (summary["unclassified"] ?? 0) + (summary["unregistered"] ?? 0) + (summary["ambiguous"] ?? 0);
 
   const load = useCallback(
     async (
@@ -121,7 +119,10 @@ export function KpiClassificationClues({ taskId }: { taskId: string }) {
         <Space wrap>
           <Segmented
             value={clueStatus}
-            options={STATUS_OPTIONS}
+            options={STATUS_KEYS.map((key) => ({
+              value: key,
+              label: `${STATUS_LABELS[key]} (${summary[key] ?? 0})`,
+            }))}
             onChange={(value) => {
               const nextStatus = value as KpiClueStatusV4;
               setClueStatus(nextStatus);
@@ -150,6 +151,15 @@ export function KpiClassificationClues({ taskId }: { taskId: string }) {
         message="线索仅辅助分类，不改变规则结果"
         description="完成分类和动态配置后，请在任务详情手动重跑受影响的 KPI 规则。"
       />
+      {actionableCount > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`${actionableCount} 个指标待处理`}
+          description={`待分类 ${summary["unclassified"] ?? 0} · 未注册 ${summary["unregistered"] ?? 0} · 歧义 ${summary["ambiguous"] ?? 0}`}
+        />
+      )}
       <Table
         rowKey="source_name"
         size="small"

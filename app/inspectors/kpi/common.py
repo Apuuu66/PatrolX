@@ -25,6 +25,7 @@ from app.inspectors.kpi.catalog import (
     aggregate_kpi_metric,
     evaluate_kpi_threshold,
     load_kpi_catalog,
+    match_longest_prefix,
     normalize_metric_name,
 )
 from app.services.kpi_catalog import load_task_kpi_config
@@ -166,15 +167,7 @@ def parse_time(text: str, tz: zoneinfo.ZoneInfo) -> datetime:
 def match_metric_name(source_name: str, domain_config: KpiDomainConfig) -> str | None:
     """按“指标名 + 单位”的真实列名做最长前缀匹配，返回稳定 key。"""
     normalized = normalize_metric_name(source_name)
-    best_key: str | None = None
-    best_length = 0
-    for name, key in domain_config.alias_index.items():
-        if not name or not normalized.startswith(name):
-            continue
-        if len(name) > best_length:
-            best_key = key
-            best_length = len(name)
-    return best_key
+    return match_longest_prefix(normalized, domain_config.alias_index)
 
 
 def _stable_record_values(record: KpiRecord, domain_config: KpiDomainConfig) -> dict[str, float]:

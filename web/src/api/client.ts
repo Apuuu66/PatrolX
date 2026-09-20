@@ -1391,6 +1391,10 @@ export interface components {
             total: number;
             page: number;
             page_size: number;
+            /** @description 各线索状态的计数（不受筛选条件影响） */
+            summary?: {
+                [key: string]: number;
+            };
         };
     };
     responses: {

@@ -9,7 +9,7 @@ import unicodedata
 import zoneinfo
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from app.core.config import settings
 
@@ -39,6 +39,25 @@ def normalize_metric_name(value: str) -> str:
     """按配置契约归一化指标名；前缀匹配使用同一规则。"""
     normalized = unicodedata.normalize("NFKC", value).strip()
     return " ".join(normalized.split()).casefold()
+
+
+_MatchValueT = TypeVar("_MatchValueT")
+
+
+def match_longest_prefix(normalized: str, index: dict[str, _MatchValueT]) -> _MatchValueT | None:
+    """对已归一化的输入做最长前缀匹配，返回对应的值或 None。
+
+    规则执行和分类线索服务共用同一算法，保证匹配逻辑一致。
+    """
+    best: _MatchValueT | None = None
+    best_length = 0
+    for name, value in index.items():
+        if not name or not normalized.startswith(name):
+            continue
+        if len(name) > best_length:
+            best = value
+            best_length = len(name)
+    return best
 
 
 @dataclass(slots=True)

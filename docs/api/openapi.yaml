@@ -3130,3 +3130,8 @@ components:
           type: integer
         page_size:
           type: integer
+        summary:
+          type: object
+          description: 各线索状态的计数（不受筛选条件影响）
+          additionalProperties:
+            type: integer

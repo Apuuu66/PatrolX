@@ -789,3 +789,4 @@ class KpiClassificationCluePageV4(BaseModel):
     total: int = Field(ge=0)
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, le=200)
+    summary: dict[KpiClueStatusV4, int] = Field(default_factory=dict)

@@ -308,3 +308,86 @@ GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元
 2. 不为普通规则引入规则间 artifact 或 prepare 依赖。
 3. 阈值继续收敛到可配置参数，并保持结果契约稳定。
 4. 补充日志量大时的流式处理和内存边界测试。
+
+## 12. KPI 指标公式与增量分类机制
+
+### 目标设计
+
+- 指标公式以声明式配置驱动，不在调度器或规则代码中硬编码。
+- 派生指标通过 ratio 公式从原始指标计算得到，先汇总输入再算比率（sum-then-divide）。
+- 增量分类通过任务快照隔离历史状态：任务执行时固化当时的指标目录，后续分类线索只读该快照，不使用数据库最新状态重写历史任务。
+- 分类线索只读规则结果中记录的真实 CSV 列名，不引入规则间依赖。
+
+### 当前实现
+
+#### 公式配置
+
+公式定义在 `deploy/data/kpi/rules/metric-rules.json`，每条指标通过 `source_type` 和 `formula` 字段区分：
+
+```json
+{
+  "key": "me_call_success_rate",
+  "source_type": "derived",
+  "formula": {
+    "kind": "ratio",
+    "numerator": "me_call_success_count",
+    "denominator": "me_call_attempts",
+    "scale": 100,
+    "denominator_fallback": null
+  }
+}
+```
+
+计算逻辑在 `app/inspectors/kpi/catalog.py` 的 `aggregate_kpi_metric()`：
+
+- 先对所有记录中分子和分母的值做 `sum` 聚合，再算比率。
+- 分母为 0 返回 `denominator_zero`，不产生值。
+- 分子或分母数据缺失返回 `missing_input: <key>`，不产生值。
+- 可选 `denominator_fallback` 列表提供分母回退输入。
+- 结果附带 provenance（来源列名、回退是否触发）供审计。
+
+#### 两个聚合层次
+
+| 用途 | 范围 | 加法含义 |
+|---|---|---|
+| `main_value`（总览卡片） | 所有时间点全部记录 | 所有值加在一起再算比率 |
+| `series`（趋势图每个点） | 单个时间窗口 `(start_at, end_at, period_minutes)` | 只加该时段内的值再算比率 |
+| 逐行阈值检查 | 单条 CSV 记录 | 不加，直接用该行的值 |
+
+#### 增量分类线索
+
+任务执行时写出两个关键产物：
+
+1. 规则结果 `output/<task_id>/rules/kpi.*.json` 的 `metadata.kpi_files` 记录 CSV 列名（`objects`）和样本值（`records[].values`）。
+2. 配置快照 `output/<task_id>/kpi/kpi_catalog_snapshot.json` 记录执行时刻的 `base_metrics`（基础指标全集）和 `metrics`（已分配业务域的指标）。
+
+调用 `GET /api/v4/tasks/{task_id}/kpi/classification-clues` 时，系统把 CSV 真实列名与快照中的指标目录逐个比对（归一化：NFKC + 去空白 + casefold），返回四种状态：
+
+| 状态 | 含义 | 处理建议 |
+|---|---|---|
+| `classified` | 已匹配且已分配业务域 | 无需处理 |
+| `unclassified` | 匹配到基础指标但未分配业务域 | 去数据库分配 domain |
+| `ambiguous` | 匹配到多个基础指标 | 人工确认唯一指标 |
+| `unregistered` | CSV 有此列但基础资源库没有 | 先离线导入基础指标 |
+
+关键实现位于 `app/services/kpi_classification_clues.py`。
+
+### 差异
+
+当前无已知差异。新增派生指标时只需在 `metric-rules.json` 中声明 `source_type: "derived"` 和 `formula`，聚合逻辑自动生效。快照中缺少 `base_metrics` 字段的历史任务（schema 版本较低）所有线索都会显示为 `unregistered`，需重跑任务生成新快照。
+
+## 13. SQLite 数据库文件使用注意
+
+### 目标设计
+
+SQLite 单文件数据库（`data/patrolx.db`）在程序空闲时可直接复制；程序运行中需使用 `sqlite3 .backup` 保证一致性。
+
+### 当前实现
+
+- 空闲时（API / CLI 均未运行）：直接 `cp data/patrolx.db <目标>` 即可。
+- 运行中：使用 `sqlite3 data/patrolx.db ".backup <目标>"`，避免只拷主文件而丢失 journal/WAL 导致副本不一致。
+- 迁移到其他机器或目录：拷贝后修改 `app/core/config.py` 中 `sqlite_path` 或环境变量即可。
+
+### 差异
+
+当前无已知差异。

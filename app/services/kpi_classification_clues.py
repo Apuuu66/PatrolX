@@ -6,12 +6,12 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
-from app.inspectors.kpi.catalog import normalize_metric_name
+from app.inspectors.kpi.catalog import match_longest_prefix, normalize_metric_name
 from app.models.schemas import (
     KpiClassificationCluePageV4,
     KpiClassificationClueV4,
@@ -106,8 +106,8 @@ def list_classification_clues(
                 identity = (rule_code, source_name)
                 if identity not in clue_map:
                     normalized = normalize_metric_name(source_name)
-                    base_matches = _unique_metrics(base_index.get(normalized, []))
-                    effective_matches = _unique_metrics(effective_index.get(normalized, []))
+                    base_matches = _unique_metrics(match_longest_prefix(normalized, base_index) or [])
+                    effective_matches = _unique_metrics(match_longest_prefix(normalized, effective_index) or [])
                     matched = base_matches[0] if len(base_matches) == 1 else None
                     if len(base_matches) > 1:
                         status = KpiClueStatusV4.AMBIGUOUS
@@ -147,7 +147,9 @@ def list_classification_clues(
                 elif clue.clue_status == KpiClueStatusV4.UNREGISTERED:
                     clue.resolution_note = "未匹配到基础资源，请先离线导入基础指标"
 
-    items = list(clue_map.values())
+    all_items = list(clue_map.values())
+    summary = dict(Counter(item.clue_status for item in all_items))
+    items = all_items
     if clue_status:
         items = [item for item in items if item.clue_status == clue_status]
     if search:
@@ -170,4 +172,5 @@ def list_classification_clues(
         total=total,
         page=page,
         page_size=page_size,
+        summary=summary,
     )

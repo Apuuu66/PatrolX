@@ -84,3 +84,38 @@ def test_classification_clues_filter_and_page(task_site: Path) -> None:
 
     page = list_classification_clues("task-clue", search="成功率")
     assert [item.source_name for item in page.items] == ["成功率"]
+
+
+def test_classification_clues_prefix_match_with_unit_suffix(task_site: Path) -> None:
+    """CSV 列名带单位后缀时应通过前缀匹配正确识别，而非误报未注册。"""
+    task_dir = task_site
+    rule_result = json.loads((task_dir / "rules" / "kpi.call.json").read_text(encoding="utf-8"))
+    rule_result["metadata"]["kpi_files"][0]["objects"].extend(["呼叫次数(次)", "成功率(%)", "Call Attempts(total)"])
+    rule_result["metadata"]["kpi_files"][0]["records"].append(
+        {"values": {"呼叫次数(次)": 100, "成功率(%)": 99.5, "Call Attempts(total)": 200}}
+    )
+    (task_dir / "rules" / "kpi.call.json").write_text(json.dumps(rule_result), encoding="utf-8")
+
+    page = list_classification_clues("task-clue", page=1, page_size=50)
+    by_name = {item.source_name: item for item in page.items}
+    assert by_name["呼叫次数(次)"].clue_status == "ambiguous"
+    assert by_name["成功率(%)"].clue_status == "classified"
+    assert by_name["成功率(%)"].metric_key == "me_c"
+    assert by_name["Call Attempts(total)"].clue_status == "unclassified"
+    assert by_name["Call Attempts(total)"].metric_key == "me_a"
+
+
+def test_classification_clues_summary_counts(task_site: Path) -> None:
+    """响应应包含不受筛选条件影响的各状态计数。"""
+    page = list_classification_clues("task-clue")
+    assert page.summary == {
+        "ambiguous": 1,
+        "classified": 1,
+        "unclassified": 1,
+        "unregistered": 1,
+    }
+
+    # 筛选后 summary 不变
+    filtered = list_classification_clues("task-clue", clue_status="classified")
+    assert filtered.total == 1
+    assert filtered.summary == page.summary
