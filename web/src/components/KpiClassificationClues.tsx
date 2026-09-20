@@ -103,12 +103,15 @@ export function KpiClassificationClues({ taskId }: { taskId: string }) {
       title: "操作",
       key: "actions",
       width: 120,
-      render: (_, record) =>
-        record.clue_status === "unclassified" || record.clue_status === "ambiguous" ? (
-          <Link to={`/kpi-resources?search=${encodeURIComponent(record.source_name)}`}>
+      render: (_, record) => {
+        if (record.clue_status !== "unclassified" && record.clue_status !== "ambiguous") return null;
+        const searchKey = record.metric_key ?? record.candidates?.[0]?.metric_key ?? record.source_name;
+        return (
+          <Link to={`/kpi-resources?search=${encodeURIComponent(searchKey)}`}>
             <Button size="small" type="link">去分类</Button>
           </Link>
-        ) : null,
+        );
+      },
     },
   ];
 
