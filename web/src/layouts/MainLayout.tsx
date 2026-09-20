@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Layout, Menu, Typography, Card, Form, Input, Button, Tag, Space } from "antd";
+import { useEffect, useState } from "react";
+import { Layout, Menu, Typography, Modal, Form, Input, Button, Tag, Space } from "antd";
 import {
   BarChartOutlined,
   DatabaseOutlined,
@@ -22,16 +22,21 @@ interface LoginFormValues {
   password: string;
 }
 
-function LoginPanel() {
+function LoginModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { login } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) setError(null);
+  }, [open]);
 
   const handleSubmit = async (values: LoginFormValues) => {
     setSubmitting(true);
     setError(null);
     try {
       await login(values.username, values.password);
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败");
     } finally {
@@ -40,8 +45,14 @@ function LoginPanel() {
   };
 
   return (
-    <div style={{ display: "grid", placeItems: "center", minHeight: "60vh" }}>
-      <Card title="登录 PatrolX" style={{ width: 360 }}>
+    <Modal
+      title="登录 PatrolX"
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      width={360}
+    >
+      <div>
         <Typography.Paragraph type="secondary">系统由管理员创建账号，不支持在线注册。</Typography.Paragraph>
         {error && <Typography.Paragraph type="danger">{error}</Typography.Paragraph>}
         <Form layout="vertical" onFinish={(values) => void handleSubmit(values)}>
@@ -55,15 +66,16 @@ function LoginPanel() {
             登录
           </Button>
         </Form>
-      </Card>
-    </div>
+      </div>
+    </Modal>
   );
 }
 
 export function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout, canWrite } = useAuth();
+  const { user, logout } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
   const selected =
     location.pathname.startsWith("/tasks") || location.pathname === "/"
       ? "/tasks"
@@ -72,10 +84,6 @@ export function MainLayout() {
       : location.pathname.startsWith("/inspectors")
         ? "/inspectors"
         : "/dicts";
-
-  if (!user) {
-    return <LoginPanel />;
-  }
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -123,17 +131,31 @@ export function MainLayout() {
             系统维护巡检平台
           </Typography.Title>
           <Space>
-            <Typography.Text type="secondary">{user.username}</Typography.Text>
-            <Tag color={canWrite ? "blue" : "default"}>{ROLE_LABELS[user.role] ?? user.role}</Tag>
-            <Button size="small" icon={<LogoutOutlined />} onClick={() => void logout()}>
-              登出
-            </Button>
+            {user ? (
+              <>
+                <Typography.Text type="secondary">{user.username}</Typography.Text>
+                <Tag color={user.role === "admin" ? "blue" : "default"}>
+                  {ROLE_LABELS[user.role] ?? user.role}
+                </Tag>
+                <Button size="small" icon={<LogoutOutlined />} onClick={() => void logout()}>
+                  登出
+                </Button>
+              </>
+            ) : (
+              <>
+                <Typography.Text type="secondary">访客模式</Typography.Text>
+                <Button size="small" type="primary" onClick={() => setLoginOpen(true)}>
+                  登录
+                </Button>
+              </>
+            )}
           </Space>
         </Header>
         <Content style={{ padding: 24, background: "#f5f5f5" }}>
           <Outlet />
         </Content>
       </Layout>
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </Layout>
   );
 }

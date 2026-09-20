@@ -161,7 +161,6 @@ async def create_task_v2(
     province: str | None = Form(None),
     operator: str | None = Form(None),
     product: str | None = Form(None),
-    _auth: AuthSession = Depends(require_role("admin")),
 ) -> TaskCreated:
     filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
     if len(filename.encode("utf-8")) > 255:
@@ -253,7 +252,7 @@ def get_task_v2(task_id: str = PathParam()) -> InspectionTask:
 
 
 @router.delete("/tasks/{task_id}", status_code=204, operation_id="deleteTaskV2")
-def delete_task_v2(task_id: str = PathParam(), _auth: AuthSession = Depends(require_role("admin"))) -> Response:
+def delete_task_v2(task_id: str = PathParam()) -> Response:
     try:
         result = task_service.delete(task_id)
     except TaskDeleteError as exc:
@@ -278,7 +277,8 @@ def delete_task_v2(task_id: str = PathParam(), _auth: AuthSession = Depends(requ
 
 @router.post("/tasks/{task_id}/rerun", response_model=TaskCreated, status_code=202, operation_id="rerunTaskV2")
 def rerun_task_v2(
-    task_id: str = PathParam(), body: RerunRequest | None = None, _auth: AuthSession = Depends(require_role("admin"))
+    task_id: str = PathParam(),
+    body: RerunRequest | None = None,
 ) -> TaskCreated:
     codes = body.rule_codes if body else None
     if codes:
@@ -302,7 +302,6 @@ def rebuild_task_v2(
     response: Response,
     body: RebuildRequest,
     task_id: str = PathParam(),
-    _auth: AuthSession = Depends(require_role("admin")),
 ) -> TaskCreated:
     try:
         accepted = task_service.rebuild(task_id, body)

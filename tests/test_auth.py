@@ -110,6 +110,41 @@ class TestAuthAPI:
         resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 401
 
+    def test_task_endpoints_allow_anonymous(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """任务创建/重跑/重建/删除属于执行操作，访客模式不需要登录。"""
+        from app.api import router as api_router
+        from app.models.schemas import TaskCreated
+        from app.services.tasks import DeleteResult
+
+        monkeypatch.setattr(api_router.task_service, "exists", lambda task_id: False)
+        monkeypatch.setattr(
+            api_router.task_service,
+            "reserve",
+            lambda *args, **kwargs: TaskCreated(task_id="guest-task"),
+        )
+        monkeypatch.setattr(api_router.task_service, "submit", lambda task_id: None)
+        monkeypatch.setattr(api_router.task_service, "rerun", lambda task_id, codes: True)
+        monkeypatch.setattr(api_router.task_service, "rebuild", lambda task_id, body: True)
+        monkeypatch.setattr(api_router.task_service, "delete", lambda task_id: DeleteResult.DELETED)
+
+        upload = client.post(
+            "/api/v2/tasks",
+            files={"package_file": ("guest.zip", b"guest-package", "application/zip")},
+        )
+        assert upload.status_code == 202
+
+        rerun = client.post("/api/v2/tasks/guest-task/rerun", json={})
+        assert rerun.status_code == 202
+
+        rebuild = client.post(
+            "/api/v2/tasks/guest-task/rebuild",
+            json={"mode": "full", "confirmed": True, "trigger_source": "ui"},
+        )
+        assert rebuild.status_code == 202
+
+        deleted = client.delete("/api/v2/tasks/guest-task")
+        assert deleted.status_code == 204
+
     def test_write_endpoint_requires_auth(self, client: TestClient) -> None:
         # Try to classify without token → 401
         resp = client.put(

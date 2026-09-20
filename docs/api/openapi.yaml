@@ -82,8 +82,6 @@ paths:
     post:
       summary: 创建巡检任务（同名同 checksum 复用；同名不同 checksum 冲突）
       operationId: createTaskV2
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -172,8 +170,6 @@ paths:
     delete:
       summary: 删除任务（级联删除 uploads/ 与 output/ 现场数据）
       operationId: deleteTaskV2
-      security:
-        - BearerAuth: []
       parameters:
       - $ref: '#/components/parameters/TaskId'
       responses:
@@ -197,8 +193,6 @@ paths:
     post:
       summary: 增量重跑（全部或指定规则）
       operationId: rerunTaskV2
-      security:
-        - BearerAuth: []
       parameters:
       - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -219,8 +213,6 @@ paths:
     post:
       summary: 重建重跑（全量或强制重建解压的增量）
       operationId: rebuildTaskV2
-      security:
-        - BearerAuth: []
       parameters:
       - $ref: '#/components/parameters/TaskId'
       requestBody:
