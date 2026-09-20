@@ -6,13 +6,20 @@ import { api, type KpiClassificationCluePageV4, type KpiClassificationClueV4, ty
 import { KpiMetricCatalogProvider, KpiMetricName, useKpiMetricCatalog } from "./KpiMetricSelect";
 import { formatKpiMetricNames } from "./kpiMetricCatalogModel";
 
-const STATUS_KEYS: KpiClueStatusV4[] = ["unclassified", "classified", "unregistered", "ambiguous"];
+const STATUS_KEYS: KpiClueStatusV4[] = [
+  "unclassified",
+  "classified",
+  "unregistered",
+  "ambiguous",
+  "reserved",
+];
 
 const STATUS_LABELS: Record<KpiClueStatusV4, string> = {
   unclassified: "待分类",
   classified: "已分类",
   unregistered: "未注册",
   ambiguous: "歧义",
+  reserved: "预留",
 };
 
 const STATUS_COLORS: Record<KpiClueStatusV4, string> = {
@@ -20,6 +27,7 @@ const STATUS_COLORS: Record<KpiClueStatusV4, string> = {
   classified: "green",
   unregistered: "red",
   ambiguous: "purple",
+  reserved: "default",
 };
 
 function KpiClassificationClueContent({ taskId }: { taskId: string }) {

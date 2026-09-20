@@ -2764,6 +2764,7 @@ components:
       - call
       - api
       - media
+      - reserved
     KpiResourceMetricV3:
       type: object
       required:
@@ -2831,6 +2832,7 @@ components:
           - call
           - api
           - media
+          - reserved
           properties:
             unclassified:
               type: integer
@@ -2842,6 +2844,9 @@ components:
               type: integer
               minimum: 0
             media:
+              type: integer
+              minimum: 0
+            reserved:
               type: integer
               minimum: 0
     KpiResourceClassificationRequestV3:
@@ -2864,6 +2869,7 @@ components:
           - call
           - api
           - media
+          - reserved
         operator:
           type: string
           minLength: 1
@@ -2885,6 +2891,7 @@ components:
           - call
           - api
           - media
+          - reserved
         metric_keys:
           type: array
           minItems: 1
@@ -2923,6 +2930,7 @@ components:
           - call
           - api
           - media
+          - reserved
         to_domain:
           type: string
           enum:
@@ -2930,6 +2938,7 @@ components:
           - call
           - api
           - media
+          - reserved
         result:
           type: string
           enum:
@@ -2973,6 +2982,7 @@ components:
           type: integer
           enum:
           - 1
+          - 2
         base_data_version:
           type: string
         classification_version:
@@ -2986,6 +2996,11 @@ components:
           items:
             type: object
             additionalProperties: true
+        reserved_metric_keys:
+          type: array
+          description: 已标记为预留、任务未分类展示中隐藏的指标 key。
+          items:
+            type: string
         rules:
           type: object
           additionalProperties: true
@@ -3031,7 +3046,7 @@ components:
 
     KpiClueStatusV4:
       type: string
-      enum: [unclassified, classified, unregistered, ambiguous]
+      enum: [unclassified, classified, unregistered, ambiguous, reserved]
 
     KpiMetricRuleRequestV4:
       type: object

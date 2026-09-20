@@ -1,4 +1,4 @@
-export type ResourceDomain = "unclassified" | "call" | "api" | "media";
+export type ResourceDomain = "unclassified" | "call" | "api" | "media" | "reserved";
 
 export interface ResourceQueryInput {
   search?: string;
@@ -19,6 +19,7 @@ export const RESOURCE_DOMAIN_LABELS: Record<ResourceDomain, string> = {
   call: "呼叫",
   api: "API",
   media: "媒体",
+  reserved: "预留",
 };
 
 export function resourceDomainLabel(value: string): string {

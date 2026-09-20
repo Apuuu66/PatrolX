@@ -1242,7 +1242,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        KpiResourceDomainV3: "unclassified" | "call" | "api" | "media";
+        KpiResourceDomainV3: "unclassified" | "call" | "api" | "media" | "reserved";
         KpiResourceMetricV3: {
             key: string;
             resource_id: string;
@@ -1267,18 +1267,19 @@ export interface components {
                 call: number;
                 api: number;
                 media: number;
+                reserved: number;
             };
         };
         KpiResourceClassificationRequestV3: {
             metric_keys: string[];
             /** @enum {string} */
-            domain: "unclassified" | "call" | "api" | "media";
+            domain: "unclassified" | "call" | "api" | "media" | "reserved";
             operator: string;
         };
         KpiResourceClassificationResultV3: {
             classification_version: number;
             /** @enum {string} */
-            domain: "unclassified" | "call" | "api" | "media";
+            domain: "unclassified" | "call" | "api" | "media" | "reserved";
             metric_keys: string[];
             audited_count: number;
         };
@@ -1289,9 +1290,9 @@ export interface components {
             operation: "classify" | "unclassify";
             operator: string;
             /** @enum {string} */
-            from_domain: "unclassified" | "call" | "api" | "media";
+            from_domain: "unclassified" | "call" | "api" | "media" | "reserved";
             /** @enum {string} */
-            to_domain: "unclassified" | "call" | "api" | "media";
+            to_domain: "unclassified" | "call" | "api" | "media" | "reserved";
             /** @enum {string} */
             result: "success";
             /** Format: date-time */
@@ -1305,7 +1306,7 @@ export interface components {
         };
         KpiTaskCatalogSnapshotV3: {
             /** @enum {integer} */
-            schema_version: 1;
+            schema_version: 1 | 2;
             base_data_version: string;
             classification_version: number;
             /** Format: date-time */
@@ -1313,6 +1314,8 @@ export interface components {
             metrics: {
                 [key: string]: unknown;
             }[];
+            /** @description 已标记为预留、任务未分类展示中隐藏的指标 key。 */
+            reserved_metric_keys?: string[];
             rules: {
                 [key: string]: unknown;
             };
@@ -1338,7 +1341,7 @@ export interface components {
         /** @enum {string} */
         KpiConfigEntityTypeV4: "metric_rule" | "threshold" | "capacity_rule" | "display_rule" | "common_config";
         /** @enum {string} */
-        KpiClueStatusV4: "unclassified" | "classified" | "unregistered" | "ambiguous";
+        KpiClueStatusV4: "unclassified" | "classified" | "unregistered" | "ambiguous" | "reserved";
         KpiMetricRuleRequestV4: {
             metric_type: components["schemas"]["KpiMetricTypeV4"];
             semantic_group: components["schemas"]["KpiSemanticGroupV4"];

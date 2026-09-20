@@ -442,6 +442,7 @@ class KpiResourceDomain(StrEnum):
     CALL = "call"
     API = "api"
     MEDIA = "media"
+    RESERVED = "reserved"
 
 
 class KpiResourceMetricV3(BaseModel):
@@ -473,7 +474,7 @@ class KpiResourceClassificationRequestV3(BaseModel):
     """KPI 指标批量分类请求。"""
 
     metric_keys: list[str] = Field(min_length=1, max_length=100)
-    domain: Literal["unclassified", "call", "api", "media"]
+    domain: Literal["unclassified", "call", "api", "media", "reserved"]
     operator: str = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -487,7 +488,7 @@ class KpiResourceClassificationResultV3(BaseModel):
     """KPI 指标批量分类结果。"""
 
     classification_version: int = Field(ge=0)
-    domain: Literal["unclassified", "call", "api", "media"]
+    domain: Literal["unclassified", "call", "api", "media", "reserved"]
     metric_keys: list[str]
     audited_count: int = Field(ge=0)
 
@@ -524,6 +525,7 @@ class KpiTaskCatalogSnapshot(BaseModel):
     captured_at: datetime
     base_metrics: list[dict[str, Any]] = Field(default_factory=list)
     metrics: list[dict[str, Any]] = Field(default_factory=list)
+    reserved_metric_keys: list[str] = Field(default_factory=list)
     rules: dict[str, Any]
 
 
@@ -599,6 +601,7 @@ class KpiClueStatusV4(StrEnum):
     CLASSIFIED = "classified"
     UNREGISTERED = "unregistered"
     AMBIGUOUS = "ambiguous"
+    RESERVED = "reserved"
 
 
 class KpiFormulaV4(BaseModel):

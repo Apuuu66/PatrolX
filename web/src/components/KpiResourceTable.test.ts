@@ -15,6 +15,7 @@ test("builds resource query with search, filter and bounded pagination", () => {
 test("maps resource labels", () => {
   assert.equal(resourceDomainLabel("unclassified"), "未分类");
   assert.equal(resourceDomainLabel("media"), "媒体");
+  assert.equal(resourceDomainLabel("reserved"), "预留");
 });
 
 test("maps selected row keys", () => {

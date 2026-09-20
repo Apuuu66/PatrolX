@@ -8,6 +8,7 @@ const DOMAIN_COLORS: Record<string, string> = {
   call: "blue",
   api: "geekblue",
   media: "purple",
+  reserved: "default",
 };
 
 interface Props {

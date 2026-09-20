@@ -429,6 +429,8 @@ class KpiConfig:
     config_source: str = "git-json+db"
     base_data_version: str = ""
     classification_version: int = 0
+    reserved_metric_keys: frozenset[str] = frozenset()
+    reserved_alias_index: dict[str, str] = field(default_factory=dict)
 
     @property
     def tzinfo(self) -> zoneinfo.ZoneInfo:
@@ -890,6 +892,14 @@ def build_kpi_config_from_catalog(
             "status": rule["status"],
         }
 
+    reserved_alias_index: dict[str, str] = {}
+    for key, domain in classifications.items():
+        if domain != "reserved" or key not in catalog.metrics:
+            continue
+        metric = catalog.metrics[key]
+        for value in (metric.name_zh, metric.name_en, metric.key):
+            reserved_alias_index[normalize_metric_name(value)] = key
+
     return KpiConfig(
         version=1,
         input_timezone=str(catalog.rules.common["input_timezone"]),
@@ -898,4 +908,6 @@ def build_kpi_config_from_catalog(
         config_source="git-json+db",
         base_data_version=catalog.base_data_version,
         classification_version=classification_version,
+        reserved_metric_keys=frozenset(reserved_alias_index.values()),
+        reserved_alias_index=reserved_alias_index,
     )

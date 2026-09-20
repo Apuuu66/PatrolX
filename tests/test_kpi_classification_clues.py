@@ -27,7 +27,9 @@ def task_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             {"resource_id": "ME_A", "key": "me_a", "name_zh": "呼叫次数", "name_en": "Call Attempts"},
             {"resource_id": "ME_B", "key": "me_b", "name_zh": "呼叫次数", "name_en": "Call"},
             {"resource_id": "ME_C", "key": "me_c", "name_zh": "成功率", "name_en": "Success Rate"},
+            {"resource_id": "ME_D", "key": "me_d", "name_zh": "预留指标", "name_en": "Reserved Metric"},
         ],
+        "reserved_metric_keys": ["me_d"],
         "metrics": [
             {
                 "key": "me_c",
@@ -47,10 +49,18 @@ def task_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             "kpi_files": [
                 {
                     "path": "kpi/call-5.csv",
-                    "objects": ["呼叫次数", "成功率", "未登记指标", "Call Attempts"],
-                    "record_count": 4,
+                    "objects": ["呼叫次数", "成功率", "未登记指标", "Call Attempts", "预留指标"],
+                    "record_count": 5,
                     "records": [
-                        {"values": {"呼叫次数": 1, "成功率": 99, "未登记指标": "x", "Call Attempts": 2}},
+                        {
+                            "values": {
+                                "呼叫次数": 1,
+                                "成功率": 99,
+                                "未登记指标": "x",
+                                "Call Attempts": 2,
+                                "预留指标": 3,
+                            }
+                        },
                         {"values": {"呼叫次数": 2, "成功率": 98, "Call Attempts": 3}},
                     ],
                 }
@@ -63,7 +73,7 @@ def task_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_classification_clues_use_task_snapshot_and_paginate(task_site: Path) -> None:
     page = list_classification_clues("task-clue")
-    assert page.total == 4
+    assert page.total == 5
     by_name = {item.source_name: item for item in page.items}
     assert by_name["成功率"].clue_status == "classified"
     assert by_name["成功率"].metric_key == "me_c"
@@ -73,6 +83,8 @@ def test_classification_clues_use_task_snapshot_and_paginate(task_site: Path) ->
     assert by_name["Call Attempts"].metric_key == "me_a"
     assert by_name["未登记指标"].clue_status == "unregistered"
     assert by_name["未登记指标"].source_files == ["kpi/call-5.csv"]
+    assert by_name["预留指标"].clue_status == "reserved"
+    assert by_name["预留指标"].metric_key == "me_d"
     assert by_name["呼叫次数"].record_count == 2
     assert by_name["未登记指标"].sample_values == ["x"]
 
@@ -113,6 +125,7 @@ def test_classification_clues_summary_counts(task_site: Path) -> None:
         "classified": 1,
         "unclassified": 1,
         "unregistered": 1,
+        "reserved": 1,
     }
 
     # 筛选后 summary 不变

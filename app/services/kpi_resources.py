@@ -20,7 +20,7 @@ from app.models.schemas import (
 )
 from app.services.kpi_config import KpiConfigError, assert_metric_classifiable
 
-VALID_DOMAINS = ("unclassified", "call", "api", "media")
+VALID_DOMAINS = ("unclassified", "call", "api", "media", "reserved")
 
 
 class KpiResourceError(Exception):
@@ -66,7 +66,7 @@ def _domain_for(domain: str) -> str | None:
 
 
 def _display_domain(domain: str | None) -> str:
-    return domain if domain in {"call", "api", "media"} else "unclassified"
+    return domain if domain in {"call", "api", "media", "reserved"} else "unclassified"
 
 
 def list_resource_metrics(

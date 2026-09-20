@@ -22,6 +22,7 @@ from app.inspectors.kpi.catalog import (
     _validate_rules,
     build_kpi_config_from_catalog,
     load_kpi_catalog,
+    normalize_metric_name,
 )
 from app.models.db import (
     KpiCapacityRule,
@@ -39,6 +40,7 @@ from app.models.schemas import KpiTaskCatalogSnapshot
 
 SNAPSHOT_SCHEMA_VERSION = 2
 SNAPSHOT_RELATIVE_PATH = Path("kpi") / "kpi_catalog_snapshot.json"
+SNAPSHOT_CLASSIFICATION_DOMAINS = set(REGISTERED_DOMAINS) | {"reserved"}
 
 
 class KpiSnapshotError(KpiCatalogError):
@@ -60,7 +62,9 @@ def _read_catalog_state() -> tuple[
         with session_factory() as session:
             classification_rows = session.query(KpiClassification).all()
             classifications = {
-                row.metric_key: row.domain for row in classification_rows if row.domain in REGISTERED_DOMAINS
+                row.metric_key: row.domain
+                for row in classification_rows
+                if row.domain in SNAPSHOT_CLASSIFICATION_DOMAINS
             }
             classification_revision = session.get(KpiClassificationRevision, 1)
             classification_version = int(classification_revision.revision) if classification_revision else 0
@@ -239,7 +243,16 @@ def _config_from_snapshot(snapshot: KpiTaskCatalogSnapshot) -> KpiConfig:
         rules=rules,
         base_data_version=snapshot.base_data_version,
     )
-    return build_kpi_config_from_catalog(catalog, classifications, snapshot.classification_version)
+    config = build_kpi_config_from_catalog(catalog, classifications, snapshot.classification_version)
+    config.reserved_metric_keys = frozenset(snapshot.reserved_metric_keys)
+    config.reserved_alias_index = {
+        normalize_metric_name(str(metric.get(name_field, ""))): str(metric["key"])
+        for metric in snapshot.base_metrics
+        if metric.get("key") in snapshot.reserved_metric_keys
+        for name_field in ("name_zh", "name_en", "key")
+        if metric.get(name_field)
+    }
+    return config
 
 
 def _base_metric_items(catalog: KpiGitCatalog) -> list[dict[str, Any]]:
@@ -285,6 +298,9 @@ def load_task_kpi_config(task_id: str) -> KpiConfig:
             display_rules=display_rules,
         )
         _validate_rules(catalog.rules.to_dict(), set(catalog.metrics))
+        reserved_metric_keys = sorted(
+            key for key, domain in classifications.items() if domain == "reserved" and key in catalog.metrics
+        )
         snapshot = KpiTaskCatalogSnapshot(
             schema_version=SNAPSHOT_SCHEMA_VERSION,
             base_data_version=catalog.base_data_version,
@@ -293,6 +309,7 @@ def load_task_kpi_config(task_id: str) -> KpiConfig:
             captured_at=datetime.now(UTC),
             base_metrics=_base_metric_items(catalog),
             metrics=_effective_metrics(catalog, classifications),
+            reserved_metric_keys=reserved_metric_keys,
             rules=catalog.rules.to_dict(),
         )
         _atomic_write_snapshot(task_id, snapshot)

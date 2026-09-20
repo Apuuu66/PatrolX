@@ -78,6 +78,7 @@ def list_classification_clues(
     snapshot = _load_snapshot(task_id)
     base_index = _alias_index(snapshot.get("base_metrics", []))
     effective_index = _alias_index(snapshot.get("metrics", []))
+    reserved_keys = {str(key) for key in snapshot.get("reserved_metric_keys", []) if isinstance(key, str)}
     clue_map: dict[tuple[str, str], KpiClassificationClueV4] = {}
     rules_dir = settings.output / task_id / "rules"
     rule_paths = sorted(rules_dir.glob("kpi.*.json")) if rules_dir.is_dir() else []
@@ -113,6 +114,8 @@ def list_classification_clues(
                         status = KpiClueStatusV4.AMBIGUOUS
                     elif matched is None:
                         status = KpiClueStatusV4.UNREGISTERED
+                    elif matched["key"] in reserved_keys:
+                        status = KpiClueStatusV4.RESERVED
                     elif effective_matches:
                         status = KpiClueStatusV4.CLASSIFIED
                     else:

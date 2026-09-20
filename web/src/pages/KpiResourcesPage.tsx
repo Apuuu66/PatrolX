@@ -10,7 +10,7 @@ import {
 } from "../api/http";
 import { KpiMetricName } from "../components/KpiMetricSelect";
 import { KpiResourceTable } from "../components/KpiResourceTable";
-import { RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
+import { resourceDomainLabel, RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
 import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
 import { KpiThresholdEditor } from "../components/KpiThresholdEditor";
 import { KpiMetricCatalogProvider } from "../components/KpiMetricSelect";
@@ -26,6 +26,15 @@ const DOMAIN_OPTIONS = (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[])
   value,
   label: RESOURCE_DOMAIN_LABELS[value],
 }));
+
+const AUDIT_OPERATION_LABELS: Record<KpiClassificationAudit["operation"], string> = {
+  classify: "分类",
+  unclassify: "取消分类",
+};
+
+const AUDIT_RESULT_LABELS: Record<KpiClassificationAudit["result"], string> = {
+  success: "成功",
+};
 
 export function KpiResourcesPage() {
   const { message } = App.useApp();
@@ -162,10 +171,11 @@ export function KpiResourcesPage() {
       ellipsis: true,
       render: (_, record) => <KpiMetricName metricKey={record.metric_key} />,
     },
-    { title: "操作", dataIndex: "operation", width: 100 },
+    { title: "操作", dataIndex: "operation", width: 100, render: (value: KpiClassificationAudit["operation"]) => AUDIT_OPERATION_LABELS[value] },
     { title: "操作人", dataIndex: "operator", width: 120 },
-    { title: "原业务域", dataIndex: "from_domain", width: 110 },
-    { title: "新业务域", dataIndex: "to_domain", width: 110 },
+    { title: "原业务域", dataIndex: "from_domain", width: 110, render: resourceDomainLabel },
+    { title: "新业务域", dataIndex: "to_domain", width: 110, render: resourceDomainLabel },
+    { title: "结果", dataIndex: "result", width: 90, render: (value: KpiClassificationAudit["result"]) => AUDIT_RESULT_LABELS[value] },
     {
       title: "操作时间",
       dataIndex: "operated_at",

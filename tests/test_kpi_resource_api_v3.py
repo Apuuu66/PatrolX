@@ -59,7 +59,7 @@ def test_v3_list_classify_and_retire_v2(v3_env: Path) -> None:
     assert page.status_code == 200
     body = page.json()
     assert body["total"] == 2
-    assert body["summary"] == {"unclassified": 2, "call": 0, "api": 0, "media": 0}
+    assert body["summary"] == {"unclassified": 2, "call": 0, "api": 0, "media": 0, "reserved": 0}
     result = client.put(
         "/api/v3/kpi/resource-metrics/classification",
         json={"metric_keys": ["me_1"], "domain": "call", "operator": "alice"},

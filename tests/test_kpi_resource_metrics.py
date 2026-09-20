@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -72,3 +73,35 @@ def test_unregistered_metric_is_a_clue_not_rule_failure(tmp_path, monkeypatch) -
     result = registry.get("kpi.call").run(ctx)
     assert result.status.value in {"pass", "warn", "fail", "error", "skip"}
     assert any(item["reason"] == "metric_not_registered" for item in result.metadata["unclassified_metrics"])
+
+
+def test_reserved_metric_is_hidden_from_task_unclassified(tmp_path, monkeypatch) -> None:
+    _setup(tmp_path, monkeypatch)
+    metric_keys = [item["key"] for item in kpi_catalog_payload()["metrics"]]
+    classify_resource_metrics(metric_keys, domain="call", operator="alice")
+    classify_resource_metrics(["me_call_attempts"], domain="reserved", operator="alice")
+
+    from app.services.kpi_catalog import load_task_kpi_config
+
+    content = (
+        "设备类型：XXX\n测量单元名称：呼叫会话统计\n"
+        "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,自定义指标\n"
+        "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,10,7\n"
+    )
+    path = tmp_path / "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+    config = load_task_kpi_config("reserved-task")
+    assert config.reserved_metric_keys == {"me_call_attempts"}
+    snapshot_path = settings.output / "reserved-task" / "kpi" / "kpi_catalog_snapshot.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert snapshot["reserved_metric_keys"] == ["me_call_attempts"]
+
+    registry.load_all()
+    ctx = RuleContext(task_id="reserved-task", data_dir=tmp_path, log=lambda *args, **kwargs: None)
+    ctx.files = [path]
+    result = registry.get("kpi.call").run(ctx)
+    names = {item["source_name"] for item in result.metadata["unclassified_metrics"]}
+    assert "呼叫请求次数" not in names
+    assert "自定义指标" in names

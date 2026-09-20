@@ -194,11 +194,13 @@ def _record_metric_value(
 def _unclassified_metrics(
     files: list[KpiCsvFile],
     domain_config: KpiDomainConfig,
+    reserved_alias_index: dict[str, str],
 ) -> list[dict[str, object]]:
     grouped: dict[str, dict[str, object]] = {}
     for kpi_file in files:
-        registered = {name for name in kpi_file.objects if match_metric_name(name, domain_config)}
-        unclassified = [name for name in kpi_file.objects if name not in registered]
+        registered = {name for name in kpi_file.objects if match_metric_name(name, domain_config) is not None}
+        reserved = {name for name in kpi_file.objects if normalize_metric_name(name) in reserved_alias_index}
+        unclassified = [name for name in kpi_file.objects if name not in registered and name not in reserved]
         for name in unclassified:
             item = grouped.setdefault(
                 name,
@@ -382,7 +384,7 @@ def build_kpi_metadata(
         "input_timezone": config.input_timezone,
         "metric_catalog": [item.as_metadata() for item in domain_config.metrics.values()],
         "kpi_results": metric_results,
-        "unclassified_metrics": _unclassified_metrics(files, domain_config),
+        "unclassified_metrics": _unclassified_metrics(files, domain_config, config.reserved_alias_index),
         "kpi_files": [
             {
                 "path": kpi_file.path,
