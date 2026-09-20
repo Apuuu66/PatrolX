@@ -187,6 +187,8 @@ export function KpiResourcesPage() {
               placeholder="搜索资源 ID / 中文名 / 英文名"
               allowClear
               style={{ width: 280 }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               onSearch={handleSearch}
             />
             <Select
