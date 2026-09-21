@@ -33,8 +33,6 @@ from app.services import store
 from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext
 from app.services.extraction import WORK_CATEGORIES
-from app.services.kpi_catalog import KpiSnapshotError, load_task_kpi_config
-from app.services.kpi_resources import classify_resource_metrics
 from app.services.report import render_report
 
 
@@ -154,7 +152,7 @@ def run_task(
     )
     ctx = _new_context(task_id, package)
     executor = Executor(registry)
-    results = executor.run_all(ctx, after_extract=lambda: load_task_kpi_config(task_id))
+    results = executor.run_all(ctx)
     main_result = results.get("pkg.extract.main")
     if main_result is not None and main_result.status == RuleStatus.ERROR:
         store.save_rule_result(settings.output, task_id, main_result)
@@ -262,14 +260,6 @@ def run_incremental_rebuild(
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
     task_dir = settings.output / task_id
-    snapshot_path = task_dir / "kpi" / "kpi_catalog_snapshot.json"
-    if not snapshot_path.is_file():
-        raise KpiSnapshotError(f"任务 KPI 配置快照缺失: {snapshot_path}")
-    try:
-        snapshot_bytes = snapshot_path.read_bytes()
-        json.loads(snapshot_bytes)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise KpiSnapshotError(f"任务 KPI 配置快照损坏: {snapshot_path}: {exc}") from exc
 
     checksum = package_checksum or sha256_file(package)
     ctx = _new_context(task_id, package, checksum)
@@ -283,10 +273,6 @@ def run_incremental_rebuild(
 
     extraction = executor.run_rule("pkg.extract.main", ctx)
     store.save_rule_result(settings.output, task_id, extraction)
-    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-    snapshot_path.write_bytes(snapshot_bytes)
-    load_task_kpi_config(task_id)
-
     for code in rule_codes:
         try:
             old_result = store.load_rule_result(settings.output, task_id, code)
@@ -347,15 +333,11 @@ def run_single_rule(
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
     task_path = settings.output / task_id / "task.json"
-    snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
-    if task_path.exists() and not snapshot_path.exists():
-        raise KpiSnapshotError(f"任务 KPI 配置快照缺失: {snapshot_path}")
     ctx = _new_context(task_id, package, package_checksum)
     executor = Executor(registry)
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
         store.save_rule_result(settings.output, task_id, extraction)
-    load_task_kpi_config(task_id)
     try:
         old_result = store.load_rule_result(settings.output, task_id, code)
     except (json.JSONDecodeError, OSError):
@@ -405,9 +387,6 @@ def main(argv: list[str] | None = None) -> int:
     run_one.add_argument("--rule", required=True, help="规则 code")
     run_one.add_argument("--package-dir", default=None, help="输入目录（可选）")
     run_one.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<package>）")
-    classify_kpi = sub.add_parser("classify-kpi", help="分类 KPI 基础指标")
-    classify_kpi.add_argument("--metric-key", required=True, help="KPI 指标稳定 key")
-    classify_kpi.add_argument("--domain", required=True, help="业务域：call/api/media/unclassified")
     create_user_parser = sub.add_parser("create-user", help="创建认证用户（不支持在线注册）")
     create_user_parser.add_argument("--username", required=True, help="用户名")
     create_user_parser.add_argument("--password", required=True, help="密码")
@@ -455,14 +434,6 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"已创建默认管理员 {args.username}")
         return 0
-    if args.cmd == "classify-kpi":
-        init_db()
-        result = classify_resource_metrics([args.metric_key], domain=args.domain, operator="cli")
-        print(
-            f"已分类 {','.join(result['metric_keys'])} 到 {result['domain']}，修订：{result['classification_version']}"
-        )
-        return 0
-
     packages = find_packages()
     if not packages:
         print("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")

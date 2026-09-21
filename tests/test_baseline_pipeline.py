@@ -9,7 +9,7 @@ NORMAL_RULES = (
     "log.filter",
     "alarm.stat",
     "config.check",
-    "kpi.api",
+    "kpi.measurement_units",
     "log.error_density",
     "resource.check",
     "traffic.stat",

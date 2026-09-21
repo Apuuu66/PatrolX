@@ -62,7 +62,7 @@ export function getPreparationDisplay(
 ): PreparationDisplay {
   const abnormalItems = preparation.items.filter((item) => ABNORMAL_STATUSES.has(item.status));
   const normalItems = preparation.items.filter((item) => NORMAL_STATUSES.has(item.status));
-  const issueCount = abnormalItems.reduce((total, item) => total + item.issues.length, 0);
+  const issueCount = abnormalItems.reduce((total, item) => total + (item.issues ?? []).length, 0);
   const hasAbnormal = abnormalItems.length > 0;
   const visibleAbnormalItems = showAllAbnormal
     ? abnormalItems

@@ -413,7 +413,7 @@ def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch)
     assert (task_dir / "prepared" / "log.umf_acc" / ".prepare.sha256").is_file()
     assert not (task_dir / "prepared" / "log.umf_acc" / "kpi_values.json").exists()
     assert {result["code"] for result in load_task(env, task.task_id)["system"]["rules"]} >= {
-        "kpi.api",
+        "kpi.measurement_units",
         "log.umf_acc",
     }
 

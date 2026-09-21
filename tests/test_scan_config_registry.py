@@ -18,9 +18,7 @@ EXPECTED_REFS = {
     "log.repeat_error",
     "log.fault_pattern",
     "log.service_errors",
-    "kpi.call",
-    "kpi.api",
-    "kpi.media",
+    "kpi.measurement_units",
 }
 
 

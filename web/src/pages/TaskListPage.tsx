@@ -175,7 +175,7 @@ function PreparationPanel({
           <Flex vertical gap={4}>
             {display.visibleAbnormalItems.map((item) => {
               const active = activeCategories.includes(item.category);
-              const firstIssue = item.issues[0];
+              const firstIssue = item.issues?.[0];
               return (
                 <div key={item.code}>
                   <Button
@@ -219,7 +219,7 @@ function PreparationPanel({
                   </Button>
                   {active && (
                     <div style={{ padding: "6px 16px 8px" }}>
-                      {item.issues.map((issue, index) => (
+                      {(item.issues ?? []).map((issue, index) => (
                         <div key={`${issue.type}-${index}`} style={{ marginBottom: 6 }}>
                           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                             {issue.type} · {issue.reason}

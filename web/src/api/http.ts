@@ -1,82 +1,102 @@
 import type { components } from "./client";
 import { clearSession, getToken } from "./auth.ts";
 
-export type TaskStatus = components["schemas"]["TaskStatusV2"];
-export type TaskSummary = components["schemas"]["TaskSummaryV2"];
-export type TaskStats = components["schemas"]["TaskStatsV2"];
-export type SystemInspection = components["schemas"]["SystemInspectionV2"];
-export type RuleResult = components["schemas"]["RuleResultV2"];
-export type RuleStatus = components["schemas"]["RuleStatusV2"];
-export type Severity = components["schemas"]["SeverityV2"];
-export type InspectorInfo = components["schemas"]["InspectorInfoV2"];
-export type KpiRecordItem = components["schemas"]["KpiRecordItemV2"];
-export type KpiRecordPage = components["schemas"]["KpiRecordPageV2"];
-export type DataPreparation = components["schemas"]["DataPreparationV2"];
-export type PreparationItem = components["schemas"]["PreparationItemV2"];
-export type PreparationIssue = components["schemas"]["PreparationIssueV2"];
-export type DictsResponse = components["schemas"]["DictsResponseV2"];
-export type OverviewSummary = components["schemas"]["OverviewSummaryV2"];
-export type DictItem = components["schemas"]["DictItemV2"];
-export type LogEntry = components["schemas"]["LogEntryV2"];
-export type KpiResourceDomain = components["schemas"]["KpiResourceDomainV3"];
-export type KpiResourceMetric = components["schemas"]["KpiResourceMetricV3"];
-export type KpiResourceMetricPage = components["schemas"]["KpiResourceMetricPageV3"];
-export type KpiResourceClassificationResult = components["schemas"]["KpiResourceClassificationResultV3"];
-export type KpiClassificationAudit = components["schemas"]["KpiClassificationAuditV3"];
-export type KpiClassificationAuditPage = components["schemas"]["KpiClassificationAuditPageV3"];
-export type KpiTaskCatalogSnapshot = components["schemas"]["KpiTaskCatalogSnapshotV3"];
-export type KpiRegisteredDomainV4 = components["schemas"]["KpiRegisteredDomainV4"];
-export type KpiSourceTypeV4 = components["schemas"]["KpiSourceTypeV4"];
-export type KpiMetricTypeV4 = components["schemas"]["KpiMetricTypeV4"];
-export type KpiSemanticGroupV4 = components["schemas"]["KpiSemanticGroupV4"];
-export type KpiDisplayRoleV4 = components["schemas"]["KpiDisplayRoleV4"];
-export type KpiAggregationKindV4 = components["schemas"]["KpiAggregationKindV4"];
-export type KpiThresholdDirectionV4 = components["schemas"]["KpiThresholdDirectionV4"];
-export type KpiCapacityStatusV4 = components["schemas"]["KpiCapacityStatusV4"];
-export type KpiCapacitySemanticsV4 = components["schemas"]["KpiCapacitySemanticsV4"];
-export type KpiConfigEntityTypeV4 = components["schemas"]["KpiConfigEntityTypeV4"];
-export type KpiClueStatusV4 = components["schemas"]["KpiClueStatusV4"];
-export type KpiMetricRuleRequestV4 = components["schemas"]["KpiMetricRuleRequestV4"];
-export type KpiMetricRuleV4 = components["schemas"]["KpiMetricRuleV4"];
-export type KpiMetricRulePageV4 = components["schemas"]["KpiMetricRulePageV4"];
-export type KpiThresholdRequestV4 = components["schemas"]["KpiThresholdRequestV4"];
-export type KpiThresholdV4 = components["schemas"]["KpiThresholdV4"];
-export type KpiThresholdPageV4 = components["schemas"]["KpiThresholdPageV4"];
-export type KpiCapacityRuleRequestV4 = components["schemas"]["KpiCapacityRuleRequestV4"];
-export type KpiCapacityRuleV4 = components["schemas"]["KpiCapacityRuleV4"];
-export type KpiCapacityRulePageV4 = components["schemas"]["KpiCapacityRulePageV4"];
-export type KpiDisplayRuleRequestV4 = components["schemas"]["KpiDisplayRuleRequestV4"];
-export type KpiDisplayRuleV4 = components["schemas"]["KpiDisplayRuleV4"];
-export type KpiDisplayRulePageV4 = components["schemas"]["KpiDisplayRulePageV4"];
-export type KpiDerivedFormulaV4 = components["schemas"]["KpiDerivedFormulaV4"];
-export type KpiDerivedMetricCreateRequestV4 = components["schemas"]["KpiDerivedMetricCreateRequestV4"];
-export type KpiDerivedMetricUpdateRequestV4 = components["schemas"]["KpiDerivedMetricUpdateRequestV4"];
-export type KpiDerivedMetricV4 = components["schemas"]["KpiDerivedMetricV4"];
-export type KpiDerivedMetricPageV4 = components["schemas"]["KpiDerivedMetricPageV4"];
-export type KpiCommonConfigRequestV4 = components["schemas"]["KpiCommonConfigRequestV4"];
-export type KpiCommonConfigV4 = components["schemas"]["KpiCommonConfigV4"];
-export type KpiConfigAuditV4 = components["schemas"]["KpiConfigAuditV4"];
-export type KpiConfigAuditPageV4 = components["schemas"]["KpiConfigAuditPageV4"];
-export type KpiClassificationClueV4 = components["schemas"]["KpiClassificationClueV4"];
-export type KpiClassificationCluePageV4 = components["schemas"]["KpiClassificationCluePageV4"];
+export type TaskStatus = components["schemas"]["TaskStatus"];
+export type TaskSummary = components["schemas"]["TaskSummary"];
+export type TaskStats = components["schemas"]["TaskStats"];
+export type SystemInspection = components["schemas"]["SystemInspection"];
+export type RuleResult = components["schemas"]["RuleResult"];
+export type RuleStatus = components["schemas"]["RuleStatus"];
+export type Severity = components["schemas"]["Severity"];
+export type InspectorInfo = components["schemas"]["InspectorInfo"];
+export type MeasurementUnit = components["schemas"]["KpiMeasurementUnit"];
+export type MeasurementUnitList = components["schemas"]["KpiMeasurementUnitList"];
+export type MeasurementBinding = components["schemas"]["KpiMeasurementBinding"];
+export type MeasurementBindingList = components["schemas"]["KpiMeasurementBindingList"];
+export type MeasurementBindingStatus = MeasurementBinding["status"];
+export type MeasurementDerived = components["schemas"]["KpiMeasurementDerived"];
+export type MeasurementDerivedCreatePayload = components["schemas"]["KpiMeasurementDerivedCreateRequest"];
+export interface MeasurementMetadataMetricObservation {
+  object_key: string;
+  row_count: number;
+  valid_count: number;
+  null_count: number;
+  parse_error_count: number;
+  zero_count: number;
+  min_value: number | null;
+  max_value: number | null;
+  avg_value?: number | null;
+  value_pattern: "normal" | "all_zero" | "unknown";
+  source_rows?: { source_file: string; line_number: number; value: string }[];
+}
+export interface MeasurementMetadataMetric {
+  metric_resource_id: string;
+  raw_source_name: string;
+  base_source_name?: string;
+  display_unit?: string | null;
+  read_status: "ok" | "missing" | "parse_error";
+  value_pattern: "normal" | "all_zero" | "unknown";
+  source_file?: string;
+  source_files?: string[];
+  observations?: MeasurementMetadataMetricObservation[];
+  errors?: unknown[];
+}
+export interface MeasurementMetadataObject {
+  object_key: string;
+  row_count: number;
+  valid_count: number;
+  null_count: number;
+  parse_error_count: number;
+  zero_count: number;
+  min_value: number | null;
+  max_value: number | null;
+  avg_value?: number | null;
+  value_pattern: "normal" | "all_zero" | "unknown";
+}
+export interface MeasurementMetadataUnit {
+  measurement_unit_id: string;
+  name_zh: string;
+  name_en: string;
+  status: "pass" | "warn" | "fail" | "error" | "skip";
+  reason?: string | null;
+  file_count: number;
+  object_count?: number;
+  metric_coverage?: string;
+  metrics: MeasurementMetadataMetric[];
+  objects?: Record<string, MeasurementMetadataObject>;
+  source_files?: string[];
+  derived_metrics?: {
+    metric_resource_id: string;
+    template: string;
+    status: "pass" | "warn" | "fail";
+    message?: string | null;
+    observations: { object_key: string; status: "pass" | "warn" | "fail"; message?: string | null; value?: number | null }[];
+  }[];
+}
+export type DataPreparation = components["schemas"]["DataPreparation"];
+export type PreparationItem = components["schemas"]["PreparationItem"];
+export type PreparationIssue = components["schemas"]["PreparationIssue"];
+export type DictsResponse = components["schemas"]["DictsResponse"];
+export type OverviewSummary = components["schemas"]["OverviewSummary"];
+export type DictItem = components["schemas"]["DictItem"];
+export type LogEntry = components["schemas"]["LogEntry"];
 export type User = components["schemas"]["UserV1"];
 export type UserPage = components["schemas"]["UserListResponseV1"];
 export type UserCreatePayload = components["schemas"]["UserCreateRequestV1"];
 export type UserRolePayload = components["schemas"]["UserRoleRequestV1"];
 export type UserPasswordPayload = components["schemas"]["UserPasswordRequestV1"];
 export type TaskDeleteError = TaskDeleteErrorDetail;
-export type RebuildMode = components["schemas"]["RebuildModeV2"];
-export type RebuildTriggerSource = components["schemas"]["RebuildRequestV2"]["trigger_source"];
-export type RebuildRequestPayload = Omit<components["schemas"]["RebuildRequestV2"], "confirmed"> & {
+export type RebuildMode = components["schemas"]["RebuildMode"];
+export type RebuildTriggerSource = components["schemas"]["RebuildRequest"]["trigger_source"];
+export type RebuildRequestPayload = Omit<components["schemas"]["RebuildRequest"], "confirmed"> & {
   confirmed: true;
 };
 
 const BASE = "/api/v2";
-const KPI_BASE = "/api/v3";
-const KPI_V4_BASE = "/api/v4";
+const KPI_V5_BASE = "/api/v5";
 const AUTH_BASE = "/api/v1";
 
-export type TaskDeleteErrorDetail = components["schemas"]["TaskDeleteErrorDetailV2"];
+export interface TaskDeleteErrorDetail { task_id: string; locations: string[]; failed_path: string; reason: string; path_length?: number; path_limit?: number; }
 
 export class ApiError extends Error {
   code: string;
@@ -141,7 +161,7 @@ export const api = {
     if (q.page_size) params.set("page_size", String(q.page_size));
     if (q.status) params.set("status", q.status);
     const qs = params.toString();
-    return request<{ items: TaskSummary[]; total: number; page: number; page_size: number }>(
+    return request<components["schemas"]["TaskListResponse"]>(
       `${BASE}/tasks${qs ? `?${qs}` : ""}`,
     );
   },
@@ -187,27 +207,6 @@ export const api = {
     );
   },
 
-  listKpiRecords: (
-    taskId: string,
-    ruleCode: string,
-    query: {
-      metric_key?: string;
-      source_file?: string;
-      period_minutes?: 5 | 15 | 30 | 60;
-      status?: components["schemas"]["KpiDisplayStatusV2"];
-      page?: number;
-      page_size?: number;
-    } = {},
-  ) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<KpiRecordPage>(
-      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}/kpi/records${qs ? `?${qs}` : ""}`,
-    );
-  },
 
   listInspectors: (category?: string, includeHidden = false) => {
     const params = new URLSearchParams();
@@ -218,215 +217,64 @@ export const api = {
   },
 
   listDicts: () => request<DictsResponse>(`${BASE}/dicts`),
+  importMeasurementUnits: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<components["schemas"]["KpiMeasurementImportResult"]>(`${KPI_V5_BASE}/kpi/measurement-units/import`, {
+      method: "POST",
+      body: form,
+    });
+  },
 
-  listKpiResourceMetrics: (query: KpiResourceQuery = {}) => {
+  listMeasurementUnits: (query: { search?: string; enabled?: boolean; page?: number; page_size?: number } = {}) => {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {
       if (value !== undefined) params.set(key, String(value));
     });
     const qs = params.toString();
-    return request<KpiResourceMetricPage>(`${KPI_BASE}/kpi/resource-metrics${qs ? `?${qs}` : ""}`);
+    return request<MeasurementUnitList>(`${KPI_V5_BASE}/kpi/measurement-units${qs ? `?${qs}` : ""}`);
   },
 
-  classifyKpiResourceMetrics: (payload: KpiResourceClassificationPayload) =>
-    request<KpiResourceClassificationResult>(`${KPI_BASE}/kpi/resource-metrics/classification`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  listKpiClassificationAudits: (query: KpiClassificationAuditQuery = {}) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<KpiClassificationAuditPage>(
-      `${KPI_BASE}/kpi/resource-metrics/classification-audits${qs ? `?${qs}` : ""}`,
-    );
-  },
-
-  getKpiCatalogSnapshot: (taskId: string) =>
-    request<KpiTaskCatalogSnapshot>(`${KPI_BASE}/tasks/${encodeURIComponent(taskId)}/kpi/catalog-snapshot`),
-
-  listKpiMetricRulesV4: (query: { page?: number; page_size?: number } = {}) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<KpiMetricRulePageV4>(`${KPI_V4_BASE}/kpi/config/metric-rules${qs ? `?${qs}` : ""}`);
-  },
-
-  upsertKpiMetricRuleV4: (metricKey: string, payload: KpiMetricRuleRequestV4) =>
-    request<KpiMetricRuleV4>(`${KPI_V4_BASE}/kpi/config/metric-rules/${encodeURIComponent(metricKey)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  deleteKpiMetricRuleV4: (metricKey: string) =>
-    request<components["schemas"]["KpiConfigDeleteResultV4"]>(
-      `${KPI_V4_BASE}/kpi/config/metric-rules/${encodeURIComponent(metricKey)}`,
-      { method: "DELETE" },
+  setMeasurementUnitEnabled: (resourceId: string, enabled: boolean) =>
+    request<{ resource_id: string; enabled: boolean }>(
+      `${KPI_V5_BASE}/kpi/measurement-units/${encodeURIComponent(resourceId)}`,
+      { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) },
     ),
 
-  listKpiDerivedMetricsV4: (
-    query: { search?: string; domain?: KpiRegisteredDomainV4; enabled?: boolean; page?: number; page_size?: number } = {},
+  listMeasurementBindings: (
+    query: { measurement_unit_id?: string; status?: string; search?: string; page?: number; page_size?: number } = {},
   ) => {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {
       if (value !== undefined) params.set(key, String(value));
     });
     const qs = params.toString();
-    return request<KpiDerivedMetricPageV4>(`${KPI_V4_BASE}/kpi/config/derived-metrics${qs ? `?${qs}` : ""}`);
+    return request<MeasurementBindingList>(`${KPI_V5_BASE}/kpi/measurement-bindings${qs ? `?${qs}` : ""}`);
   },
 
-  createKpiDerivedMetricV4: (payload: KpiDerivedMetricCreateRequestV4) =>
-    request<KpiDerivedMetricV4>(`${KPI_V4_BASE}/kpi/config/derived-metrics`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  updateKpiDerivedMetricV4: (metricKey: string, payload: KpiDerivedMetricUpdateRequestV4) =>
-    request<KpiDerivedMetricV4>(`${KPI_V4_BASE}/kpi/config/derived-metrics/${encodeURIComponent(metricKey)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  deleteKpiDerivedMetricV4: (metricKey: string) =>
-    request<components["schemas"]["KpiConfigDeleteResultV4"]>(
-      `${KPI_V4_BASE}/kpi/config/derived-metrics/${encodeURIComponent(metricKey)}`,
-      { method: "DELETE" },
+  setMeasurementBindingStatus: (bindingId: number, status: "candidate" | "confirmed" | "ignored", enabled?: boolean) =>
+    request<{ id: number; status: string; enabled: boolean }>(
+      `${KPI_V5_BASE}/kpi/measurement-bindings/${bindingId}`,
+      { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, enabled }) },
     ),
 
-  listKpiThresholdsV4: (query: { page?: number; page_size?: number } = {}) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<KpiThresholdPageV4>(`${KPI_V4_BASE}/kpi/config/thresholds${qs ? `?${qs}` : ""}`);
-  },
-
-  createKpiThresholdV4: (payload: KpiThresholdRequestV4) =>
-    request<KpiThresholdV4>(`${KPI_V4_BASE}/kpi/config/thresholds`, {
+  createMeasurementDerived: (payload: MeasurementDerivedCreatePayload) =>
+    request<MeasurementDerived>(`${KPI_V5_BASE}/kpi/measurement-derived`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
 
-  updateKpiThresholdV4: (id: number, payload: KpiThresholdRequestV4) =>
-    request<KpiThresholdV4>(`${KPI_V4_BASE}/kpi/config/thresholds/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
 
-  deleteKpiThresholdV4: (id: number) =>
-    request<components["schemas"]["KpiConfigDeleteResultV4"]>(`${KPI_V4_BASE}/kpi/config/thresholds/${id}`, {
-      method: "DELETE",
-    }),
 
-  listKpiCapacityRulesV4: (query: { page?: number; page_size?: number } = {}) => {
+  listUsers: async (query: { page?: number; page_size?: number } = {}) => {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {
       if (value !== undefined) params.set(key, String(value));
     });
     const qs = params.toString();
-    return request<KpiCapacityRulePageV4>(`${KPI_V4_BASE}/kpi/config/capacity-rules${qs ? `?${qs}` : ""}`);
-  },
-
-  createKpiCapacityRuleV4: (payload: KpiCapacityRuleRequestV4) =>
-    request<KpiCapacityRuleV4>(`${KPI_V4_BASE}/kpi/config/capacity-rules`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  updateKpiCapacityRuleV4: (id: number, payload: KpiCapacityRuleRequestV4) =>
-    request<KpiCapacityRuleV4>(`${KPI_V4_BASE}/kpi/config/capacity-rules/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  deleteKpiCapacityRuleV4: (id: number) =>
-    request<components["schemas"]["KpiConfigDeleteResultV4"]>(`${KPI_V4_BASE}/kpi/config/capacity-rules/${id}`, {
-      method: "DELETE",
-    }),
-
-  listKpiDisplayRulesV4: (query: { page?: number; page_size?: number } = {}) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<KpiDisplayRulePageV4>(`${KPI_V4_BASE}/kpi/config/display-rules${qs ? `?${qs}` : ""}`);
-  },
-
-  createKpiDisplayRuleV4: (payload: KpiDisplayRuleRequestV4) =>
-    request<KpiDisplayRuleV4>(`${KPI_V4_BASE}/kpi/config/display-rules`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  updateKpiDisplayRuleV4: (id: number, payload: KpiDisplayRuleRequestV4) =>
-    request<KpiDisplayRuleV4>(`${KPI_V4_BASE}/kpi/config/display-rules/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  deleteKpiDisplayRuleV4: (id: number) =>
-    request<components["schemas"]["KpiConfigDeleteResultV4"]>(`${KPI_V4_BASE}/kpi/config/display-rules/${id}`, {
-      method: "DELETE",
-    }),
-
-  getKpiCommonConfigV4: () => request<KpiCommonConfigV4>(`${KPI_V4_BASE}/kpi/config/common`),
-
-  updateKpiCommonConfigV4: (payload: KpiCommonConfigRequestV4) =>
-    request<KpiCommonConfigV4>(`${KPI_V4_BASE}/kpi/config/common`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-
-  listKpiConfigAuditsV4: (
-    query: { entity_type?: KpiConfigEntityTypeV4; operator?: string; page?: number; page_size?: number } = {},
-  ) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<KpiConfigAuditPageV4>(`${KPI_V4_BASE}/kpi/config/audits${qs ? `?${qs}` : ""}`);
-  },
-
-  listKpiClassificationCluesV4: (
-    taskId: string,
-    query: { clue_status?: KpiClueStatusV4; search?: string; page?: number; page_size?: number } = {},
-  ) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<KpiClassificationCluePageV4>(
-      `${KPI_V4_BASE}/tasks/${encodeURIComponent(taskId)}/kpi/classification-clues${qs ? `?${qs}` : ""}`,
-    );
-  },
-
-  listUsers: (query: { page?: number; page_size?: number } = {}) => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined) params.set(key, String(value));
-    });
-    const qs = params.toString();
-    return request<UserPage>(`${AUTH_BASE}/users${qs ? `?${qs}` : ""}`);
+    const data = await request<UserPage>(`${AUTH_BASE}/users${qs ? `?${qs}` : ""}`);
+    return { ...data, items: data.items ?? [] };
   },
 
   createUser: (payload: UserCreatePayload) =>
@@ -455,24 +303,3 @@ export const api = {
 };
 
 export const reportUrl = (taskId: string) => `${BASE}/tasks/${encodeURIComponent(taskId)}/report`;
-
-export interface KpiResourceQuery {
-  search?: string;
-  domain?: KpiResourceDomain;
-  page?: number;
-  page_size?: number;
-}
-
-export interface KpiResourceClassificationPayload {
-  metric_keys: string[];
-  domain: KpiResourceDomain;
-  operator: string;
-}
-
-export interface KpiClassificationAuditQuery {
-  metric_key?: string;
-  operator?: string;
-  domain?: KpiResourceDomain;
-  page?: number;
-  page_size?: number;
-}

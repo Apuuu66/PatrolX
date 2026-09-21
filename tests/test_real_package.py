@@ -11,7 +11,6 @@ from app.models.schemas import RuleCategory, RuleStatus
 from app.services.executor import RuleContext
 from app.services.extraction import extract_main_site
 from tests.fixtures.make_real_package import build_real_package
-from tests.kpi_helpers import configure_kpi_catalog
 
 
 def _extract(tmp_path: Path):
@@ -85,25 +84,9 @@ def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Pat
     assert not manifest["rejected"]
 
 
-def test_real_kpi_call_and_container_resource_rule_results(tmp_path: Path, monkeypatch) -> None:
-    configure_kpi_catalog(tmp_path, monkeypatch)
+def test_real_container_resource_and_alarm_rule_results(tmp_path: Path) -> None:
     data_dir, _ = _extract(tmp_path)
     registry.load_all()
-
-    kpi_ctx = _ctx_with_task(
-        tmp_path,
-        [
-            "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
-            "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv",
-            "kpi/ne333_Call_Session_API_Statistics_30_0_202609020000.csv",
-            "kpi/ne333_Call_Session_API_Statistics_60_0_202609020000.csv",
-        ],
-    )
-    kpi_result = registry.get("kpi.call").run(kpi_ctx)
-    assert kpi_result.status == RuleStatus.PASS
-    # 多周期样例只保留优先级最高的 15 分钟数据。
-    assert kpi_result.metrics[0].value == 1
-    assert kpi_result.metrics[1].value == 576
 
     resource_ctx = _ctx_with_task(
         tmp_path,

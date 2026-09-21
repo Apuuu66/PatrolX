@@ -17,13 +17,12 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { ClearOutlined, DownloadOutlined, FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined } from "@ant-design/icons";
+import { ClearOutlined, FileTextOutlined, RedoOutlined, RollbackOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
-  type KpiTaskCatalogSnapshot,
   type RuleResult,
   type RuleStatus,
   type SystemInspection,
@@ -34,7 +33,6 @@ import { SummaryCards } from "../components/SummaryCards";
 import { usePolling } from "../hooks/usePolling";
 import { latestTaskFailure } from "../utils/taskFailure";
 import { countByStatus, filterByStatus, toggleStatusFilter, type StatusFilter } from "../utils/taskFilter";
-import { KpiClassificationClues } from "../components/KpiClassificationClues";
 
 const CATEGORY_LABELS: Record<string, string> = {
   log: "日志",
@@ -52,7 +50,6 @@ export function TaskDetailPage() {
   const navigate = useNavigate();
   const [task, setTask] = useState<TaskSummary | null>(null);
   const [system, setSystem] = useState<SystemInspection | null>(null);
-  const [catalogSnapshot, setCatalogSnapshot] = useState<KpiTaskCatalogSnapshot | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
@@ -70,12 +67,8 @@ export function TaskDetailPage() {
         api.listInspectors(undefined, true),
         api.getTaskLogs(taskId).catch(() => null),
       ]);
-      const snapshot = (s?.rules ?? []).some((rule) => rule.category === "kpi")
-        ? await api.getKpiCatalogSnapshot(taskId).catch(() => null)
-        : null;
       setTask(t);
       setSystem(s);
-      setCatalogSnapshot(snapshot);
       setHidden(new Set(inspectors.filter((i) => i.hidden).map((i) => i.code)));
       setFailure(latestTaskFailure(logs?.entries ?? []));
     } catch (err) {
@@ -92,17 +85,6 @@ export function TaskDetailPage() {
   const busy = task?.status === "pending" || task?.status === "running";
   const canRebuild = task?.status === "completed" || task?.status === "failed";
   usePolling(load, 2000, !!busy);
-
-  const downloadCatalogSnapshot = () => {
-    if (!catalogSnapshot) return;
-    const blob = new Blob([JSON.stringify(catalogSnapshot, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `kpi_catalog_snapshot_${taskId}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   const rerunAll = async () => {
     try {
@@ -315,40 +297,8 @@ export function TaskDetailPage() {
             },
           ]}
         />
-        {catalogSnapshot && (
-          <Descriptions
-            size="small"
-            column={3}
-            title="KPI 快照"
-            style={{ marginTop: 16 }}
-            items={[
-              {
-                key: "captured_at",
-                label: "生成时间",
-                children: dayjs(catalogSnapshot.captured_at).format("YYYY-MM-DD HH:mm:ss"),
-              },
-              { key: "metrics", label: "指标数量", children: catalogSnapshot.metrics.length },
-              {
-                key: "download",
-                label: "完整快照",
-                children: (
-                  <Button size="small" icon={<DownloadOutlined />} onClick={downloadCatalogSnapshot}>
-                    下载
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        )}
       </Card>
-
-      {catalogSnapshot && (
-        <div style={{ marginBottom: 16 }}>
-          <KpiClassificationClues taskId={taskId} />
-        </div>
-      )}
-
-      {task.status === "failed" && failure && (
+        {task.status === "failed" && failure && (
         <Alert type="error" showIcon message="任务失败" description={failure} style={{ marginBottom: 16 }} />
       )}
 
@@ -402,7 +352,7 @@ export function TaskDetailPage() {
           type="warning"
           showIcon
           message="将强制重建解压现场"
-          description="所选规则及其私有准备会重算，未选择规则结果和当前 KPI 快照保持不变。"
+          description="所选规则及其私有准备会重算，未选择规则结果保持不变。"
           style={{ marginBottom: 16 }}
         />
         <Select

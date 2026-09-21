@@ -38,6 +38,7 @@ def test_review_endpoints_follow_contract(tmp_path: Path, monkeypatch) -> None:
             "KPI/kpi-api-15.csv",
             "API 统计\n测量周期,开始时间,结束时间,请求总数,成功数\n15,bad-time,2026-09-01 10:15:00,100,90\n",
         )
+        archive.writestr("logs/app.log", "2026-09-01 10:00:00 ERROR service failed\n")
     task_id = upload_package(
         env,
         client,

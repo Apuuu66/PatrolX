@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, App, Breadcrumb, Button, Card, Descriptions, Empty, List, Spin, Space, Tag, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult } from "../api/http";
-import { KpiInspectionPanel } from "../components/KpiInspectionPanel";
+import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
 import { MetricPanel } from "../components/MetricPanel";
 import { RuleStatusTag, SeverityTag } from "../components/StatusBadge";
 
@@ -43,7 +43,7 @@ export function RuleDetailPage() {
   }
 
   const conclusion = result.summary || meta?.description || "已完成规则执行";
-  const hasKpiResults = Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "kpi_files");
+  const hasMeasurementResults = Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "measurement_units");
   const alertType = result.status === "fail" || result.status === "error" ? "error" : result.status === "warn" ? "warning" : "info";
 
   return (
@@ -97,9 +97,9 @@ export function RuleDetailPage() {
         )}
       </Card>
 
-      {hasKpiResults && (
-        <Card title="KPI 巡检" style={{ marginBottom: 16 }}>
-          <KpiInspectionPanel metadata={result.metadata} taskId={taskId} ruleCode={ruleCode} />
+      {hasMeasurementResults && (
+        <Card title="KPI 测量单元巡检" style={{ marginBottom: 16 }}>
+          <MeasurementInspectionPanel metadata={result.metadata} />
         </Card>
       )}
 
@@ -120,7 +120,7 @@ export function RuleDetailPage() {
             {
               key: "source_patterns",
               label: "源文件匹配",
-              children: (meta?.source_patterns ?? []).length ? meta!.source_patterns.map((i) => <Tag key={i}>{i}</Tag>) : "-",
+              children: (meta?.source_patterns ?? []).length ? (meta!.source_patterns ?? []).map((i) => <Tag key={i}>{i}</Tag>) : "-",
             },
           ]}
         />

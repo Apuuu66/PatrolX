@@ -30,15 +30,8 @@ groups:
     description: DDD 服务日志
     source_patterns:
       - '^logs/(?:ServiceLog_[^/]+/)?DDD/.+\.log$'
-  kpi_call:
-    description: 呼叫 KPI 真实导出 CSV
+  kpi_all:
+    description: KPI 测量单元 CSV（含话统目录）
     source_patterns:
-      - '^kpi/(?:.*/)?(?:[^/]+_)?Call_Session_API_Statistics_(?:5|15|30|60)(?:_0_[^/]+)?\.csv$'
-  kpi_api:
-    description: API KPI CSV
-    source_patterns:
-      - '^kpi/(?:.*/)?kpi-api-(?:5|15|30|60)\.csv$'
-  kpi_media:
-    description: 媒体 KPI CSV
-    source_patterns:
-      - '^kpi/(?:.*/)?kpi-media-(?:5|15|30|60)\.csv$'
+      - '^kpi/.*\.csv$'
+      - '^traffic/.*\.csv$'

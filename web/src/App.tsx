@@ -20,8 +20,8 @@ const InspectorsPage = lazy(() =>
   import("./pages/InspectorsPage").then(({ InspectorsPage }) => ({ default: InspectorsPage })),
 );
 const DictsPage = lazy(() => import("./pages/DictsPage").then(({ DictsPage }) => ({ default: DictsPage })));
-const KpiResourcesPage = lazy(() =>
-  import("./pages/KpiResourcesPage").then(({ KpiResourcesPage }) => ({ default: KpiResourcesPage })),
+const MeasurementUnitsPage = lazy(() =>
+  import("./pages/MeasurementUnitsPage").then(({ MeasurementUnitsPage }) => ({ default: MeasurementUnitsPage })),
 );
 const UsersPage = lazy(() => import("./pages/UsersPage").then(({ UsersPage }) => ({ default: UsersPage })));
 
@@ -43,7 +43,7 @@ const router = createBrowserRouter([
       { path: "tasks/:taskId/report", element: <ReportPage /> },
       { path: "tasks/:taskId/logs", element: <LogsPage /> },
       { path: "inspectors", element: <InspectorsPage /> },
-      { path: "kpi-resources", element: <KpiResourcesPage /> },
+      { path: "measurement-units", element: <MeasurementUnitsPage /> },
       { path: "dicts", element: <DictsPage /> },
       { path: "users", element: <UsersPage /> },
     ],

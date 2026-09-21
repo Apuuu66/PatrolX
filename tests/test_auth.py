@@ -200,9 +200,9 @@ class TestAuthAPI:
 
     def test_write_endpoint_requires_auth(self, client: TestClient) -> None:
         # Try to classify without token → 401
-        resp = client.put(
-            "/api/v3/kpi/resource-metrics/classification",
-            json={"metric_keys": ["me_call_attempts"], "domain": "call", "operator": "x"},
+        resp = client.post(
+            "/api/v5/kpi/measurement-units/import",
+            files={"file": ("resources.csv", "资源id,中文描述,英文描述\n", "text/csv")},
         )
         assert resp.status_code == 401
 
@@ -210,9 +210,9 @@ class TestAuthAPI:
         # Viewer cannot write
         create_user("viewonly", "pass", role="viewer")
         result = login("viewonly", "pass")
-        resp = client.put(
-            "/api/v3/kpi/resource-metrics/classification",
-            json={"metric_keys": ["me_call_attempts"], "domain": "call", "operator": "x"},
+        resp = client.post(
+            "/api/v5/kpi/measurement-units/import",
+            files={"file": ("resources.csv", "资源id,中文描述,英文描述\n", "text/csv")},
             headers={"Authorization": f"Bearer {result['token']}"},
         )
         assert resp.status_code == 403

@@ -1,85 +1,141 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: PatrolX API
-  version: 4.0.0
-  description: PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）。 当前契约包含 /api/v2 巡检接口、/api/v3 基础指标分类接口和 /api/v4 KPI 动态口径配置接口。
-servers:
-- url: /
+  description: PatrolX 巡检系统接口契约（离线巡检：任务/系统/规则/字典）
+  version: 1.0.0
 paths:
   /api/v1/auth/login:
     post:
-      summary: 登录并创建会话
+      summary: Auth Login
       operationId: loginV1
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LoginRequestV1'
+        required: true
       responses:
         '200':
-          description: 登录成功
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponseV1'
-        '401':
-          $ref: '#/components/responses/Error401'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/auth/logout:
     post:
-      summary: 登出并失效当前会话
+      summary: Auth Logout
       operationId: logoutV1
-      security:
-        - BearerAuth: []
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
         '200':
-          description: 已登出
-        '401':
-          $ref: '#/components/responses/Error401'
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Logoutv1
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/auth/me:
     get:
-      summary: 查询当前登录用户
+      summary: Auth Me
       operationId: getMeV1
-      security:
-        - BearerAuth: []
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
         '200':
-          description: 当前用户
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserInfoV1'
-        '401':
-          $ref: '#/components/responses/Error401'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/users:
     get:
-      summary: 用户台账分页
+      summary: List Users V1
       operationId: listUsersV1
-      tags:
-      - auth
-      security:
-        - BearerAuth: []
       parameters:
-      - $ref: '#/components/parameters/Page'
-      - $ref: '#/components/parameters/UserPageSize'
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
         '200':
-          description: 用户台账
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserListResponseV1'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
-      summary: 创建用户
+      summary: Create User V1
       operationId: createUserV1
-      tags:
-      - auth
-      security:
-        - BearerAuth: []
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -88,29 +144,36 @@ paths:
               $ref: '#/components/schemas/UserCreateRequestV1'
       responses:
         '201':
-          description: 用户已创建
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserV1'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '409':
-          $ref: '#/components/responses/Error409'
         '422':
-          $ref: '#/components/responses/Error422'
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/users/{username}:
     patch:
-      summary: 更新用户角色
+      summary: Update User V1
       operationId: updateUserV1
-      tags:
-      - auth
-      security:
-        - BearerAuth: []
       parameters:
-      - $ref: '#/components/parameters/Username'
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Username
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -119,49 +182,63 @@ paths:
               $ref: '#/components/schemas/UserRoleRequestV1'
       responses:
         '200':
-          description: 用户角色已更新
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserV1'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     delete:
-      summary: 删除用户
+      summary: Delete User V1
       operationId: deleteUserV1
-      tags:
-      - auth
-      security:
-        - BearerAuth: []
       parameters:
-      - $ref: '#/components/parameters/Username'
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Username
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
         '204':
-          description: 用户已删除
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/users/{username}/password:
     put:
-      summary: 重置用户密码
+      summary: Reset User Password V1
       operationId: resetUserPasswordV1
-      tags:
-      - auth
-      security:
-        - BearerAuth: []
       parameters:
-      - $ref: '#/components/parameters/Username'
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Username
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -170,1395 +247,1512 @@ paths:
               $ref: '#/components/schemas/UserPasswordRequestV1'
       responses:
         '200':
-          description: 用户密码已重置
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserV1'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
         '422':
-          $ref: '#/components/responses/Error422'
-  /healthz:
-    get:
-      summary: 健康检查
-      operationId: healthz
-      tags:
-      - system
-      responses:
-        '200':
-          description: 服务健康
+          description: Validation Error
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-  /metrics:
-    get:
-      summary: Prometheus 指标（内部可观测）
-      operationId: metrics
-      tags:
-      - system
-      responses:
-        '200':
-          description: Prometheus 文本格式指标
-          content:
-            text/plain:
-              schema:
-                type: string
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks:
     post:
-      summary: 创建巡检任务（同名同 checksum 复用；同名不同 checksum 冲突）
+      summary: Create Task V2
       operationId: createTaskV2
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              type: object
-              required:
-              - package_file
-              properties:
-                package_file:
-                  type: string
-                  format: binary
-                  description: 数据压缩包（zip/tar.gz，非空，默认上限 2GB）
-                name:
-                  type: string
-                  description: 任务名称（可选）
-                version:
-                  type: string
-                  description: 版本字典编码（可选）
-                province:
-                  type: string
-                  description: 省份字典编码（可选）
-                operator:
-                  type: string
-                  description: 运营商字典编码（可选）
-                product:
-                  type: string
-                  description: 产品形态字典编码（可选）
+              $ref: '#/components/schemas/Body_createTaskV2'
       responses:
         '202':
-          description: 任务已创建，异步执行
-          headers:
-            Location:
-              schema:
-                type: string
-                example: /tasks/task-001
-              example: /api/v2/tasks/task-001
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaskCreatedV2'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '409':
-          description: 同名包但 checksum 不同
+                $ref: '#/components/schemas/TaskCreated'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorV2'
-        '413':
-          $ref: '#/components/responses/Error413'
+                $ref: '#/components/schemas/HTTPValidationError'
     get:
-      summary: 任务列表
+      summary: List Tasks V2
       operationId: listTasksV2
       parameters:
-      - $ref: '#/components/parameters/Page'
-      - $ref: '#/components/parameters/PageSize'
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
       - name: status
         in: query
+        required: false
         schema:
-          $ref: '#/components/schemas/TaskStatusV2'
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
       responses:
         '200':
-          description: 任务摘要列表
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaskListResponseV2'
+                $ref: '#/components/schemas/TaskListResponse'
         '422':
-          $ref: '#/components/responses/Error422'
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/overview:
+    get:
+      summary: Get Overview V2
+      operationId: getOverviewV2
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewSummary'
   /api/v2/tasks/{task_id}:
     get:
-      summary: 任务摘要（不含全量规则结果）
+      summary: Get Task V2
       operationId: getTaskV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       responses:
         '200':
-          description: 任务摘要
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InspectionTaskV2'
-        '404':
-          $ref: '#/components/responses/Error404'
+                $ref: '#/components/schemas/InspectionTask'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     delete:
-      summary: 删除任务（级联删除 uploads/ 与 output/ 现场数据）
+      summary: Delete Task V2
       operationId: deleteTaskV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       responses:
         '204':
-          description: 已删除
-        '409':
-          description: 任务正在排队或执行，禁止删除
+          description: Successful Response
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorV2'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '500':
-          description: 任务现场删除失败；任务记录与可恢复现场保持可见
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskDeleteErrorV2'
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks/{task_id}/rerun:
     post:
-      summary: 增量重跑（全部或指定规则）
+      summary: Rerun Task V2
       operationId: rerunTaskV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RerunRequestV2'
+              anyOf:
+              - $ref: '#/components/schemas/RerunRequest'
+              - type: 'null'
+              title: Body
       responses:
         '202':
-          description: 重跑任务已受理
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaskCreatedV2'
-        '404':
-          $ref: '#/components/responses/Error404'
+                $ref: '#/components/schemas/TaskCreated'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks/{task_id}/rebuild:
     post:
-      summary: 重建重跑（全量或强制重建解压的增量）
+      summary: Rebuild Task V2
       operationId: rebuildTaskV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RebuildRequestV2'
+              $ref: '#/components/schemas/RebuildRequest'
       responses:
         '202':
-          description: 重建任务已受理
-          headers:
-            Location:
-              description: 任务详情地址
-              schema:
-                type: string
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaskCreatedV2'
-        '400':
-          description: 请求无效、未确认或规则无效
+                $ref: '#/components/schemas/TaskCreated'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorV2'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          description: 任务忙、原始包缺失或增量快照无效
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorV2'
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks/{task_id}/report:
     get:
-      summary: 巡检报告（HTML 在线预览）
+      summary: Get Report V2
       operationId: getReportV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       responses:
         '200':
-          description: HTML 报告
+          description: Successful Response
           content:
             text/html:
               schema:
                 type: string
-          headers: {}
-        '404':
-          $ref: '#/components/responses/Error404'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks/{task_id}/logs:
     get:
-      summary: 任务执行日志
+      summary: Get Task Logs V2
       operationId: getTaskLogsV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       responses:
         '200':
-          description: 结构化执行日志
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaskLogsV2'
-        '404':
-          $ref: '#/components/responses/Error404'
+                $ref: '#/components/schemas/TaskLogs'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks/{task_id}/system:
     get:
-      summary: 系统摘要与规则状态列表
+      summary: Get System V2
       operationId: getSystemV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       - name: exclude_details
         in: query
+        required: false
         schema:
           type: boolean
           default: false
-        description: 为 true 时只返回规则状态摘要，清空 rules[].metadata/metrics/findings。
+          title: Exclude Details
       responses:
         '200':
-          description: 系统巡检结果
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemInspectionV2'
-        '404':
-          $ref: '#/components/responses/Error404'
+                $ref: '#/components/schemas/SystemInspection'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks/{task_id}/rules/{rule_code}:
     get:
-      summary: 单规则完整结果
+      summary: Get Rule Result V2
       operationId: getRuleResultV2
       parameters:
-      - $ref: '#/components/parameters/TaskId'
-      - $ref: '#/components/parameters/RuleCode'
-      - name: exclude_records
-        in: query
+      - name: task_id
+        in: path
+        required: true
         schema:
-          type: boolean
-          default: false
-        description: 为 true 时清空 KPI metadata.kpi_files[].records，并对 kpi_results[].series 与 provenance.direct_cross_reference 做最多 200 点的展示抽稀；完整序列保留在规则结果文件中。
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
       responses:
         '200':
-          description: 规则结果（metrics/findings）
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RuleResultV2'
-        '404':
-          $ref: '#/components/responses/Error404'
-  /api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records:
-    get:
-      summary: 分页查询 KPI 原始记录
-      operationId: listKpiRecordsV2
-      parameters:
-      - $ref: '#/components/parameters/TaskId'
-      - $ref: '#/components/parameters/RuleCode'
-      - name: metric_key
-        in: query
-        schema:
-          type: string
-        description: 稳定指标 key，精确匹配。
-      - name: source_file
-        in: query
-        schema:
-          type: string
-        description: 任务内相对路径，精确匹配。
-      - name: period_minutes
-        in: query
-        schema:
-          type: integer
-          enum: [5, 15, 30, 60]
-      - name: status
-        in: query
-        schema:
-          $ref: '#/components/schemas/KpiDisplayStatusV2'
-      - $ref: '#/components/parameters/Page'
-      - $ref: '#/components/parameters/KpiRecordPageSize'
-      responses:
-        '200':
-          description: KPI 原始记录分页
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiRecordPageV2'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '404':
-          $ref: '#/components/responses/Error404'
+                $ref: '#/components/schemas/RuleResult'
         '422':
-          $ref: '#/components/responses/Error422'
-  /api/v2/overview:
-    get:
-      summary: 全局巡检概览
-      operationId: getOverviewV2
-      responses:
-        '200':
-          description: 任务、注册规则、规则结果与发现问题统计
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OverviewSummaryV2'
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/inspectors:
     get:
-      summary: 已注册规则元数据（只读）
+      summary: List Inspectors V2
       operationId: listInspectorsV2
       parameters:
       - name: category
         in: query
+        required: false
         schema:
-          $ref: '#/components/schemas/RuleCategoryV2'
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
       - name: include_hidden
         in: query
+        required: false
         schema:
           type: boolean
           default: false
+          title: Include Hidden
       responses:
         '200':
-          description: 规则元数据列表
+          description: Successful Response
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/InspectorInfoV2'
-  /api/v2/dicts:
-    get:
-      summary: 全部预制数据字典
-      operationId: listDictsV2
-      responses:
-        '200':
-          description: 字典
+                  $ref: '#/components/schemas/InspectorInfo'
+                title: Response Listinspectorsv2
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DictsResponseV2'
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/dicts:
+    get:
+      summary: List Dicts V2
+      operationId: listDictsV2
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictsResponse'
   /api/v2/dicts/{dict_name}:
     put:
-      summary: 维护字典项（纯内部开放）
+      summary: Update Dict V2
       operationId: updateDictV2
-      security:
-        - BearerAuth: []
       parameters:
       - name: dict_name
         in: path
         required: true
         schema:
           type: string
-          enum:
-          - province
-          - operator
-          - product
-          - version
+          title: Dict Name
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DictUpdateRequestV2'
+              anyOf:
+              - $ref: '#/components/schemas/DictUpdateRequest'
+              - type: 'null'
+              title: Body
       responses:
         '200':
-          description: 更新后的字典
+          description: Successful Response
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/DictItemV2'
-        '400':
-          $ref: '#/components/responses/Error400'
-  /api/v3/kpi/resource-metrics:
-    get:
-      summary: 分页查询基础指标
-      operationId: listKpiResourceMetricsV3
-      parameters:
-      - name: search
-        in: query
-        description: 按资源 ID、中文名或英文名模糊匹配
-        schema:
-          type: string
-      - name: domain
-        in: query
-        schema:
-          $ref: '#/components/schemas/KpiResourceDomainV3'
-      - name: include_missing
-        in: query
-        schema:
-          type: boolean
-          default: false
-      - $ref: '#/components/parameters/Page'
-      - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: 基础指标分页和统计
+                  $ref: '#/components/schemas/DictItem'
+                title: Response Updatedictv2
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiResourceMetricPageV3'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '500':
-          $ref: '#/components/responses/Error500'
-  /api/v3/kpi/resource-metrics/classification:
-    put:
-      summary: 批量分类 KPI 指标
-      operationId: classifyKpiResourceMetricsV3
-      security:
-        - BearerAuth: []
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-units/import:
+    post:
+      summary: Import Kpi Measurement Units V5
+      operationId: importKpiMeasurementUnitsV5
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/KpiResourceClassificationRequestV3'
+              $ref: '#/components/schemas/Body_importKpiMeasurementUnitsV5'
       responses:
         '200':
-          description: 整批分类成功
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiResourceClassificationResultV3'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          description: 指标被公式、阈值或容量规则引用
+                $ref: '#/components/schemas/KpiMeasurementImportResult'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorV2'
-  /api/v3/kpi/resource-metrics/classification-audits:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-units:
     get:
-      summary: 分页查询 KPI 分类审计
-      operationId: listKpiClassificationAuditsV3
-      parameters:
-      - name: metric_key
-        in: query
-        schema:
-          type: string
-      - name: operator
-        in: query
-        schema:
-          type: string
-      - name: domain
-        in: query
-        schema:
-          $ref: '#/components/schemas/KpiResourceDomainV3'
-      - $ref: '#/components/parameters/Page'
-      - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: 分类审计分页
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiClassificationAuditPageV3'
-        '400':
-          $ref: '#/components/responses/Error400'
-  /api/v3/tasks/{task_id}/kpi/catalog-snapshot:
-    get:
-      summary: 读取任务 KPI 配置快照
-      operationId: getKpiCatalogSnapshotV3
-      parameters:
-      - $ref: '#/components/parameters/TaskId'
-      responses:
-        '200':
-          description: 任务 KPI 配置快照
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiTaskCatalogSnapshotV3'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          description: 任务存在但 KPI 配置快照缺失
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorV2'
-        '500':
-          $ref: '#/components/responses/Error500'
-  /api/v4/kpi/config/metric-rules:
-    get:
-      summary: 分页查询指标规则
-      operationId: listKpiMetricRulesV4
-      parameters:
-        - name: search
-          in: query
-          schema:
-            type: string
-        - name: source_type
-          in: query
-          schema:
-            $ref: '#/components/schemas/KpiSourceTypeV4'
-        - name: domain
-          in: query
-          schema:
-            $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: 指标规则分页
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiMetricRulePageV4'
-
-  /api/v4/kpi/config/metric-rules/{metric_key}:
-    get:
-      summary: 查询指标规则
-      operationId: getKpiMetricRuleV4
-      parameters:
-        - name: metric_key
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 指标规则
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiMetricRuleV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-    put:
-      summary: 创建或更新指标规则与公式
-      operationId: upsertKpiMetricRuleV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: metric_key
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiMetricRuleRequestV4'
-      responses:
-        '200':
-          description: 保存成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiMetricRuleV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          description: 引用保护、公式循环或配置冲突
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorV2'
-    delete:
-      summary: 删除自定义指标规则并回退默认规则
-      operationId: deleteKpiMetricRuleV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: metric_key
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 删除成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-
-  /api/v4/kpi/config/derived-metrics:
-    get:
-      summary: 分页查询在线派生指标
-      operationId: listKpiDerivedMetricsV4
+      summary: List Kpi Measurement Units V5
+      operationId: listKpiMeasurementUnitsV5
       parameters:
       - name: search
         in: query
+        required: false
         schema:
-          type: string
-      - name: domain
-        in: query
-        schema:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
       - name: enabled
         in: query
+        required: false
         schema:
-          type: boolean
-      - $ref: '#/components/parameters/Page'
-      - $ref: '#/components/parameters/PageSize'
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
       responses:
         '200':
-          description: 在线派生指标分页
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiDerivedMetricPageV4'
-    post:
-      summary: 创建在线派生指标
-      operationId: createKpiDerivedMetricV4
-      security:
-      - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiDerivedMetricCreateRequestV4'
-      responses:
-        '202':
-          description: 已受理创建
-          headers:
-            Location:
-              schema:
-                type: string
+                $ref: '#/components/schemas/KpiMeasurementUnitList'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiDerivedMetricV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '409':
-          description: key 重复或配置冲突
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorV2'
-  /api/v4/kpi/config/derived-metrics/{metric_key}:
-    get:
-      summary: 查询在线派生指标
-      operationId: getKpiDerivedMetricV4
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-units/{resource_id}:
+    patch:
+      summary: Set Kpi Measurement Unit Enabled V5
+      operationId: setKpiMeasurementUnitEnabledV5
       parameters:
-      - name: metric_key
+      - name: resource_id
         in: path
         required: true
         schema:
           type: string
+          title: Resource Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/KpiMeasurementEnabledRequest'
+              - type: 'null'
+              title: Body
       responses:
         '200':
-          description: 在线派生指标
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiDerivedMetricV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-    put:
-      summary: 更新在线派生指标
-      operationId: updateKpiDerivedMetricV4
-      security:
-      - BearerAuth: []
+                type: object
+                additionalProperties: true
+                title: Response Setkpimeasurementunitenabledv5
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-bindings:
+    get:
+      summary: List Kpi Measurement Bindings V5
+      operationId: listKpiMeasurementBindingsV5
       parameters:
-      - name: metric_key
+      - name: measurement_unit_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Measurement Unit Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementBindingList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-bindings/{binding_id}:
+    patch:
+      summary: Set Kpi Measurement Binding Status V5
+      operationId: setKpiMeasurementBindingStatusV5
+      parameters:
+      - name: binding_id
         in: path
         required: true
         schema:
-          type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiDerivedMetricUpdateRequestV4'
-      responses:
-        '200':
-          description: 保存成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiDerivedMetricV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          description: 配置冲突
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorV2'
-    delete:
-      summary: 删除未被引用的在线派生指标
-      operationId: deleteKpiDerivedMetricV4
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: metric_key
-        in: path
-        required: true
+          type: integer
+          title: Binding Id
+      - name: authorization
+        in: header
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/KpiMeasurementBindingStatusRequest'
+              - type: 'null'
+              title: Body
       responses:
         '200':
-          description: 删除成功
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          description: 派生指标仍被引用
+                type: object
+                additionalProperties: true
+                title: Response Setkpimeasurementbindingstatusv5
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorV2'
-
-  /api/v4/kpi/config/thresholds:
-    get:
-      summary: 分页查询阈值
-      operationId: listKpiThresholdsV4
-      parameters:
-        - name: domain
-          in: query
-          schema:
-            $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        - name: search
-          in: query
-          schema:
-            type: string
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: 阈值分页
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiThresholdPageV4'
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-derived:
     post:
-      summary: 创建阈值
-      operationId: createKpiThresholdV4
-      security:
-        - BearerAuth: []
+      summary: Create Kpi Measurement Derived V5
+      operationId: createKpiMeasurementDerivedV5
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/KpiThresholdRequestV4'
+              anyOf:
+              - $ref: '#/components/schemas/KpiMeasurementDerivedCreateRequest'
+              - type: 'null'
+              title: Body
       responses:
-        '202':
-          description: 已受理创建
-          headers:
-            Location:
-              schema:
-                type: string
+        '201':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiThresholdV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '409':
-          description: domain+metric_key 重复
+                $ref: '#/components/schemas/KpiMeasurementDerived'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorV2'
-
-  /api/v4/kpi/config/thresholds/{threshold_id}:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /healthz:
     get:
-      summary: 查询阈值
-      operationId: getKpiThresholdV4
-      parameters:
-        - name: threshold_id
-          in: path
-          required: true
-          schema:
-            type: integer
+      tags:
+      - system
+      summary: Healthz
+      operationId: healthz
       responses:
         '200':
-          description: 阈值
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KpiThresholdV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-    put:
-      summary: 更新阈值
-      operationId: updateKpiThresholdV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: threshold_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiThresholdRequestV4'
-      responses:
-        '200':
-          description: 保存成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiThresholdV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '404':
-          $ref: '#/components/responses/Error404'
-    delete:
-      summary: 删除阈值
-      operationId: deleteKpiThresholdV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: threshold_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 删除成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-
-  /api/v4/kpi/config/capacity-rules:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Healthz
+  /metrics:
     get:
-      summary: 分页查询容量规则
-      operationId: listKpiCapacityRulesV4
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
+      tags:
+      - system
+      summary: Metrics
+      operationId: metrics
       responses:
         '200':
-          description: 容量规则分页
+          description: Successful Response
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/KpiCapacityRulePageV4'
-    post:
-      summary: 创建容量规则
-      operationId: createKpiCapacityRuleV4
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiCapacityRuleRequestV4'
-      responses:
-        '202':
-          description: 已受理创建
-          headers:
-            Location:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiCapacityRuleV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '409':
-          description: source_name 重复
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorV2'
-
-  /api/v4/kpi/config/capacity-rules/{capacity_rule_id}:
-    put:
-      summary: 更新容量规则
-      operationId: updateKpiCapacityRuleV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: capacity_rule_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiCapacityRuleRequestV4'
-      responses:
-        '200':
-          description: 保存成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiCapacityRuleV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-    delete:
-      summary: 删除容量规则
-      operationId: deleteKpiCapacityRuleV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: capacity_rule_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 删除成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-
-  /api/v4/kpi/config/display-rules:
-    get:
-      summary: 分页查询展示规则
-      operationId: listKpiDisplayRulesV4
-      parameters:
-        - name: domain
-          in: query
-          schema:
-            $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: 展示规则分页
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiDisplayRulePageV4'
-    post:
-      summary: 创建展示规则
-      operationId: createKpiDisplayRuleV4
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiDisplayRuleRequestV4'
-      responses:
-        '202':
-          description: 已受理创建
-          headers:
-            Location:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiDisplayRuleV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '409':
-          description: domain+metric_key 重复
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorV2'
-
-  /api/v4/kpi/config/display-rules/{display_rule_id}:
-    put:
-      summary: 更新展示规则
-      operationId: updateKpiDisplayRuleV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: display_rule_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiDisplayRuleRequestV4'
-      responses:
-        '200':
-          description: 保存成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiDisplayRuleV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-    delete:
-      summary: 删除展示规则
-      operationId: deleteKpiDisplayRuleV4
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: display_rule_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 删除成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-
-  /api/v4/kpi/config/common:
-    get:
-      summary: 查询公共配置
-      operationId: getKpiCommonConfigV4
-      responses:
-        '200':
-          description: 公共配置
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiCommonConfigV4'
-    put:
-      summary: 更新公共配置
-      operationId: updateKpiCommonConfigV4
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiCommonConfigRequestV4'
-      responses:
-        '200':
-          description: 保存成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiCommonConfigV4'
-        '400':
-          $ref: '#/components/responses/Error400'
-
-  /api/v4/kpi/config/audits:
-    get:
-      summary: 分页查询动态配置审计
-      operationId: listKpiConfigAuditsV4
-      parameters:
-        - name: entity_type
-          in: query
-          schema:
-            $ref: '#/components/schemas/KpiConfigEntityTypeV4'
-        - name: operator
-          in: query
-          schema:
-            type: string
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: 配置审计分页
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiConfigAuditPageV4'
-
-  /api/v4/tasks/{task_id}/kpi/classification-clues:
-    get:
-      summary: 分页查询任务按需分类线索
-      operationId: listKpiClassificationCluesV4
-      parameters:
-        - name: task_id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: clue_status
-          in: query
-          schema:
-            $ref: '#/components/schemas/KpiClueStatusV4'
-        - name: search
-          in: query
-          schema:
-            type: string
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: 线索分页
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KpiClassificationCluePageV4'
-        '404':
-          $ref: '#/components/responses/Error404'
-
+              schema: {}
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      description: 登录接口返回的 opaque token。
-  parameters:
-    TaskId:
-      name: task_id
-      in: path
-      required: true
-      schema:
-        type: string
-    RuleCode:
-      name: rule_code
-      in: path
-      required: true
-      schema:
-        type: string
-    Page:
-      name: page
-      in: query
-      schema:
-        type: integer
-        default: 1
-        minimum: 1
-    PageSize:
-      name: page_size
-      in: query
-      schema:
-        type: integer
-        default: 20
-        minimum: 1
-        maximum: 100
-    UserPageSize:
-      name: page_size
-      in: query
-      schema:
-        type: integer
-        default: 20
-        minimum: 1
-        maximum: 200
-    Username:
-      name: username
-      in: path
-      required: true
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 128
-    KpiRecordPageSize:
-      name: page_size
-      in: query
-      schema:
-        type: integer
-        default: 50
-        minimum: 1
-        maximum: 200
-  responses:
-    Error400:
-      description: 请求错误
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Error401:
-      description: 未登录或会话已失效
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorV2'
-    Error404:
-      description: 资源不存在
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Error403:
-      description: 没有执行该操作的权限
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Error409:
-      description: 资源冲突
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Error413:
-      description: 文件过大
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Error422:
-      description: 请求参数校验失败
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorV2'
-    Error500:
-      description: 服务器内部错误
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorV2'
   schemas:
+    Body_createTaskV2:
+      properties:
+        package_file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Package File
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        province:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+        operator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator
+        product:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product
+      type: object
+      required:
+      - package_file
+      title: Body_createTaskV2
+    Body_importKpiMeasurementUnitsV5:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_importKpiMeasurementUnitsV5
+    DataPreparation:
+      properties:
+        status:
+          $ref: '#/components/schemas/PreparationStatus'
+        items:
+          items:
+            $ref: '#/components/schemas/PreparationItem'
+          type: array
+          minItems: 1
+          title: Items
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        success_count:
+          type: integer
+          minimum: 0.0
+          title: Success Count
+        warning_count:
+          type: integer
+          minimum: 0.0
+          title: Warning Count
+        failure_count:
+          type: integer
+          minimum: 0.0
+          title: Failure Count
+        skip_count:
+          type: integer
+          minimum: 0.0
+          title: Skip Count
+      type: object
+      required:
+      - status
+      - items
+      - total
+      - success_count
+      - warning_count
+      - failure_count
+      - skip_count
+      title: DataPreparation
+    DictItem:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - code
+      - name
+      title: DictItem
+    DictUpdateRequest:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - code
+      - name
+      title: DictUpdateRequest
+    DictsResponse:
+      properties:
+        province:
+          items:
+            $ref: '#/components/schemas/DictItem'
+          type: array
+          title: Province
+        operator:
+          items:
+            $ref: '#/components/schemas/DictItem'
+          type: array
+          title: Operator
+        product:
+          items:
+            $ref: '#/components/schemas/DictItem'
+          type: array
+          title: Product
+        version:
+          items:
+            $ref: '#/components/schemas/DictItem'
+          type: array
+          title: Version
+      type: object
+      required:
+      - province
+      - operator
+      - product
+      - version
+      title: DictsResponse
+    Finding:
+      properties:
+        finding_id:
+          type: string
+          title: Finding Id
+        title:
+          type: string
+          title: Title
+        severity:
+          $ref: '#/components/schemas/Severity'
+        source_file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source File
+        evidence:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Evidence
+        details:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Details
+        recommendation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recommendation
+        metrics:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/Metric'
+            type: array
+          - type: 'null'
+          title: Metrics
+      type: object
+      required:
+      - finding_id
+      - title
+      - severity
+      title: Finding
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    InspectionTask:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        name:
+          type: string
+          title: Name
+        mode:
+          $ref: '#/components/schemas/TaskMode'
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        trigger:
+          $ref: '#/components/schemas/TaskTrigger'
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        stats:
+          $ref: '#/components/schemas/TaskStats'
+        preparation:
+          anyOf:
+          - $ref: '#/components/schemas/DataPreparation'
+          - type: 'null'
+        system:
+          anyOf:
+          - $ref: '#/components/schemas/SystemInspection'
+          - type: 'null'
+      type: object
+      required:
+      - task_id
+      - name
+      - mode
+      - status
+      - trigger
+      - created_at
+      - stats
+      title: InspectionTask
+    InspectorInfo:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        category:
+          $ref: '#/components/schemas/RuleCategory'
+        severity:
+          $ref: '#/components/schemas/Severity'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        rule_version:
+          type: string
+          title: Rule Version
+        hidden:
+          type: boolean
+          title: Hidden
+          default: false
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        recommendation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recommendation
+        source_patterns:
+          items:
+            type: string
+          type: array
+          title: Source Patterns
+        outputs:
+          additionalProperties: true
+          type: object
+          title: Outputs
+        params:
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          type: array
+          title: Params
+      type: object
+      required:
+      - code
+      - name
+      - category
+      - severity
+      - priority
+      - rule_version
+      title: InspectorInfo
+    KpiMeasurementBinding:
+      properties:
+        id:
+          type: integer
+          title: Id
+        metric_resource_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Metric Resource Id
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        raw_source_name:
+          type: string
+          title: Raw Source Name
+        base_source_name:
+          type: string
+          title: Base Source Name
+        display_unit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Display Unit
+        status:
+          type: string
+          enum:
+          - candidate
+          - confirmed
+          - conflict
+          - ignored
+          title: Status
+        enabled:
+          type: boolean
+          title: Enabled
+        task_id:
+          type: string
+          title: Task Id
+        source_file:
+          type: string
+          title: Source File
+      type: object
+      required:
+      - id
+      - metric_resource_id
+      - measurement_unit_id
+      - raw_source_name
+      - base_source_name
+      - display_unit
+      - status
+      - enabled
+      - task_id
+      - source_file
+      title: KpiMeasurementBinding
+    KpiMeasurementBindingList:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/KpiMeasurementBinding'
+          type: array
+          title: Items
+      type: object
+      required:
+      - total
+      - items
+      title: KpiMeasurementBindingList
+    KpiMeasurementBindingStatusRequest:
+      properties:
+        status:
+          type: string
+          enum:
+          - candidate
+          - confirmed
+          - ignored
+          title: Status
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      required:
+      - status
+      title: KpiMeasurementBindingStatusRequest
+    KpiMeasurementDerived:
+      properties:
+        id:
+          type: integer
+          title: Id
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        numerator_metric_id:
+          type: string
+          title: Numerator Metric Id
+        denominator_metric_id:
+          type: string
+          title: Denominator Metric Id
+        template:
+          type: string
+          const: success_rate
+          title: Template
+          default: success_rate
+        enabled:
+          type: boolean
+          title: Enabled
+      type: object
+      required:
+      - id
+      - measurement_unit_id
+      - metric_resource_id
+      - numerator_metric_id
+      - denominator_metric_id
+      - enabled
+      title: KpiMeasurementDerived
+    KpiMeasurementDerivedCreateRequest:
+      properties:
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        numerator_metric_id:
+          type: string
+          title: Numerator Metric Id
+        denominator_metric_id:
+          type: string
+          title: Denominator Metric Id
+      type: object
+      required:
+      - measurement_unit_id
+      - metric_resource_id
+      - numerator_metric_id
+      - denominator_metric_id
+      title: KpiMeasurementDerivedCreateRequest
+    KpiMeasurementEnabledRequest:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+      type: object
+      required:
+      - enabled
+      title: KpiMeasurementEnabledRequest
+    KpiMeasurementImportResult:
+      properties:
+        added:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Added
+        updated:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Updated
+        skipped:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Skipped
+        errors:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Errors
+      type: object
+      title: KpiMeasurementImportResult
+    KpiMeasurementUnit:
+      properties:
+        resource_id:
+          type: string
+          title: Resource Id
+        name_zh:
+          type: string
+          title: Name Zh
+        name_en:
+          type: string
+          title: Name En
+        filename_fragment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filename Fragment
+        enabled:
+          type: boolean
+          title: Enabled
+        metric_count:
+          type: integer
+          minimum: 0.0
+          title: Metric Count
+        unit_count:
+          type: integer
+          minimum: 0.0
+          title: Unit Count
+        confirmed_binding_count:
+          type: integer
+          minimum: 0.0
+          title: Confirmed Binding Count
+        candidate_binding_count:
+          type: integer
+          minimum: 0.0
+          title: Candidate Binding Count
+        derived_count:
+          type: integer
+          minimum: 0.0
+          title: Derived Count
+      type: object
+      required:
+      - resource_id
+      - name_zh
+      - name_en
+      - filename_fragment
+      - enabled
+      - metric_count
+      - unit_count
+      - confirmed_binding_count
+      - candidate_binding_count
+      - derived_count
+      title: KpiMeasurementUnit
+    KpiMeasurementUnitList:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/KpiMeasurementUnit'
+          type: array
+          title: Items
+      type: object
+      required:
+      - total
+      - items
+      title: KpiMeasurementUnitList
+    LogEntry:
+      properties:
+        ts:
+          type: string
+          format: date-time
+          title: Ts
+        level:
+          type: string
+          title: Level
+        message:
+          type: string
+          title: Message
+        rule_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Code
+        detail:
+          additionalProperties: true
+          type: object
+          title: Detail
+      type: object
+      required:
+      - ts
+      - level
+      - message
+      title: LogEntry
     LoginRequestV1:
+      properties:
+        username:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Username
+        password:
+          type: string
+          maxLength: 256
+          minLength: 1
+          title: Password
       type: object
       required:
       - username
       - password
+      title: LoginRequestV1
+    LoginResponseV1:
       properties:
+        token:
+          type: string
+          title: Token
         username:
           type: string
-          minLength: 1
-          maxLength: 128
-        password:
+          title: Username
+        role:
           type: string
-          minLength: 1
-          maxLength: 256
-    LoginResponseV1:
+          title: Role
       type: object
       required:
       - token
       - username
       - role
+      title: LoginResponseV1
+    Metric:
       properties:
-        token:
+        key:
           type: string
-        username:
+          title: Key
+        label:
           type: string
-        role:
-          type: string
-          enum:
-          - admin
-          - viewer
-    UserInfoV1:
+          title: Label
+        value:
+          anyOf:
+          - type: integer
+          - type: number
+          - type: string
+          title: Value
+        unit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unit
+        threshold:
+          anyOf:
+          - additionalProperties:
+              anyOf:
+              - type: integer
+              - type: number
+            type: object
+          - type: 'null'
+          title: Threshold
+        baseline:
+          anyOf:
+          - type: integer
+          - type: number
+          - type: string
+          - type: 'null'
+          title: Baseline
+        series:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Series
       type: object
       required:
-      - username
-      - role
+      - key
+      - label
+      - value
+      title: Metric
+    OverviewSummary:
       properties:
-        username:
-          type: string
-        role:
-          type: string
-          enum:
-          - admin
-          - viewer
-    UserV1:
-      type: object
-      required: [username, role, created_at, updated_at]
-      properties:
-        username:
-          type: string
-          minLength: 1
-          maxLength: 128
-        role:
-          type: string
-          enum: [admin, viewer]
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    UserListResponseV1:
-      type: object
-      required: [items, total, page, page_size]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserV1'
-        total:
+        task_count:
           type: integer
-        page:
+          minimum: 0.0
+          title: Task Count
+        registered_rule_count:
           type: integer
-        page_size:
+          minimum: 0.0
+          title: Registered Rule Count
+        rule_result_count:
           type: integer
-    UserCreateRequestV1:
+          minimum: 0.0
+          title: Rule Result Count
+        finding_count:
+          type: integer
+          minimum: 0.0
+          title: Finding Count
+        status_counts:
+          $ref: '#/components/schemas/Summary'
       type: object
-      required: [username, password, role]
+      required:
+      - task_count
+      - registered_rule_count
+      - rule_result_count
+      - finding_count
+      - status_counts
+      title: OverviewSummary
+    PreparationIssue:
       properties:
-        username:
+        type:
+          $ref: '#/components/schemas/PreparationIssueType'
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+        target:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target
+        reason:
           type: string
-          minLength: 1
-          maxLength: 128
-        password:
-          type: string
-          minLength: 8
-          maxLength: 256
-        role:
-          type: string
-          enum: [admin, viewer]
-    UserPasswordRequestV1:
+          title: Reason
+        path_length:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Path Length
+        path_limit:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Path Limit
       type: object
-      required: [new_password]
-      properties:
-        new_password:
-          type: string
-          minLength: 8
-          maxLength: 256
-    UserRoleRequestV1:
-      type: object
-      required: [role]
-      properties:
-        role:
-          type: string
-          enum: [admin, viewer]
-    TaskStatus:
+      required:
+      - type
+      - reason
+      title: PreparationIssue
+    PreparationIssueType:
       type: string
       enum:
-      - pending
-      - running
-      - completed
+      - conflict
+      - duplicate
+      - skipped
       - failed
-    RuleStatus:
+      - rejected
+      title: PreparationIssueType
+    PreparationItem:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        category:
+          type: string
+          title: Category
+        status:
+          $ref: '#/components/schemas/PreparationStatus'
+        summary:
+          type: string
+          title: Summary
+        duration_ms:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Duration Ms
+        extracted_count:
+          type: integer
+          minimum: 0.0
+          title: Extracted Count
+        total_count:
+          type: integer
+          minimum: 0.0
+          title: Total Count
+        issues:
+          items:
+            $ref: '#/components/schemas/PreparationIssue'
+          type: array
+          title: Issues
+      type: object
+      required:
+      - code
+      - name
+      - category
+      - status
+      - summary
+      - extracted_count
+      - total_count
+      title: PreparationItem
+    PreparationStatus:
       type: string
       enum:
       - pass
       - warn
       - fail
-      - error
       - skip
-    Severity:
-      type: string
-      enum:
-      - low
-      - medium
-      - high
-      - critical
+      - error
+      title: PreparationStatus
     Priority:
       type: integer
       enum:
       - 0
       - 1
       - 2
-      description: P0 数据准备 / P1 基础检查 / P2 综合分析
+      title: Priority
+    RebuildMode:
+      type: string
+      enum:
+      - full
+      - incremental
+      title: RebuildMode
+    RebuildRequest:
+      properties:
+        mode:
+          $ref: '#/components/schemas/RebuildMode'
+        confirmed:
+          type: boolean
+          title: Confirmed
+        rule_codes:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Rule Codes
+        trigger_source:
+          $ref: '#/components/schemas/RebuildTriggerSource'
+          default: ui
+      type: object
+      required:
+      - mode
+      - confirmed
+      title: RebuildRequest
+    RebuildTriggerSource:
+      type: string
+      enum:
+      - ui
+      - api
+      title: RebuildTriggerSource
+    RerunRequest:
+      properties:
+        rule_codes:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Rule Codes
+      type: object
+      title: RerunRequest
     RuleCategory:
       type: string
       enum:
@@ -1569,116 +1763,61 @@ components:
       - config
       - resource
       - other
-    TaskMode:
-      type: string
-      enum:
-      - online
-      - local
-    TaskTrigger:
-      type: string
-      enum:
-      - api
-      - cli
-      - rerun
-    Summary:
-      type: object
-      required:
-      - total
-      - pass
-      - warn
-      - fail
-      - error
-      - skip
+      title: RuleCategory
+    RuleResult:
       properties:
-        total:
-          type: integer
-        pass:
-          type: integer
-        warn:
-          type: integer
-        fail:
-          type: integer
-        error:
-          type: integer
-        skip:
-          type: integer
-    TaskStats:
-      allOf:
-      - $ref: '#/components/schemas/Summary'
-      - type: object
-        properties:
-          systems:
-            type: integer
-    Metric:
-      type: object
-      required:
-      - key
-      - label
-      - value
-      properties:
-        key:
+        code:
           type: string
-          description: 契约级稳定标识，跨任务/系统不可变
-        label:
+          title: Code
+        name:
           type: string
-        value:
-          oneOf:
-          - type: number
-          - type: string
-        unit:
-          type: string
-        threshold:
-          type: object
-          properties:
-            min:
-              type: number
-            max:
-              type: number
-        baseline:
-          oneOf:
-          - type: number
-          - type: string
-        series:
-          type: array
-          description: 趋势图数据
-          items:
-            type: object
-            properties:
-              t:
-                type: string
-                description: 时间点或序号
-              v:
-                oneOf:
-                - type: number
-                - type: string
-    Finding:
-      type: object
-      required:
-      - finding_id
-      - title
-      - severity
-      properties:
-        finding_id:
-          type: string
-        title:
-          type: string
+          title: Name
+        category:
+          $ref: '#/components/schemas/RuleCategory'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        execution_order:
+          type: integer
+          title: Execution Order
+        status:
+          $ref: '#/components/schemas/RuleStatus'
         severity:
           $ref: '#/components/schemas/Severity'
-        source_file:
-          type: string
-          description: 结论来源文件（可定位原始数据）
-        evidence:
-          type: string
-          description: 证据片段（默认截断 2KB）
-        details:
-          type: string
-        recommendation:
-          type: string
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+        skip_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Skip Reason
+        executed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Executed At
+        duration_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Duration Ms
         metrics:
-          type: array
           items:
             $ref: '#/components/schemas/Metric'
-    RuleResult:
+          type: array
+          title: Metrics
+        findings:
+          items:
+            $ref: '#/components/schemas/Finding'
+          type: array
+          title: Findings
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
       type: object
       required:
       - code
@@ -1688,85 +1827,209 @@ components:
       - execution_order
       - status
       - severity
+      title: RuleResult
+    RuleStatus:
+      type: string
+      enum:
+      - pass
+      - warn
+      - fail
+      - error
+      - skip
+      title: RuleStatus
+    Severity:
+      type: string
+      enum:
+      - low
+      - medium
+      - high
+      - critical
+      title: Severity
+    Summary:
       properties:
-        code:
-          type: string
-        name:
-          type: string
-        category:
-          $ref: '#/components/schemas/RuleCategory'
-        priority:
-          $ref: '#/components/schemas/Priority'
-        execution_order:
+        total:
           type: integer
-        status:
-          $ref: '#/components/schemas/RuleStatus'
-        severity:
-          $ref: '#/components/schemas/Severity'
-        summary:
-          type: string
-        skip_reason:
-          type: string
-          description: status=skip 时必填
-        executed_at:
-          type: string
-          format: date-time
-        duration_ms:
+          minimum: 0.0
+          title: Total
+        pass:
           type: integer
-        metrics:
-          type: array
-          items:
-            $ref: '#/components/schemas/Metric'
-        findings:
-          type: array
-          items:
-            $ref: '#/components/schemas/Finding'
-        metadata:
-          type: object
-          additionalProperties: true
+          minimum: 0.0
+          title: Pass
+        warn:
+          type: integer
+          minimum: 0.0
+          title: Warn
+        fail:
+          type: integer
+          minimum: 0.0
+          title: Fail
+        error:
+          type: integer
+          minimum: 0.0
+          title: Error
+        skip:
+          type: integer
+          minimum: 0.0
+          title: Skip
+      type: object
+      required:
+      - total
+      - pass
+      - warn
+      - fail
+      - error
+      - skip
+      title: Summary
     SystemInspection:
+      properties:
+        package_file:
+          type: string
+          title: Package File
+        package_checksum:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Package Checksum
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        status:
+          $ref: '#/components/schemas/SystemStatus'
+        summary:
+          $ref: '#/components/schemas/Summary'
+        rules:
+          items:
+            $ref: '#/components/schemas/RuleResult'
+          type: array
+          title: Rules
+        customer:
+          additionalProperties:
+            type: string
+          type: object
+          title: Customer
       type: object
       required:
       - package_file
       - status
       - summary
-      - rules
-      properties:
-        package_file:
-          type: string
-        package_checksum:
-          type: string
-        version:
-          type: string
-        status:
-          type: string
-          enum:
-          - completed
-          - failed
-        summary:
-          $ref: '#/components/schemas/Summary'
-        rules:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuleResult'
-        customer:
-          type: object
-          additionalProperties: true
-    InspectionTask:
-      type: object
-      required:
-      - task_id
-      - name
-      - mode
-      - status
-      - trigger
-      - created_at
-      - stats
+      title: SystemInspection
+    SystemStatus:
+      type: string
+      enum:
+      - completed
+      - failed
+      title: SystemStatus
+    TaskCreated:
       properties:
         task_id:
           type: string
+          title: Task Id
+      type: object
+      required:
+      - task_id
+      title: TaskCreated
+    TaskListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskSummary'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - page_size
+      title: TaskListResponse
+    TaskLogs:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        entries:
+          items:
+            $ref: '#/components/schemas/LogEntry'
+          type: array
+          title: Entries
+      type: object
+      required:
+      - task_id
+      - entries
+      title: TaskLogs
+    TaskMode:
+      type: string
+      enum:
+      - online
+      - local
+      title: TaskMode
+    TaskStats:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        pass:
+          type: integer
+          minimum: 0.0
+          title: Pass
+        warn:
+          type: integer
+          minimum: 0.0
+          title: Warn
+        fail:
+          type: integer
+          minimum: 0.0
+          title: Fail
+        error:
+          type: integer
+          minimum: 0.0
+          title: Error
+        skip:
+          type: integer
+          minimum: 0.0
+          title: Skip
+        systems:
+          type: integer
+          minimum: 0.0
+          title: Systems
+          default: 1
+      type: object
+      required:
+      - total
+      - pass
+      - warn
+      - fail
+      - error
+      - skip
+      title: TaskStats
+    TaskStatus:
+      type: string
+      enum:
+      - pending
+      - running
+      - completed
+      - failed
+      title: TaskStatus
+    TaskSummary:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
         name:
           type: string
+          title: Name
         mode:
           $ref: '#/components/schemas/TaskMode'
         status:
@@ -1776,606 +2039,43 @@ components:
         created_at:
           type: string
           format: date-time
+          title: Created At
         completed_at:
-          type: string
-          format: date-time
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
         stats:
           $ref: '#/components/schemas/TaskStats'
+        preparation:
+          anyOf:
+          - $ref: '#/components/schemas/DataPreparation'
+          - type: 'null'
         system:
-          $ref: '#/components/schemas/SystemInspection'
-    TaskCreated:
-      type: object
-      required:
-      - task_id
-      properties:
-        task_id:
-          type: string
-    TaskSummary:
-      allOf:
-      - $ref: '#/components/schemas/InspectionTask'
-      - type: object
-        properties:
-          system:
-            nullable: true
-          customer_province:
-            type: string
-            description: 上传时选择的省份字典编码（可选）
-          customer_operator:
-            type: string
-            description: 上传时选择的运营商字典编码（可选）
-          customer_product:
-            type: string
-            description: 上传时选择的产品形态字典编码（可选）
-          customer_version:
-            type: string
-            description: 上传时选择的版本字典编码（可选）
-    TaskListResponse:
-      type: object
-      required:
-      - items
-      - total
-      - page
-      - page_size
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskSummary'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-    OverviewSummary:
-      type: object
-      required:
-      - task_count
-      - registered_rule_count
-      - rule_result_count
-      - finding_count
-      - status_counts
-      properties:
-        task_count:
-          type: integer
-          description: 任务总数
-        registered_rule_count:
-          type: integer
-          description: 注册规则总数（包含 hidden 内部规则）
-        rule_result_count:
-          type: integer
-          description: 全部任务的规则结果总数
-        finding_count:
-          type: integer
-          description: 全部任务的发现问题总数（按 Finding 记录数，不去重）
-        status_counts:
-          $ref: '#/components/schemas/Summary'
-    RerunRequest:
-      type: object
-      properties:
-        rule_codes:
-          type: array
-          description: 不填表示重跑该任务全部规则
-          items:
-            type: string
-    RebuildModeV2:
-      type: string
-      enum:
-      - full
-      - incremental
-    RebuildRequestV2:
-      type: object
-      required:
-      - mode
-      - confirmed
-      properties:
-        mode:
-          $ref: '#/components/schemas/RebuildModeV2'
-        confirmed:
-          type: boolean
-          description: 破坏性重建确认；必须为 true。
-        rule_codes:
-          type: array
-          description: 增量目标普通规则；全量请求必须省略或为空。
-          minItems: 1
-          uniqueItems: true
-          items:
-            type: string
-        trigger_source:
-          type: string
-          enum:
-          - ui
-          - api
-          default: ui
-    LogEntry:
-      type: object
-      required:
-      - ts
-      - level
-      - message
-      properties:
-        ts:
-          type: string
-          format: date-time
-        level:
-          type: string
-        message:
-          type: string
-        rule_code:
-          type: string
-        detail:
-          type: object
-          additionalProperties: true
-    TaskLogs:
-      type: object
-      required:
-      - task_id
-      - entries
-      properties:
-        task_id:
-          type: string
-        entries:
-          type: array
-          items:
-            $ref: '#/components/schemas/LogEntry'
-    InspectorInfo:
-      type: object
-      required:
-      - code
-      - name
-      - category
-      - severity
-      - priority
-      - rule_version
-      - hidden
-      - source_patterns
-      - outputs
-      properties:
-        code:
-          type: string
-        name:
-          type: string
-        category:
-          $ref: '#/components/schemas/RuleCategory'
-        severity:
-          $ref: '#/components/schemas/Severity'
-        priority:
-          $ref: '#/components/schemas/Priority'
-        rule_version:
-          type: string
-        hidden:
-          type: boolean
-        description:
-          type: string
-        recommendation:
-          type: string
-        source_patterns:
-          type: array
-          description: 匹配任务目录内相对路径的正则
-          items:
-            type: string
-        outputs:
-          type: object
-          properties:
-            metrics:
-              type: array
-              items:
-                type: object
-                properties:
-                  key:
-                    type: string
-                  label:
-                    type: string
-                  unit:
-                    type: string
-                  type:
-                    type: string
-                    enum:
-                    - number
-                    - string
-                    - trend
-        params:
-          type: array
-          items:
-            type: object
-            properties:
-              key:
-                type: string
-              label:
-                type: string
-              default:
-                type: string
-    DictItem:
-      type: object
-      required:
-      - code
-      - name
-      properties:
-        code:
-          type: string
-          description: 编码，仅小写字母/数字/下划线
-        name:
-          type: string
-    DictsResponse:
-      type: object
-      required:
-      - province
-      - operator
-      - product
-      - version
-      properties:
-        province:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItem'
-        operator:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItem'
-        product:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItem'
-        version:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItem'
-    DictUpdateRequest:
-      type: object
-      required:
-      - code
-      - name
-      properties:
-        code:
-          type: string
-        name:
-          type: string
-    Error:
-      type: object
-      required:
-      - code
-      - message
-      properties:
-        code:
-          type: string
-          enum:
-          - invalid_package
-          - package_too_large
-          - invalid_dict
-          - bad_request
-          - unknown_rule
-          - not_found
-          - internal
-          description: 错误码（新增时同步契约与实现）
-        message:
-          type: string
-        detail:
-          type: object
-          additionalProperties: true
-    TaskStatusV2:
-      type: string
-      enum:
-      - pending
-      - running
-      - completed
-      - failed
-    RuleStatusV2:
-      type: string
-      enum:
-      - pass
-      - warn
-      - fail
-      - error
-      - skip
-    SeverityV2:
-      type: string
-      enum:
-      - low
-      - medium
-      - high
-      - critical
-    PriorityV2:
-      type: integer
-      enum:
-      - 0
-      - 1
-      - 2
-      description: P0 数据准备 / P1 基础检查 / P2 综合分析
-    RuleCategoryV2:
-      type: string
-      enum:
-      - log
-      - kpi
-      - traffic
-      - alarm
-      - config
-      - resource
-      - other
-    TaskModeV2:
-      type: string
-      enum:
-      - online
-      - local
-    TaskTriggerV2:
-      type: string
-      enum:
-      - api
-      - cli
-      - rerun
-    SummaryV2:
-      type: object
-      required:
-      - total
-      - pass
-      - warn
-      - fail
-      - error
-      - skip
-      properties:
-        total:
-          type: integer
-        pass:
-          type: integer
-        warn:
-          type: integer
-        fail:
-          type: integer
-        error:
-          type: integer
-        skip:
-          type: integer
-    TaskStatsV2:
-      allOf:
-      - $ref: '#/components/schemas/SummaryV2'
-      - type: object
-        properties:
-          systems:
-            type: integer
-    MetricV2:
-      type: object
-      required:
-      - key
-      - label
-      - value
-      properties:
-        key:
-          type: string
-          description: 契约级稳定标识，跨任务/系统不可变
-        label:
-          type: string
-        value:
-          oneOf:
-          - type: number
+          anyOf:
+          - $ref: '#/components/schemas/SystemInspection'
+          - type: 'null'
+        customer_province:
+          anyOf:
           - type: string
-        unit:
-          type: string
-        threshold:
-          type: object
-          properties:
-            min:
-              type: number
-            max:
-              type: number
-        baseline:
-          oneOf:
-          - type: number
+          - type: 'null'
+          title: Customer Province
+        customer_operator:
+          anyOf:
           - type: string
-        series:
-          type: array
-          description: 趋势图数据
-          items:
-            type: object
-            properties:
-              t:
-                type: string
-                description: 时间点或序号
-              v:
-                oneOf:
-                - type: number
-                - type: string
-    FindingV2:
-      type: object
-      required:
-      - finding_id
-      - title
-      - severity
-      properties:
-        finding_id:
-          type: string
-        title:
-          type: string
-        severity:
-          $ref: '#/components/schemas/SeverityV2'
-        source_file:
-          type: string
-          description: 结论来源文件（可定位原始数据）
-        evidence:
-          type: string
-          description: 证据片段（默认截断 2KB）
-        details:
-          type: string
-        recommendation:
-          type: string
-        metrics:
-          type: array
-          items:
-            $ref: '#/components/schemas/MetricV2'
-    RuleResultV2:
-      type: object
-      required:
-      - code
-      - name
-      - category
-      - priority
-      - execution_order
-      - status
-      - severity
-      properties:
-        code:
-          type: string
-        name:
-          type: string
-        category:
-          $ref: '#/components/schemas/RuleCategoryV2'
-        priority:
-          $ref: '#/components/schemas/PriorityV2'
-        execution_order:
-          type: integer
-        status:
-          $ref: '#/components/schemas/RuleStatusV2'
-        severity:
-          $ref: '#/components/schemas/SeverityV2'
-        summary:
-          type: string
-        skip_reason:
-          type: string
-          description: status=skip 时必填
-        executed_at:
-          type: string
-          format: date-time
-        duration_ms:
-          type: integer
-        metrics:
-          type: array
-          items:
-            $ref: '#/components/schemas/MetricV2'
-        findings:
-          type: array
-          items:
-            $ref: '#/components/schemas/FindingV2'
-        metadata:
-          type: object
-          additionalProperties: true
-    SystemInspectionV2:
-      type: object
-      required:
-      - package_file
-      - status
-      - summary
-      - rules
-      properties:
-        package_file:
-          type: string
-        package_checksum:
-          type: string
-        version:
-          type: string
-        status:
-          type: string
-          enum:
-          - completed
-          - failed
-        summary:
-          $ref: '#/components/schemas/SummaryV2'
-        rules:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuleResultV2'
-        customer:
-          type: object
-          additionalProperties: true
-    PreparationStatusV2:
-      type: string
-      enum:
-      - pass
-      - warn
-      - fail
-      - skip
-      - error
-    PreparationIssueTypeV2:
-      type: string
-      enum:
-      - conflict
-      - duplicate
-      - skipped
-      - failed
-      - rejected
-    PreparationIssueV2:
-      type: object
-      required:
-      - type
-      - reason
-      properties:
-        type:
-          $ref: '#/components/schemas/PreparationIssueTypeV2'
-        source:
-          type: string
-          nullable: true
-        target:
-          type: string
-          nullable: true
-        reason:
-          type: string
-        path_length:
-          type: integer
-          nullable: true
-        path_limit:
-          type: integer
-          nullable: true
-    PreparationItemV2:
-      type: object
-      required:
-      - code
-      - name
-      - category
-      - status
-      - summary
-      - extracted_count
-      - total_count
-      - issues
-      properties:
-        code:
-          type: string
-          example: pkg.extract.kpi
-        name:
-          type: string
-          example: KPI 分类解压
-        category:
-          type: string
-          example: kpi
-        status:
-          $ref: '#/components/schemas/PreparationStatusV2'
-        summary:
-          type: string
-        duration_ms:
-          type: integer
-          nullable: true
-        extracted_count:
-          type: integer
-        total_count:
-          type: integer
-        issues:
-          type: array
-          items:
-            $ref: '#/components/schemas/PreparationIssueV2'
-    DataPreparationV2:
-      type: object
-      required:
-      - status
-      - items
-      - total
-      - success_count
-      - warning_count
-      - failure_count
-      - skip_count
-      properties:
-        status:
-          $ref: '#/components/schemas/PreparationStatusV2'
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/PreparationItemV2'
-        total:
-          type: integer
-        success_count:
-          type: integer
-        warning_count:
-          type: integer
-        failure_count:
-          type: integer
-        skip_count:
-          type: integer
-    InspectionTaskV2:
+          - type: 'null'
+          title: Customer Operator
+        customer_product:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Customer Product
+        customer_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Customer Version
       type: object
       required:
       - task_id
@@ -2385,1410 +2085,146 @@ components:
       - trigger
       - created_at
       - stats
+      title: TaskSummary
+    TaskTrigger:
+      type: string
+      enum:
+      - api
+      - cli
+      - rerun
+      title: TaskTrigger
+    UserCreateRequestV1:
       properties:
-        task_id:
+        username:
           type: string
-        name:
+          maxLength: 128
+          minLength: 1
+          title: Username
+        password:
           type: string
-        mode:
-          $ref: '#/components/schemas/TaskModeV2'
-        status:
-          $ref: '#/components/schemas/TaskStatusV2'
-        trigger:
-          $ref: '#/components/schemas/TaskTriggerV2'
-        created_at:
+          maxLength: 256
+          minLength: 8
+          title: Password
+        role:
           type: string
-          format: date-time
-        completed_at:
-          type: string
-          format: date-time
-        stats:
-          $ref: '#/components/schemas/TaskStatsV2'
-        preparation:
-          nullable: true
-          allOf:
-          - $ref: '#/components/schemas/DataPreparationV2'
-        system:
-          $ref: '#/components/schemas/SystemInspectionV2'
-    TaskCreatedV2:
+          enum:
+          - admin
+          - viewer
+          title: Role
       type: object
       required:
-      - task_id
+      - username
+      - password
+      - role
+      title: UserCreateRequestV1
+    UserInfoV1:
       properties:
-        task_id:
+        username:
           type: string
-    TaskSummaryV2:
-      allOf:
-      - $ref: '#/components/schemas/InspectionTaskV2'
-      - type: object
-        properties:
-          system:
-            nullable: true
-          customer_province:
-            type: string
-            description: 上传时选择的省份字典编码（可选）
-          customer_operator:
-            type: string
-            description: 上传时选择的运营商字典编码（可选）
-          customer_product:
-            type: string
-            description: 上传时选择的产品形态字典编码（可选）
-          customer_version:
-            type: string
-            description: 上传时选择的版本字典编码（可选）
-    TaskListResponseV2:
+          title: Username
+        role:
+          type: string
+          title: Role
       type: object
       required:
-      - items
+      - username
+      - role
+      title: UserInfoV1
+    UserListResponseV1:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/UserV1'
+          type: array
+          title: Items
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+      type: object
+      required:
       - total
       - page
       - page_size
+      title: UserListResponseV1
+    UserPasswordRequestV1:
       properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskSummaryV2'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-    OverviewSummaryV2:
+        new_password:
+          type: string
+          maxLength: 256
+          minLength: 8
+          title: New Password
       type: object
       required:
-      - task_count
-      - registered_rule_count
-      - rule_result_count
-      - finding_count
-      - status_counts
+      - new_password
+      title: UserPasswordRequestV1
+    UserRoleRequestV1:
       properties:
-        task_count:
-          type: integer
-          description: 任务总数
-        registered_rule_count:
-          type: integer
-          description: 注册规则总数（包含 hidden 内部规则）
-        rule_result_count:
-          type: integer
-          description: 全部任务的规则结果总数
-        finding_count:
-          type: integer
-          description: 全部任务的发现问题总数（按 Finding 记录数，不去重）
-        status_counts:
-          $ref: '#/components/schemas/SummaryV2'
-    RerunRequestV2:
-      type: object
-      properties:
-        rule_codes:
-          type: array
-          description: 不填表示重跑该任务全部规则
-          items:
-            type: string
-    LogEntryV2:
-      type: object
-      required:
-      - ts
-      - level
-      - message
-      properties:
-        ts:
-          type: string
-          format: date-time
-        level:
-          type: string
-        message:
-          type: string
-        rule_code:
-          type: string
-        detail:
-          type: object
-          additionalProperties: true
-    TaskLogsV2:
-      type: object
-      required:
-      - task_id
-      - entries
-      properties:
-        task_id:
-          type: string
-        entries:
-          type: array
-          items:
-            $ref: '#/components/schemas/LogEntryV2'
-    InspectorInfoV2:
-      type: object
-      required:
-      - code
-      - name
-      - category
-      - severity
-      - priority
-      - rule_version
-      - hidden
-      - source_patterns
-      - outputs
-      properties:
-        code:
-          type: string
-        name:
-          type: string
-        category:
-          $ref: '#/components/schemas/RuleCategoryV2'
-        severity:
-          $ref: '#/components/schemas/SeverityV2'
-        priority:
-          $ref: '#/components/schemas/PriorityV2'
-        rule_version:
-          type: string
-        hidden:
-          type: boolean
-        description:
-          type: string
-        recommendation:
-          type: string
-        source_patterns:
-          type: array
-          description: 匹配任务目录内相对路径的正则
-          items:
-            type: string
-        outputs:
-          type: object
-          properties:
-            metrics:
-              type: array
-              items:
-                type: object
-                properties:
-                  key:
-                    type: string
-                  label:
-                    type: string
-                  unit:
-                    type: string
-                  type:
-                    type: string
-                    enum:
-                    - number
-                    - string
-                    - trend
-        params:
-          type: array
-          items:
-            type: object
-            properties:
-              key:
-                type: string
-              label:
-                type: string
-              default:
-                type: string
-    DictItemV2:
-      type: object
-      required:
-      - code
-      - name
-      properties:
-        code:
-          type: string
-          description: 编码，仅小写字母/数字/下划线
-        name:
-          type: string
-    DictsResponseV2:
-      type: object
-      required:
-      - province
-      - operator
-      - product
-      - version
-      properties:
-        province:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItemV2'
-        operator:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItemV2'
-        product:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItemV2'
-        version:
-          type: array
-          items:
-            $ref: '#/components/schemas/DictItemV2'
-    DictUpdateRequestV2:
-      type: object
-      required:
-      - code
-      - name
-      properties:
-        code:
-          type: string
-        name:
-          type: string
-    TaskDeleteErrorV2:
-      allOf:
-      - $ref: '#/components/schemas/ErrorV2'
-      - type: object
-        properties:
-          detail:
-            $ref: '#/components/schemas/TaskDeleteErrorDetailV2'
-      description: 任务删除失败错误（detail 携带重试上下文）
-    TaskDeleteErrorDetailV2:
-      type: object
-      required:
-      - task_id
-      - locations
-      - failed_path
-      - reason
-      properties:
-        task_id:
-          type: string
-          description: 任务标识，禁止修改。
-        locations:
-          type: array
-          description: 删除涉及的现场相对位置。
-          items:
-            type: string
-        failed_path:
-          type: string
-          description: 删除失败的具体路径。
-        reason:
-          type: string
-          description: 可读失败原因。
-        path_length:
-          type: integer
-          description: 路径长度；仅路径限制相关错误返回。
-        path_limit:
-          type: integer
-          description: 路径长度上限；仅路径限制相关错误返回。
-    ErrorV2:
-      type: object
-      required:
-      - code
-      - message
-      properties:
-        code:
+        role:
           type: string
           enum:
-          - invalid_package
-          - package_too_large
-          - invalid_dict
-          - bad_request
-          - unknown_rule
-          - not_found
-          - internal
-          - task_delete_failed
-          - package_checksum_conflict
-          - invalid_filename
-          - invalid_resource_csv
-          - resource_conflict
-          - corrupt_data
-          - validation_error
-          - invalid_rebuild_request
-          - task_busy
-          - package_missing
-          - kpi_snapshot_invalid
-          description: 错误码（新增时同步契约与实现）
-        message:
-          type: string
-        detail:
-          type: object
-          additionalProperties: true
-      description: 错误码（/api/v2 含包上传与损坏数据错误）
-    KpiDisplayStatusV2:
-      type: string
-      enum:
-      - pass
-      - warn
-      - fail
-      - neutral
-      - unavailable
-    KpiRecordItemV2:
+          - admin
+          - viewer
+          title: Role
       type: object
       required:
-      - metric_key
-      - metric_name_zh
-      - source_file
-      - line_number
-      - period_minutes
-      - start_at
-      - end_at
-      - value
-      - status
-      - errors
+      - role
+      title: UserRoleRequestV1
+    UserV1:
       properties:
-        metric_key:
+        username:
           type: string
-        metric_name_zh:
+          title: Username
+        role:
           type: string
-        source_file:
-          type: string
-        line_number:
-          type: integer
-          minimum: 1
-        period_minutes:
-          type: integer
-          minimum: 1
-        start_at:
+          title: Role
+        created_at:
           type: string
           format: date-time
-        end_at:
+          title: Created At
+        updated_at:
           type: string
           format: date-time
-        value:
-          oneOf:
-          - type: number
-          - type: string
-          - type: 'null'
-        status:
-          $ref: '#/components/schemas/KpiDisplayStatusV2'
-        errors:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-    KpiRecordPageV2:
-      type: object
-      required: [total, page, page_size, items]
-      properties:
-        total:
-          type: integer
-          minimum: 0
-        page:
-          type: integer
-          minimum: 1
-        page_size:
-          type: integer
-          minimum: 1
-          maximum: 200
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiRecordItemV2'
-    KpiMetricDefinitionV2:
-      type: object
-      required: [key, name_zh, name_en, aliases, metric_type, semantic_group, display_role, unit, source_type, aggregation]
-      properties:
-        key:
-          type: string
-        name_zh:
-          type: string
-        name_en:
-          type: string
-        aliases:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        metric_type:
-          type: string
-          enum: [count, rate, capacity, latency, gauge]
-        semantic_group:
-          type: string
-          enum: [quality, traffic, capacity, latency, other]
-        display_role:
-          type: string
-          enum: [highlight, context, diagnostic, catalog]
-        unit:
-          type: string
-          nullable: true
-        source_type:
-          type: string
-          enum: [raw, derived]
-        aggregation:
-          type: object
-          additionalProperties: true
-        formula:
-          type: object
-          additionalProperties: true
-          nullable: true
-        description:
-          type: string
-          nullable: true
-    KpiMetricResultV2:
-      type: object
-      required: [key, main_value, value_available, display_status, unit, aggregation, breach_count, series, source_files, provenance]
-      properties:
-        key:
-          type: string
-        main_value:
-          oneOf:
-          - type: number
-          - type: string
-          - type: 'null'
-        value_available:
-          type: boolean
-        unavailable_reason:
-          type: string
-          nullable: true
-        display_status:
-          $ref: '#/components/schemas/KpiDisplayStatusV2'
-        unit:
-          type: string
-          nullable: true
-        aggregation:
-          type: string
-        threshold:
-          type: object
-          additionalProperties: true
-          nullable: true
-        breach_count:
-          type: integer
-          minimum: 0
-        series:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        source_files:
-          type: array
-          items:
-            type: string
-        provenance:
-          type: object
-          additionalProperties: true
-    KpiUnclassifiedMetricV2:
-      type: object
-      required: [source_name, source_files, record_count, sample_values, reason]
-      properties:
-        source_name:
-          type: string
-        source_files:
-          type: array
-          items:
-            type: string
-        record_count:
-          type: integer
-          minimum: 0
-        sample_values:
-          type: array
-        reason:
-          type: string
-    KpiMetadataV2:
-      type: object
-      required: [version, domain, metric_catalog, kpi_results, unclassified_metrics, kpi_files]
-      properties:
-        version:
-          type: integer
-          minimum: 2
-        domain:
-          type: string
-        metric_catalog:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiMetricDefinitionV2'
-        kpi_results:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiMetricResultV2'
-        unclassified_metrics:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiUnclassifiedMetricV2'
-        kpi_files:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-    KpiResourceDomainV3:
-      type: string
-      enum:
-      - unclassified
-      - call
-      - api
-      - media
-      - reserved
-    KpiResourceMetricV3:
+          title: Updated At
       type: object
       required:
-      - key
-      - resource_id
-      - name_zh
-      - name_en
-      - domain
-      - missing_from_base
+      - username
+      - role
       - created_at
       - updated_at
+      title: UserV1
+    ValidationError:
       properties:
-        key:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
           type: string
-        resource_id:
+          title: Message
+        type:
           type: string
-        name_zh:
-          type: string
-        name_en:
-          type: string
-        domain:
-          $ref: '#/components/schemas/KpiResourceDomainV3'
-        missing_from_base:
-          type: boolean
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    KpiResourceMetricPageV3:
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
       type: object
       required:
-      - items
-      - total
-      - page
-      - page_size
-      - base_data_version
-      - classification_version
-      - summary
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiResourceMetricV3'
-        total:
-          type: integer
-          minimum: 0
-        page:
-          type: integer
-          minimum: 1
-        page_size:
-          type: integer
-          minimum: 1
-          maximum: 200
-        base_data_version:
-          type: string
-        classification_version:
-          type: integer
-          minimum: 0
-        summary:
-          type: object
-          required:
-          - unclassified
-          - call
-          - api
-          - media
-          - reserved
-          properties:
-            unclassified:
-              type: integer
-              minimum: 0
-            call:
-              type: integer
-              minimum: 0
-            api:
-              type: integer
-              minimum: 0
-            media:
-              type: integer
-              minimum: 0
-            reserved:
-              type: integer
-              minimum: 0
-    KpiResourceClassificationRequestV3:
-      type: object
-      required:
-      - metric_keys
-      - domain
-      - operator
-      properties:
-        metric_keys:
-          type: array
-          minItems: 1
-          maxItems: 100
-          items:
-            type: string
-        domain:
-          type: string
-          enum:
-          - unclassified
-          - call
-          - api
-          - media
-          - reserved
-        operator:
-          type: string
-          minLength: 1
-    KpiResourceClassificationResultV3:
-      type: object
-      required:
-      - classification_version
-      - domain
-      - metric_keys
-      - audited_count
-      properties:
-        classification_version:
-          type: integer
-          minimum: 0
-        domain:
-          type: string
-          enum:
-          - unclassified
-          - call
-          - api
-          - media
-          - reserved
-        metric_keys:
-          type: array
-          minItems: 1
-          items:
-            type: string
-        audited_count:
-          type: integer
-          minimum: 0
-    KpiClassificationAuditV3:
-      type: object
-      required:
-      - id
-      - metric_key
-      - operation
-      - operator
-      - from_domain
-      - to_domain
-      - result
-      - operated_at
-      properties:
-        id:
-          type: integer
-        metric_key:
-          type: string
-        operation:
-          type: string
-          enum:
-          - classify
-          - unclassify
-        operator:
-          type: string
-        from_domain:
-          type: string
-          enum:
-          - unclassified
-          - call
-          - api
-          - media
-          - reserved
-        to_domain:
-          type: string
-          enum:
-          - unclassified
-          - call
-          - api
-          - media
-          - reserved
-        result:
-          type: string
-          enum:
-          - success
-        operated_at:
-          type: string
-          format: date-time
-    KpiClassificationAuditPageV3:
-      type: object
-      required:
-      - items
-      - total
-      - page
-      - page_size
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiClassificationAuditV3'
-        total:
-          type: integer
-          minimum: 0
-        page:
-          type: integer
-          minimum: 1
-        page_size:
-          type: integer
-          minimum: 1
-          maximum: 200
-    KpiTaskCatalogSnapshotV3:
-      type: object
-      required:
-      - schema_version
-      - base_data_version
-      - classification_version
-      - captured_at
-      - metrics
-      - rules
-      properties:
-        schema_version:
-          type: integer
-          enum:
-          - 1
-          - 2
-          - 3
-        base_data_version:
-          type: string
-        classification_version:
-          type: integer
-          minimum: 0
-        captured_at:
-          type: string
-          format: date-time
-        metrics:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        derived_metrics:
-          type: array
-          description: 任务执行时启用的在线派生指标。
-          items:
-            type: object
-            additionalProperties: true
-        reserved_metric_keys:
-          type: array
-          description: 已标记为预留、任务未分类展示中隐藏的指标 key。
-          items:
-            type: string
-        rules:
-          type: object
-          additionalProperties: true
-    KpiRegisteredDomainV4:
-      type: string
-      enum: [call, api, media]
-
-    KpiSourceTypeV4:
-      type: string
-      enum: [raw, derived]
-
-    KpiMetricTypeV4:
-      type: string
-      enum: [count, rate, capacity, latency, gauge]
-
-    KpiSemanticGroupV4:
-      type: string
-      enum: [traffic, quality, latency, capacity, other]
-
-    KpiDisplayRoleV4:
-      type: string
-      enum: [highlight, context]
-
-    KpiAggregationKindV4:
-      type: string
-      enum: [sum, min, max, mean, count, median, stddev, success_rate]
-
-    KpiThresholdDirectionV4:
-      type: string
-      enum: [min, max]
-
-    KpiCapacityStatusV4:
-      type: string
-      enum: [confirmed, unknown]
-
-    KpiCapacitySemanticsV4:
-      type: string
-      enum: [peak, concurrency, gauge]
-
-    KpiConfigEntityTypeV4:
-      type: string
-      enum: [metric_rule, threshold, capacity_rule, display_rule, common_config, derived_metric]
-
-    KpiClueStatusV4:
-      type: string
-      enum: [unclassified, classified, unregistered, ambiguous, reserved]
-
-    KpiMetricRuleRequestV4:
-      type: object
-      required: [metric_type, semantic_group, display_role, unit, source_type, aggregation_kind, operator]
-      properties:
-        metric_type:
-          $ref: '#/components/schemas/KpiMetricTypeV4'
-        semantic_group:
-          $ref: '#/components/schemas/KpiSemanticGroupV4'
-        display_role:
-          $ref: '#/components/schemas/KpiDisplayRoleV4'
-        unit:
-          type: string
-        source_type:
-          $ref: '#/components/schemas/KpiSourceTypeV4'
-        aggregation_kind:
-          $ref: '#/components/schemas/KpiAggregationKindV4'
-          type: number
-          nullable: true
-        description:
-          type: string
-          nullable: true
-        formula:
-          allOf:
-            - $ref: '#/components/schemas/KpiFormulaRequestV4'
-          nullable: true
-        operator:
-          type: string
-
-    KpiFormulaRequestV4:
-      type: object
-      required: [kind, numerator, denominator, scale]
-      properties:
-        kind:
-          type: string
-          enum: [ratio]
-        numerator:
-          type: string
-        denominator:
-          type: string
-        denominator_fallback_inputs:
-          type: array
-          items:
-            type: string
-        scale:
-          type: number
-
-    KpiMetricRuleV4:
-      type: object
-      required: [metric_key, metric_type, semantic_group, display_role, unit, source_type, aggregation_kind, updated_at, rule_config_version]
-      properties:
-        metric_key:
-          type: string
-        metric_type:
-          $ref: '#/components/schemas/KpiMetricTypeV4'
-        semantic_group:
-          $ref: '#/components/schemas/KpiSemanticGroupV4'
-        display_role:
-          $ref: '#/components/schemas/KpiDisplayRoleV4'
-        unit:
-          type: string
-        source_type:
-          $ref: '#/components/schemas/KpiSourceTypeV4'
-        aggregation_kind:
-          $ref: '#/components/schemas/KpiAggregationKindV4'
-          type: number
-          nullable: true
-        description:
-          type: string
-          nullable: true
-        formula:
-          allOf:
-            - $ref: '#/components/schemas/KpiFormulaV4'
-          nullable: true
-        domain:
-          allOf:
-            - $ref: '#/components/schemas/KpiRegisteredDomainV4'
-          nullable: true
-        updated_at:
-          type: string
-          format: date-time
-        rule_config_version:
-          type: integer
-
-    KpiMetricRulePageV4:
-      type: object
-      required: [items, total, page, page_size, rule_config_version]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiMetricRuleV4'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-        rule_config_version:
-          type: integer
-
-    KpiFormulaV4:
-      type: object
-      required: [kind, numerator, denominator, scale]
-      properties:
-        kind:
-          type: string
-          enum: [ratio]
-        numerator:
-          type: string
-        denominator:
-          type: string
-        denominator_fallback_inputs:
-          type: array
-          items:
-            type: string
-        scale:
-          type: number
-
-    KpiThresholdRequestV4:
-      type: object
-      required: [domain, metric_key, label, direction, unit, default, periods, operator]
-      properties:
-        domain:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        metric_key:
-          type: string
-        label:
-          type: string
-        direction:
-          $ref: '#/components/schemas/KpiThresholdDirectionV4'
-        unit:
-          type: string
-        default:
-          type: number
-        periods:
-          type: object
-          additionalProperties:
-            type: number
-        operator:
-          type: string
-
-    KpiThresholdV4:
-      type: object
-      required: [id, domain, metric_key, label, direction, unit, default, periods, updated_at, rule_config_version]
-      properties:
-        id:
-          type: integer
-        domain:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        metric_key:
-          type: string
-        label:
-          type: string
-        direction:
-          $ref: '#/components/schemas/KpiThresholdDirectionV4'
-        unit:
-          type: string
-        default:
-          type: number
-        periods:
-          type: object
-          additionalProperties:
-            type: number
-        updated_at:
-          type: string
-          format: date-time
-        rule_config_version:
-          type: integer
-
-    KpiThresholdPageV4:
-      type: object
-      required: [items, total, page, page_size, rule_config_version]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiThresholdV4'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-        rule_config_version:
-          type: integer
-
-    KpiCapacityRuleRequestV4:
-      type: object
-      required: [source_name, metric_key, status, operator]
-      properties:
-        source_name:
-          type: string
-        metric_key:
-          type: string
-        domain:
-          allOf:
-            - $ref: '#/components/schemas/KpiRegisteredDomainV4'
-          nullable: true
-        semantics:
-          allOf:
-            - $ref: '#/components/schemas/KpiCapacitySemanticsV4'
-          nullable: true
-        status:
-          $ref: '#/components/schemas/KpiCapacityStatusV4'
-        operator:
-          type: string
-
-    KpiCapacityRuleV4:
-      type: object
-      required: [id, source_name, metric_key, status, updated_at, rule_config_version]
-      properties:
-        id:
-          type: integer
-        source_name:
-          type: string
-        metric_key:
-          type: string
-        domain:
-          allOf:
-            - $ref: '#/components/schemas/KpiRegisteredDomainV4'
-          nullable: true
-        semantics:
-          allOf:
-            - $ref: '#/components/schemas/KpiCapacitySemanticsV4'
-          nullable: true
-        status:
-          $ref: '#/components/schemas/KpiCapacityStatusV4'
-        updated_at:
-          type: string
-          format: date-time
-        rule_config_version:
-          type: integer
-
-    KpiCapacityRulePageV4:
-      type: object
-      required: [items, total, page, page_size, rule_config_version]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiCapacityRuleV4'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-        rule_config_version:
-          type: integer
-
-    KpiDisplayRuleRequestV4:
-      type: object
-      required: [domain, metric_key, role, operator]
-      properties:
-        domain:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        metric_key:
-          type: string
-        role:
-          $ref: '#/components/schemas/KpiDisplayRoleV4'
-        operator:
-          type: string
-
-    KpiDisplayRuleV4:
-      type: object
-      required: [id, domain, metric_key, role, updated_at, rule_config_version]
-      properties:
-        id:
-          type: integer
-        domain:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        metric_key:
-          type: string
-        role:
-          $ref: '#/components/schemas/KpiDisplayRoleV4'
-        updated_at:
-          type: string
-          format: date-time
-        rule_config_version:
-          type: integer
-
-    KpiDisplayRulePageV4:
-      type: object
-      required: [items, total, page, page_size, rule_config_version]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiDisplayRuleV4'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-        rule_config_version:
-          type: integer
-
-    KpiCommonConfigRequestV4:
-      type: object
-      required: [input_timezone, max_files, max_records, operator]
-      properties:
-        input_timezone:
-          type: string
-        max_files:
-          type: integer
-          minimum: 1
-        max_records:
-          type: integer
-          minimum: 1
-        operator:
-          type: string
-
-    KpiCommonConfigV4:
-      type: object
-      required: [input_timezone, max_files, max_records, updated_at, rule_config_version]
-      properties:
-        input_timezone:
-          type: string
-        max_files:
-          type: integer
-        max_records:
-          type: integer
-        updated_at:
-          type: string
-          format: date-time
-        rule_config_version:
-          type: integer
-
-    KpiDerivedMetricCreateRequestV4:
-      type: object
-      required: [name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula]
-      properties:
-        metric_key:
-          type: string
-          minLength: 3
-          maxLength: 128
-          description: 派生指标 key；新增时可省略，省略后由服务端生成唯一稳定 key。
-        name_zh:
-          type: string
-          minLength: 1
-        name_en:
-          type: string
-          minLength: 1
-        domain:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        metric_type:
-          $ref: '#/components/schemas/KpiMetricTypeV4'
-        semantic_group:
-          $ref: '#/components/schemas/KpiSemanticGroupV4'
-        display_role:
-          $ref: '#/components/schemas/KpiDisplayRoleV4'
-        unit:
-          type: string
-          minLength: 1
-        description:
-          type: string
-          nullable: true
-        enabled:
-          type: boolean
-        formula:
-          $ref: '#/components/schemas/KpiDerivedFormulaRequestV4'
-    KpiDerivedMetricUpdateRequestV4:
-      type: object
-      required: [name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula]
-      properties:
-        name_zh:
-          type: string
-          minLength: 1
-        name_en:
-          type: string
-          minLength: 1
-        domain:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        metric_type:
-          $ref: '#/components/schemas/KpiMetricTypeV4'
-        semantic_group:
-          $ref: '#/components/schemas/KpiSemanticGroupV4'
-        display_role:
-          $ref: '#/components/schemas/KpiDisplayRoleV4'
-        unit:
-          type: string
-          minLength: 1
-        description:
-          type: string
-          nullable: true
-        enabled:
-          type: boolean
-        formula:
-          $ref: '#/components/schemas/KpiDerivedFormulaRequestV4'
-    KpiDerivedFormulaRequestV4:
-      type: object
-      required: [kind, numerator, denominator, scale]
-      properties:
-        kind:
-          type: string
-          enum: [ratio, inverse_ratio]
-        numerator:
-          type: string
-          minLength: 1
-        denominator:
-          type: string
-          minLength: 1
-        denominator_fallback_inputs:
-          type: array
-          items:
-            type: string
-        scale:
-          type: number
-          exclusiveMinimum: 0
-    KpiDerivedMetricV4:
-      type: object
-      required: [metric_key, name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula, updated_at, rule_config_version]
-      properties:
-        metric_key:
-          type: string
-        name_zh:
-          type: string
-        name_en:
-          type: string
-        domain:
-          $ref: '#/components/schemas/KpiRegisteredDomainV4'
-        metric_type:
-          $ref: '#/components/schemas/KpiMetricTypeV4'
-        semantic_group:
-          $ref: '#/components/schemas/KpiSemanticGroupV4'
-        display_role:
-          $ref: '#/components/schemas/KpiDisplayRoleV4'
-        unit:
-          type: string
-        description:
-          type: string
-          nullable: true
-        enabled:
-          type: boolean
-        formula:
-          $ref: '#/components/schemas/KpiDerivedFormulaV4'
-        updated_at:
-          type: string
-          format: date-time
-        rule_config_version:
-          type: integer
-    KpiDerivedFormulaV4:
-      type: object
-      required: [kind, numerator, denominator, scale]
-      properties:
-        kind:
-          type: string
-          enum: [ratio, inverse_ratio]
-        numerator:
-          type: string
-        denominator:
-          type: string
-        denominator_fallback_inputs:
-          type: array
-          items:
-            type: string
-        scale:
-          type: number
-    KpiDerivedMetricPageV4:
-      type: object
-      required: [items, total, page, page_size, rule_config_version]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiDerivedMetricV4'
-        total:
-          type: integer
-          minimum: 0
-        page:
-          type: integer
-          minimum: 1
-        page_size:
-          type: integer
-          minimum: 1
-          maximum: 200
-        rule_config_version:
-          type: integer
-
-    KpiConfigDeleteResultV4:
-      type: object
-      required: [deleted, entity_type, entity_key, rule_config_version]
-      properties:
-        deleted:
-          type: boolean
-        entity_type:
-          $ref: '#/components/schemas/KpiConfigEntityTypeV4'
-        entity_key:
-          type: string
-        rule_config_version:
-          type: integer
-
-    KpiConfigAuditV4:
-      type: object
-      required: [id, entity_type, entity_key, operation, operator, result, rule_config_version, operated_at]
-      properties:
-        id:
-          type: integer
-        entity_type:
-          $ref: '#/components/schemas/KpiConfigEntityTypeV4'
-        entity_key:
-          type: string
-        operation:
-          type: string
-          enum: [upsert, delete]
-        operator:
-          type: string
-        before:
-          type: object
-          additionalProperties: true
-          nullable: true
-        after:
-          type: object
-          additionalProperties: true
-          nullable: true
-        result:
-          type: string
-        rule_config_version:
-          type: integer
-        detail:
-          type: object
-          additionalProperties: true
-          nullable: true
-        operated_at:
-          type: string
-          format: date-time
-
-    KpiConfigAuditPageV4:
-      type: object
-      required: [items, total, page, page_size]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiConfigAuditV4'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-
-    KpiClassificationClueV4:
-      type: object
-      required: [source_name, clue_status, rule_code, domain, source_files, record_count, sample_values]
-      properties:
-        source_name:
-          type: string
-        metric_key:
-          type: string
-          nullable: true
-        candidates:
-          type: array
-          items:
-            type: object
-            required: [metric_key, name_zh, name_en]
-            properties:
-              metric_key:
-                type: string
-              name_zh:
-                type: string
-              name_en:
-                type: string
-        clue_status:
-          $ref: '#/components/schemas/KpiClueStatusV4'
-        rule_code:
-          type: string
-        domain:
-          type: string
-        source_files:
-          type: array
-          items:
-            type: string
-        record_count:
-          type: integer
-        sample_values:
-          type: array
-        resolution_note:
-          type: string
-          nullable: true
-
-    KpiClassificationCluePageV4:
-      type: object
-      required: [items, total, page, page_size]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/KpiClassificationClueV4'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
-        summary:
-          type: object
-          description: 各线索状态的计数（不受筛选条件影响）
-          additionalProperties:
-            type: integer
+      - loc
+      - msg
+      - type
+      title: ValidationError

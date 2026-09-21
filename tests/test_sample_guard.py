@@ -5,10 +5,9 @@ from app.services.executor import Executor
 from tests.baseline_helpers import setup_env
 from tests.fixtures.make_real_package import build_real_package
 
-CALL_KPI_RULES = {"kpi.call"}
+CALL_KPI_RULES = {"kpi.measurement_units"}
 EXPECTED_SKIPS = {
-    "kpi.api",
-    "kpi.media",
+    "kpi.measurement_units",
     "log.ccc_service",
     "log.ddd_service",
     "traffic.stat",

@@ -76,11 +76,6 @@ def test_full_rebuild_refreshes_snapshot_and_protects_package(tmp_path, monkeypa
     env, client, task_id = _setup_task(tmp_path, monkeypatch)
     package = env.uploads / task_id / "rebuild-sample.zip"
     package_checksum = sha256_file(package)
-    snapshot_path = env.task_dir(task_id) / "kpi" / "kpi_catalog_snapshot.json"
-    old_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    old_snapshot["base_data_version"] = "old-config"
-    snapshot_path.write_text(json.dumps(old_snapshot, ensure_ascii=False), encoding="utf-8")
-
     with client:
         result = _rebuild(
             client,
@@ -93,8 +88,6 @@ def test_full_rebuild_refreshes_snapshot_and_protects_package(tmp_path, monkeypa
         task = wait_for_task(client, task_id)
 
     assert task["status"] == "completed"
-    refreshed = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    assert refreshed["base_data_version"] != "old-config"
     assert sha256_file(package) == package_checksum
 
 
@@ -107,12 +100,6 @@ def test_incremental_rebuild_rebuilds_site_and_preserves_other_results(tmp_path,
     target_path = env.rules_dir(task_id) / f"{target}.json"
     target_path.write_text(json.dumps({"code": target, "sentinel": "old"}, ensure_ascii=False), encoding="utf-8")
     before_others = {code: strip_volatile(load_rule(env, task_id, code)) for code in others}
-    snapshot_path = env.task_dir(task_id) / "kpi" / "kpi_catalog_snapshot.json"
-    snapshot_path.write_text(
-        snapshot_path.read_text(encoding="utf-8").replace('"captured_at"', '"captured_at"'),
-        encoding="utf-8",
-    )
-
     with client:
         _rebuild(
             client,
@@ -152,16 +139,6 @@ def test_rebuild_prechecks_reject_without_output_change(tmp_path, monkeypatch) -
         return digest
 
     with client:
-        metrics_path = env.root / "kpi" / "base" / "metrics.json"
-        original_metrics = metrics_path.read_bytes()
-        metrics_path.write_bytes(b"{broken")
-        try:
-            response = client.post(f"/api/v2/tasks/{task_id}/rebuild", json={"mode": "full", "confirmed": True})
-            assert response.status_code == 400
-            assert response.json()["code"] == "invalid_rebuild_request"
-        finally:
-            metrics_path.write_bytes(original_metrics)
-
         response = client.post(
             f"/api/v2/tasks/{task_id}/rebuild",
             json={"mode": "incremental", "confirmed": True, "rule_codes": ["pkg.extract.main"]},
@@ -184,17 +161,6 @@ def test_rebuild_prechecks_reject_without_output_change(tmp_path, monkeypatch) -
             assert response.json()["code"] == "task_busy"
         finally:
             task_service._active_task = original_active
-
-        snapshot_path = task_dir / "kpi" / "kpi_catalog_snapshot.json"
-        original_snapshot = snapshot_path.read_bytes()
-        snapshot_path.write_bytes(b"{broken")
-        response = client.post(
-            f"/api/v2/tasks/{task_id}/rebuild",
-            json={"mode": "incremental", "confirmed": True, "rule_codes": ["log.error_density"]},
-        )
-        assert response.status_code == 409
-        assert response.json()["code"] == "kpi_snapshot_invalid"
-        snapshot_path.write_bytes(original_snapshot)
 
         before = tree_digest()
         uploads_dir = env.uploads / task_id

@@ -27,3 +27,28 @@ def _admin_auth_override() -> None:
     )
     yield
     app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture(autouse=True)
+def _clean_measurement_unit_tables() -> None:
+    """隔离新版测量单元测试数据；不影响其他测试表。"""
+    from app.models.db import (
+        KpiMeasurementBinding,
+        KpiMeasurementDerived,
+        KpiMeasurementResource,
+        init_db,
+        session_factory,
+    )
+
+    init_db()
+    with session_factory() as session:
+        session.query(KpiMeasurementBinding).delete()
+        session.query(KpiMeasurementDerived).delete()
+        session.query(KpiMeasurementResource).delete()
+        session.commit()
+    yield
+    with session_factory() as session:
+        session.query(KpiMeasurementBinding).delete()
+        session.query(KpiMeasurementDerived).delete()
+        session.query(KpiMeasurementResource).delete()
+        session.commit()

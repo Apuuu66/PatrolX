@@ -25,15 +25,15 @@ def test_local_single_rule_rerun_preserves_unrelated_results(tmp_path: Path, mon
 
     task_id = "task-sample"
     run_task(SAMPLE, task_id=task_id)
-    unrelated_path = env.task_dir(task_id) / "rules" / "kpi.api.json"
-    unrelated_before = load_rule(env, task_id, "kpi.api")
+    unrelated_path = env.task_dir(task_id) / "rules" / "kpi.measurement_units.json"
+    unrelated_before = load_rule(env, task_id, "kpi.measurement_units")
     task_before = load_task(env, task_id)
     unrelated_mtime_before = unrelated_path.stat().st_mtime_ns
     assert load_rule(env, task_id, "alarm.stat")["status"] == "fail"
 
     run_single_rule("alarm.stat", package=SAMPLE, task_id=task_id)
     target = load_rule(env, task_id, "alarm.stat")
-    unrelated_after = load_rule(env, task_id, "kpi.api")
+    unrelated_after = load_rule(env, task_id, "kpi.measurement_units")
     task_after = load_task(env, task_id)
 
     assert target["status"] == "fail"
@@ -47,20 +47,20 @@ def test_online_single_rule_rerun_refreshes_summary_and_report(tmp_path: Path, m
     env = setup_env(tmp_path, monkeypatch)
     task_id = upload_package(env, client)
     wait_for_task(client, task_id)
-    before = load_rule(env, task_id, "kpi.api")
+    before = load_rule(env, task_id, "kpi.measurement_units")
     unrelated_path = env.task_dir(task_id) / "rules" / "alarm.stat.json"
     unrelated_before = load_rule(env, task_id, "alarm.stat")
     unrelated_mtime_before = unrelated_path.stat().st_mtime_ns
     report_before = (env.task_dir(task_id) / "report.html").read_text(encoding="utf-8")
 
-    response = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["kpi.api"]})
+    response = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["kpi.measurement_units"]})
     assert response.status_code == 202, response.text
     wait_for_task(client, task_id)
 
-    target = load_rule(env, task_id, "kpi.api")
+    target = load_rule(env, task_id, "kpi.measurement_units")
     task = load_task(env, task_id)
     unrelated_after = load_rule(env, task_id, "alarm.stat")
-    assert target["status"] == "fail"
+    assert target["status"] == "skip"
     assert target["executed_at"] != before["executed_at"] or target["duration_ms"] != before["duration_ms"]
     assert unrelated_after == unrelated_before
     assert unrelated_path.stat().st_mtime_ns == unrelated_mtime_before
@@ -83,10 +83,10 @@ def test_single_rule_rerun_rebuilds_missing_task_site(tmp_path: Path, monkeypatc
     task_id = run_task(package).task_id
     shutil.rmtree(env.task_dir(task_id))
 
-    run_single_rule("kpi.api", package=package, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
 
     assert (env.task_dir(task_id) / ".patrolx-extracted.json").is_file()
-    assert load_rule(env, task_id, "kpi.api")["status"] != "skip"
+    assert load_rule(env, task_id, "kpi.measurement_units")["status"] == "skip"
 
 
 def test_single_rule_rerun_reports_skip_for_unmatched_sources(tmp_path: Path, monkeypatch) -> None:
@@ -105,51 +105,27 @@ def test_single_rule_rerun_reports_skip_for_unmatched_sources(tmp_path: Path, mo
     assert target["skip_reason"] == "source_patterns 未匹配到文件: ^config/.*$"
 
 
-def test_kpi_rules_rerun_without_prepare_and_deterministically(tmp_path: Path, monkeypatch) -> None:
+def test_kpi_measurement_rerun_without_prepare_and_deterministically(tmp_path: Path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
     package = tmp_path / "kpi-rerun.zip"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr(
-            "kpi/kpi-api-15.csv",
-            "设备类型：XXX\n测量单元名称：API 统计\n"
-            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),请求总数,成功数\n"
-            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,99\n",
+            "kpi/ne333_Call_Statistics_15_0_202609020000.csv",
+            "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数\n"
+            "pod-a,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100\n",
         )
-        archive.writestr(
-            "kpi/kpi-media-15.csv",
-            "设备类型：XXX\n测量单元名称：媒体统计\n"
-            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),媒体请求\n"
-            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,88\n",
-        )
-        call_content = (
-            "设备类型：XXX\n"
-            "测量单元名称：呼叫会话统计\n"
-            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数\n"
-            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,99,1\n"
-        )
-        archive.writestr("kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv", call_content)
     task_id = run_task(package).task_id
-    shutil.rmtree(env.task_dir(task_id) / "prepared", ignore_errors=True)
 
-    kpi_codes = ("kpi.api", "kpi.media", "kpi.call")
-    before = {code: load_rule(env, task_id, code) for code in kpi_codes}
-    mtimes = {code: (env.rules_dir(task_id) / f"{code}.json").stat().st_mtime_ns for code in kpi_codes}
-    for code in kpi_codes:
-        run_single_rule(code, package=package, task_id=task_id)
+    before = load_rule(env, task_id, "kpi.measurement_units")
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
+    target = load_rule(env, task_id, "kpi.measurement_units")
 
-        target = load_rule(env, task_id, code)
-        assert target["status"] == "pass"
-        assert {key: value for key, value in target.items() if key not in ("executed_at", "duration_ms")} == {
-            key: value for key, value in before[code].items() if key not in ("executed_at", "duration_ms")
-        }
-        mtimes[code] = (env.rules_dir(task_id) / f"{code}.json").stat().st_mtime_ns
-        for other in kpi_codes:
-            if other == code:
-                continue
-            path = env.rules_dir(task_id) / f"{other}.json"
-            assert path.stat().st_mtime_ns == mtimes[other]
+    assert target["status"] == "skip"
+    assert {key: value for key, value in target.items() if key not in ("executed_at", "duration_ms")} == {
+        key: value for key, value in before.items() if key not in ("executed_at", "duration_ms")
+    }
 
 
 def test_single_rule_rerun_reuses_valid_manifest(tmp_path: Path, monkeypatch) -> None:
@@ -173,8 +149,8 @@ def test_single_rule_rerun_reuses_valid_manifest(tmp_path: Path, monkeypatch) ->
         raise AssertionError("manifest 有效时单规则重跑不应重建解压现场")
 
     monkeypatch.setattr(extraction, "extract_main_site", unexpected_extract)
-    run_single_rule("kpi.api", package=package, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
 
     after = {path.relative_to(env.task_dir(task_id)).as_posix() for path in env.task_dir(task_id).rglob("*")}
-    assert load_rule(env, task_id, "kpi.api")["status"] == "pass"
+    assert load_rule(env, task_id, "kpi.measurement_units")["status"] == "skip"
     assert before == after

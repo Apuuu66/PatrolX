@@ -165,102 +165,6 @@ class SystemInspection(BaseModel):
     customer: dict[str, str] = Field(default_factory=dict)
 
 
-class KpiPeriodMinutes(IntEnum):
-    FIVE = 5
-    FIFTEEN = 15
-    THIRTY = 30
-    SIXTY = 60
-
-
-class KpiDisplayStatus(StrEnum):
-    PASS = "pass"
-    WARN = "warn"
-    FAIL = "fail"
-    NEUTRAL = "neutral"
-    UNAVAILABLE = "unavailable"
-
-
-KpiValue = int | float | str | None
-
-
-class KpiMetricDefinition(BaseModel):
-    """KPI 目录中的指标定义。"""
-
-    key: str
-    name_zh: str
-    name_en: str
-    aliases: list[dict[str, Any]] = Field(default_factory=list)
-    metric_type: str
-    semantic_group: str
-    display_role: str
-    unit: str | None = None
-    source_type: str
-    aggregation: dict[str, Any]
-    formula: dict[str, Any] | None = None
-    description: str | None = None
-
-
-class KpiMetricResult(BaseModel):
-    """KPI 指标聚合结果。"""
-
-    key: str
-    main_value: KpiValue = None
-    value_available: bool = True
-    unavailable_reason: str | None = None
-    display_status: KpiDisplayStatus
-    unit: str | None = None
-    aggregation: str
-    threshold: dict[str, Any] | None = None
-    breach_count: int = Field(default=0, ge=0)
-    series: list[dict[str, Any]] = Field(default_factory=list)
-    source_files: list[str] = Field(default_factory=list)
-    provenance: dict[str, Any] = Field(default_factory=dict)
-
-
-class KpiUnclassifiedMetric(BaseModel):
-    """未登记 KPI 指标，仅作为目录补齐线索展示。"""
-
-    source_name: str
-    source_files: list[str] = Field(default_factory=list)
-    record_count: int = Field(default=0, ge=0)
-    sample_values: list[Any] = Field(default_factory=list)
-    reason: str = "metric_not_registered"
-
-
-class KpiRecordError(BaseModel):
-    """KPI 原始记录错误投影。"""
-
-    code: str
-    line_number: int | None = None
-    column: str | None = None
-    message: str = ""
-    value: KpiValue = None
-
-
-class KpiRecordItem(BaseModel):
-    """按指标展开的 KPI 原始记录。"""
-
-    metric_key: str
-    metric_name_zh: str
-    source_file: str
-    line_number: int = Field(ge=1)
-    period_minutes: int = Field(ge=1)
-    start_at: datetime
-    end_at: datetime
-    value: KpiValue = None
-    status: KpiDisplayStatus = KpiDisplayStatus.NEUTRAL
-    errors: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class KpiRecordPage(BaseModel):
-    """KPI 原始记录分页响应。"""
-
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    items: list[KpiRecordItem] = Field(default_factory=list)
-
-
 class PreparationIssue(BaseModel):
     type: PreparationIssueType
     source: str | None = None
@@ -435,418 +339,73 @@ class Error(BaseModel):
     detail: dict[str, Any] | None = None
 
 
-class KpiResourceDomain(StrEnum):
-    """KPI 资源指标的业务域筛选值。"""
-
-    UNCLASSIFIED = "unclassified"
-    CALL = "call"
-    API = "api"
-    MEDIA = "media"
-    RESERVED = "reserved"
+class KpiMeasurementImportResult(BaseModel):
+    added: dict[str, int] = Field(default_factory=dict)
+    updated: dict[str, int] = Field(default_factory=dict)
+    skipped: list[dict[str, Any]] = Field(default_factory=list)
+    errors: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class KpiResourceMetricV3(BaseModel):
-    """基础指标配置中的基础资源与分类状态。"""
-
-    key: str
+class KpiMeasurementUnit(BaseModel):
     resource_id: str
     name_zh: str
     name_en: str
-    domain: KpiResourceDomain
-    missing_from_base: bool
-    created_at: datetime
-    updated_at: datetime
-
-
-class KpiResourceMetricPageV3(BaseModel):
-    """基础指标配置分页查询响应。"""
-
-    items: list[KpiResourceMetricV3] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    base_data_version: str
-    classification_version: int = Field(ge=0)
-    summary: dict[KpiResourceDomain, int]
-
-
-class KpiResourceClassificationRequestV3(BaseModel):
-    """KPI 指标批量分类请求。"""
-
-    metric_keys: list[str] = Field(min_length=1, max_length=100)
-    domain: Literal["unclassified", "call", "api", "media", "reserved"]
-    operator: str = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_metric_keys(self) -> "KpiResourceClassificationRequestV3":
-        if len(self.metric_keys) != len(set(self.metric_keys)):
-            raise ValueError("metric_keys 不能重复")
-        return self
-
-
-class KpiResourceClassificationResultV3(BaseModel):
-    """KPI 指标批量分类结果。"""
-
-    classification_version: int = Field(ge=0)
-    domain: Literal["unclassified", "call", "api", "media", "reserved"]
-    metric_keys: list[str]
-    audited_count: int = Field(ge=0)
-
-
-class KpiClassificationAuditV3(BaseModel):
-    """KPI 分类审计记录。"""
-
-    id: int
-    metric_key: str
-    operation: str
-    operator: str
-    from_domain: str
-    to_domain: str
-    result: str
-    operated_at: datetime
-
-
-class KpiClassificationAuditPageV3(BaseModel):
-    """KPI 分类审计分页响应。"""
-
-    items: list[KpiClassificationAuditV3] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-
-
-class KpiTaskCatalogSnapshot(BaseModel):
-    """任务启动时的 KPI 配置快照。"""
-
-    schema_version: int = 1
-    base_data_version: str
-    classification_version: int = Field(ge=0)
-    rule_config_version: int = Field(default=0, ge=0)
-    captured_at: datetime
-    base_metrics: list[dict[str, Any]] = Field(default_factory=list)
-    metrics: list[dict[str, Any]] = Field(default_factory=list)
-    reserved_metric_keys: list[str] = Field(default_factory=list)
-    rules: dict[str, Any]
-    derived_metrics: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class KpiMetricTypeV4(StrEnum):
-    COUNT = "count"
-    RATE = "rate"
-    CAPACITY = "capacity"
-    LATENCY = "latency"
-    GAUGE = "gauge"
-
-
-class KpiSemanticGroupV4(StrEnum):
-    TRAFFIC = "traffic"
-    QUALITY = "quality"
-    LATENCY = "latency"
-    CAPACITY = "capacity"
-    OTHER = "other"
-
-
-class KpiDisplayRoleV4(StrEnum):
-    HIGHLIGHT = "highlight"
-    CONTEXT = "context"
-
-
-class KpiSourceTypeV4(StrEnum):
-    RAW = "raw"
-    DERIVED = "derived"
-
-
-class KpiAggregationKindV4(StrEnum):
-    SUM = "sum"
-    MIN = "min"
-    MAX = "max"
-    MEAN = "mean"
-    COUNT = "count"
-    MEDIAN = "median"
-    STDDEV = "stddev"
-    SUCCESS_RATE = "success_rate"
-
-
-class KpiRegisteredDomainV4(StrEnum):
-    CALL = "call"
-    API = "api"
-    MEDIA = "media"
-
-
-class KpiThresholdDirectionV4(StrEnum):
-    MIN = "min"
-    MAX = "max"
-
-
-class KpiCapacityStatusV4(StrEnum):
-    CONFIRMED = "confirmed"
-    UNKNOWN = "unknown"
-
-
-class KpiCapacitySemanticsV4(StrEnum):
-    PEAK = "peak"
-    CONCURRENCY = "concurrency"
-    GAUGE = "gauge"
-
-
-class KpiConfigEntityTypeV4(StrEnum):
-    METRIC_RULE = "metric_rule"
-    THRESHOLD = "threshold"
-    CAPACITY_RULE = "capacity_rule"
-    DISPLAY_RULE = "display_rule"
-    COMMON_CONFIG = "common_config"
-    DERIVED_METRIC = "derived_metric"
-
-
-class KpiClueStatusV4(StrEnum):
-    UNCLASSIFIED = "unclassified"
-    CLASSIFIED = "classified"
-    UNREGISTERED = "unregistered"
-    AMBIGUOUS = "ambiguous"
-    RESERVED = "reserved"
-
-
-class KpiFormulaV4(BaseModel):
-    kind: Literal["ratio"]
-    numerator: str
-    denominator: str
-    denominator_fallback_inputs: list[str] = Field(default_factory=list)
-    scale: float
-
-
-class KpiMetricRuleRequestV4(BaseModel):
-    metric_type: KpiMetricTypeV4
-    semantic_group: KpiSemanticGroupV4
-    display_role: KpiDisplayRoleV4
-    unit: str = Field(min_length=1)
-    source_type: KpiSourceTypeV4
-    aggregation_kind: KpiAggregationKindV4
-    description: str | None = None
-    formula: KpiFormulaV4 | None = None
-    operator: str = Field(min_length=1)
-
-
-class KpiMetricRuleV4(BaseModel):
-    metric_key: str
-    metric_type: KpiMetricTypeV4
-    semantic_group: KpiSemanticGroupV4
-    display_role: KpiDisplayRoleV4
-    unit: str
-    source_type: KpiSourceTypeV4
-    aggregation_kind: KpiAggregationKindV4
-    description: str | None = None
-    formula: KpiFormulaV4 | None = None
-    domain: KpiRegisteredDomainV4 | None = None
-    updated_at: datetime
-    rule_config_version: int
-
-
-class KpiMetricRulePageV4(BaseModel):
-    items: list[KpiMetricRuleV4] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    rule_config_version: int = Field(ge=0)
-
-
-class KpiDerivedFormulaV4(BaseModel):
-    kind: Literal["ratio", "inverse_ratio"]
-    numerator: str
-    denominator: str
-    denominator_fallback_inputs: list[str] = Field(default_factory=list)
-    scale: float = Field(gt=0)
-
-
-class KpiDerivedMetricRequestV4(BaseModel):
-    name_zh: str = Field(min_length=1)
-    name_en: str = Field(min_length=1)
-    domain: KpiRegisteredDomainV4
-    metric_type: KpiMetricTypeV4
-    semantic_group: KpiSemanticGroupV4
-    display_role: KpiDisplayRoleV4
-    unit: str = Field(min_length=1)
-    description: str | None = None
+    filename_fragment: str | None
     enabled: bool
-    formula: KpiDerivedFormulaV4
+    metric_count: int = Field(ge=0)
+    unit_count: int = Field(ge=0)
+    confirmed_binding_count: int = Field(ge=0)
+    candidate_binding_count: int = Field(ge=0)
+    derived_count: int = Field(ge=0)
 
 
-class KpiDerivedMetricCreateRequestV4(KpiDerivedMetricRequestV4):
-    metric_key: str | None = Field(default=None, min_length=3, max_length=128)
+class KpiMeasurementUnitList(BaseModel):
+    total: int = Field(ge=0)
+    items: list[KpiMeasurementUnit]
 
 
-KpiDerivedMetricUpdateRequestV4 = KpiDerivedMetricRequestV4
-
-
-class KpiDerivedMetricV4(BaseModel):
-    metric_key: str
-    name_zh: str
-    name_en: str
-    domain: KpiRegisteredDomainV4
-    metric_type: KpiMetricTypeV4
-    semantic_group: KpiSemanticGroupV4
-    display_role: KpiDisplayRoleV4
-    unit: str
-    description: str | None = None
+class KpiMeasurementEnabledRequest(BaseModel):
     enabled: bool
-    formula: KpiDerivedFormulaV4
-    updated_at: datetime
-    rule_config_version: int
 
 
-class KpiDerivedMetricPageV4(BaseModel):
-    items: list[KpiDerivedMetricV4] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    rule_config_version: int = Field(ge=0)
-
-
-class KpiThresholdRequestV4(BaseModel):
-    domain: KpiRegisteredDomainV4
-    metric_key: str
-    label: str = Field(min_length=1)
-    direction: KpiThresholdDirectionV4
-    unit: str = Field(min_length=1)
-    default: float
-    periods: dict[str, float]
-    operator: str = Field(min_length=1)
-
-
-class KpiThresholdV4(BaseModel):
+class KpiMeasurementBinding(BaseModel):
     id: int
-    domain: KpiRegisteredDomainV4
-    metric_key: str
-    label: str
-    direction: KpiThresholdDirectionV4
-    unit: str
-    default: float
-    periods: dict[str, float]
-    updated_at: datetime
-    rule_config_version: int
+    metric_resource_id: str | None
+    measurement_unit_id: str
+    raw_source_name: str
+    base_source_name: str
+    display_unit: str | None
+    status: Literal["candidate", "confirmed", "conflict", "ignored"]
+    enabled: bool
+    task_id: str
+    source_file: str
 
 
-class KpiThresholdPageV4(BaseModel):
-    items: list[KpiThresholdV4] = Field(default_factory=list)
+class KpiMeasurementBindingList(BaseModel):
     total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    rule_config_version: int = Field(ge=0)
+    items: list[KpiMeasurementBinding]
 
 
-class KpiCapacityRuleRequestV4(BaseModel):
-    source_name: str = Field(min_length=1)
-    metric_key: str
-    domain: KpiRegisteredDomainV4 | None = None
-    status: KpiCapacityStatusV4
-    semantics: KpiCapacitySemanticsV4 | None = None
-    operator: str = Field(min_length=1)
+class KpiMeasurementBindingStatusRequest(BaseModel):
+    status: Literal["candidate", "confirmed", "ignored"]
+    enabled: bool | None = None
 
 
-class KpiCapacityRuleV4(BaseModel):
+class KpiMeasurementDerivedCreateRequest(BaseModel):
+    measurement_unit_id: str
+    metric_resource_id: str
+    numerator_metric_id: str
+    denominator_metric_id: str
+
+
+class KpiMeasurementDerived(BaseModel):
     id: int
-    source_name: str
-    metric_key: str
-    domain: KpiRegisteredDomainV4 | None = None
-    status: KpiCapacityStatusV4
-    semantics: KpiCapacitySemanticsV4 | None = None
-    updated_at: datetime
-    rule_config_version: int
-
-
-class KpiCapacityRulePageV4(BaseModel):
-    items: list[KpiCapacityRuleV4] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    rule_config_version: int = Field(ge=0)
-
-
-class KpiDisplayRuleRequestV4(BaseModel):
-    domain: KpiRegisteredDomainV4
-    metric_key: str
-    role: KpiDisplayRoleV4
-    operator: str = Field(min_length=1)
-
-
-class KpiDisplayRuleV4(BaseModel):
-    id: int
-    domain: KpiRegisteredDomainV4
-    metric_key: str
-    role: KpiDisplayRoleV4
-    updated_at: datetime
-    rule_config_version: int
-
-
-class KpiDisplayRulePageV4(BaseModel):
-    items: list[KpiDisplayRuleV4] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    rule_config_version: int = Field(ge=0)
-
-
-class KpiCommonConfigRequestV4(BaseModel):
-    input_timezone: str = Field(min_length=1)
-    max_files: int = Field(ge=1)
-    max_records: int = Field(ge=1)
-    operator: str = Field(min_length=1)
-
-
-class KpiCommonConfigV4(BaseModel):
-    input_timezone: str
-    max_files: int
-    max_records: int
-    updated_at: datetime
-    rule_config_version: int
-
-
-class KpiConfigDeleteResultV4(BaseModel):
-    deleted: bool
-    entity_type: KpiConfigEntityTypeV4
-    entity_key: str
-    rule_config_version: int
-
-
-class KpiConfigAuditV4(BaseModel):
-    id: int
-    entity_type: KpiConfigEntityTypeV4
-    entity_key: str
-    operation: Literal["upsert", "delete"]
-    operator: str
-    before: dict[str, Any] | None = None
-    after: dict[str, Any] | None = None
-    result: str
-    rule_config_version: int
-    detail: dict[str, Any] | None = None
-    operated_at: datetime
-
-
-class KpiConfigAuditPageV4(BaseModel):
-    items: list[KpiConfigAuditV4] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-
-
-class KpiClassificationClueV4(BaseModel):
-    source_name: str
-    metric_key: str | None = None
-    candidates: list[dict[str, str]] = Field(default_factory=list)
-    clue_status: KpiClueStatusV4
-    rule_code: str
-    domain: str
-    source_files: list[str] = Field(default_factory=list)
-    record_count: int = Field(ge=0)
-    sample_values: list[Any] = Field(default_factory=list)
-    resolution_note: str | None = None
-
-
-class KpiClassificationCluePageV4(BaseModel):
-    items: list[KpiClassificationClueV4] = Field(default_factory=list)
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=200)
-    summary: dict[KpiClueStatusV4, int] = Field(default_factory=dict)
+    measurement_unit_id: str
+    metric_resource_id: str
+    numerator_metric_id: str
+    denominator_metric_id: str
+    template: Literal["success_rate"] = "success_rate"
+    enabled: bool
 
 
 class LoginRequestV1(BaseModel):

@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.models.db import init_db
-from tests.kpi_helpers import configure_kpi_catalog
 
 SAMPLE = Path(__file__).resolve().parent / "fixtures" / "sample" / "sample.zip"
 VOLATILE_KEYS = {"executed_at", "duration_ms"}
@@ -47,7 +46,6 @@ def setup_env(tmp_path: Path, monkeypatch) -> Env:
     monkeypatch.setattr(settings, "sqlite_path", env.sqlite)
     init_db()
     monkeypatch.chdir(env.root)
-    configure_kpi_catalog(env.root, monkeypatch, output_dir=env.output, sqlite_path=env.sqlite)
     monkeypatch.setattr(settings, "uploads_dir", env.uploads)
     monkeypatch.setattr(settings, "output_dir", env.output)
     monkeypatch.setattr(settings, "sqlite_path", env.sqlite)

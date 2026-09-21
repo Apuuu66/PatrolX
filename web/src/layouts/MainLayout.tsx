@@ -80,8 +80,8 @@ export function MainLayout() {
   const selected =
     location.pathname.startsWith("/tasks") || location.pathname === "/"
       ? "/tasks"
-      : location.pathname.startsWith("/kpi-resources")
-        ? "/kpi-resources"
+      : location.pathname.startsWith("/measurement-units")
+        ? "/measurement-units"
       : location.pathname.startsWith("/inspectors")
         ? "/inspectors"
       : location.pathname.startsWith("/users")
@@ -90,7 +90,7 @@ export function MainLayout() {
 
   const menuItems = [
     { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
-    { key: "/kpi-resources", icon: <DatabaseOutlined />, label: "基础指标" },
+    { key: "/measurement-units", icon: <DatabaseOutlined />, label: "基础指标" },
     { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
     { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },
     ...(user?.role === "admin" ? [{ key: "/users", icon: <UserOutlined />, label: "用户管理" }] : []),

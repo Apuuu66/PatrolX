@@ -6,7 +6,6 @@ import os
 import shutil
 import tempfile
 from pathlib import Path, PureWindowsPath
-from typing import Any
 
 import yaml
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
@@ -25,40 +24,13 @@ from app.models.schemas import (
     DictUpdateRequest,
     InspectionTask,
     InspectorInfo,
-    KpiCapacityRulePageV4,
-    KpiCapacityRuleRequestV4,
-    KpiCapacityRuleV4,
-    KpiClassificationAuditPageV3,
-    KpiClassificationCluePageV4,
-    KpiClueStatusV4,
-    KpiCommonConfigRequestV4,
-    KpiCommonConfigV4,
-    KpiConfigAuditPageV4,
-    KpiConfigAuditV4,
-    KpiConfigDeleteResultV4,
-    KpiConfigEntityTypeV4,
-    KpiDerivedMetricCreateRequestV4,
-    KpiDerivedMetricPageV4,
-    KpiDerivedMetricUpdateRequestV4,
-    KpiDerivedMetricV4,
-    KpiDisplayRulePageV4,
-    KpiDisplayRuleRequestV4,
-    KpiDisplayRuleV4,
-    KpiDisplayStatus,
-    KpiMetricRulePageV4,
-    KpiMetricRuleRequestV4,
-    KpiMetricRuleV4,
-    KpiPeriodMinutes,
-    KpiRecordPage,
-    KpiRegisteredDomainV4,
-    KpiResourceClassificationRequestV3,
-    KpiResourceClassificationResultV3,
-    KpiResourceMetricPageV3,
-    KpiSourceTypeV4,
-    KpiTaskCatalogSnapshot,
-    KpiThresholdPageV4,
-    KpiThresholdRequestV4,
-    KpiThresholdV4,
+    KpiMeasurementBindingList,
+    KpiMeasurementBindingStatusRequest,
+    KpiMeasurementDerived,
+    KpiMeasurementDerivedCreateRequest,
+    KpiMeasurementEnabledRequest,
+    KpiMeasurementImportResult,
+    KpiMeasurementUnitList,
     LogEntry,
     LoginRequestV1,
     LoginResponseV1,
@@ -90,47 +62,24 @@ from app.services.auth import (
     reset_user_password,
     update_user_role,
 )
-from app.services.kpi_classification_clues import KpiClassificationClueError, list_classification_clues
-from app.services.kpi_config import (
-    KpiConfigError,
-    create_derived_metric,
-    create_threshold,
-    delete_capacity_rule,
-    delete_derived_metric,
-    delete_display_rule,
-    delete_metric_rule,
-    delete_threshold,
-    get_common_config,
-    get_derived_metric,
-    get_metric_rule,
-    get_threshold,
-    list_capacity_rules,
-    list_config_audits,
-    list_derived_metrics,
-    list_display_rules,
-    list_metric_rules,
-    list_thresholds,
-    update_common_config,
-    update_derived_metric,
-    update_threshold,
-    upsert_capacity_rule,
-    upsert_display_rule,
-    upsert_metric_rule,
-)
-from app.services.kpi_records import list_kpi_records
-from app.services.kpi_resources import (
-    KpiResourceError,
-    classify_resource_metrics,
-    list_classification_audits,
-    list_resource_metrics,
+from app.services.kpi_measurement_units import (
+    KpiMeasurementError,
+    create_measurement_derived,
+    import_resource_csv,
+    list_measurement_bindings,
+    list_measurement_units,
+    set_measurement_binding_status,
+    set_measurement_unit_enabled,
 )
 from app.services.overview import build_overview
+from app.services.store import load_rule_result
 from app.services.tasks import DeleteResult, TaskDeleteError, TaskRebuildError, task_service
 
 v1_router = APIRouter(prefix="/api/v1")
 router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
 v4_router = APIRouter(prefix="/api/v4")
+v5_router = APIRouter(prefix="/api/v5")
 DICT_NAMES = ("province", "operator", "product", "version")
 
 
@@ -143,14 +92,6 @@ class AppError(Exception):
         self.message = message
         self.status_code = status_code
         self.detail = detail
-
-
-def _convert_kpi_config_error(exc: KpiConfigError) -> AppError:
-    return AppError(exc.code, exc.message, exc.status_code, exc.detail)
-
-
-def _convert_kpi_clue_error(exc: KpiClassificationClueError) -> AppError:
-    return AppError(exc.code, exc.message, exc.status_code)
 
 
 async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
@@ -376,17 +317,6 @@ def get_task_logs_v2(task_id: str = PathParam()) -> TaskLogs:
 KPI_SERIES_MAX_POINTS = 200
 
 
-def _bounded_kpi_list(items: list[Any], max_items: int = KPI_SERIES_MAX_POINTS) -> list[Any]:
-    """为展示接口均匀抽稀长列表；完整数据仍保留在规则结果文件中。"""
-    if len(items) <= max_items:
-        return items
-    step = -(-len(items) // max_items)
-    sampled = items[::step]
-    if sampled[-1] is not items[-1]:
-        sampled.append(items[-1])
-    return sampled
-
-
 def _load_system_json(task_id: str) -> SystemInspection:
     path = settings.output / task_id / "system.json"
     if path.exists():
@@ -419,159 +349,20 @@ def get_system_v2(
 def get_rule_result_v2(
     task_id: str = PathParam(),
     rule_code: str = PathParam(),
-    exclude_records: bool = False,
 ) -> RuleResult:
-    system = _load_system_json(task_id)
-    rule = next((item for item in system.rules if item.code == rule_code), None)
+    registry.load_all()
+    if rule_code not in {rule.code for rule in registry.all()}:
+        raise AppError("not_found", "规则结果不存在", 404)
+    rule = load_rule_result(settings.output, task_id, rule_code)
     if rule is None:
-        raise AppError("not_found", f"规则结果不存在: {rule_code}", 404)
-    if not exclude_records:
-        return rule
-    projected = rule.model_copy()
-    metadata = dict(projected.metadata)
-    if metadata.get("version", 0) >= 2:
-        kpi_files = []
-        for kpi_file in metadata.get("kpi_files", []):
-            if isinstance(kpi_file, dict):
-                kpi_file = {**kpi_file, "records": []}
-            kpi_files.append(kpi_file)
-        metadata["kpi_files"] = kpi_files
-
-        kpi_results = []
-        for result in metadata.get("kpi_results", []):
-            if not isinstance(result, dict):
-                kpi_results.append(result)
-                continue
-            result = dict(result)
-            series = result.get("series")
-            if isinstance(series, list):
-                result["series"] = _bounded_kpi_list(series)
-            provenance = result.get("provenance")
-            if isinstance(provenance, dict):
-                cross_reference = provenance.get("direct_cross_reference")
-                if isinstance(cross_reference, list):
-                    result["provenance"] = {
-                        **provenance,
-                        "direct_cross_reference": _bounded_kpi_list(cross_reference),
-                    }
-            kpi_results.append(result)
-        metadata["kpi_results"] = kpi_results
-    projected.metadata = metadata
-    return projected
-
-
-@router.get(
-    "/tasks/{task_id}/rules/{rule_code}/kpi/records",
-    response_model=KpiRecordPage,
-    operation_id="listKpiRecordsV2",
-)
-def list_kpi_records_v2(
-    task_id: str = PathParam(),
-    rule_code: str = PathParam(),
-    metric_key: str | None = Query(default=None),
-    source_file: str | None = Query(default=None),
-    period_minutes: KpiPeriodMinutes | None = Query(default=None),
-    status: KpiDisplayStatus | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
-) -> KpiRecordPage:
-    try:
-        return list_kpi_records(
-            task_id,
-            rule_code,
-            metric_key=metric_key,
-            source_file=source_file,
-            period_minutes=period_minutes,
-            status=status,
-            page=page,
-            page_size=page_size,
-        )
-    except KeyError as exc:
-        raise AppError("not_found", "规则结果不存在", 404) from exc
-
-
-@v3_router.get(
-    "/kpi/resource-metrics",
-    response_model=KpiResourceMetricPageV3,
-    operation_id="listKpiResourceMetricsV3",
-)
-def list_kpi_resource_metrics_v3(
-    search: str | None = Query(default=None),
-    domain: str | None = Query(default=None),
-    include_missing: bool = Query(default=False),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=200),
-) -> KpiResourceMetricPageV3:
-    try:
-        return list_resource_metrics(
-            search=search,
-            domain=domain,
-            include_missing=include_missing,
-            page=page,
-            page_size=page_size,
-        )
-    except KpiResourceError as exc:
-        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
-
-
-@v3_router.put(
-    "/kpi/resource-metrics/classification",
-    response_model=KpiResourceClassificationResultV3,
-    operation_id="classifyKpiResourceMetricsV3",
-)
-def classify_kpi_resource_metrics_v3(
-    body: KpiResourceClassificationRequestV3, _auth: AuthSession = Depends(require_role("admin"))
-) -> KpiResourceClassificationResultV3:
-    try:
-        result = classify_resource_metrics(
-            body.metric_keys,
-            domain=body.domain,
-            operator=body.operator,
-        )
-        return KpiResourceClassificationResultV3.model_validate(result)
-    except KpiResourceError as exc:
-        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
-
-
-@v3_router.get(
-    "/kpi/resource-metrics/classification-audits",
-    response_model=KpiClassificationAuditPageV3,
-    operation_id="listKpiClassificationAuditsV3",
-)
-def list_kpi_classification_audits_v3(
-    metric_key: str | None = Query(default=None),
-    operator: str | None = Query(default=None),
-    domain: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=200),
-) -> KpiClassificationAuditPageV3:
-    try:
-        return list_classification_audits(
-            metric_key=metric_key,
-            operator=operator,
-            domain=domain,
-            page=page,
-            page_size=page_size,
-        )
-    except KpiResourceError as exc:
-        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
-
-
-@v3_router.get(
-    "/tasks/{task_id}/kpi/catalog-snapshot",
-    response_model=KpiTaskCatalogSnapshot,
-    operation_id="getKpiCatalogSnapshotV3",
-)
-def get_kpi_catalog_snapshot_v3(task_id: str = PathParam()) -> KpiTaskCatalogSnapshot:
-    if not (settings.output / task_id / "task.json").is_file():
-        raise AppError("not_found", "任务不存在", 404)
-    snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
-    if not snapshot_path.is_file():
-        raise AppError("kpi_snapshot_missing", "任务 KPI 配置快照缺失", 409)
-    try:
-        return KpiTaskCatalogSnapshot.model_validate_json(snapshot_path.read_bytes())
-    except (OSError, ValueError) as exc:
-        raise AppError("kpi_snapshot_invalid", "任务 KPI 配置快照损坏", 500) from exc
+        try:
+            system = _load_system_json(task_id)
+            rule = next((item for item in system.rules if item.code == rule_code), None)
+        except AppError:
+            rule = None
+    if rule is None:
+        raise AppError("not_found", "规则结果不存在", 404)
+    return rule
 
 
 @router.get("/inspectors", response_model=list[InspectorInfo], operation_id="listInspectorsV2")
@@ -632,403 +423,124 @@ def update_dict_v2(
     return [DictItem(code=i["code"], name=i["name"]) for i in items]
 
 
-# ---- /api/v4 KPI 动态口径配置契约路由 ----
+# --- Measurement units (v5) ---
 
 
-@v4_router.get("/kpi/config/metric-rules", response_model=KpiMetricRulePageV4, operation_id="listKpiMetricRulesV4")
-def list_kpi_metric_rules_v4(
-    search: str | None = None,
-    source_type: KpiSourceTypeV4 | None = None,
-    domain: KpiRegisteredDomainV4 | None = None,
+@v5_router.post(
+    "/kpi/measurement-units/import",
+    response_model=KpiMeasurementImportResult,
+    operation_id="importKpiMeasurementUnitsV5",
+)
+async def import_kpi_measurement_units_v5(
+    file: UploadFile = File(), _auth: AuthSession = Depends(require_role("admin"))
+) -> KpiMeasurementImportResult:
+    suffix = Path(file.filename or "resources.csv").suffix or ".csv"
+    with tempfile.NamedTemporaryFile("w+b", suffix=suffix) as tmp:
+        await file.seek(0)
+        while chunk := await file.read(1024 * 1024):
+            tmp.write(chunk)
+        await file.seek(0)
+        tmp.seek(0)
+        try:
+            result = import_resource_csv(Path(tmp.name))
+        except KpiMeasurementError as exc:
+            raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementImportResult.model_validate(result)
+
+
+@v5_router.get(
+    "/kpi/measurement-units",
+    response_model=KpiMeasurementUnitList,
+    operation_id="listKpiMeasurementUnitsV5",
+)
+def list_kpi_measurement_units_v5(
+    search: str | None = Query(default=None),
+    enabled: bool | None = Query(default=None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
-) -> KpiMetricRulePageV4:
-    return list_metric_rules(
-        search=search,
-        source_type=source_type.value if source_type else None,
-        domain=domain.value if domain else None,
-        page=page,
-        page_size=page_size,
-    )
+) -> KpiMeasurementUnitList:
+    result = list_measurement_units(search=search, enabled=enabled)
+    start = (page - 1) * page_size
+    items = result["items"][start : start + page_size]
+    return KpiMeasurementUnitList(total=result["total"], items=items)
 
 
-@v4_router.get(
-    "/kpi/config/metric-rules/{metric_key}", response_model=KpiMetricRuleV4, operation_id="getKpiMetricRuleV4"
+@v5_router.patch(
+    "/kpi/measurement-units/{resource_id}",
+    response_model=dict,
+    operation_id="setKpiMeasurementUnitEnabledV5",
 )
-def get_kpi_metric_rule_v4(metric_key: str = PathParam()) -> KpiMetricRuleV4:
-    try:
-        return get_metric_rule(metric_key)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.put(
-    "/kpi/config/metric-rules/{metric_key}", response_model=KpiMetricRuleV4, operation_id="upsertKpiMetricRuleV4"
-)
-def upsert_kpi_metric_rule_v4(
-    metric_key: str = PathParam(),
-    body: KpiMetricRuleRequestV4 | None = None,
+def set_kpi_measurement_unit_enabled_v5(
+    resource_id: str = PathParam(),
+    body: KpiMeasurementEnabledRequest | None = None,
     _auth: AuthSession = Depends(require_role("admin")),
-) -> KpiMetricRuleV4:
+) -> dict:
     if body is None:
         raise AppError("invalid_request", "请求体不能为空", 400)
     try:
-        return upsert_metric_rule(metric_key, body)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
+        return set_measurement_unit_enabled(resource_id, body.enabled)
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
 
 
-@v4_router.delete(
-    "/kpi/config/metric-rules/{metric_key}",
-    response_model=KpiConfigDeleteResultV4,
-    operation_id="deleteKpiMetricRuleV4",
+@v5_router.get(
+    "/kpi/measurement-bindings",
+    response_model=KpiMeasurementBindingList,
+    operation_id="listKpiMeasurementBindingsV5",
 )
-def delete_kpi_metric_rule_v4(
-    metric_key: str = PathParam(),
-    auth: AuthSession = Depends(require_role("admin")),
-) -> KpiConfigDeleteResultV4:
-    try:
-        return delete_metric_rule(metric_key, auth.username)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.get(
-    "/kpi/config/derived-metrics", response_model=KpiDerivedMetricPageV4, operation_id="listKpiDerivedMetricsV4"
-)
-def list_kpi_derived_metrics_v4(
-    search: str | None = None,
-    domain: KpiRegisteredDomainV4 | None = None,
-    enabled: bool | None = None,
+def list_kpi_measurement_bindings_v5(
+    measurement_unit_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    search: str | None = Query(default=None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
-) -> KpiDerivedMetricPageV4:
+) -> KpiMeasurementBindingList:
+    result = list_measurement_bindings(measurement_unit_id, status, search)
+    start = (page - 1) * page_size
+    items = result["items"][start : start + page_size]
+    return KpiMeasurementBindingList(total=result["total"], items=items)
+
+
+@v5_router.patch(
+    "/kpi/measurement-bindings/{binding_id}",
+    response_model=dict,
+    operation_id="setKpiMeasurementBindingStatusV5",
+)
+def set_kpi_measurement_binding_status_v5(
+    binding_id: int = PathParam(),
+    body: KpiMeasurementBindingStatusRequest | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> dict:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
     try:
-        return list_derived_metrics(
-            search=search,
-            domain=domain.value if domain else None,
-            enabled=enabled,
-            page=page,
-            page_size=page_size,
+        return set_measurement_binding_status(binding_id, body.status, body.enabled)
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+
+
+@v5_router.post(
+    "/kpi/measurement-derived",
+    response_model=KpiMeasurementDerived,
+    status_code=201,
+    operation_id="createKpiMeasurementDerivedV5",
+)
+def create_kpi_measurement_derived_v5(
+    body: KpiMeasurementDerivedCreateRequest | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> KpiMeasurementDerived:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        result = create_measurement_derived(
+            body.measurement_unit_id,
+            body.metric_resource_id,
+            body.numerator_metric_id,
+            body.denominator_metric_id,
         )
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.post(
-    "/kpi/config/derived-metrics",
-    response_model=KpiDerivedMetricV4,
-    status_code=202,
-    operation_id="createKpiDerivedMetricV4",
-)
-def create_kpi_derived_metric_v4(
-    response: Response,
-    body: KpiDerivedMetricCreateRequestV4 | None = None,
-    auth: AuthSession = Depends(require_role("admin")),
-) -> KpiDerivedMetricV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        item = create_derived_metric(body, auth.username)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-    response.headers["Location"] = f"/api/v4/kpi/config/derived-metrics/{item.metric_key}"
-    return item
-
-
-@v4_router.get(
-    "/kpi/config/derived-metrics/{metric_key}", response_model=KpiDerivedMetricV4, operation_id="getKpiDerivedMetricV4"
-)
-def get_kpi_derived_metric_v4(metric_key: str = PathParam()) -> KpiDerivedMetricV4:
-    try:
-        return get_derived_metric(metric_key)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.put(
-    "/kpi/config/derived-metrics/{metric_key}",
-    response_model=KpiDerivedMetricV4,
-    operation_id="updateKpiDerivedMetricV4",
-)
-def update_kpi_derived_metric_v4(
-    metric_key: str = PathParam(),
-    body: KpiDerivedMetricUpdateRequestV4 | None = None,
-    auth: AuthSession = Depends(require_role("admin")),
-) -> KpiDerivedMetricV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        return update_derived_metric(metric_key, body, auth.username)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.delete(
-    "/kpi/config/derived-metrics/{metric_key}",
-    response_model=KpiConfigDeleteResultV4,
-    operation_id="deleteKpiDerivedMetricV4",
-)
-def delete_kpi_derived_metric_v4(
-    metric_key: str = PathParam(), auth: AuthSession = Depends(require_role("admin"))
-) -> KpiConfigDeleteResultV4:
-    try:
-        return delete_derived_metric(metric_key, auth.username)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.get("/kpi/config/thresholds", response_model=KpiThresholdPageV4, operation_id="listKpiThresholdsV4")
-def list_kpi_thresholds_v4(
-    domain: KpiRegisteredDomainV4 | None = None,
-    search: str | None = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
-) -> KpiThresholdPageV4:
-    return list_thresholds(domain=domain.value if domain else None, search=search, page=page, page_size=page_size)
-
-
-@v4_router.post(
-    "/kpi/config/thresholds", response_model=KpiThresholdV4, status_code=202, operation_id="createKpiThresholdV4"
-)
-def create_kpi_threshold_v4(
-    response: Response, body: KpiThresholdRequestV4 | None = None, _auth: AuthSession = Depends(require_role("admin"))
-) -> KpiThresholdV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        item = create_threshold(body)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-    response.headers["Location"] = f"/api/v4/kpi/config/thresholds/{item.id}"
-    return item
-
-
-@v4_router.get("/kpi/config/thresholds/{threshold_id}", response_model=KpiThresholdV4, operation_id="getKpiThresholdV4")
-def get_kpi_threshold_v4(threshold_id: int = PathParam()) -> KpiThresholdV4:
-    try:
-        return get_threshold(threshold_id)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.put(
-    "/kpi/config/thresholds/{threshold_id}", response_model=KpiThresholdV4, operation_id="updateKpiThresholdV4"
-)
-def update_kpi_threshold_v4(
-    threshold_id: int = PathParam(),
-    body: KpiThresholdRequestV4 | None = None,
-    _auth: AuthSession = Depends(require_role("admin")),
-) -> KpiThresholdV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        return update_threshold(threshold_id, body)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.delete(
-    "/kpi/config/thresholds/{threshold_id}",
-    response_model=KpiConfigDeleteResultV4,
-    operation_id="deleteKpiThresholdV4",
-)
-def delete_kpi_threshold_v4(
-    threshold_id: int = PathParam(),
-    auth: AuthSession = Depends(require_role("admin")),
-) -> KpiConfigDeleteResultV4:
-    try:
-        return delete_threshold(threshold_id, auth.username)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.get(
-    "/kpi/config/capacity-rules", response_model=KpiCapacityRulePageV4, operation_id="listKpiCapacityRulesV4"
-)
-def list_kpi_capacity_rules_v4(
-    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=200)
-) -> KpiCapacityRulePageV4:
-    return list_capacity_rules(page=page, page_size=page_size)
-
-
-@v4_router.post(
-    "/kpi/config/capacity-rules",
-    response_model=KpiCapacityRuleV4,
-    status_code=202,
-    operation_id="createKpiCapacityRuleV4",
-)
-def create_kpi_capacity_rule_v4(
-    response: Response,
-    body: KpiCapacityRuleRequestV4 | None = None,
-    _auth: AuthSession = Depends(require_role("admin")),
-) -> KpiCapacityRuleV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        item = upsert_capacity_rule(body)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-    response.headers["Location"] = f"/api/v4/kpi/config/capacity-rules/{item.id}"
-    return item
-
-
-@v4_router.put(
-    "/kpi/config/capacity-rules/{capacity_rule_id}",
-    response_model=KpiCapacityRuleV4,
-    operation_id="updateKpiCapacityRuleV4",
-)
-def update_kpi_capacity_rule_v4(
-    capacity_rule_id: int = PathParam(),
-    body: KpiCapacityRuleRequestV4 | None = None,
-    _auth: AuthSession = Depends(require_role("admin")),
-) -> KpiCapacityRuleV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        return upsert_capacity_rule(body, capacity_rule_id)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.delete(
-    "/kpi/config/capacity-rules/{capacity_rule_id}",
-    response_model=KpiConfigDeleteResultV4,
-    operation_id="deleteKpiCapacityRuleV4",
-)
-def delete_kpi_capacity_rule_v4(
-    capacity_rule_id: int = PathParam(),
-    auth: AuthSession = Depends(require_role("admin")),
-) -> KpiConfigDeleteResultV4:
-    try:
-        return delete_capacity_rule(capacity_rule_id, auth.username)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.get("/kpi/config/display-rules", response_model=KpiDisplayRulePageV4, operation_id="listKpiDisplayRulesV4")
-def list_kpi_display_rules_v4(
-    domain: KpiRegisteredDomainV4 | None = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
-) -> KpiDisplayRulePageV4:
-    return list_display_rules(domain=domain.value if domain else None, page=page, page_size=page_size)
-
-
-@v4_router.post(
-    "/kpi/config/display-rules",
-    response_model=KpiDisplayRuleV4,
-    status_code=202,
-    operation_id="createKpiDisplayRuleV4",
-)
-def create_kpi_display_rule_v4(
-    response: Response, body: KpiDisplayRuleRequestV4 | None = None, _auth: AuthSession = Depends(require_role("admin"))
-) -> KpiDisplayRuleV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        item = upsert_display_rule(body)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-    response.headers["Location"] = f"/api/v4/kpi/config/display-rules/{item.id}"
-    return item
-
-
-@v4_router.put(
-    "/kpi/config/display-rules/{display_rule_id}",
-    response_model=KpiDisplayRuleV4,
-    operation_id="updateKpiDisplayRuleV4",
-)
-def update_kpi_display_rule_v4(
-    display_rule_id: int = PathParam(),
-    body: KpiDisplayRuleRequestV4 | None = None,
-    _auth: AuthSession = Depends(require_role("admin")),
-) -> KpiDisplayRuleV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        return upsert_display_rule(body, display_rule_id)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.delete(
-    "/kpi/config/display-rules/{display_rule_id}",
-    response_model=KpiConfigDeleteResultV4,
-    operation_id="deleteKpiDisplayRuleV4",
-)
-def delete_kpi_display_rule_v4(
-    display_rule_id: int = PathParam(),
-    auth: AuthSession = Depends(require_role("admin")),
-) -> KpiConfigDeleteResultV4:
-    try:
-        return delete_display_rule(display_rule_id, auth.username)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.get("/kpi/config/common", response_model=KpiCommonConfigV4, operation_id="getKpiCommonConfigV4")
-def get_kpi_common_config_v4() -> KpiCommonConfigV4:
-    try:
-        return get_common_config()
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.put("/kpi/config/common", response_model=KpiCommonConfigV4, operation_id="updateKpiCommonConfigV4")
-def update_kpi_common_config_v4(
-    body: KpiCommonConfigRequestV4 | None = None, _auth: AuthSession = Depends(require_role("admin"))
-) -> KpiCommonConfigV4:
-    if body is None:
-        raise AppError("invalid_request", "请求体不能为空", 400)
-    try:
-        return update_common_config(body)
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-
-
-@v4_router.get("/kpi/config/audits", response_model=KpiConfigAuditPageV4, operation_id="listKpiConfigAuditsV4")
-def list_kpi_config_audits_v4(
-    entity_type: KpiConfigEntityTypeV4 | None = None,
-    operator: str | None = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
-) -> KpiConfigAuditPageV4:
-    try:
-        rows, total, version = list_config_audits(
-            entity_type=entity_type.value if entity_type else None,
-            operator=operator,
-            page=page,
-            page_size=page_size,
-        )
-    except KpiConfigError as exc:
-        raise _convert_kpi_config_error(exc) from exc
-    items = [KpiConfigAuditV4.model_validate(row, from_attributes=True) for row in rows]
-    return KpiConfigAuditPageV4(items=items, total=total, page=page, page_size=page_size, rule_config_version=version)
-
-
-@v4_router.get(
-    "/tasks/{task_id}/kpi/classification-clues",
-    response_model=KpiClassificationCluePageV4,
-    operation_id="listKpiClassificationCluesV4",
-)
-def list_kpi_classification_clues_v4(
-    task_id: str = PathParam(),
-    clue_status: KpiClueStatusV4 | None = None,
-    search: str | None = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
-) -> KpiClassificationCluePageV4:
-    try:
-        return list_classification_clues(
-            task_id,
-            clue_status=clue_status.value if clue_status else None,
-            search=search,
-            page=page,
-            page_size=page_size,
-        )
-    except KpiClassificationClueError as exc:
-        raise _convert_kpi_clue_error(exc) from exc
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementDerived.model_validate(result)
 
 
 # --- Auth (v1) ---

@@ -20,7 +20,6 @@ from app.inspectors.registry import registry
 from app.models.db import TaskRecord, init_db, session_factory
 from app.models.schemas import (
     InspectionTask,
-    KpiTaskCatalogSnapshot,
     RebuildMode,
     RebuildRequest,
     TaskCreated,
@@ -31,7 +30,6 @@ from app.models.schemas import (
 )
 from app.services import preparation, store
 from app.services.extraction.layout import PathLimitPolicy
-from app.services.kpi_catalog import KpiCatalogError, load_kpi_catalog
 from app.services.store import append_log, load_task_meta
 
 logger = get_logger("patrolx.tasks")
@@ -552,20 +550,7 @@ class TaskService:
                     f"增量重建只允许普通规则: {', '.join(hidden)}",
                     400,
                 )
-            snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
-            if not snapshot_path.is_file():
-                raise TaskRebuildError("kpi_snapshot_invalid", f"任务 KPI 配置快照缺失: {snapshot_path}", 409)
-            try:
-                KpiTaskCatalogSnapshot.model_validate_json(snapshot_path.read_bytes())
-            except (OSError, ValueError) as exc:
-                raise TaskRebuildError("kpi_snapshot_invalid", "任务 KPI 配置快照损坏", 409) from exc
             rule_codes = list(request.rule_codes or [])
-        else:
-            try:
-                load_kpi_catalog(settings.kpi_data)
-            except KpiCatalogError as exc:
-                raise TaskRebuildError("invalid_rebuild_request", f"KPI 拆分配置无效: {exc}", 400) from exc
-
         plan = RebuildPlan(
             mode=request.mode,
             rule_codes=rule_codes,

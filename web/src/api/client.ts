@@ -13,7 +13,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 登录并创建会话 */
+        /** Auth Login */
         post: operations["loginV1"];
         delete?: never;
         options?: never;
@@ -30,7 +30,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 登出并失效当前会话 */
+        /** Auth Logout */
         post: operations["logoutV1"];
         delete?: never;
         options?: never;
@@ -45,7 +45,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 查询当前登录用户 */
+        /** Auth Me */
         get: operations["getMeV1"];
         put?: never;
         post?: never;
@@ -62,10 +62,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 用户台账分页 */
+        /** List Users V1 */
         get: operations["listUsersV1"];
         put?: never;
-        /** 创建用户 */
+        /** Create User V1 */
         post: operations["createUserV1"];
         delete?: never;
         options?: never;
@@ -83,11 +83,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** 删除用户 */
+        /** Delete User V1 */
         delete: operations["deleteUserV1"];
         options?: never;
         head?: never;
-        /** 更新用户角色 */
+        /** Update User V1 */
         patch: operations["updateUserV1"];
         trace?: never;
     };
@@ -99,42 +99,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 重置用户密码 */
+        /** Reset User Password V1 */
         put: operations["resetUserPasswordV1"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/healthz": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 健康检查 */
-        get: operations["healthz"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Prometheus 指标（内部可观测） */
-        get: operations["metrics"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -149,11 +115,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 任务列表 */
+        /** List Tasks V2 */
         get: operations["listTasksV2"];
         put?: never;
-        /** 创建巡检任务（同名同 checksum 复用；同名不同 checksum 冲突） */
+        /** Create Task V2 */
         post: operations["createTaskV2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Overview V2 */
+        get: operations["getOverviewV2"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -167,11 +150,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 任务摘要（不含全量规则结果） */
+        /** Get Task V2 */
         get: operations["getTaskV2"];
         put?: never;
         post?: never;
-        /** 删除任务（级联删除 uploads/ 与 output/ 现场数据） */
+        /** Delete Task V2 */
         delete: operations["deleteTaskV2"];
         options?: never;
         head?: never;
@@ -187,7 +170,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 增量重跑（全部或指定规则） */
+        /** Rerun Task V2 */
         post: operations["rerunTaskV2"];
         delete?: never;
         options?: never;
@@ -204,7 +187,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 重建重跑（全量或强制重建解压的增量） */
+        /** Rebuild Task V2 */
         post: operations["rebuildTaskV2"];
         delete?: never;
         options?: never;
@@ -219,7 +202,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 巡检报告（HTML 在线预览） */
+        /** Get Report V2 */
         get: operations["getReportV2"];
         put?: never;
         post?: never;
@@ -236,7 +219,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 任务执行日志 */
+        /** Get Task Logs V2 */
         get: operations["getTaskLogsV2"];
         put?: never;
         post?: never;
@@ -253,7 +236,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 系统摘要与规则状态列表 */
+        /** Get System V2 */
         get: operations["getSystemV2"];
         put?: never;
         post?: never;
@@ -270,42 +253,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 单规则完整结果 */
+        /** Get Rule Result V2 */
         get: operations["getRuleResultV2"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页查询 KPI 原始记录 */
-        get: operations["listKpiRecordsV2"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/overview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 全局巡检概览 */
-        get: operations["getOverviewV2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -321,7 +270,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 已注册规则元数据（只读） */
+        /** List Inspectors V2 */
         get: operations["listInspectorsV2"];
         put?: never;
         post?: never;
@@ -338,7 +287,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 全部预制数据字典 */
+        /** List Dicts V2 */
         get: operations["listDictsV2"];
         put?: never;
         post?: never;
@@ -356,7 +305,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 维护字典项（纯内部开放） */
+        /** Update Dict V2 */
         put: operations["updateDictV2"];
         post?: never;
         delete?: never;
@@ -365,24 +314,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v3/kpi/resource-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页查询基础指标 */
-        get: operations["listKpiResourceMetricsV3"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v3/kpi/resource-metrics/classification": {
+    "/api/v5/kpi/measurement-units/import": {
         parameters: {
             query?: never;
             header?: never;
@@ -390,24 +322,24 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 批量分类 KPI 指标 */
-        put: operations["classifyKpiResourceMetricsV3"];
-        post?: never;
+        put?: never;
+        /** Import Kpi Measurement Units V5 */
+        post: operations["importKpiMeasurementUnitsV5"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v3/kpi/resource-metrics/classification-audits": {
+    "/api/v5/kpi/measurement-units": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 分页查询 KPI 分类审计 */
-        get: operations["listKpiClassificationAuditsV3"];
+        /** List Kpi Measurement Units V5 */
+        get: operations["listKpiMeasurementUnitsV5"];
         put?: never;
         post?: never;
         delete?: never;
@@ -416,152 +348,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v3/tasks/{task_id}/kpi/catalog-snapshot": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 读取任务 KPI 配置快照 */
-        get: operations["getKpiCatalogSnapshotV3"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/metric-rules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页查询指标规则 */
-        get: operations["listKpiMetricRulesV4"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/metric-rules/{metric_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询指标规则 */
-        get: operations["getKpiMetricRuleV4"];
-        /** 创建或更新指标规则与公式 */
-        put: operations["upsertKpiMetricRuleV4"];
-        post?: never;
-        /** 删除自定义指标规则并回退默认规则 */
-        delete: operations["deleteKpiMetricRuleV4"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/derived-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页查询在线派生指标 */
-        get: operations["listKpiDerivedMetricsV4"];
-        put?: never;
-        /** 创建在线派生指标 */
-        post: operations["createKpiDerivedMetricV4"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/derived-metrics/{metric_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询在线派生指标 */
-        get: operations["getKpiDerivedMetricV4"];
-        /** 更新在线派生指标 */
-        put: operations["updateKpiDerivedMetricV4"];
-        post?: never;
-        /** 删除未被引用的在线派生指标 */
-        delete: operations["deleteKpiDerivedMetricV4"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/thresholds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页查询阈值 */
-        get: operations["listKpiThresholdsV4"];
-        put?: never;
-        /** 创建阈值 */
-        post: operations["createKpiThresholdV4"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/thresholds/{threshold_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询阈值 */
-        get: operations["getKpiThresholdV4"];
-        /** 更新阈值 */
-        put: operations["updateKpiThresholdV4"];
-        post?: never;
-        /** 删除阈值 */
-        delete: operations["deleteKpiThresholdV4"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/capacity-rules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页查询容量规则 */
-        get: operations["listKpiCapacityRulesV4"];
-        put?: never;
-        /** 创建容量规则 */
-        post: operations["createKpiCapacityRuleV4"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v4/kpi/config/capacity-rules/{capacity_rule_id}": {
+    "/api/v5/kpi/measurement-units/{resource_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -569,35 +356,33 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 更新容量规则 */
-        put: operations["updateKpiCapacityRuleV4"];
+        put?: never;
         post?: never;
-        /** 删除容量规则 */
-        delete: operations["deleteKpiCapacityRuleV4"];
+        delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Set Kpi Measurement Unit Enabled V5 */
+        patch: operations["setKpiMeasurementUnitEnabledV5"];
         trace?: never;
     };
-    "/api/v4/kpi/config/display-rules": {
+    "/api/v5/kpi/measurement-bindings": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 分页查询展示规则 */
-        get: operations["listKpiDisplayRulesV4"];
+        /** List Kpi Measurement Bindings V5 */
+        get: operations["listKpiMeasurementBindingsV5"];
         put?: never;
-        /** 创建展示规则 */
-        post: operations["createKpiDisplayRuleV4"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v4/kpi/config/display-rules/{display_rule_id}": {
+    "/api/v5/kpi/measurement-bindings/{binding_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -605,43 +390,41 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 更新展示规则 */
-        put: operations["updateKpiDisplayRuleV4"];
+        put?: never;
         post?: never;
-        /** 删除展示规则 */
-        delete: operations["deleteKpiDisplayRuleV4"];
+        delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Set Kpi Measurement Binding Status V5 */
+        patch: operations["setKpiMeasurementBindingStatusV5"];
         trace?: never;
     };
-    "/api/v4/kpi/config/common": {
+    "/api/v5/kpi/measurement-derived": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 查询公共配置 */
-        get: operations["getKpiCommonConfigV4"];
-        /** 更新公共配置 */
-        put: operations["updateKpiCommonConfigV4"];
-        post?: never;
+        get?: never;
+        put?: never;
+        /** Create Kpi Measurement Derived V5 */
+        post: operations["createKpiMeasurementDerivedV5"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v4/kpi/config/audits": {
+    "/healthz": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 分页查询动态配置审计 */
-        get: operations["listKpiConfigAuditsV4"];
+        /** Healthz */
+        get: operations["healthz"];
         put?: never;
         post?: never;
         delete?: never;
@@ -650,15 +433,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v4/tasks/{task_id}/kpi/classification-clues": {
+    "/metrics": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 分页查询任务按需分类线索 */
-        get: operations["listKpiClassificationCluesV4"];
+        /** Metrics */
+        get: operations["metrics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -671,1071 +454,654 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        LoginRequestV1: {
-            username: string;
-            password: string;
+        /** Body_createTaskV2 */
+        Body_createTaskV2: {
+            /** Package File */
+            package_file: string;
+            /** Name */
+            name?: string | null;
+            /** Version */
+            version?: string | null;
+            /** Province */
+            province?: string | null;
+            /** Operator */
+            operator?: string | null;
+            /** Product */
+            product?: string | null;
         };
-        LoginResponseV1: {
-            token: string;
-            username: string;
-            /** @enum {string} */
-            role: "admin" | "viewer";
+        /** Body_importKpiMeasurementUnitsV5 */
+        Body_importKpiMeasurementUnitsV5: {
+            /** File */
+            file: string;
         };
-        UserInfoV1: {
-            username: string;
-            /** @enum {string} */
-            role: "admin" | "viewer";
-        };
-        UserV1: {
-            username: string;
-            /** @enum {string} */
-            role: "admin" | "viewer";
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        UserListResponseV1: {
-            items: components["schemas"]["UserV1"][];
+        /** DataPreparation */
+        DataPreparation: {
+            status: components["schemas"]["PreparationStatus"];
+            /** Items */
+            items: components["schemas"]["PreparationItem"][];
+            /** Total */
             total: number;
-            page: number;
-            page_size: number;
+            /** Success Count */
+            success_count: number;
+            /** Warning Count */
+            warning_count: number;
+            /** Failure Count */
+            failure_count: number;
+            /** Skip Count */
+            skip_count: number;
         };
-        UserCreateRequestV1: {
-            username: string;
-            password: string;
-            /** @enum {string} */
-            role: "admin" | "viewer";
+        /** DictItem */
+        DictItem: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
         };
-        UserPasswordRequestV1: {
-            new_password: string;
+        /** DictUpdateRequest */
+        DictUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
         };
-        UserRoleRequestV1: {
-            /** @enum {string} */
-            role: "admin" | "viewer";
+        /** DictsResponse */
+        DictsResponse: {
+            /** Province */
+            province: components["schemas"]["DictItem"][];
+            /** Operator */
+            operator: components["schemas"]["DictItem"][];
+            /** Product */
+            product: components["schemas"]["DictItem"][];
+            /** Version */
+            version: components["schemas"]["DictItem"][];
         };
-        /** @enum {string} */
-        TaskStatus: "pending" | "running" | "completed" | "failed";
-        /** @enum {string} */
-        RuleStatus: "pass" | "warn" | "fail" | "error" | "skip";
-        /** @enum {string} */
-        Severity: "low" | "medium" | "high" | "critical";
-        /**
-         * @description P0 数据准备 / P1 基础检查 / P2 综合分析
-         * @enum {integer}
-         */
-        Priority: 0 | 1 | 2;
-        /** @enum {string} */
-        RuleCategory: "log" | "kpi" | "traffic" | "alarm" | "config" | "resource" | "other";
-        /** @enum {string} */
-        TaskMode: "online" | "local";
-        /** @enum {string} */
-        TaskTrigger: "api" | "cli" | "rerun";
-        Summary: {
-            total: number;
-            pass: number;
-            warn: number;
-            fail: number;
-            error: number;
-            skip: number;
-        };
-        TaskStats: components["schemas"]["Summary"] & {
-            systems?: number;
-        };
-        Metric: {
-            /** @description 契约级稳定标识，跨任务/系统不可变 */
-            key: string;
-            label: string;
-            value: number | string;
-            unit?: string;
-            threshold?: {
-                min?: number;
-                max?: number;
-            };
-            baseline?: number | string;
-            /** @description 趋势图数据 */
-            series?: {
-                /** @description 时间点或序号 */
-                t?: string;
-                v?: number | string;
-            }[];
-        };
+        /** Finding */
         Finding: {
+            /** Finding Id */
             finding_id: string;
+            /** Title */
             title: string;
             severity: components["schemas"]["Severity"];
-            /** @description 结论来源文件（可定位原始数据） */
-            source_file?: string;
-            /** @description 证据片段（默认截断 2KB） */
-            evidence?: string;
-            details?: string;
-            recommendation?: string;
-            metrics?: components["schemas"]["Metric"][];
+            /** Source File */
+            source_file?: string | null;
+            /** Evidence */
+            evidence?: string | null;
+            /** Details */
+            details?: string | null;
+            /** Recommendation */
+            recommendation?: string | null;
+            /** Metrics */
+            metrics?: components["schemas"]["Metric"][] | null;
         };
-        RuleResult: {
-            code: string;
-            name: string;
-            category: components["schemas"]["RuleCategory"];
-            priority: components["schemas"]["Priority"];
-            execution_order: number;
-            status: components["schemas"]["RuleStatus"];
-            severity: components["schemas"]["Severity"];
-            summary?: string;
-            /** @description status=skip 时必填 */
-            skip_reason?: string;
-            /** Format: date-time */
-            executed_at?: string;
-            duration_ms?: number;
-            metrics?: components["schemas"]["Metric"][];
-            findings?: components["schemas"]["Finding"][];
-            metadata?: {
-                [key: string]: unknown;
-            };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
-        SystemInspection: {
-            package_file: string;
-            package_checksum?: string;
-            version?: string;
-            /** @enum {string} */
-            status: "completed" | "failed";
-            summary: components["schemas"]["Summary"];
-            rules: components["schemas"]["RuleResult"][];
-            customer?: {
-                [key: string]: unknown;
-            };
-        };
+        /** InspectionTask */
         InspectionTask: {
+            /** Task Id */
             task_id: string;
+            /** Name */
             name: string;
             mode: components["schemas"]["TaskMode"];
             status: components["schemas"]["TaskStatus"];
             trigger: components["schemas"]["TaskTrigger"];
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            completed_at?: string;
-            stats: components["schemas"]["TaskStats"];
-            system?: components["schemas"]["SystemInspection"];
-        };
-        TaskCreated: {
-            task_id: string;
-        };
-        TaskSummary: components["schemas"]["InspectionTask"] & {
-            system?: unknown;
-            /** @description 上传时选择的省份字典编码（可选） */
-            customer_province?: string;
-            /** @description 上传时选择的运营商字典编码（可选） */
-            customer_operator?: string;
-            /** @description 上传时选择的产品形态字典编码（可选） */
-            customer_product?: string;
-            /** @description 上传时选择的版本字典编码（可选） */
-            customer_version?: string;
-        };
-        TaskListResponse: {
-            items: components["schemas"]["TaskSummary"][];
-            total: number;
-            page: number;
-            page_size: number;
-        };
-        OverviewSummary: {
-            /** @description 任务总数 */
-            task_count: number;
-            /** @description 注册规则总数（包含 hidden 内部规则） */
-            registered_rule_count: number;
-            /** @description 全部任务的规则结果总数 */
-            rule_result_count: number;
-            /** @description 全部任务的发现问题总数（按 Finding 记录数，不去重） */
-            finding_count: number;
-            status_counts: components["schemas"]["Summary"];
-        };
-        RerunRequest: {
-            /** @description 不填表示重跑该任务全部规则 */
-            rule_codes?: string[];
-        };
-        /** @enum {string} */
-        RebuildModeV2: "full" | "incremental";
-        RebuildRequestV2: {
-            mode: components["schemas"]["RebuildModeV2"];
-            /** @description 破坏性重建确认；必须为 true。 */
-            confirmed: boolean;
-            /** @description 增量目标普通规则；全量请求必须省略或为空。 */
-            rule_codes?: string[];
             /**
-             * @default ui
-             * @enum {string}
+             * Created At
+             * Format: date-time
              */
-            trigger_source: "ui" | "api";
+            created_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+            stats: components["schemas"]["TaskStats"];
+            preparation?: components["schemas"]["DataPreparation"] | null;
+            system?: components["schemas"]["SystemInspection"] | null;
         };
-        LogEntry: {
-            /** Format: date-time */
-            ts: string;
-            level: string;
-            message: string;
-            rule_code?: string;
-            detail?: {
-                [key: string]: unknown;
-            };
-        };
-        TaskLogs: {
-            task_id: string;
-            entries: components["schemas"]["LogEntry"][];
-        };
+        /** InspectorInfo */
         InspectorInfo: {
+            /** Code */
             code: string;
+            /** Name */
             name: string;
             category: components["schemas"]["RuleCategory"];
             severity: components["schemas"]["Severity"];
             priority: components["schemas"]["Priority"];
+            /** Rule Version */
             rule_version: string;
+            /**
+             * Hidden
+             * @default false
+             */
             hidden: boolean;
-            description?: string;
-            recommendation?: string;
-            /** @description 匹配任务目录内相对路径的正则 */
-            source_patterns: string[];
-            outputs: {
-                metrics?: {
-                    key?: string;
-                    label?: string;
-                    unit?: string;
-                    /** @enum {string} */
-                    type?: "number" | "string" | "trend";
-                }[];
+            /** Description */
+            description?: string | null;
+            /** Recommendation */
+            recommendation?: string | null;
+            /** Source Patterns */
+            source_patterns?: string[];
+            /** Outputs */
+            outputs?: {
+                [key: string]: unknown;
             };
+            /** Params */
             params?: {
-                key?: string;
-                label?: string;
-                default?: string;
+                [key: string]: string;
             }[];
         };
-        DictItem: {
-            /** @description 编码，仅小写字母/数字/下划线 */
-            code: string;
-            name: string;
-        };
-        DictsResponse: {
-            province: components["schemas"]["DictItem"][];
-            operator: components["schemas"]["DictItem"][];
-            product: components["schemas"]["DictItem"][];
-            version: components["schemas"]["DictItem"][];
-        };
-        DictUpdateRequest: {
-            code: string;
-            name: string;
-        };
-        Error: {
+        /** KpiMeasurementBinding */
+        KpiMeasurementBinding: {
+            /** Id */
+            id: number;
+            /** Metric Resource Id */
+            metric_resource_id: string | null;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Raw Source Name */
+            raw_source_name: string;
+            /** Base Source Name */
+            base_source_name: string;
+            /** Display Unit */
+            display_unit: string | null;
             /**
-             * @description 错误码（新增时同步契约与实现）
+             * Status
              * @enum {string}
              */
-            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal";
+            status: "candidate" | "confirmed" | "conflict" | "ignored";
+            /** Enabled */
+            enabled: boolean;
+            /** Task Id */
+            task_id: string;
+            /** Source File */
+            source_file: string;
+        };
+        /** KpiMeasurementBindingList */
+        KpiMeasurementBindingList: {
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["KpiMeasurementBinding"][];
+        };
+        /** KpiMeasurementBindingStatusRequest */
+        KpiMeasurementBindingStatusRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "candidate" | "confirmed" | "ignored";
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /** KpiMeasurementDerived */
+        KpiMeasurementDerived: {
+            /** Id */
+            id: number;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Numerator Metric Id */
+            numerator_metric_id: string;
+            /** Denominator Metric Id */
+            denominator_metric_id: string;
+            /**
+             * Template
+             * @default success_rate
+             * @constant
+             */
+            template: "success_rate";
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** KpiMeasurementDerivedCreateRequest */
+        KpiMeasurementDerivedCreateRequest: {
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Numerator Metric Id */
+            numerator_metric_id: string;
+            /** Denominator Metric Id */
+            denominator_metric_id: string;
+        };
+        /** KpiMeasurementEnabledRequest */
+        KpiMeasurementEnabledRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** KpiMeasurementImportResult */
+        KpiMeasurementImportResult: {
+            /** Added */
+            added?: {
+                [key: string]: number;
+            };
+            /** Updated */
+            updated?: {
+                [key: string]: number;
+            };
+            /** Skipped */
+            skipped?: {
+                [key: string]: unknown;
+            }[];
+            /** Errors */
+            errors?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** KpiMeasurementUnit */
+        KpiMeasurementUnit: {
+            /** Resource Id */
+            resource_id: string;
+            /** Name Zh */
+            name_zh: string;
+            /** Name En */
+            name_en: string;
+            /** Filename Fragment */
+            filename_fragment: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Metric Count */
+            metric_count: number;
+            /** Unit Count */
+            unit_count: number;
+            /** Confirmed Binding Count */
+            confirmed_binding_count: number;
+            /** Candidate Binding Count */
+            candidate_binding_count: number;
+            /** Derived Count */
+            derived_count: number;
+        };
+        /** KpiMeasurementUnitList */
+        KpiMeasurementUnitList: {
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["KpiMeasurementUnit"][];
+        };
+        /** LogEntry */
+        LogEntry: {
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+            /** Level */
+            level: string;
+            /** Message */
             message: string;
+            /** Rule Code */
+            rule_code?: string | null;
+            /** Detail */
             detail?: {
                 [key: string]: unknown;
             };
         };
-        /** @enum {string} */
-        TaskStatusV2: "pending" | "running" | "completed" | "failed";
-        /** @enum {string} */
-        RuleStatusV2: "pass" | "warn" | "fail" | "error" | "skip";
-        /** @enum {string} */
-        SeverityV2: "low" | "medium" | "high" | "critical";
+        /** LoginRequestV1 */
+        LoginRequestV1: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
+        };
+        /** LoginResponseV1 */
+        LoginResponseV1: {
+            /** Token */
+            token: string;
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
+        };
+        /** Metric */
+        Metric: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Value */
+            value: number | string;
+            /** Unit */
+            unit?: string | null;
+            /** Threshold */
+            threshold?: {
+                [key: string]: number;
+            } | null;
+            /** Baseline */
+            baseline?: number | string | null;
+            /** Series */
+            series?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
+        /** OverviewSummary */
+        OverviewSummary: {
+            /** Task Count */
+            task_count: number;
+            /** Registered Rule Count */
+            registered_rule_count: number;
+            /** Rule Result Count */
+            rule_result_count: number;
+            /** Finding Count */
+            finding_count: number;
+            status_counts: components["schemas"]["Summary"];
+        };
+        /** PreparationIssue */
+        PreparationIssue: {
+            type: components["schemas"]["PreparationIssueType"];
+            /** Source */
+            source?: string | null;
+            /** Target */
+            target?: string | null;
+            /** Reason */
+            reason: string;
+            /** Path Length */
+            path_length?: number | null;
+            /** Path Limit */
+            path_limit?: number | null;
+        };
         /**
-         * @description P0 数据准备 / P1 基础检查 / P2 综合分析
+         * PreparationIssueType
+         * @enum {string}
+         */
+        PreparationIssueType: "conflict" | "duplicate" | "skipped" | "failed" | "rejected";
+        /** PreparationItem */
+        PreparationItem: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string;
+            status: components["schemas"]["PreparationStatus"];
+            /** Summary */
+            summary: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Extracted Count */
+            extracted_count: number;
+            /** Total Count */
+            total_count: number;
+            /** Issues */
+            issues?: components["schemas"]["PreparationIssue"][];
+        };
+        /**
+         * PreparationStatus
+         * @enum {string}
+         */
+        PreparationStatus: "pass" | "warn" | "fail" | "skip" | "error";
+        /**
+         * Priority
          * @enum {integer}
          */
-        PriorityV2: 0 | 1 | 2;
-        /** @enum {string} */
-        RuleCategoryV2: "log" | "kpi" | "traffic" | "alarm" | "config" | "resource" | "other";
-        /** @enum {string} */
-        TaskModeV2: "online" | "local";
-        /** @enum {string} */
-        TaskTriggerV2: "api" | "cli" | "rerun";
-        SummaryV2: {
-            total: number;
-            pass: number;
-            warn: number;
-            fail: number;
-            error: number;
-            skip: number;
+        Priority: 0 | 1 | 2;
+        /**
+         * RebuildMode
+         * @enum {string}
+         */
+        RebuildMode: "full" | "incremental";
+        /** RebuildRequest */
+        RebuildRequest: {
+            mode: components["schemas"]["RebuildMode"];
+            /** Confirmed */
+            confirmed: boolean;
+            /** Rule Codes */
+            rule_codes?: string[] | null;
+            /** @default ui */
+            trigger_source: components["schemas"]["RebuildTriggerSource"];
         };
-        TaskStatsV2: components["schemas"]["SummaryV2"] & {
-            systems?: number;
+        /**
+         * RebuildTriggerSource
+         * @enum {string}
+         */
+        RebuildTriggerSource: "ui" | "api";
+        /** RerunRequest */
+        RerunRequest: {
+            /** Rule Codes */
+            rule_codes?: string[] | null;
         };
-        MetricV2: {
-            /** @description 契约级稳定标识，跨任务/系统不可变 */
-            key: string;
-            label: string;
-            value: number | string;
-            unit?: string;
-            threshold?: {
-                min?: number;
-                max?: number;
-            };
-            baseline?: number | string;
-            /** @description 趋势图数据 */
-            series?: {
-                /** @description 时间点或序号 */
-                t?: string;
-                v?: number | string;
-            }[];
-        };
-        FindingV2: {
-            finding_id: string;
-            title: string;
-            severity: components["schemas"]["SeverityV2"];
-            /** @description 结论来源文件（可定位原始数据） */
-            source_file?: string;
-            /** @description 证据片段（默认截断 2KB） */
-            evidence?: string;
-            details?: string;
-            recommendation?: string;
-            metrics?: components["schemas"]["MetricV2"][];
-        };
-        RuleResultV2: {
+        /**
+         * RuleCategory
+         * @enum {string}
+         */
+        RuleCategory: "log" | "kpi" | "traffic" | "alarm" | "config" | "resource" | "other";
+        /** RuleResult */
+        RuleResult: {
+            /** Code */
             code: string;
+            /** Name */
             name: string;
-            category: components["schemas"]["RuleCategoryV2"];
-            priority: components["schemas"]["PriorityV2"];
+            category: components["schemas"]["RuleCategory"];
+            priority: components["schemas"]["Priority"];
+            /** Execution Order */
             execution_order: number;
-            status: components["schemas"]["RuleStatusV2"];
-            severity: components["schemas"]["SeverityV2"];
-            summary?: string;
-            /** @description status=skip 时必填 */
-            skip_reason?: string;
-            /** Format: date-time */
-            executed_at?: string;
-            duration_ms?: number;
-            metrics?: components["schemas"]["MetricV2"][];
-            findings?: components["schemas"]["FindingV2"][];
+            status: components["schemas"]["RuleStatus"];
+            severity: components["schemas"]["Severity"];
+            /** Summary */
+            summary?: string | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Executed At */
+            executed_at?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Metrics */
+            metrics?: components["schemas"]["Metric"][];
+            /** Findings */
+            findings?: components["schemas"]["Finding"][];
+            /** Metadata */
             metadata?: {
                 [key: string]: unknown;
             };
         };
-        SystemInspectionV2: {
+        /**
+         * RuleStatus
+         * @enum {string}
+         */
+        RuleStatus: "pass" | "warn" | "fail" | "error" | "skip";
+        /**
+         * Severity
+         * @enum {string}
+         */
+        Severity: "low" | "medium" | "high" | "critical";
+        /** Summary */
+        Summary: {
+            /** Total */
+            total: number;
+            /** Pass */
+            pass: number;
+            /** Warn */
+            warn: number;
+            /** Fail */
+            fail: number;
+            /** Error */
+            error: number;
+            /** Skip */
+            skip: number;
+        };
+        /** SystemInspection */
+        SystemInspection: {
+            /** Package File */
             package_file: string;
-            package_checksum?: string;
-            version?: string;
-            /** @enum {string} */
-            status: "completed" | "failed";
-            summary: components["schemas"]["SummaryV2"];
-            rules: components["schemas"]["RuleResultV2"][];
+            /** Package Checksum */
+            package_checksum?: string | null;
+            /** Version */
+            version?: string | null;
+            status: components["schemas"]["SystemStatus"];
+            summary: components["schemas"]["Summary"];
+            /** Rules */
+            rules?: components["schemas"]["RuleResult"][];
+            /** Customer */
             customer?: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
         };
-        /** @enum {string} */
-        PreparationStatusV2: "pass" | "warn" | "fail" | "skip" | "error";
-        /** @enum {string} */
-        PreparationIssueTypeV2: "conflict" | "duplicate" | "skipped" | "failed" | "rejected";
-        PreparationIssueV2: {
-            type: components["schemas"]["PreparationIssueTypeV2"];
-            source?: string | null;
-            target?: string | null;
-            reason: string;
-            path_length?: number | null;
-            path_limit?: number | null;
-        };
-        PreparationItemV2: {
-            /** @example pkg.extract.kpi */
-            code: string;
-            /** @example KPI 分类解压 */
-            name: string;
-            /** @example kpi */
-            category: string;
-            status: components["schemas"]["PreparationStatusV2"];
-            summary: string;
-            duration_ms?: number | null;
-            extracted_count: number;
-            total_count: number;
-            issues: components["schemas"]["PreparationIssueV2"][];
-        };
-        DataPreparationV2: {
-            status: components["schemas"]["PreparationStatusV2"];
-            items: components["schemas"]["PreparationItemV2"][];
-            total: number;
-            success_count: number;
-            warning_count: number;
-            failure_count: number;
-            skip_count: number;
-        };
-        InspectionTaskV2: {
-            task_id: string;
-            name: string;
-            mode: components["schemas"]["TaskModeV2"];
-            status: components["schemas"]["TaskStatusV2"];
-            trigger: components["schemas"]["TaskTriggerV2"];
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            completed_at?: string;
-            stats: components["schemas"]["TaskStatsV2"];
-            preparation?: components["schemas"]["DataPreparationV2"] | null;
-            system?: components["schemas"]["SystemInspectionV2"];
-        };
-        TaskCreatedV2: {
+        /**
+         * SystemStatus
+         * @enum {string}
+         */
+        SystemStatus: "completed" | "failed";
+        /** TaskCreated */
+        TaskCreated: {
+            /** Task Id */
             task_id: string;
         };
-        TaskSummaryV2: components["schemas"]["InspectionTaskV2"] & {
-            system?: unknown;
-            /** @description 上传时选择的省份字典编码（可选） */
-            customer_province?: string;
-            /** @description 上传时选择的运营商字典编码（可选） */
-            customer_operator?: string;
-            /** @description 上传时选择的产品形态字典编码（可选） */
-            customer_product?: string;
-            /** @description 上传时选择的版本字典编码（可选） */
-            customer_version?: string;
-        };
-        TaskListResponseV2: {
-            items: components["schemas"]["TaskSummaryV2"][];
+        /** TaskListResponse */
+        TaskListResponse: {
+            /** Items */
+            items: components["schemas"]["TaskSummary"][];
+            /** Total */
             total: number;
+            /** Page */
             page: number;
+            /** Page Size */
             page_size: number;
         };
-        OverviewSummaryV2: {
-            /** @description 任务总数 */
-            task_count: number;
-            /** @description 注册规则总数（包含 hidden 内部规则） */
-            registered_rule_count: number;
-            /** @description 全部任务的规则结果总数 */
-            rule_result_count: number;
-            /** @description 全部任务的发现问题总数（按 Finding 记录数，不去重） */
-            finding_count: number;
-            status_counts: components["schemas"]["SummaryV2"];
-        };
-        RerunRequestV2: {
-            /** @description 不填表示重跑该任务全部规则 */
-            rule_codes?: string[];
-        };
-        LogEntryV2: {
-            /** Format: date-time */
-            ts: string;
-            level: string;
-            message: string;
-            rule_code?: string;
-            detail?: {
-                [key: string]: unknown;
-            };
-        };
-        TaskLogsV2: {
+        /** TaskLogs */
+        TaskLogs: {
+            /** Task Id */
             task_id: string;
-            entries: components["schemas"]["LogEntryV2"][];
+            /** Entries */
+            entries: components["schemas"]["LogEntry"][];
         };
-        InspectorInfoV2: {
-            code: string;
-            name: string;
-            category: components["schemas"]["RuleCategoryV2"];
-            severity: components["schemas"]["SeverityV2"];
-            priority: components["schemas"]["PriorityV2"];
-            rule_version: string;
-            hidden: boolean;
-            description?: string;
-            recommendation?: string;
-            /** @description 匹配任务目录内相对路径的正则 */
-            source_patterns: string[];
-            outputs: {
-                metrics?: {
-                    key?: string;
-                    label?: string;
-                    unit?: string;
-                    /** @enum {string} */
-                    type?: "number" | "string" | "trend";
-                }[];
-            };
-            params?: {
-                key?: string;
-                label?: string;
-                default?: string;
-            }[];
-        };
-        DictItemV2: {
-            /** @description 编码，仅小写字母/数字/下划线 */
-            code: string;
-            name: string;
-        };
-        DictsResponseV2: {
-            province: components["schemas"]["DictItemV2"][];
-            operator: components["schemas"]["DictItemV2"][];
-            product: components["schemas"]["DictItemV2"][];
-            version: components["schemas"]["DictItemV2"][];
-        };
-        DictUpdateRequestV2: {
-            code: string;
-            name: string;
-        };
-        /** @description 任务删除失败错误（detail 携带重试上下文） */
-        TaskDeleteErrorV2: components["schemas"]["ErrorV2"] & {
-            detail?: components["schemas"]["TaskDeleteErrorDetailV2"];
-        };
-        TaskDeleteErrorDetailV2: {
-            /** @description 任务标识，禁止修改。 */
-            task_id: string;
-            /** @description 删除涉及的现场相对位置。 */
-            locations: string[];
-            /** @description 删除失败的具体路径。 */
-            failed_path: string;
-            /** @description 可读失败原因。 */
-            reason: string;
-            /** @description 路径长度；仅路径限制相关错误返回。 */
-            path_length?: number;
-            /** @description 路径长度上限；仅路径限制相关错误返回。 */
-            path_limit?: number;
-        };
-        /** @description 错误码（/api/v2 含包上传与损坏数据错误） */
-        ErrorV2: {
+        /**
+         * TaskMode
+         * @enum {string}
+         */
+        TaskMode: "online" | "local";
+        /** TaskStats */
+        TaskStats: {
+            /** Total */
+            total: number;
+            /** Pass */
+            pass: number;
+            /** Warn */
+            warn: number;
+            /** Fail */
+            fail: number;
+            /** Error */
+            error: number;
+            /** Skip */
+            skip: number;
             /**
-             * @description 错误码（新增时同步契约与实现）
+             * Systems
+             * @default 1
+             */
+            systems: number;
+        };
+        /**
+         * TaskStatus
+         * @enum {string}
+         */
+        TaskStatus: "pending" | "running" | "completed" | "failed";
+        /** TaskSummary */
+        TaskSummary: {
+            /** Task Id */
+            task_id: string;
+            /** Name */
+            name: string;
+            mode: components["schemas"]["TaskMode"];
+            status: components["schemas"]["TaskStatus"];
+            trigger: components["schemas"]["TaskTrigger"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+            stats: components["schemas"]["TaskStats"];
+            preparation?: components["schemas"]["DataPreparation"] | null;
+            system?: components["schemas"]["SystemInspection"] | null;
+            /** Customer Province */
+            customer_province?: string | null;
+            /** Customer Operator */
+            customer_operator?: string | null;
+            /** Customer Product */
+            customer_product?: string | null;
+            /** Customer Version */
+            customer_version?: string | null;
+        };
+        /**
+         * TaskTrigger
+         * @enum {string}
+         */
+        TaskTrigger: "api" | "cli" | "rerun";
+        /** UserCreateRequestV1 */
+        UserCreateRequestV1: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
+            /**
+             * Role
              * @enum {string}
              */
-            code: "invalid_package" | "package_too_large" | "invalid_dict" | "bad_request" | "unknown_rule" | "not_found" | "internal" | "task_delete_failed" | "package_checksum_conflict" | "invalid_filename" | "invalid_resource_csv" | "resource_conflict" | "corrupt_data" | "validation_error" | "invalid_rebuild_request" | "task_busy" | "package_missing" | "kpi_snapshot_invalid";
-            message: string;
-            detail?: {
-                [key: string]: unknown;
-            };
+            role: "admin" | "viewer";
         };
-        /** @enum {string} */
-        KpiDisplayStatusV2: "pass" | "warn" | "fail" | "neutral" | "unavailable";
-        KpiRecordItemV2: {
-            metric_key: string;
-            metric_name_zh: string;
-            source_file: string;
-            line_number: number;
-            period_minutes: number;
-            /** Format: date-time */
-            start_at: string;
-            /** Format: date-time */
-            end_at: string;
-            value: number | string | null;
-            status: components["schemas"]["KpiDisplayStatusV2"];
-            errors: {
-                [key: string]: unknown;
-            }[];
+        /** UserInfoV1 */
+        UserInfoV1: {
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
         };
-        KpiRecordPageV2: {
+        /** UserListResponseV1 */
+        UserListResponseV1: {
+            /** Items */
+            items?: components["schemas"]["UserV1"][];
+            /** Total */
             total: number;
+            /** Page */
             page: number;
+            /** Page Size */
             page_size: number;
-            items: components["schemas"]["KpiRecordItemV2"][];
         };
-        KpiMetricDefinitionV2: {
-            key: string;
-            name_zh: string;
-            name_en: string;
-            aliases: {
-                [key: string]: unknown;
-            }[];
-            /** @enum {string} */
-            metric_type: "count" | "rate" | "capacity" | "latency" | "gauge";
-            /** @enum {string} */
-            semantic_group: "quality" | "traffic" | "capacity" | "latency" | "other";
-            /** @enum {string} */
-            display_role: "highlight" | "context" | "diagnostic" | "catalog";
-            unit: string | null;
-            /** @enum {string} */
-            source_type: "raw" | "derived";
-            aggregation: {
-                [key: string]: unknown;
-            };
-            formula?: {
-                [key: string]: unknown;
-            } | null;
-            description?: string | null;
+        /** UserPasswordRequestV1 */
+        UserPasswordRequestV1: {
+            /** New Password */
+            new_password: string;
         };
-        KpiMetricResultV2: {
-            key: string;
-            main_value: number | string | null;
-            value_available: boolean;
-            unavailable_reason?: string | null;
-            display_status: components["schemas"]["KpiDisplayStatusV2"];
-            unit: string | null;
-            aggregation: string;
-            threshold?: {
-                [key: string]: unknown;
-            } | null;
-            breach_count: number;
-            series: {
-                [key: string]: unknown;
-            }[];
-            source_files: string[];
-            provenance: {
-                [key: string]: unknown;
-            };
+        /** UserRoleRequestV1 */
+        UserRoleRequestV1: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "viewer";
         };
-        KpiUnclassifiedMetricV2: {
-            source_name: string;
-            source_files: string[];
-            record_count: number;
-            sample_values: unknown[];
-            reason: string;
-        };
-        KpiMetadataV2: {
-            version: number;
-            domain: string;
-            metric_catalog: components["schemas"]["KpiMetricDefinitionV2"][];
-            kpi_results: components["schemas"]["KpiMetricResultV2"][];
-            unclassified_metrics: components["schemas"]["KpiUnclassifiedMetricV2"][];
-            kpi_files: {
-                [key: string]: unknown;
-            }[];
-        };
-        /** @enum {string} */
-        KpiResourceDomainV3: "unclassified" | "call" | "api" | "media" | "reserved";
-        KpiResourceMetricV3: {
-            key: string;
-            resource_id: string;
-            name_zh: string;
-            name_en: string;
-            domain: components["schemas"]["KpiResourceDomainV3"];
-            missing_from_base: boolean;
-            /** Format: date-time */
+        /** UserV1 */
+        UserV1: {
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
             created_at: string;
-            /** Format: date-time */
+            /**
+             * Updated At
+             * Format: date-time
+             */
             updated_at: string;
         };
-        KpiResourceMetricPageV3: {
-            items: components["schemas"]["KpiResourceMetricV3"][];
-            total: number;
-            page: number;
-            page_size: number;
-            base_data_version: string;
-            classification_version: number;
-            summary: {
-                unclassified: number;
-                call: number;
-                api: number;
-                media: number;
-                reserved: number;
-            };
-        };
-        KpiResourceClassificationRequestV3: {
-            metric_keys: string[];
-            /** @enum {string} */
-            domain: "unclassified" | "call" | "api" | "media" | "reserved";
-            operator: string;
-        };
-        KpiResourceClassificationResultV3: {
-            classification_version: number;
-            /** @enum {string} */
-            domain: "unclassified" | "call" | "api" | "media" | "reserved";
-            metric_keys: string[];
-            audited_count: number;
-        };
-        KpiClassificationAuditV3: {
-            id: number;
-            metric_key: string;
-            /** @enum {string} */
-            operation: "classify" | "unclassify";
-            operator: string;
-            /** @enum {string} */
-            from_domain: "unclassified" | "call" | "api" | "media" | "reserved";
-            /** @enum {string} */
-            to_domain: "unclassified" | "call" | "api" | "media" | "reserved";
-            /** @enum {string} */
-            result: "success";
-            /** Format: date-time */
-            operated_at: string;
-        };
-        KpiClassificationAuditPageV3: {
-            items: components["schemas"]["KpiClassificationAuditV3"][];
-            total: number;
-            page: number;
-            page_size: number;
-        };
-        KpiTaskCatalogSnapshotV3: {
-            /** @enum {integer} */
-            schema_version: 1 | 2 | 3;
-            base_data_version: string;
-            classification_version: number;
-            /** Format: date-time */
-            captured_at: string;
-            metrics: {
-                [key: string]: unknown;
-            }[];
-            /** @description 任务执行时启用的在线派生指标。 */
-            derived_metrics?: {
-                [key: string]: unknown;
-            }[];
-            /** @description 已标记为预留、任务未分类展示中隐藏的指标 key。 */
-            reserved_metric_keys?: string[];
-            rules: {
-                [key: string]: unknown;
-            };
-        };
-        /** @enum {string} */
-        KpiRegisteredDomainV4: "call" | "api" | "media";
-        /** @enum {string} */
-        KpiSourceTypeV4: "raw" | "derived";
-        /** @enum {string} */
-        KpiMetricTypeV4: "count" | "rate" | "capacity" | "latency" | "gauge";
-        /** @enum {string} */
-        KpiSemanticGroupV4: "traffic" | "quality" | "latency" | "capacity" | "other";
-        /** @enum {string} */
-        KpiDisplayRoleV4: "highlight" | "context";
-        /** @enum {string} */
-        KpiAggregationKindV4: "sum" | "min" | "max" | "mean" | "count" | "median" | "stddev" | "success_rate";
-        /** @enum {string} */
-        KpiThresholdDirectionV4: "min" | "max";
-        /** @enum {string} */
-        KpiCapacityStatusV4: "confirmed" | "unknown";
-        /** @enum {string} */
-        KpiCapacitySemanticsV4: "peak" | "concurrency" | "gauge";
-        /** @enum {string} */
-        KpiConfigEntityTypeV4: "metric_rule" | "threshold" | "capacity_rule" | "display_rule" | "common_config" | "derived_metric";
-        /** @enum {string} */
-        KpiClueStatusV4: "unclassified" | "classified" | "unregistered" | "ambiguous" | "reserved";
-        KpiMetricRuleRequestV4: {
-            metric_type: components["schemas"]["KpiMetricTypeV4"];
-            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
-            display_role: components["schemas"]["KpiDisplayRoleV4"];
-            unit: string;
-            source_type: components["schemas"]["KpiSourceTypeV4"];
-            aggregation_kind: components["schemas"]["KpiAggregationKindV4"];
-            description?: string | null;
-            formula?: components["schemas"]["KpiFormulaRequestV4"] | null;
-            operator: string;
-        };
-        KpiFormulaRequestV4: {
-            /** @enum {string} */
-            kind: "ratio";
-            numerator: string;
-            denominator: string;
-            denominator_fallback_inputs?: string[];
-            scale: number;
-        };
-        KpiMetricRuleV4: {
-            metric_key: string;
-            metric_type: components["schemas"]["KpiMetricTypeV4"];
-            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
-            display_role: components["schemas"]["KpiDisplayRoleV4"];
-            unit: string;
-            source_type: components["schemas"]["KpiSourceTypeV4"];
-            aggregation_kind: components["schemas"]["KpiAggregationKindV4"];
-            description?: string | null;
-            formula?: components["schemas"]["KpiFormulaV4"] | null;
-            domain?: components["schemas"]["KpiRegisteredDomainV4"] | null;
-            /** Format: date-time */
-            updated_at: string;
-            rule_config_version: number;
-        };
-        KpiMetricRulePageV4: {
-            items: components["schemas"]["KpiMetricRuleV4"][];
-            total: number;
-            page: number;
-            page_size: number;
-            rule_config_version: number;
-        };
-        KpiFormulaV4: {
-            /** @enum {string} */
-            kind: "ratio";
-            numerator: string;
-            denominator: string;
-            denominator_fallback_inputs?: string[];
-            scale: number;
-        };
-        KpiThresholdRequestV4: {
-            domain: components["schemas"]["KpiRegisteredDomainV4"];
-            metric_key: string;
-            label: string;
-            direction: components["schemas"]["KpiThresholdDirectionV4"];
-            unit: string;
-            default: number;
-            periods: {
-                [key: string]: number;
-            };
-            operator: string;
-        };
-        KpiThresholdV4: {
-            id: number;
-            domain: components["schemas"]["KpiRegisteredDomainV4"];
-            metric_key: string;
-            label: string;
-            direction: components["schemas"]["KpiThresholdDirectionV4"];
-            unit: string;
-            default: number;
-            periods: {
-                [key: string]: number;
-            };
-            /** Format: date-time */
-            updated_at: string;
-            rule_config_version: number;
-        };
-        KpiThresholdPageV4: {
-            items: components["schemas"]["KpiThresholdV4"][];
-            total: number;
-            page: number;
-            page_size: number;
-            rule_config_version: number;
-        };
-        KpiCapacityRuleRequestV4: {
-            source_name: string;
-            metric_key: string;
-            domain?: components["schemas"]["KpiRegisteredDomainV4"] | null;
-            semantics?: components["schemas"]["KpiCapacitySemanticsV4"] | null;
-            status: components["schemas"]["KpiCapacityStatusV4"];
-            operator: string;
-        };
-        KpiCapacityRuleV4: {
-            id: number;
-            source_name: string;
-            metric_key: string;
-            domain?: components["schemas"]["KpiRegisteredDomainV4"] | null;
-            semantics?: components["schemas"]["KpiCapacitySemanticsV4"] | null;
-            status: components["schemas"]["KpiCapacityStatusV4"];
-            /** Format: date-time */
-            updated_at: string;
-            rule_config_version: number;
-        };
-        KpiCapacityRulePageV4: {
-            items: components["schemas"]["KpiCapacityRuleV4"][];
-            total: number;
-            page: number;
-            page_size: number;
-            rule_config_version: number;
-        };
-        KpiDisplayRuleRequestV4: {
-            domain: components["schemas"]["KpiRegisteredDomainV4"];
-            metric_key: string;
-            role: components["schemas"]["KpiDisplayRoleV4"];
-            operator: string;
-        };
-        KpiDisplayRuleV4: {
-            id: number;
-            domain: components["schemas"]["KpiRegisteredDomainV4"];
-            metric_key: string;
-            role: components["schemas"]["KpiDisplayRoleV4"];
-            /** Format: date-time */
-            updated_at: string;
-            rule_config_version: number;
-        };
-        KpiDisplayRulePageV4: {
-            items: components["schemas"]["KpiDisplayRuleV4"][];
-            total: number;
-            page: number;
-            page_size: number;
-            rule_config_version: number;
-        };
-        KpiCommonConfigRequestV4: {
-            input_timezone: string;
-            max_files: number;
-            max_records: number;
-            operator: string;
-        };
-        KpiCommonConfigV4: {
-            input_timezone: string;
-            max_files: number;
-            max_records: number;
-            /** Format: date-time */
-            updated_at: string;
-            rule_config_version: number;
-        };
-        KpiDerivedMetricCreateRequestV4: {
-            /** @description 派生指标 key；新增时可省略，省略后由服务端生成唯一稳定 key。 */
-            metric_key?: string;
-            name_zh: string;
-            name_en: string;
-            domain: components["schemas"]["KpiRegisteredDomainV4"];
-            metric_type: components["schemas"]["KpiMetricTypeV4"];
-            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
-            display_role: components["schemas"]["KpiDisplayRoleV4"];
-            unit: string;
-            description?: string | null;
-            enabled: boolean;
-            formula: components["schemas"]["KpiDerivedFormulaRequestV4"];
-        };
-        KpiDerivedMetricUpdateRequestV4: {
-            name_zh: string;
-            name_en: string;
-            domain: components["schemas"]["KpiRegisteredDomainV4"];
-            metric_type: components["schemas"]["KpiMetricTypeV4"];
-            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
-            display_role: components["schemas"]["KpiDisplayRoleV4"];
-            unit: string;
-            description?: string | null;
-            enabled: boolean;
-            formula: components["schemas"]["KpiDerivedFormulaRequestV4"];
-        };
-        KpiDerivedFormulaRequestV4: {
-            /** @enum {string} */
-            kind: "ratio" | "inverse_ratio";
-            numerator: string;
-            denominator: string;
-            denominator_fallback_inputs?: string[];
-            scale: number;
-        };
-        KpiDerivedMetricV4: {
-            metric_key: string;
-            name_zh: string;
-            name_en: string;
-            domain: components["schemas"]["KpiRegisteredDomainV4"];
-            metric_type: components["schemas"]["KpiMetricTypeV4"];
-            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
-            display_role: components["schemas"]["KpiDisplayRoleV4"];
-            unit: string;
-            description?: string | null;
-            enabled: boolean;
-            formula: components["schemas"]["KpiDerivedFormulaV4"];
-            /** Format: date-time */
-            updated_at: string;
-            rule_config_version: number;
-        };
-        KpiDerivedFormulaV4: {
-            /** @enum {string} */
-            kind: "ratio" | "inverse_ratio";
-            numerator: string;
-            denominator: string;
-            denominator_fallback_inputs?: string[];
-            scale: number;
-        };
-        KpiDerivedMetricPageV4: {
-            items: components["schemas"]["KpiDerivedMetricV4"][];
-            total: number;
-            page: number;
-            page_size: number;
-            rule_config_version: number;
-        };
-        KpiConfigDeleteResultV4: {
-            deleted: boolean;
-            entity_type: components["schemas"]["KpiConfigEntityTypeV4"];
-            entity_key: string;
-            rule_config_version: number;
-        };
-        KpiConfigAuditV4: {
-            id: number;
-            entity_type: components["schemas"]["KpiConfigEntityTypeV4"];
-            entity_key: string;
-            /** @enum {string} */
-            operation: "upsert" | "delete";
-            operator: string;
-            before?: {
-                [key: string]: unknown;
-            } | null;
-            after?: {
-                [key: string]: unknown;
-            } | null;
-            result: string;
-            rule_config_version: number;
-            detail?: {
-                [key: string]: unknown;
-            } | null;
-            /** Format: date-time */
-            operated_at: string;
-        };
-        KpiConfigAuditPageV4: {
-            items: components["schemas"]["KpiConfigAuditV4"][];
-            total: number;
-            page: number;
-            page_size: number;
-        };
-        KpiClassificationClueV4: {
-            source_name: string;
-            metric_key?: string | null;
-            candidates?: {
-                metric_key: string;
-                name_zh: string;
-                name_en: string;
-            }[];
-            clue_status: components["schemas"]["KpiClueStatusV4"];
-            rule_code: string;
-            domain: string;
-            source_files: string[];
-            record_count: number;
-            sample_values: unknown[];
-            resolution_note?: string | null;
-        };
-        KpiClassificationCluePageV4: {
-            items: components["schemas"]["KpiClassificationClueV4"][];
-            total: number;
-            page: number;
-            page_size: number;
-            /** @description 各线索状态的计数（不受筛选条件影响） */
-            summary?: {
-                [key: string]: number;
-            };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
-    responses: {
-        /** @description 请求错误 */
-        Error400: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description 未登录或会话已失效 */
-        Error401: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorV2"];
-            };
-        };
-        /** @description 资源不存在 */
-        Error404: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description 没有执行该操作的权限 */
-        Error403: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description 资源冲突 */
-        Error409: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description 文件过大 */
-        Error413: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description 请求参数校验失败 */
-        Error422: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorV2"];
-            };
-        };
-        /** @description 服务器内部错误 */
-        Error500: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorV2"];
-            };
-        };
-    };
-    parameters: {
-        TaskId: string;
-        RuleCode: string;
-        Page: number;
-        PageSize: number;
-        UserPageSize: number;
-        Username: string;
-        KpiRecordPageSize: number;
-    };
+    responses: never;
+    parameters: never;
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -1755,7 +1121,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 登录成功 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1764,38 +1130,62 @@ export interface operations {
                     "application/json": components["schemas"]["LoginResponseV1"];
                 };
             };
-            401: components["responses"]["Error401"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     logoutV1: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description 已登出 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
-            401: components["responses"]["Error401"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     getMeV1: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description 当前用户 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1804,22 +1194,32 @@ export interface operations {
                     "application/json": components["schemas"]["UserInfoV1"];
                 };
             };
-            401: components["responses"]["Error401"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     listUsersV1: {
         parameters: {
             query?: {
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["UserPageSize"];
+                page?: number;
+                page_size?: number;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description 用户台账 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1828,14 +1228,23 @@ export interface operations {
                     "application/json": components["schemas"]["UserListResponseV1"];
                 };
             };
-            401: components["responses"]["Error401"];
-            403: components["responses"]["Error403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     createUserV1: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1845,7 +1254,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 用户已创建 */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1854,42 +1263,56 @@ export interface operations {
                     "application/json": components["schemas"]["UserV1"];
                 };
             };
-            401: components["responses"]["Error401"];
-            403: components["responses"]["Error403"];
-            409: components["responses"]["Error409"];
-            422: components["responses"]["Error422"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     deleteUserV1: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
-                username: components["parameters"]["Username"];
+                username: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description 用户已删除 */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Error401"];
-            403: components["responses"]["Error403"];
-            404: components["responses"]["Error404"];
-            409: components["responses"]["Error409"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     updateUserV1: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
-                username: components["parameters"]["Username"];
+                username: string;
             };
             cookie?: never;
         };
@@ -1899,7 +1322,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 用户角色已更新 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1908,18 +1331,25 @@ export interface operations {
                     "application/json": components["schemas"]["UserV1"];
                 };
             };
-            401: components["responses"]["Error401"];
-            403: components["responses"]["Error403"];
-            404: components["responses"]["Error404"];
-            409: components["responses"]["Error409"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     resetUserPasswordV1: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
-                username: components["parameters"]["Username"];
+                username: string;
             };
             cookie?: never;
         };
@@ -1929,7 +1359,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 用户密码已重置 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1938,10 +1368,664 @@ export interface operations {
                     "application/json": components["schemas"]["UserV1"];
                 };
             };
-            401: components["responses"]["Error401"];
-            403: components["responses"]["Error403"];
-            404: components["responses"]["Error404"];
-            422: components["responses"]["Error422"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listTasksV2: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_createTaskV2"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getOverviewV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewSummary"];
+                };
+            };
+        };
+    };
+    getTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectionTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rerunTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RerunRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rebuildTaskV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebuildRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getReportV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTaskLogsV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskLogs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getSystemV2: {
+        parameters: {
+            query?: {
+                exclude_details?: boolean;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemInspection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getRuleResultV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listInspectorsV2: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                include_hidden?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listDictsV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictsResponse"];
+                };
+            };
+        };
+    };
+    updateDictV2: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                dict_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DictUpdateRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    importKpiMeasurementUnitsV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_importKpiMeasurementUnitsV5"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listKpiMeasurementUnitsV5: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                enabled?: boolean | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementUnitList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setKpiMeasurementUnitEnabledV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementEnabledRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listKpiMeasurementBindingsV5: {
+        parameters: {
+            query?: {
+                measurement_unit_id?: string | null;
+                status?: string | null;
+                search?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementBindingList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setKpiMeasurementBindingStatusV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                binding_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementBindingStatusRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createKpiMeasurementDerivedV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementDerivedCreateRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementDerived"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     healthz: {
@@ -1953,14 +2037,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 服务健康 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        [key: string]: unknown;
+                        [key: string]: string;
                     };
                 };
             };
@@ -1975,1288 +2059,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Prometheus 文本格式指标 */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/plain": string;
+                    "application/json": unknown;
                 };
             };
-        };
-    };
-    listTasksV2: {
-        parameters: {
-            query?: {
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-                status?: components["schemas"]["TaskStatusV2"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 任务摘要列表 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskListResponseV2"];
-                };
-            };
-            422: components["responses"]["Error422"];
-        };
-    };
-    createTaskV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description 数据压缩包（zip/tar.gz，非空，默认上限 2GB）
-                     */
-                    package_file: string;
-                    /** @description 任务名称（可选） */
-                    name?: string;
-                    /** @description 版本字典编码（可选） */
-                    version?: string;
-                    /** @description 省份字典编码（可选） */
-                    province?: string;
-                    /** @description 运营商字典编码（可选） */
-                    operator?: string;
-                    /** @description 产品形态字典编码（可选） */
-                    product?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description 任务已创建，异步执行 */
-            202: {
-                headers: {
-                    /** @example /api/v2/tasks/task-001 */
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskCreatedV2"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            /** @description 同名包但 checksum 不同 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-            413: components["responses"]["Error413"];
-        };
-    };
-    getTaskV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 任务摘要 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InspectionTaskV2"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    deleteTaskV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 已删除 */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["Error404"];
-            /** @description 任务正在排队或执行，禁止删除 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-            /** @description 任务现场删除失败；任务记录与可恢复现场保持可见 */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskDeleteErrorV2"];
-                };
-            };
-        };
-    };
-    rerunTaskV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RerunRequestV2"];
-            };
-        };
-        responses: {
-            /** @description 重跑任务已受理 */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskCreatedV2"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    rebuildTaskV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RebuildRequestV2"];
-            };
-        };
-        responses: {
-            /** @description 重建任务已受理 */
-            202: {
-                headers: {
-                    /** @description 任务详情地址 */
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskCreatedV2"];
-                };
-            };
-            /** @description 请求无效、未确认或规则无效 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-            404: components["responses"]["Error404"];
-            /** @description 任务忙、原始包缺失或增量快照无效 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    getReportV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description HTML 报告 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    getTaskLogsV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 结构化执行日志 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskLogsV2"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    getSystemV2: {
-        parameters: {
-            query?: {
-                /** @description 为 true 时只返回规则状态摘要，清空 rules[].metadata/metrics/findings。 */
-                exclude_details?: boolean;
-            };
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 系统巡检结果 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemInspectionV2"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    getRuleResultV2: {
-        parameters: {
-            query?: {
-                /** @description 为 true 时清空 KPI metadata.kpi_files[].records，并对 kpi_results[].series 与 provenance.direct_cross_reference 做最多 200 点的展示抽稀；完整序列保留在规则结果文件中。 */
-                exclude_records?: boolean;
-            };
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-                rule_code: components["parameters"]["RuleCode"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 规则结果（metrics/findings） */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RuleResultV2"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    listKpiRecordsV2: {
-        parameters: {
-            query?: {
-                /** @description 稳定指标 key，精确匹配。 */
-                metric_key?: string;
-                /** @description 任务内相对路径，精确匹配。 */
-                source_file?: string;
-                period_minutes?: 5 | 15 | 30 | 60;
-                status?: components["schemas"]["KpiDisplayStatusV2"];
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["KpiRecordPageSize"];
-            };
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-                rule_code: components["parameters"]["RuleCode"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description KPI 原始记录分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiRecordPageV2"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            404: components["responses"]["Error404"];
-            422: components["responses"]["Error422"];
-        };
-    };
-    getOverviewV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 任务、注册规则、规则结果与发现问题统计 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OverviewSummaryV2"];
-                };
-            };
-        };
-    };
-    listInspectorsV2: {
-        parameters: {
-            query?: {
-                category?: components["schemas"]["RuleCategoryV2"];
-                include_hidden?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 规则元数据列表 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InspectorInfoV2"][];
-                };
-            };
-        };
-    };
-    listDictsV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 字典 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DictsResponseV2"];
-                };
-            };
-        };
-    };
-    updateDictV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                dict_name: "province" | "operator" | "product" | "version";
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DictUpdateRequestV2"];
-            };
-        };
-        responses: {
-            /** @description 更新后的字典 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DictItemV2"][];
-                };
-            };
-            400: components["responses"]["Error400"];
-        };
-    };
-    listKpiResourceMetricsV3: {
-        parameters: {
-            query?: {
-                /** @description 按资源 ID、中文名或英文名模糊匹配 */
-                search?: string;
-                domain?: components["schemas"]["KpiResourceDomainV3"];
-                include_missing?: boolean;
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 基础指标分页和统计 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiResourceMetricPageV3"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            500: components["responses"]["Error500"];
-        };
-    };
-    classifyKpiResourceMetricsV3: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiResourceClassificationRequestV3"];
-            };
-        };
-        responses: {
-            /** @description 整批分类成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiResourceClassificationResultV3"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            404: components["responses"]["Error404"];
-            /** @description 指标被公式、阈值或容量规则引用 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    listKpiClassificationAuditsV3: {
-        parameters: {
-            query?: {
-                metric_key?: string;
-                operator?: string;
-                domain?: components["schemas"]["KpiResourceDomainV3"];
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 分类审计分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiClassificationAuditPageV3"];
-                };
-            };
-            400: components["responses"]["Error400"];
-        };
-    };
-    getKpiCatalogSnapshotV3: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: components["parameters"]["TaskId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 任务 KPI 配置快照 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiTaskCatalogSnapshotV3"];
-                };
-            };
-            404: components["responses"]["Error404"];
-            /** @description 任务存在但 KPI 配置快照缺失 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-            500: components["responses"]["Error500"];
-        };
-    };
-    listKpiMetricRulesV4: {
-        parameters: {
-            query?: {
-                search?: string;
-                source_type?: components["schemas"]["KpiSourceTypeV4"];
-                domain?: components["schemas"]["KpiRegisteredDomainV4"];
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 指标规则分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiMetricRulePageV4"];
-                };
-            };
-        };
-    };
-    getKpiMetricRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                metric_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 指标规则 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiMetricRuleV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    upsertKpiMetricRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                metric_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiMetricRuleRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 保存成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiMetricRuleV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            404: components["responses"]["Error404"];
-            /** @description 引用保护、公式循环或配置冲突 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    deleteKpiMetricRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                metric_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 删除成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    listKpiDerivedMetricsV4: {
-        parameters: {
-            query?: {
-                search?: string;
-                domain?: components["schemas"]["KpiRegisteredDomainV4"];
-                enabled?: boolean;
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 在线派生指标分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiDerivedMetricPageV4"];
-                };
-            };
-        };
-    };
-    createKpiDerivedMetricV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiDerivedMetricCreateRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 已受理创建 */
-            202: {
-                headers: {
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiDerivedMetricV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            /** @description key 重复或配置冲突 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    getKpiDerivedMetricV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                metric_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 在线派生指标 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiDerivedMetricV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    updateKpiDerivedMetricV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                metric_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiDerivedMetricUpdateRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 保存成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiDerivedMetricV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            404: components["responses"]["Error404"];
-            /** @description 配置冲突 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    deleteKpiDerivedMetricV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                metric_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 删除成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-            /** @description 派生指标仍被引用 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    listKpiThresholdsV4: {
-        parameters: {
-            query?: {
-                domain?: components["schemas"]["KpiRegisteredDomainV4"];
-                search?: string;
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 阈值分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiThresholdPageV4"];
-                };
-            };
-        };
-    };
-    createKpiThresholdV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiThresholdRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 已受理创建 */
-            202: {
-                headers: {
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiThresholdV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            /** @description domain+metric_key 重复 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    getKpiThresholdV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                threshold_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 阈值 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiThresholdV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    updateKpiThresholdV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                threshold_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiThresholdRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 保存成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiThresholdV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            404: components["responses"]["Error404"];
-        };
-    };
-    deleteKpiThresholdV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                threshold_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 删除成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    listKpiCapacityRulesV4: {
-        parameters: {
-            query?: {
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 容量规则分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiCapacityRulePageV4"];
-                };
-            };
-        };
-    };
-    createKpiCapacityRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiCapacityRuleRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 已受理创建 */
-            202: {
-                headers: {
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiCapacityRuleV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            /** @description source_name 重复 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    updateKpiCapacityRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                capacity_rule_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiCapacityRuleRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 保存成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiCapacityRuleV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    deleteKpiCapacityRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                capacity_rule_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 删除成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    listKpiDisplayRulesV4: {
-        parameters: {
-            query?: {
-                domain?: components["schemas"]["KpiRegisteredDomainV4"];
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 展示规则分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiDisplayRulePageV4"];
-                };
-            };
-        };
-    };
-    createKpiDisplayRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiDisplayRuleRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 已受理创建 */
-            202: {
-                headers: {
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiDisplayRuleV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-            /** @description domain+metric_key 重复 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorV2"];
-                };
-            };
-        };
-    };
-    updateKpiDisplayRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                display_rule_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiDisplayRuleRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 保存成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiDisplayRuleV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    deleteKpiDisplayRuleV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                display_rule_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 删除成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
-        };
-    };
-    getKpiCommonConfigV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 公共配置 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiCommonConfigV4"];
-                };
-            };
-        };
-    };
-    updateKpiCommonConfigV4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KpiCommonConfigRequestV4"];
-            };
-        };
-        responses: {
-            /** @description 保存成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiCommonConfigV4"];
-                };
-            };
-            400: components["responses"]["Error400"];
-        };
-    };
-    listKpiConfigAuditsV4: {
-        parameters: {
-            query?: {
-                entity_type?: components["schemas"]["KpiConfigEntityTypeV4"];
-                operator?: string;
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 配置审计分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiConfigAuditPageV4"];
-                };
-            };
-        };
-    };
-    listKpiClassificationCluesV4: {
-        parameters: {
-            query?: {
-                clue_status?: components["schemas"]["KpiClueStatusV4"];
-                search?: string;
-                page?: components["parameters"]["Page"];
-                page_size?: components["parameters"]["PageSize"];
-            };
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 线索分页 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KpiClassificationCluePageV4"];
-                };
-            };
-            404: components["responses"]["Error404"];
         };
     };
 }

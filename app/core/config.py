@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     local_run_dir: Path = Path("local_run")
     output_dir: Path = Path("output")
     config_dir: Path = Path("deploy/config")
-    kpi_data_dir: Path = Path("deploy/data/kpi")
 
     # 上传限制（在线模式）
     max_upload_mb: int = 2048
@@ -39,18 +38,6 @@ class Settings(BaseSettings):
     @property
     def config(self) -> Path:
         return self.resolved(self.config_dir)
-
-    @property
-    def kpi_data(self) -> Path:
-        return self.resolved(self.kpi_data_dir)
-
-    @property
-    def kpi_metrics_file(self) -> Path:
-        return self.kpi_data / "base" / "metrics.json"
-
-    @property
-    def kpi_units_file(self) -> Path:
-        return self.kpi_data / "base" / "units.json"
 
     @property
     def scan_rules(self) -> Path:

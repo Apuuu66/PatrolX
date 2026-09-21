@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import JSON, DateTime, Engine, Float, String, UniqueConstraint, create_engine, inspect, text
+from sqlalchemy import JSON, DateTime, Engine, String, UniqueConstraint, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.core.config import settings
@@ -68,183 +68,55 @@ def init_db() -> None:
         Base.metadata.create_all(engine)
 
 
-class KpiClassification(Base):
-    """KPI 指标的当前分类状态；metric_key 可指向已移除的基础资源。"""
+class KpiMeasurementResource(Base):
+    """新版测量单元/指标/单位资源目录。"""
 
-    __tablename__ = "kpi_classifications"
+    __tablename__ = "kpi_measurement_resources"
 
-    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
-    domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiClassificationRevision(Base):
-    """KPI 分类全局修订单行表，id 固定为 1。"""
-
-    __tablename__ = "kpi_classification_revisions"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    revision: Mapped[int] = mapped_column(default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiClassificationAudit(Base):
-    """KPI 分类成功操作的审计流水。"""
-
-    __tablename__ = "kpi_classification_audits"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    metric_key: Mapped[str] = mapped_column(String(128), index=True)
-    operation: Mapped[str] = mapped_column(String(32))
-    operator: Mapped[str] = mapped_column(String(128), index=True)
-    previous_domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    next_domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    result: Mapped[str] = mapped_column(String(32), default="success")
-    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    operated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-
-
-class KpiMetricRule(Base):
-    """KPI 指标的动态计算口径；基础资源仍只能离线维护。"""
-
-    __tablename__ = "kpi_metric_rules"
-
-    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
-    metric_type: Mapped[str] = mapped_column(String(32), default="count")
-    semantic_group: Mapped[str] = mapped_column(String(32), default="other")
-    display_role: Mapped[str] = mapped_column(String(32), default="context")
-    unit: Mapped[str] = mapped_column(String(64), default="")
-    source_type: Mapped[str] = mapped_column(String(16), default="raw")
-    aggregation_kind: Mapped[str] = mapped_column(String(32), default="sum")
-    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiMetricFormula(Base):
-    """KPI 受控比率公式；与指标规则一对一。"""
-
-    __tablename__ = "kpi_metric_formulas"
-
-    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
-    numerator: Mapped[str] = mapped_column(String(128))
-    denominator: Mapped[str] = mapped_column(String(128))
-    denominator_fallback_inputs: Mapped[list] = mapped_column(JSON, default=list)
-    scale: Mapped[float] = mapped_column(Float, default=1.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiDerivedMetric(Base):
-    """在线维护的受控派生指标；只支持比率与反向比率。"""
-
-    __tablename__ = "kpi_derived_metrics"
-
-    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    resource_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(8), index=True)
     name_zh: Mapped[str] = mapped_column(String(256))
     name_en: Mapped[str] = mapped_column(String(256))
-    domain: Mapped[str] = mapped_column(String(32), index=True)
-    metric_type: Mapped[str] = mapped_column(String(32))
-    semantic_group: Mapped[str] = mapped_column(String(32))
-    display_role: Mapped[str] = mapped_column(String(32))
-    unit: Mapped[str] = mapped_column(String(64))
-    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    filename_fragment: Mapped[str | None] = mapped_column(String(256), nullable=True)
     enabled: Mapped[bool] = mapped_column(default=True)
-    formula_kind: Mapped[str] = mapped_column(String(16))
-    numerator: Mapped[str] = mapped_column(String(128))
-    denominator: Mapped[str] = mapped_column(String(128))
-    denominator_fallback_inputs: Mapped[list] = mapped_column(JSON, default=list)
-    scale: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class KpiThresholdRule(Base):
-    """按业务域和指标维护的默认与周期阈值。"""
+class KpiMeasurementBinding(Base):
+    """任务发现的指标列与测量单元绑定。"""
 
-    __tablename__ = "kpi_thresholds"
-    __table_args__ = (UniqueConstraint("domain", "metric_key", name="uq_kpi_threshold_domain_metric"),)
+    __tablename__ = "kpi_measurement_bindings"
+    __table_args__ = (UniqueConstraint("measurement_unit_id", "raw_source_name", name="uq_kpi_binding_mu_raw_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    domain: Mapped[str] = mapped_column(String(32), index=True)
-    metric_key: Mapped[str] = mapped_column(String(128), index=True)
-    label: Mapped[str] = mapped_column(String(128))
-    direction: Mapped[str] = mapped_column(String(8))
-    unit: Mapped[str] = mapped_column(String(64))
-    default_value: Mapped[float] = mapped_column(Float)
-    periods: Mapped[dict] = mapped_column(JSON, default=dict)
+    metric_resource_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    measurement_unit_id: Mapped[str] = mapped_column(String(128), index=True)
+    raw_source_name: Mapped[str] = mapped_column(String(256))
+    base_source_name: Mapped[str] = mapped_column(String(256))
+    display_unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="candidate", index=True)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    source_file: Mapped[str] = mapped_column(String(512))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class KpiCapacityRule(Base):
-    """KPI 容量列映射规则。"""
+class KpiMeasurementDerived(Base):
+    """新版 KPI 成功率派生定义。"""
 
-    __tablename__ = "kpi_capacity_rules"
+    __tablename__ = "kpi_measurement_derived"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    source_name: Mapped[str] = mapped_column(String(256), unique=True)
-    metric_key: Mapped[str] = mapped_column(String(128), index=True)
-    domain: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    semantics: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="unknown")
+    measurement_unit_id: Mapped[str] = mapped_column(String(128), index=True)
+    metric_resource_id: Mapped[str] = mapped_column(String(128))
+    numerator_metric_id: Mapped[str] = mapped_column(String(128))
+    denominator_metric_id: Mapped[str] = mapped_column(String(128))
+    template: Mapped[str] = mapped_column(String(32), default="success_rate")
+    enabled: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiDisplayRule(Base):
-    """KPI 展示角色规则。"""
-
-    __tablename__ = "kpi_display_rules"
-    __table_args__ = (UniqueConstraint("domain", "metric_key", name="uq_kpi_display_domain_metric"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    domain: Mapped[str] = mapped_column(String(32), index=True)
-    metric_key: Mapped[str] = mapped_column(String(128), index=True)
-    role: Mapped[str] = mapped_column(String(16), default="context")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiCommonConfig(Base):
-    """KPI 输入时区与解析预算的单行配置。"""
-
-    __tablename__ = "kpi_common_config"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    input_timezone: Mapped[str] = mapped_column(String(64), default="Asia/Shanghai")
-    max_files: Mapped[int] = mapped_column(default=1000)
-    max_records: Mapped[int] = mapped_column(default=200000)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiRuleConfigRevision(Base):
-    """KPI 动态配置全局修订单行表。"""
-
-    __tablename__ = "kpi_rule_config_revisions"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    revision: Mapped[int] = mapped_column(default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class KpiRuleConfigAudit(Base):
-    """KPI 动态配置成功变更的审计流水。"""
-
-    __tablename__ = "kpi_rule_config_audits"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    entity_type: Mapped[str] = mapped_column(String(32), index=True)
-    entity_key: Mapped[str] = mapped_column(String(256), index=True)
-    operation: Mapped[str] = mapped_column(String(16))
-    operator: Mapped[str] = mapped_column(String(128), index=True)
-    before: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    after: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    result: Mapped[str] = mapped_column(String(16), default="success")
-    rule_config_version: Mapped[int] = mapped_column(default=0)
-    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    operated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class AuthUser(Base):
