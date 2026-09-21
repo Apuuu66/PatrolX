@@ -685,11 +685,10 @@ def upsert_kpi_metric_rule_v4(
 )
 def delete_kpi_metric_rule_v4(
     metric_key: str = PathParam(),
-    operator: str = Query(min_length=1),
-    _auth: AuthSession = Depends(require_role("admin")),
+    auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
-        return delete_metric_rule(metric_key, operator)
+        return delete_metric_rule(metric_key, auth.username)
     except KpiConfigError as exc:
         raise _convert_kpi_config_error(exc) from exc
 
@@ -836,11 +835,10 @@ def update_kpi_threshold_v4(
 )
 def delete_kpi_threshold_v4(
     threshold_id: int = PathParam(),
-    operator: str = Query(min_length=1),
-    _auth: AuthSession = Depends(require_role("admin")),
+    auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
-        return delete_threshold(threshold_id, operator)
+        return delete_threshold(threshold_id, auth.username)
     except KpiConfigError as exc:
         raise _convert_kpi_config_error(exc) from exc
 
@@ -900,11 +898,10 @@ def update_kpi_capacity_rule_v4(
 )
 def delete_kpi_capacity_rule_v4(
     capacity_rule_id: int = PathParam(),
-    operator: str = Query(min_length=1),
-    _auth: AuthSession = Depends(require_role("admin")),
+    auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
-        return delete_capacity_rule(capacity_rule_id, operator)
+        return delete_capacity_rule(capacity_rule_id, auth.username)
     except KpiConfigError as exc:
         raise _convert_kpi_config_error(exc) from exc
 
@@ -962,11 +959,10 @@ def update_kpi_display_rule_v4(
 )
 def delete_kpi_display_rule_v4(
     display_rule_id: int = PathParam(),
-    operator: str = Query(min_length=1),
-    _auth: AuthSession = Depends(require_role("admin")),
+    auth: AuthSession = Depends(require_role("admin")),
 ) -> KpiConfigDeleteResultV4:
     try:
-        return delete_display_rule(display_rule_id, operator)
+        return delete_display_rule(display_rule_id, auth.username)
     except KpiConfigError as exc:
         raise _convert_kpi_config_error(exc) from exc
 
