@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Empty, Select, Space, Spin, Table } from "antd";
+import { Alert, Button, Empty, Select, Space, Spin, Table, Typography } from "antd";
 
 import { api } from "../api/http";
 import type { KpiCatalogItem } from "./kpiCatalogModel";
@@ -9,6 +9,7 @@ import {
   getKpiRecordRows,
   type KpiRecordFilters,
   type KpiRecordPage,
+  type KpiRecordRow,
 } from "./kpiRecordTableModel";
 
 interface Props {
@@ -135,12 +136,29 @@ export function KpiRecordTable({ taskId, ruleCode, item, sourceFiles }: Props) {
           },
         }}
         columns={[
-          { title: "指标", dataIndex: "metricName", width: 140, ellipsis: true },
-          { title: "值", dataIndex: "valueText", width: 80 },
-          { title: "状态", dataIndex: "statusLabel", width: 80 },
-          { title: "UTC 时间", dataIndex: "timeText", width: 300, ellipsis: true },
+          {
+            title: "指标",
+            dataIndex: "metricName",
+            width: 150,
+            render: (value: string) => (
+              <Typography.Text style={{ whiteSpace: "normal" }}>{value}</Typography.Text>
+            ),
+          },
+          { title: "值", dataIndex: "valueText", width: 70 },
+          { title: "状态", dataIndex: "statusLabel", width: 70 },
+          {
+            title: "时间",
+            dataIndex: "startTimeText",
+            width: 170,
+            render: (_, record: KpiRecordRow) => (
+              <div style={{ whiteSpace: "normal" }}>
+                <div>{record.startTimeText}</div>
+                <div>{record.endTimeText}</div>
+              </div>
+            ),
+          },
           { title: "来源", dataIndex: "sourceFile", ellipsis: true },
-          { title: "行号", dataIndex: "lineNumber", width: 70 },
+          { title: "行号", dataIndex: "lineNumber", width: 60 },
           { title: "错误", dataIndex: "errorsText", ellipsis: true },
         ]}
       />

@@ -27,7 +27,8 @@ export type KpiRecordRow = {
   sourceFile: string;
   lineNumber: number;
   periodText: string;
-  timeText: string;
+  startTimeText: string;
+  endTimeText: string;
   valueText: string;
   status: KpiRecordStatus;
   statusLabel: string;
@@ -76,7 +77,8 @@ export function getKpiRecordRows(items: KpiRecordItem[]): KpiRecordRow[] {
       sourceFile: item.source_file,
       lineNumber: item.line_number,
       periodText: `${item.period_minutes} 分钟`,
-      timeText: `${utcText(item.start_at)} — ${utcText(item.end_at)}`,
+      startTimeText: utcText(item.start_at),
+      endTimeText: utcText(item.end_at),
       valueText: formatKpiNumber(item.value),
       status: item.status,
       statusLabel: meta.label,

@@ -185,7 +185,9 @@ test("builds paginated KPI record queries with exact filters", () => {
 
 test("projects UTC record rows and errors", () => {
   const rows = getKpiRecordRows(records);
-  assert.equal(rows[0]?.timeText, "2026-09-14 02:00:00 UTC — 2026-09-14 02:05:00 UTC");
+  assert.equal(rows[0]?.startTimeText, "2026-09-14 02:00:00 UTC");
+  assert.equal(rows[0]?.endTimeText, "2026-09-14 02:05:00 UTC");
+  assert.equal(rows[0]?.metricName, "呼叫成功率");
   assert.equal(rows[0]?.valueText, "99.444");
   assert.deepEqual(rows.map((row) => [row.statusLabel, row.statusColor]), [
     ["失败", "#ff4d4f"],
