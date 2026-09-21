@@ -4,6 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import { api, type KpiClassificationCluePageV4, type KpiClassificationClueV4, type KpiClueStatusV4 } from "../api/http";
 import { KpiMetricCatalogProvider, KpiMetricName, useKpiMetricCatalog } from "./KpiMetricSelect";
+import { hasActionableKpiClassificationClues } from "./kpiClassificationCluesModel";
 import { formatKpiMetricNames } from "./kpiMetricCatalogModel";
 
 const STATUS_KEYS: KpiClueStatusV4[] = [
@@ -135,6 +136,8 @@ function KpiClassificationClueContent({ taskId }: { taskId: string }) {
       },
     },
   ];
+
+  if (!pageData || !hasActionableKpiClassificationClues(summary)) return null;
 
   return (
     <Card
