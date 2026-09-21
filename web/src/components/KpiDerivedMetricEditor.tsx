@@ -264,14 +264,11 @@ export function KpiDerivedMetricEditor({ onChanged }: { onChanged?: () => void }
       >
         <Form form={form} layout="vertical">
           <Space wrap style={gridStyle}>
-            <Form.Item
-              name="metric_key"
-              label="指标 key"
-              rules={editing ? [] : [{ pattern: /^[a-z][a-z0-9_]{2,127}$/, message: "派生指标 key 格式不正确" }]}
-              extra="可不填，保存后自动生成；填写时为 3-128 位小写字母开头，可含数字和下划线"
-            >
-              <Input placeholder="不填则自动生成" disabled={Boolean(editing)} />
-            </Form.Item>
+            {editing && (
+              <Form.Item name="metric_key" label="指标 key">
+                <Input disabled />
+              </Form.Item>
+            )}
             <Form.Item name="domain" label="业务域" rules={[{ required: true }]}>
               <Select options={DOMAINS} />
             </Form.Item>
