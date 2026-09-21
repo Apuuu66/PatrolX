@@ -2,12 +2,14 @@ import type {
   KpiAggregationKindV4,
   KpiDisplayRoleV4,
   KpiMetricRuleRequestV4,
+  KpiMetricRuleV4,
   KpiMetricTypeV4,
   KpiRegisteredDomainV4,
   KpiSemanticGroupV4,
   KpiSourceTypeV4,
   KpiThresholdDirectionV4,
   KpiThresholdRequestV4,
+  KpiThresholdV4,
 } from "../api/http";
 
 export const KPI_AGGREGATION_OPTIONS: { value: KpiAggregationKindV4; label: string }[] = [
@@ -43,7 +45,8 @@ export interface KpiThresholdFormValues {
   label: string;
   direction: KpiThresholdDirectionV4;
   unit: string;
-  default: number;
+  threshold_id?: number;
+  default: number | undefined;
   periods: Partial<Record<(typeof KPI_THRESHOLD_PERIODS)[number], number | null>>;
 }
 
@@ -88,12 +91,44 @@ export function buildThresholdPayload(
     label: values.label.trim(),
     direction: values.direction,
     unit: values.unit.trim(),
-    default: values.default,
+    default: Number(values.default),
     periods: Object.fromEntries(
       KPI_THRESHOLD_PERIODS.filter((period) => values.periods?.[period] !== null && values.periods?.[period] !== undefined).map(
         (period) => [period, Number(values.periods?.[period])],
       ),
     ),
     operator,
+  };
+}
+
+
+export function groupThresholdsByMetricKey(thresholds: KpiThresholdV4[]): Map<string, KpiThresholdV4> {
+  return new Map(thresholds.map((threshold) => [threshold.metric_key, threshold]));
+}
+
+export function formatKpiThresholdSummary(threshold?: KpiThresholdV4 | null): string {
+  if (!threshold) return "未配置";
+  const prefix = threshold.direction === "max" ? "上限 ≤" : "下限 ≥";
+  return `${prefix} ${Number(threshold.default)}${threshold.unit}`;
+}
+
+export function buildThresholdFormValuesForMetric(
+  metricRule: Pick<KpiMetricRuleV4, "metric_key" | "domain" | "unit">,
+  threshold?: KpiThresholdV4 | null,
+  metricName?: string,
+): KpiThresholdFormValues {
+  const domain = threshold?.domain ?? metricRule.domain;
+  if (!domain) throw new Error("当前指标缺少业务域，无法配置阈值");
+  return {
+    ...(threshold ? { threshold_id: threshold.id } : {}),
+    domain,
+    metric_key: metricRule.metric_key,
+    label: threshold?.label ?? metricName ?? metricRule.metric_key,
+    direction: threshold?.direction ?? "min",
+    unit: threshold?.unit ?? metricRule.unit,
+    default: threshold === undefined || threshold === null ? undefined : Number(threshold.default),
+    periods: threshold
+      ? Object.fromEntries(KPI_THRESHOLD_PERIODS.map((period) => [period, threshold.periods[period] ?? null]))
+      : {},
   };
 }

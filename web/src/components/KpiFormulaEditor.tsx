@@ -10,11 +10,15 @@ import {
   type KpiSemanticGroupV4,
   type KpiDisplayRoleV4,
   type KpiSourceTypeV4,
+  type KpiThresholdV4,
 } from "../api/http";
 import { KpiMetricName, KpiMetricSelect, useKpiMetricCatalog } from "./KpiMetricSelect";
 import { formatKpiMetricFormula } from "./kpiMetricCatalogModel";
+import { KpiThresholdModal } from "./KpiThresholdModal";
 import {
   buildMetricRulePayload,
+  formatKpiThresholdSummary,
+  groupThresholdsByMetricKey,
   KPI_AGGREGATION_OPTIONS as AGGREGATIONS,
   type KpiMetricRuleFormValues,
 } from "./kpiConfigModel";
@@ -51,16 +55,23 @@ interface FormulaFormValues extends Omit<KpiMetricRuleFormValues, "unit"> {
   unit: string;
 }
 
+interface ThresholdTarget {
+  metricRule: KpiMetricRuleV4;
+  threshold: KpiThresholdV4 | null;
+}
+
 export function KpiFormulaEditor({ operator, onChanged }: { operator: string; onChanged?: () => void }) {
   const { message } = App.useApp();
   const { metrics, metricIndex } = useKpiMetricCatalog();
   const [pageData, setPageData] = useState<KpiMetricRulePageV4 | null>(null);
+  const [thresholds, setThresholds] = useState<KpiThresholdV4[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<FormulaFormValues>();
+  const [thresholdTarget, setThresholdTarget] = useState<ThresholdTarget | null>(null);
   const sourceType = Form.useWatch("source_type", form);
   const existingMetricKeys = useMemo(
     () => new Set((pageData?.items ?? []).map((item) => item.metric_key)),
@@ -70,6 +81,7 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
     () => new Set((pageData?.items ?? []).filter((item) => item.source_type === "derived").map((item) => item.metric_key)),
     [pageData],
   );
+  const thresholdIndex = useMemo(() => groupThresholdsByMetricKey(thresholds), [thresholds]);
 
   const load = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true);
@@ -82,9 +94,25 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
     }
   }, [message, page, pageSize]);
 
+  const loadThresholds = useCallback(async () => {
+    try {
+      const firstPage = await api.listKpiThresholdsV4({ page: 1, page_size: 200 });
+      const items = [...firstPage.items];
+      const totalPages = Math.ceil(firstPage.total / 200);
+      for (let nextPage = 2; nextPage <= totalPages; nextPage += 1) {
+        const pageData = await api.listKpiThresholdsV4({ page: nextPage, page_size: 200 });
+        items.push(...pageData.items);
+      }
+      setThresholds(items);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "阈值加载失败");
+    }
+  }, [message]);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadThresholds();
+  }, [load, loadThresholds]);
 
   const openCreate = () => {
     form.setFieldsValue({
@@ -148,6 +176,10 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
     }
   };
 
+  const openThreshold = (record: KpiMetricRuleV4) => {
+    setThresholdTarget({ metricRule: record, threshold: thresholdIndex.get(record.metric_key) ?? null });
+  };
+
   const columns: ColumnsType<KpiMetricRuleV4> = [
     {
       title: "指标",
@@ -174,6 +206,12 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
           : "-",
     },
     {
+      title: "阈值",
+      key: "threshold",
+      width: 130,
+      render: (_, record) => formatKpiThresholdSummary(thresholdIndex.get(record.metric_key)),
+    },
+    {
       title: "更新时间",
       dataIndex: "updated_at",
       width: 160,
@@ -182,11 +220,14 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
     {
       title: "操作",
       key: "actions",
-      width: 130,
+      width: 190,
       render: (_, record) => (
         <Space size={4}>
           <Button size="small" type="link" onClick={() => openEdit(record)}>
             编辑
+          </Button>
+          <Button size="small" type="link" onClick={() => openThreshold(record)}>
+            {thresholdIndex.has(record.metric_key) ? "编辑阈值" : "配置阈值"}
           </Button>
           <Button size="small" type="link" danger onClick={() => void remove(record)}>
             删除
@@ -283,6 +324,17 @@ export function KpiFormulaEditor({ operator, onChanged }: { operator: string; on
           )}
         </Form>
       </Modal>
+      <KpiThresholdModal
+        open={thresholdTarget !== null}
+        metricRule={thresholdTarget?.metricRule ?? null}
+        threshold={thresholdTarget?.threshold ?? null}
+        operator={operator}
+        onClose={() => setThresholdTarget(null)}
+        onSaved={async () => {
+          await loadThresholds();
+          onChanged?.();
+        }}
+      />
     </Card>
   );
 }

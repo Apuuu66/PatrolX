@@ -13,7 +13,6 @@ import { KpiResourceTable } from "../components/KpiResourceTable";
 import { resourceDomainLabel, RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
 import { KpiDerivedMetricEditor } from "../components/KpiDerivedMetricEditor";
 import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
-import { KpiThresholdEditor } from "../components/KpiThresholdEditor";
 import { KpiMetricCatalogProvider } from "../components/KpiMetricSelect";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -301,11 +300,6 @@ export function KpiResourcesPage() {
               key: "derived-metrics",
               label: "派生指标",
               children: <KpiDerivedMetricEditor />,
-            },
-            {
-              key: "thresholds",
-              label: "阈值",
-              children: <KpiThresholdEditor operator={operator.trim()} />,
             },
             {
               key: "rules",
