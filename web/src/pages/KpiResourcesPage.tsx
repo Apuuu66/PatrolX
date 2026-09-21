@@ -51,7 +51,7 @@ export function KpiResourcesPage() {
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [domain, setDomain] = useState<ResourceDomain | undefined>();
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [targetDomain, setTargetDomain] = useState<ResourceDomain>();
   const [operator, setOperator] = useState("");
