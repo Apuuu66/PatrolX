@@ -527,6 +527,7 @@ class KpiTaskCatalogSnapshot(BaseModel):
     metrics: list[dict[str, Any]] = Field(default_factory=list)
     reserved_metric_keys: list[str] = Field(default_factory=list)
     rules: dict[str, Any]
+    derived_metrics: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class KpiMetricTypeV4(StrEnum):
@@ -594,6 +595,7 @@ class KpiConfigEntityTypeV4(StrEnum):
     CAPACITY_RULE = "capacity_rule"
     DISPLAY_RULE = "display_rule"
     COMMON_CONFIG = "common_config"
+    DERIVED_METRIC = "derived_metric"
 
 
 class KpiClueStatusV4(StrEnum):
@@ -641,6 +643,58 @@ class KpiMetricRuleV4(BaseModel):
 
 class KpiMetricRulePageV4(BaseModel):
     items: list[KpiMetricRuleV4] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    rule_config_version: int = Field(ge=0)
+
+
+class KpiDerivedFormulaV4(BaseModel):
+    kind: Literal["ratio", "inverse_ratio"]
+    numerator: str
+    denominator: str
+    denominator_fallback_inputs: list[str] = Field(default_factory=list)
+    scale: float = Field(gt=0)
+
+
+class KpiDerivedMetricRequestV4(BaseModel):
+    name_zh: str = Field(min_length=1)
+    name_en: str = Field(min_length=1)
+    domain: KpiRegisteredDomainV4
+    metric_type: KpiMetricTypeV4
+    semantic_group: KpiSemanticGroupV4
+    display_role: KpiDisplayRoleV4
+    unit: str = Field(min_length=1)
+    description: str | None = None
+    enabled: bool
+    formula: KpiDerivedFormulaV4
+
+
+class KpiDerivedMetricCreateRequestV4(KpiDerivedMetricRequestV4):
+    metric_key: str = Field(min_length=3, max_length=128)
+
+
+KpiDerivedMetricUpdateRequestV4 = KpiDerivedMetricRequestV4
+
+
+class KpiDerivedMetricV4(BaseModel):
+    metric_key: str
+    name_zh: str
+    name_en: str
+    domain: KpiRegisteredDomainV4
+    metric_type: KpiMetricTypeV4
+    semantic_group: KpiSemanticGroupV4
+    display_role: KpiDisplayRoleV4
+    unit: str
+    description: str | None = None
+    enabled: bool
+    formula: KpiDerivedFormulaV4
+    updated_at: datetime
+    rule_config_version: int
+
+
+class KpiDerivedMetricPageV4(BaseModel):
+    items: list[KpiDerivedMetricV4] = Field(default_factory=list)
     total: int = Field(ge=0)
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, le=200)

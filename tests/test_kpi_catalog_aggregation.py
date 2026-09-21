@@ -172,3 +172,27 @@ def test_threshold_evaluation_has_min_max_and_neutral_status() -> None:
     )
     assert evaluate_kpi_threshold(1.0, None, 5) == "neutral"
     assert evaluate_kpi_threshold(None, threshold, 5) == "unavailable"
+
+
+def test_inverse_ratio_aggregates_inputs_first_and_tracks_formula_kind() -> None:
+    formula = KpiRatioFormula(
+        numerator="call_failure_count",
+        denominator="call_attempts",
+        kind="inverse_ratio",
+        scale=100,
+    )
+    metric = _metric(
+        "call_success_rate",
+        metric_type="rate",
+        source_type="derived",
+        aggregation="success_rate",
+        formula=formula,
+    )
+    result = aggregate_kpi_metric(
+        metric,
+        {"call_failure_count": [5, 10], "call_attempts": [100, 200]},
+    )
+    assert result.value_available is True
+    assert result.main_value == pytest.approx((1 - 15 / 300) * 100)
+    assert result.provenance["formula"] == "(1 - call_failure_count / call_attempts) * 100"
+    assert [item["key"] for item in result.provenance["inputs"]] == ["call_failure_count", "call_attempts"]

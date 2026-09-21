@@ -54,13 +54,17 @@ export function toKpiRegisteredDomain(domain: KpiResourceDomain): KpiRegisteredD
 }
 
 export function formatKpiMetricFormula(
-  formula: { numerator: string; denominator: string; scale?: number },
+  formula: { kind?: "ratio" | "inverse_ratio"; numerator: string; denominator: string; scale?: number },
   metrics: KpiResourceMetric[],
   index?: Map<string, KpiResourceMetric>,
 ): string {
   const numerator = getKpiMetricDisplayName(metrics, formula.numerator, index);
   const denominator = getKpiMetricDisplayName(metrics, formula.denominator, index);
   const scale = formula.scale ?? 1;
+  if (formula.kind === "inverse_ratio") {
+    const base = `1 - ${numerator} / ${denominator}`;
+    return scale === 1 ? base : `(${base}) × ${scale}`;
+  }
   const base = `${numerator} / ${denominator}`;
   return scale === 1 ? base : `${base} × ${scale}`;
 }

@@ -469,6 +469,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v4/kpi/config/derived-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询在线派生指标 */
+        get: operations["listKpiDerivedMetricsV4"];
+        put?: never;
+        /** 创建在线派生指标 */
+        post: operations["createKpiDerivedMetricV4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v4/kpi/config/derived-metrics/{metric_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询在线派生指标 */
+        get: operations["getKpiDerivedMetricV4"];
+        /** 更新在线派生指标 */
+        put: operations["updateKpiDerivedMetricV4"];
+        post?: never;
+        /** 删除未被引用的在线派生指标 */
+        delete: operations["deleteKpiDerivedMetricV4"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v4/kpi/config/thresholds": {
         parameters: {
             query?: never;
@@ -1306,12 +1343,16 @@ export interface components {
         };
         KpiTaskCatalogSnapshotV3: {
             /** @enum {integer} */
-            schema_version: 1 | 2;
+            schema_version: 1 | 2 | 3;
             base_data_version: string;
             classification_version: number;
             /** Format: date-time */
             captured_at: string;
             metrics: {
+                [key: string]: unknown;
+            }[];
+            /** @description 任务执行时启用的在线派生指标。 */
+            derived_metrics?: {
                 [key: string]: unknown;
             }[];
             /** @description 已标记为预留、任务未分类展示中隐藏的指标 key。 */
@@ -1339,7 +1380,7 @@ export interface components {
         /** @enum {string} */
         KpiCapacitySemanticsV4: "peak" | "concurrency" | "gauge";
         /** @enum {string} */
-        KpiConfigEntityTypeV4: "metric_rule" | "threshold" | "capacity_rule" | "display_rule" | "common_config";
+        KpiConfigEntityTypeV4: "metric_rule" | "threshold" | "capacity_rule" | "display_rule" | "common_config" | "derived_metric";
         /** @enum {string} */
         KpiClueStatusV4: "unclassified" | "classified" | "unregistered" | "ambiguous" | "reserved";
         KpiMetricRuleRequestV4: {
@@ -1485,6 +1526,70 @@ export interface components {
             max_records: number;
             /** Format: date-time */
             updated_at: string;
+            rule_config_version: number;
+        };
+        KpiDerivedMetricCreateRequestV4: {
+            metric_key: string;
+            name_zh: string;
+            name_en: string;
+            domain: components["schemas"]["KpiRegisteredDomainV4"];
+            metric_type: components["schemas"]["KpiMetricTypeV4"];
+            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
+            display_role: components["schemas"]["KpiDisplayRoleV4"];
+            unit: string;
+            description?: string | null;
+            enabled: boolean;
+            formula: components["schemas"]["KpiDerivedFormulaRequestV4"];
+        };
+        KpiDerivedMetricUpdateRequestV4: {
+            name_zh: string;
+            name_en: string;
+            domain: components["schemas"]["KpiRegisteredDomainV4"];
+            metric_type: components["schemas"]["KpiMetricTypeV4"];
+            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
+            display_role: components["schemas"]["KpiDisplayRoleV4"];
+            unit: string;
+            description?: string | null;
+            enabled: boolean;
+            formula: components["schemas"]["KpiDerivedFormulaRequestV4"];
+        };
+        KpiDerivedFormulaRequestV4: {
+            /** @enum {string} */
+            kind: "ratio" | "inverse_ratio";
+            numerator: string;
+            denominator: string;
+            denominator_fallback_inputs?: string[];
+            scale: number;
+        };
+        KpiDerivedMetricV4: {
+            metric_key: string;
+            name_zh: string;
+            name_en: string;
+            domain: components["schemas"]["KpiRegisteredDomainV4"];
+            metric_type: components["schemas"]["KpiMetricTypeV4"];
+            semantic_group: components["schemas"]["KpiSemanticGroupV4"];
+            display_role: components["schemas"]["KpiDisplayRoleV4"];
+            unit: string;
+            description?: string | null;
+            enabled: boolean;
+            formula: components["schemas"]["KpiDerivedFormulaV4"];
+            /** Format: date-time */
+            updated_at: string;
+            rule_config_version: number;
+        };
+        KpiDerivedFormulaV4: {
+            /** @enum {string} */
+            kind: "ratio" | "inverse_ratio";
+            numerator: string;
+            denominator: string;
+            denominator_fallback_inputs?: string[];
+            scale: number;
+        };
+        KpiDerivedMetricPageV4: {
+            items: components["schemas"]["KpiDerivedMetricV4"][];
+            total: number;
+            page: number;
+            page_size: number;
             rule_config_version: number;
         };
         KpiConfigDeleteResultV4: {
@@ -2549,6 +2654,159 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error404"];
+        };
+    };
+    listKpiDerivedMetricsV4: {
+        parameters: {
+            query?: {
+                search?: string;
+                domain?: components["schemas"]["KpiRegisteredDomainV4"];
+                enabled?: boolean;
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 在线派生指标分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDerivedMetricPageV4"];
+                };
+            };
+        };
+    };
+    createKpiDerivedMetricV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiDerivedMetricCreateRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 已受理创建 */
+            202: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDerivedMetricV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            /** @description key 重复或配置冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+        };
+    };
+    getKpiDerivedMetricV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 在线派生指标 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDerivedMetricV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+        };
+    };
+    updateKpiDerivedMetricV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiDerivedMetricUpdateRequestV4"];
+            };
+        };
+        responses: {
+            /** @description 保存成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDerivedMetricV4"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            404: components["responses"]["Error404"];
+            /** @description 配置冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
+        };
+    };
+    deleteKpiDerivedMetricV4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 删除成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiConfigDeleteResultV4"];
+                };
+            };
+            404: components["responses"]["Error404"];
+            /** @description 派生指标仍被引用 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorV2"];
+                };
+            };
         };
     };
     listKpiThresholdsV4: {

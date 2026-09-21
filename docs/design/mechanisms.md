@@ -314,7 +314,7 @@ GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元
 ### 目标设计
 
 - 指标公式以声明式配置驱动，不在调度器或规则代码中硬编码。
-- 派生指标通过 ratio 公式从原始指标计算得到，先汇总输入再算比率（sum-then-divide）。
+- 派生指标通过受控 `ratio` / `inverse_ratio` 公式从原始指标计算得到，先汇总输入再算比率（sum-then-divide）。
 - 增量分类通过任务快照隔离历史状态：任务执行时固化当时的指标目录，后续分类线索只读该快照，不使用数据库最新状态重写历史任务。
 - 分类线索只读规则结果中记录的真实 CSV 列名，不引入规则间依赖。
 
@@ -374,7 +374,11 @@ GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元
 
 ### 差异
 
-当前无已知差异。新增派生指标时只需在 `metric-rules.json` 中声明 `source_type: "derived"` 和 `formula`，聚合逻辑自动生效。快照中缺少 `base_metrics` 字段的历史任务（schema 版本较低）所有线索都会显示为 `unregistered`，需重跑任务生成新快照。
+当前无已知差异。
+
+离线静态派生指标仍可声明在 `metric-rules.json` 中。界面派生指标则保存在 SQLite `kpi_derived_metrics` 表中，公式只允许 `ratio` 和 `inverse_ratio`；两者在任务执行时都走同一个 `aggregate_kpi_metric()` 口径。
+
+任务启动时，在线启用项会被写入任务快照 `derived_metrics`（当前 schema 版本 3），并注入当次 KPI 配置。快照创建后不再重写；修改、停用或删除界面派生指标只影响之后需要新建快照的任务。快照中缺少 `base_metrics` 字段的历史任务（schema 版本较低）所有线索都会显示为 `unregistered`，需重跑任务生成新快照。
 
 ## 13. SQLite 数据库文件使用注意
 

@@ -148,3 +148,106 @@ def test_removed_unclassified_metric_keeps_database_record(db_catalog: Path) -> 
         record = session.get(KpiClassification, "me_1")
         assert record is not None
         assert record.domain == "call"
+
+
+def test_snapshot_v3_contains_online_derived_metric(db_catalog: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/v4/kpi/config/derived-metrics",
+        json={
+            "metric_key": "online_success_rate",
+            "name_zh": "在线成功率",
+            "name_en": "Online Success Rate",
+            "domain": "call",
+            "metric_type": "rate",
+            "semantic_group": "quality",
+            "display_role": "highlight",
+            "unit": "%",
+            "enabled": True,
+            "formula": {"kind": "ratio", "numerator": "me_1", "denominator": "me_2", "scale": 100},
+        },
+    )
+    assert response.status_code == 202, response.text
+    task_id = "task-derived"
+    config = load_task_kpi_config(task_id)
+    path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
+    snapshot = json.loads(path.read_text(encoding="utf-8"))
+    assert snapshot["schema_version"] == 3
+    assert snapshot["derived_metrics"][0]["metric_key"] == "online_success_rate"
+    assert "online_success_rate" in config.domains["call"].metrics
+    definition = config.domains["call"].metrics["online_success_rate"]
+    assert definition.source_type == "derived"
+    assert definition.formula is not None
+    assert definition.formula.kind == "ratio"
+
+
+def test_disabled_derived_metric_excluded_from_snapshot(db_catalog: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    payload = {
+        "metric_key": "online_success_rate",
+        "name_zh": "在线成功率",
+        "name_en": "Online Success Rate",
+        "domain": "call",
+        "metric_type": "rate",
+        "semantic_group": "quality",
+        "display_role": "highlight",
+        "unit": "%",
+        "enabled": False,
+        "formula": {"kind": "ratio", "numerator": "me_1", "denominator": "me_2", "scale": 100},
+    }
+    assert client.post("/api/v4/kpi/config/derived-metrics", json=payload).status_code == 202
+    task_id = "task-disabled-derived"
+    load_task_kpi_config(task_id)
+    snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert snapshot["derived_metrics"] == []
+
+
+def test_snapshot_keeps_derived_metric_when_config_changes(db_catalog: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    payload = {
+        "metric_key": "online_success_rate",
+        "name_zh": "在线成功率",
+        "name_en": "Online Success Rate",
+        "domain": "call",
+        "metric_type": "rate",
+        "semantic_group": "quality",
+        "display_role": "highlight",
+        "unit": "%",
+        "enabled": True,
+        "formula": {"kind": "ratio", "numerator": "me_1", "denominator": "me_2", "scale": 100},
+    }
+    assert client.post("/api/v4/kpi/config/derived-metrics", json=payload).status_code == 202
+    task_id = "task-derived-immutable"
+    load_task_kpi_config(task_id)
+    snapshot_path = settings.output / task_id / "kpi" / "kpi_catalog_snapshot.json"
+    before = snapshot_path.read_text(encoding="utf-8")
+
+    payload["formula"] = {
+        "kind": "inverse_ratio",
+        "numerator": "me_2",
+        "denominator": "me_1",
+        "scale": 100,
+    }
+    assert client.put("/api/v4/kpi/config/derived-metrics/online_success_rate", json=payload).status_code == 200
+    load_task_kpi_config(task_id)
+    assert snapshot_path.read_text(encoding="utf-8") == before
+
+    new_config = load_task_kpi_config("task-derived-new")
+    new_snapshot = json.loads((settings.output / "task-derived-new" / "kpi" / "kpi_catalog_snapshot.json").read_text())
+    assert new_snapshot["derived_metrics"][0]["formula"]["kind"] == "inverse_ratio"
+    new_formula = new_config.domains["call"].metrics["online_success_rate"].formula
+    assert new_formula is not None
+    assert new_formula.kind == "inverse_ratio"

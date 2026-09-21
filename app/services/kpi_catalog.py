@@ -14,10 +14,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
 from app.inspectors.kpi.catalog import (
     REGISTERED_DOMAINS,
+    KpiAggregation,
     KpiBaseMetric,
     KpiCatalogError,
     KpiConfig,
     KpiGitCatalog,
+    KpiMetricDefinition,
+    KpiRatioFormula,
     KpiRuleSet,
     _validate_rules,
     build_kpi_config_from_catalog,
@@ -29,6 +32,7 @@ from app.models.db import (
     KpiClassification,
     KpiClassificationRevision,
     KpiCommonConfig,
+    KpiDerivedMetric,
     KpiDisplayRule,
     KpiMetricFormula,
     KpiMetricRule,
@@ -38,7 +42,7 @@ from app.models.db import (
 )
 from app.models.schemas import KpiTaskCatalogSnapshot
 
-SNAPSHOT_SCHEMA_VERSION = 2
+SNAPSHOT_SCHEMA_VERSION = 3
 SNAPSHOT_RELATIVE_PATH = Path("kpi") / "kpi_catalog_snapshot.json"
 SNAPSHOT_CLASSIFICATION_DOMAINS = set(REGISTERED_DOMAINS) | {"reserved"}
 
@@ -54,10 +58,11 @@ def _read_catalog_state() -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
     list[dict[str, Any]],
+    list[dict[str, Any]],
     dict[str, Any],
     int,
 ]:
-    """读取分类、动态规则、公共配置和两个权威版本。"""
+    """读取分类、动态规则、派生指标、公共配置和两个权威版本。"""
     try:
         with session_factory() as session:
             classification_rows = session.query(KpiClassification).all()
@@ -101,6 +106,31 @@ def _read_catalog_state() -> tuple[
                         ),
                     }
 
+            derived_metrics = [
+                {
+                    "metric_key": row.metric_key,
+                    "name_zh": row.name_zh,
+                    "name_en": row.name_en,
+                    "domain": row.domain,
+                    "metric_type": row.metric_type,
+                    "semantic_group": row.semantic_group,
+                    "display_role": row.display_role,
+                    "unit": row.unit,
+                    "description": row.description,
+                    "enabled": bool(row.enabled),
+                    "formula": {
+                        "kind": row.formula_kind,
+                        "numerator": row.numerator,
+                        "denominator": row.denominator,
+                        "denominator_fallback_inputs": list(row.denominator_fallback_inputs or []),
+                        "scale": float(row.scale),
+                    },
+                }
+                for row in session.query(KpiDerivedMetric)
+                .filter(KpiDerivedMetric.enabled.is_(True))
+                .order_by(KpiDerivedMetric.metric_key)
+                .all()
+            ]
             thresholds = [
                 {
                     "domain": row.domain,
@@ -146,6 +176,7 @@ def _read_catalog_state() -> tuple[
                 classifications,
                 classification_version,
                 metric_rules,
+                derived_metrics,
                 thresholds,
                 capacity_rules,
                 display_rules,
@@ -209,6 +240,36 @@ def _atomic_write_snapshot(task_id: str, snapshot: KpiTaskCatalogSnapshot) -> No
         raise
 
 
+def _inject_derived_metrics(config: KpiConfig, items: list[dict[str, Any]]) -> None:
+    for item in items:
+        domain = str(item["domain"])
+        if domain not in REGISTERED_DOMAINS or not item.get("enabled", True):
+            continue
+        formula_raw = item["formula"]
+        fallback_raw = formula_raw.get("denominator_fallback_inputs", [])
+        definition = KpiMetricDefinition(
+            key=str(item["metric_key"]),
+            name_zh=str(item["name_zh"]),
+            name_en=str(item["name_en"]),
+            metric_type=str(item["metric_type"]),
+            semantic_group=str(item["semantic_group"]),
+            display_role=str(item["display_role"]),
+            unit=str(item["unit"]),
+            source_type="derived",
+            aggregation=KpiAggregation("success_rate"),
+            aliases=[],
+            description=item.get("description"),
+            formula=KpiRatioFormula(
+                numerator=str(formula_raw["numerator"]),
+                denominator=str(formula_raw["denominator"]),
+                kind=str(formula_raw.get("kind", "ratio")),
+                denominator_fallback_inputs=list(fallback_raw),
+                scale=float(formula_raw["scale"]),
+            ),
+        )
+        config.domains[domain].metrics[definition.key] = definition
+
+
 def _config_from_snapshot(snapshot: KpiTaskCatalogSnapshot) -> KpiConfig:
     metrics: dict[str, Any] = {}
     classifications: dict[str, str] = {}
@@ -252,6 +313,7 @@ def _config_from_snapshot(snapshot: KpiTaskCatalogSnapshot) -> KpiConfig:
         for name_field in ("name_zh", "name_en", "key")
         if metric.get(name_field)
     }
+    _inject_derived_metrics(config, snapshot.derived_metrics)
     return config
 
 
@@ -284,6 +346,7 @@ def load_task_kpi_config(task_id: str) -> KpiConfig:
             classifications,
             classification_version,
             metric_rules,
+            derived_metrics,
             thresholds,
             capacity_rules,
             display_rules,
@@ -311,9 +374,12 @@ def load_task_kpi_config(task_id: str) -> KpiConfig:
             metrics=_effective_metrics(catalog, classifications),
             reserved_metric_keys=reserved_metric_keys,
             rules=catalog.rules.to_dict(),
+            derived_metrics=derived_metrics,
         )
         _atomic_write_snapshot(task_id, snapshot)
-        return build_kpi_config_from_catalog(catalog, classifications, classification_version)
+        config = build_kpi_config_from_catalog(catalog, classifications, classification_version)
+        _inject_derived_metrics(config, derived_metrics)
+        return config
     except KpiCatalogError as exc:
         raise KpiSnapshotError(f"KPI 基础资源或动态配置无效: {exc}") from exc
     except (OSError, SQLAlchemyError) as exc:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import re
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -14,6 +16,7 @@ from app.models.db import (
     KpiCapacityRule,
     KpiClassification,
     KpiCommonConfig,
+    KpiDerivedMetric,
     KpiDisplayRule,
     KpiMetricFormula,
     KpiMetricRule,
@@ -29,6 +32,11 @@ from app.models.schemas import (
     KpiCommonConfigRequestV4,
     KpiCommonConfigV4,
     KpiConfigDeleteResultV4,
+    KpiDerivedFormulaV4,
+    KpiDerivedMetricCreateRequestV4,
+    KpiDerivedMetricPageV4,
+    KpiDerivedMetricUpdateRequestV4,
+    KpiDerivedMetricV4,
     KpiDisplayRulePageV4,
     KpiDisplayRuleRequestV4,
     KpiDisplayRuleV4,
@@ -43,6 +51,7 @@ from app.models.schemas import (
 
 RAW_AGGREGATIONS = {"sum", "min", "max", "mean", "count", "median", "stddev"}
 PERIOD_KEYS = {"5", "15", "30", "60"}
+DERIVED_METRIC_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{2,127}$")
 
 
 class KpiConfigError(Exception):
@@ -197,6 +206,230 @@ def _validate_formula_inputs_are_raw(session, formula: KpiFormulaV4) -> None:
     derived = sorted(row.metric_key for row in rows if row.source_type == "derived")
     if derived:
         raise KpiConfigError("kpi_formula_input_derived", f"公式输入必须是 raw 指标: {derived}", 409)
+
+
+def _validate_derived_metric(
+    metric_key: str, domain: str, formula: KpiDerivedFormulaV4, *, require_key: bool = True
+) -> None:
+    if require_key and DERIVED_METRIC_KEY_RE.fullmatch(metric_key) is None:
+        raise KpiConfigError("kpi_derived_metric_key_invalid", "派生指标 key 非法", 400)
+    catalog = load_kpi_catalog()
+    if metric_key in catalog.metrics or metric_key in catalog.units:
+        raise KpiConfigError("kpi_derived_metric_key_conflict", f"派生指标 key 与基础资源冲突: {metric_key}", 409)
+    if not math.isfinite(formula.scale) or formula.scale <= 0:
+        raise KpiConfigError("kpi_formula_invalid", "scale 必须是大于 0 的有限数字", 400)
+    fallback_inputs = list(dict.fromkeys(formula.denominator_fallback_inputs))
+    if len(fallback_inputs) != len(formula.denominator_fallback_inputs):
+        raise KpiConfigError("kpi_formula_invalid", "公式 fallback 输入重复", 400)
+    input_domains = _classification_domains()
+    for key in dict.fromkeys([formula.numerator, formula.denominator, *fallback_inputs]):
+        if key == metric_key:
+            raise KpiConfigError("kpi_formula_cycle", "派生公式不能引用自身", 409)
+        if key not in _base_metric_keys():
+            raise KpiConfigError("kpi_formula_unknown_input", f"公式引用未知基础指标: {key}", 400)
+        input_domain = input_domains.get(key)
+        if input_domain is None:
+            raise KpiConfigError("kpi_formula_input_not_classified", f"公式输入尚未分类: {key}", 409)
+        if input_domain != domain:
+            raise KpiConfigError("kpi_formula_input_domain", f"公式输入业务域不一致: {key}", 400)
+
+
+def _derived_metric_dict(row: KpiDerivedMetric) -> dict:
+    return {
+        "metric_key": row.metric_key,
+        "name_zh": row.name_zh,
+        "name_en": row.name_en,
+        "domain": row.domain,
+        "metric_type": row.metric_type,
+        "semantic_group": row.semantic_group,
+        "display_role": row.display_role,
+        "unit": row.unit,
+        "description": row.description,
+        "enabled": row.enabled,
+        "formula": {
+            "kind": row.formula_kind,
+            "numerator": row.numerator,
+            "denominator": row.denominator,
+            "denominator_fallback_inputs": list(row.denominator_fallback_inputs or []),
+            "scale": float(row.scale),
+        },
+    }
+
+
+def _derived_metric_model(row: KpiDerivedMetric, version: int) -> KpiDerivedMetricV4:
+    return KpiDerivedMetricV4(
+        **_derived_metric_dict(row),  # type: ignore[arg-type]
+        updated_at=row.updated_at,
+        rule_config_version=version,
+    )
+
+
+def list_derived_metrics(
+    *,
+    search: str | None = None,
+    domain: str | None = None,
+    enabled: bool | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> KpiDerivedMetricPageV4:
+    try:
+        with session_factory() as session:
+            query = session.query(KpiDerivedMetric)
+            if domain:
+                query = query.filter(KpiDerivedMetric.domain == domain)
+            if enabled is not None:
+                query = query.filter(KpiDerivedMetric.enabled == enabled)
+            rows = query.order_by(KpiDerivedMetric.metric_key).all()
+            if search:
+                folded = search.casefold()
+                rows = [row for row in rows if folded in row.metric_key.casefold() or folded in row.name_zh.casefold()]
+            version = _revision(session)
+            total = len(rows)
+            start = (page - 1) * page_size
+            items = [_derived_metric_model(row, version) for row in rows[start : start + page_size]]
+            return KpiDerivedMetricPageV4(
+                items=items, total=total, page=page, page_size=page_size, rule_config_version=version
+            )
+    except (OSError, SQLAlchemyError) as exc:
+        raise _database_unavailable(exc) from exc
+
+
+def get_derived_metric(metric_key: str) -> KpiDerivedMetricV4:
+    try:
+        with session_factory() as session:
+            row = session.get(KpiDerivedMetric, metric_key)
+            if row is None:
+                raise KpiConfigError("kpi_derived_metric_not_found", f"派生指标不存在: {metric_key}", 404)
+            return _derived_metric_model(row, _revision(session))
+    except (OSError, SQLAlchemyError) as exc:
+        raise _database_unavailable(exc) from exc
+
+
+def create_derived_metric(body: KpiDerivedMetricCreateRequestV4, operator: str) -> KpiDerivedMetricV4:
+    _validate_derived_metric(body.metric_key, body.domain.value, body.formula)
+    try:
+        with session_factory() as session, session.begin():
+            if session.get(KpiDerivedMetric, body.metric_key) is not None:
+                raise KpiConfigError("kpi_derived_metric_exists", f"派生指标已存在: {body.metric_key}", 409)
+            now = _now()
+            row = KpiDerivedMetric(
+                metric_key=body.metric_key,
+                name_zh=body.name_zh,
+                name_en=body.name_en,
+                domain=body.domain.value,
+                metric_type=body.metric_type.value,
+                semantic_group=body.semantic_group.value,
+                display_role=body.display_role.value,
+                unit=body.unit,
+                description=body.description,
+                enabled=body.enabled,
+                formula_kind=body.formula.kind,
+                numerator=body.formula.numerator,
+                denominator=body.formula.denominator,
+                denominator_fallback_inputs=list(dict.fromkeys(body.formula.denominator_fallback_inputs)),
+                scale=float(body.formula.scale),
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            session.flush()
+            version = _increment_revision(session)
+            _audit(
+                session,
+                entity_type="derived_metric",
+                entity_key=row.metric_key,
+                operation="upsert",
+                operator=operator,
+                before=None,
+                after=_derived_metric_dict(row),
+                version=version,
+            )
+            return _derived_metric_model(row, version)
+    except KpiConfigError:
+        raise
+    except (OSError, SQLAlchemyError) as exc:
+        raise _database_unavailable(exc) from exc
+
+
+def update_derived_metric(metric_key: str, body: KpiDerivedMetricUpdateRequestV4, operator: str) -> KpiDerivedMetricV4:
+    try:
+        with session_factory() as session, session.begin():
+            row = session.get(KpiDerivedMetric, metric_key)
+            if row is None:
+                raise KpiConfigError("kpi_derived_metric_not_found", f"派生指标不存在: {metric_key}", 404)
+            _validate_derived_metric(metric_key, body.domain.value, body.formula, require_key=False)
+            old = _derived_metric_dict(row)
+            row.name_zh = body.name_zh
+            row.name_en = body.name_en
+            row.domain = body.domain.value
+            row.metric_type = body.metric_type.value
+            row.semantic_group = body.semantic_group.value
+            row.display_role = body.display_role.value
+            row.unit = body.unit
+            row.description = body.description
+            row.enabled = body.enabled
+            row.formula_kind = body.formula.kind
+            row.numerator = body.formula.numerator
+            row.denominator = body.formula.denominator
+            row.denominator_fallback_inputs = list(dict.fromkeys(body.formula.denominator_fallback_inputs))
+            row.scale = float(body.formula.scale)
+            row.updated_at = _now()
+            session.flush()
+            version = _increment_revision(session)
+            _audit(
+                session,
+                entity_type="derived_metric",
+                entity_key=metric_key,
+                operation="upsert",
+                operator=operator,
+                before=old,
+                after=_derived_metric_dict(row),
+                version=version,
+            )
+            return _derived_metric_model(row, version)
+    except KpiConfigError:
+        raise
+    except (OSError, SQLAlchemyError) as exc:
+        raise _database_unavailable(exc) from exc
+
+
+def delete_derived_metric(metric_key: str, operator: str) -> KpiConfigDeleteResultV4:
+    try:
+        with session_factory() as session, session.begin():
+            row = session.get(KpiDerivedMetric, metric_key)
+            if row is None:
+                raise KpiConfigError("kpi_derived_metric_not_found", f"派生指标不存在: {metric_key}", 404)
+            references = [
+                ("阈值", session.query(KpiThresholdRule).filter(KpiThresholdRule.metric_key == metric_key).count()),
+                ("容量规则", session.query(KpiCapacityRule).filter(KpiCapacityRule.metric_key == metric_key).count()),
+                ("展示规则", session.query(KpiDisplayRule).filter(KpiDisplayRule.metric_key == metric_key).count()),
+            ]
+            if any(count for _, count in references):
+                labels = "、".join(label for label, count in references if count)
+                raise KpiConfigError("kpi_derived_metric_referenced", f"派生指标仍被引用: {labels}", 409)
+            old = _derived_metric_dict(row)
+            session.delete(row)
+            version = _increment_revision(session)
+            _audit(
+                session,
+                entity_type="derived_metric",
+                entity_key=metric_key,
+                operation="delete",
+                operator=operator,
+                before=old,
+                after=None,
+                version=version,
+            )
+            return KpiConfigDeleteResultV4(
+                deleted=True,
+                entity_type="derived_metric",
+                entity_key=metric_key,
+                rule_config_version=version,
+            )
+    except KpiConfigError:
+        raise
+    except (OSError, SQLAlchemyError) as exc:
+        raise _database_unavailable(exc) from exc
 
 
 def _metric_rule_dict(row: KpiMetricRule, formula: KpiMetricFormula | None) -> dict:
@@ -857,7 +1090,20 @@ def assert_metric_classifiable(metric_key: str) -> None:
                 formula_reference = (
                     session.query(KpiMetricFormula).filter(KpiMetricFormula.denominator == metric_key).one_or_none()
                 )
+            if formula_reference is None:
+                formula_reference = (
+                    session.query(KpiMetricFormula)
+                    .filter(KpiMetricFormula.denominator_fallback_inputs.contains(metric_key))
+                    .one_or_none()
+                )
             if formula_reference is not None:
+                raise KpiConfigError("kpi_metric_referenced", f"指标被派生公式引用: {metric_key}", 409)
+            derived_reference = session.query(KpiDerivedMetric).filter(
+                (KpiDerivedMetric.numerator == metric_key)
+                | (KpiDerivedMetric.denominator == metric_key)
+                | (KpiDerivedMetric.denominator_fallback_inputs.contains(metric_key))
+            )
+            if derived_reference.count():
                 raise KpiConfigError("kpi_metric_referenced", f"指标被派生公式引用: {metric_key}", 409)
             if session.query(KpiThresholdRule).filter(KpiThresholdRule.metric_key == metric_key).count():
                 raise KpiConfigError("kpi_metric_referenced", f"指标被阈值引用: {metric_key}", 409)
@@ -879,6 +1125,8 @@ def referenced_metric_keys() -> set[str]:
                 keys.update(
                     {formula.metric_key, formula.numerator, formula.denominator, *formula.denominator_fallback_inputs}
                 )
+            for derived in session.query(KpiDerivedMetric).all():
+                keys.update({derived.numerator, derived.denominator, *derived.denominator_fallback_inputs})
             keys.update(row.metric_key for row in session.query(KpiThresholdRule).all())
             keys.update(row.metric_key for row in session.query(KpiCapacityRule).all())
             keys.update(row.metric_key for row in session.query(KpiDisplayRule).all())

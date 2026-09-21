@@ -37,6 +37,10 @@ from app.models.schemas import (
     KpiConfigAuditV4,
     KpiConfigDeleteResultV4,
     KpiConfigEntityTypeV4,
+    KpiDerivedMetricCreateRequestV4,
+    KpiDerivedMetricPageV4,
+    KpiDerivedMetricUpdateRequestV4,
+    KpiDerivedMetricV4,
     KpiDisplayRulePageV4,
     KpiDisplayRuleRequestV4,
     KpiDisplayRuleV4,
@@ -89,20 +93,25 @@ from app.services.auth import (
 from app.services.kpi_classification_clues import KpiClassificationClueError, list_classification_clues
 from app.services.kpi_config import (
     KpiConfigError,
+    create_derived_metric,
     create_threshold,
     delete_capacity_rule,
+    delete_derived_metric,
     delete_display_rule,
     delete_metric_rule,
     delete_threshold,
     get_common_config,
+    get_derived_metric,
     get_metric_rule,
     get_threshold,
     list_capacity_rules,
     list_config_audits,
+    list_derived_metrics,
     list_display_rules,
     list_metric_rules,
     list_thresholds,
     update_common_config,
+    update_derived_metric,
     update_threshold,
     upsert_capacity_rule,
     upsert_display_rule,
@@ -681,6 +690,91 @@ def delete_kpi_metric_rule_v4(
 ) -> KpiConfigDeleteResultV4:
     try:
         return delete_metric_rule(metric_key, operator)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.get(
+    "/kpi/config/derived-metrics", response_model=KpiDerivedMetricPageV4, operation_id="listKpiDerivedMetricsV4"
+)
+def list_kpi_derived_metrics_v4(
+    search: str | None = None,
+    domain: KpiRegisteredDomainV4 | None = None,
+    enabled: bool | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiDerivedMetricPageV4:
+    try:
+        return list_derived_metrics(
+            search=search,
+            domain=domain.value if domain else None,
+            enabled=enabled,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.post(
+    "/kpi/config/derived-metrics",
+    response_model=KpiDerivedMetricV4,
+    status_code=202,
+    operation_id="createKpiDerivedMetricV4",
+)
+def create_kpi_derived_metric_v4(
+    response: Response,
+    body: KpiDerivedMetricCreateRequestV4 | None = None,
+    auth: AuthSession = Depends(require_role("admin")),
+) -> KpiDerivedMetricV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        item = create_derived_metric(body, auth.username)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+    response.headers["Location"] = f"/api/v4/kpi/config/derived-metrics/{item.metric_key}"
+    return item
+
+
+@v4_router.get(
+    "/kpi/config/derived-metrics/{metric_key}", response_model=KpiDerivedMetricV4, operation_id="getKpiDerivedMetricV4"
+)
+def get_kpi_derived_metric_v4(metric_key: str = PathParam()) -> KpiDerivedMetricV4:
+    try:
+        return get_derived_metric(metric_key)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.put(
+    "/kpi/config/derived-metrics/{metric_key}",
+    response_model=KpiDerivedMetricV4,
+    operation_id="updateKpiDerivedMetricV4",
+)
+def update_kpi_derived_metric_v4(
+    metric_key: str = PathParam(),
+    body: KpiDerivedMetricUpdateRequestV4 | None = None,
+    auth: AuthSession = Depends(require_role("admin")),
+) -> KpiDerivedMetricV4:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        return update_derived_metric(metric_key, body, auth.username)
+    except KpiConfigError as exc:
+        raise _convert_kpi_config_error(exc) from exc
+
+
+@v4_router.delete(
+    "/kpi/config/derived-metrics/{metric_key}",
+    response_model=KpiConfigDeleteResultV4,
+    operation_id="deleteKpiDerivedMetricV4",
+)
+def delete_kpi_derived_metric_v4(
+    metric_key: str = PathParam(), auth: AuthSession = Depends(require_role("admin"))
+) -> KpiConfigDeleteResultV4:
+    try:
+        return delete_derived_metric(metric_key, auth.username)
     except KpiConfigError as exc:
         raise _convert_kpi_config_error(exc) from exc
 

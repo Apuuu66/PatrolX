@@ -372,3 +372,37 @@ def test_all_kpi_domains_skip_without_any_kpi_files(tmp_path: Path) -> None:
 def test_kpi_rule_version_bumped_for_real_csv_format(code: str) -> None:
     registry.load_all()
     assert registry.get(code).rule_version == "1.7.0"
+
+
+def test_kpi_call_injects_online_inverse_ratio_metric(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+    from app.models.schemas import KpiDerivedMetricCreateRequestV4
+    from app.services.kpi_catalog import load_task_kpi_config
+    from app.services.kpi_config import create_derived_metric
+
+    payload = {
+        "metric_key": "online_success_rate",
+        "name_zh": "在线成功率",
+        "name_en": "Online Success Rate",
+        "domain": "call",
+        "metric_type": "rate",
+        "semantic_group": "quality",
+        "display_role": "highlight",
+        "unit": "%",
+        "enabled": True,
+        "formula": {
+            "kind": "inverse_ratio",
+            "numerator": "me_call_failure_count",
+            "denominator": "me_call_attempts",
+            "scale": 100,
+        },
+    }
+    create_derived_metric(KpiDerivedMetricCreateRequestV4.model_validate(payload), "tester")
+    config = load_task_kpi_config("kpi-test")
+    monkeypatch.setattr("app.inspectors.kpi.call.load_kpi_config", lambda task_id: config)
+    ctx = _ctx(tmp_path, {"kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv": _GOOD_CALL})
+    result = _run_rule("kpi.call", ctx)
+    metadata = next(item for item in result.metadata["kpi_results"] if item["key"] == "online_success_rate")
+    assert metadata["main_value"] == pytest.approx((1 - 5 / 1200) * 100)
+    assert metadata["provenance"]["formula"] == "(1 - me_call_failure_count / me_call_attempts) * 100"
+    assert metadata["provenance"]["inputs"][0]["source_names"] == ["呼叫请求失败次数"]

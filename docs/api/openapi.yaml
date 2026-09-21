@@ -786,6 +786,142 @@ paths:
         '404':
           $ref: '#/components/responses/Error404'
 
+  /api/v4/kpi/config/derived-metrics:
+    get:
+      summary: 分页查询在线派生指标
+      operationId: listKpiDerivedMetricsV4
+      parameters:
+      - name: search
+        in: query
+        schema:
+          type: string
+      - name: domain
+        in: query
+        schema:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+      - name: enabled
+        in: query
+        schema:
+          type: boolean
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 在线派生指标分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDerivedMetricPageV4'
+    post:
+      summary: 创建在线派生指标
+      operationId: createKpiDerivedMetricV4
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiDerivedMetricCreateRequestV4'
+      responses:
+        '202':
+          description: 已受理创建
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDerivedMetricV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
+          description: key 重复或配置冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+  /api/v4/kpi/config/derived-metrics/{metric_key}:
+    get:
+      summary: 查询在线派生指标
+      operationId: getKpiDerivedMetricV4
+      parameters:
+      - name: metric_key
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 在线派生指标
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDerivedMetricV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+    put:
+      summary: 更新在线派生指标
+      operationId: updateKpiDerivedMetricV4
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: metric_key
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiDerivedMetricUpdateRequestV4'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDerivedMetricV4'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: 配置冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+    delete:
+      summary: 删除未被引用的在线派生指标
+      operationId: deleteKpiDerivedMetricV4
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: metric_key
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiConfigDeleteResultV4'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: 派生指标仍被引用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorV2'
+
   /api/v4/kpi/config/thresholds:
     get:
       summary: 分页查询阈值
@@ -2983,6 +3119,7 @@ components:
           enum:
           - 1
           - 2
+          - 3
         base_data_version:
           type: string
         classification_version:
@@ -2993,6 +3130,12 @@ components:
           format: date-time
         metrics:
           type: array
+          items:
+            type: object
+            additionalProperties: true
+        derived_metrics:
+          type: array
+          description: 任务执行时启用的在线派生指标。
           items:
             type: object
             additionalProperties: true
@@ -3042,7 +3185,7 @@ components:
 
     KpiConfigEntityTypeV4:
       type: string
-      enum: [metric_rule, threshold, capacity_rule, display_rule, common_config]
+      enum: [metric_rule, threshold, capacity_rule, display_rule, common_config, derived_metric]
 
     KpiClueStatusV4:
       type: string
@@ -3374,6 +3517,156 @@ components:
         updated_at:
           type: string
           format: date-time
+        rule_config_version:
+          type: integer
+
+    KpiDerivedMetricCreateRequestV4:
+      type: object
+      required: [metric_key, name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula]
+      properties:
+        metric_key:
+          type: string
+          minLength: 3
+          maxLength: 128
+        name_zh:
+          type: string
+          minLength: 1
+        name_en:
+          type: string
+          minLength: 1
+        domain:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        metric_type:
+          $ref: '#/components/schemas/KpiMetricTypeV4'
+        semantic_group:
+          $ref: '#/components/schemas/KpiSemanticGroupV4'
+        display_role:
+          $ref: '#/components/schemas/KpiDisplayRoleV4'
+        unit:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        formula:
+          $ref: '#/components/schemas/KpiDerivedFormulaRequestV4'
+    KpiDerivedMetricUpdateRequestV4:
+      type: object
+      required: [name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula]
+      properties:
+        name_zh:
+          type: string
+          minLength: 1
+        name_en:
+          type: string
+          minLength: 1
+        domain:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        metric_type:
+          $ref: '#/components/schemas/KpiMetricTypeV4'
+        semantic_group:
+          $ref: '#/components/schemas/KpiSemanticGroupV4'
+        display_role:
+          $ref: '#/components/schemas/KpiDisplayRoleV4'
+        unit:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        formula:
+          $ref: '#/components/schemas/KpiDerivedFormulaRequestV4'
+    KpiDerivedFormulaRequestV4:
+      type: object
+      required: [kind, numerator, denominator, scale]
+      properties:
+        kind:
+          type: string
+          enum: [ratio, inverse_ratio]
+        numerator:
+          type: string
+          minLength: 1
+        denominator:
+          type: string
+          minLength: 1
+        denominator_fallback_inputs:
+          type: array
+          items:
+            type: string
+        scale:
+          type: number
+          exclusiveMinimum: 0
+    KpiDerivedMetricV4:
+      type: object
+      required: [metric_key, name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula, updated_at, rule_config_version]
+      properties:
+        metric_key:
+          type: string
+        name_zh:
+          type: string
+        name_en:
+          type: string
+        domain:
+          $ref: '#/components/schemas/KpiRegisteredDomainV4'
+        metric_type:
+          $ref: '#/components/schemas/KpiMetricTypeV4'
+        semantic_group:
+          $ref: '#/components/schemas/KpiSemanticGroupV4'
+        display_role:
+          $ref: '#/components/schemas/KpiDisplayRoleV4'
+        unit:
+          type: string
+        description:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        formula:
+          $ref: '#/components/schemas/KpiDerivedFormulaV4'
+        updated_at:
+          type: string
+          format: date-time
+        rule_config_version:
+          type: integer
+    KpiDerivedFormulaV4:
+      type: object
+      required: [kind, numerator, denominator, scale]
+      properties:
+        kind:
+          type: string
+          enum: [ratio, inverse_ratio]
+        numerator:
+          type: string
+        denominator:
+          type: string
+        denominator_fallback_inputs:
+          type: array
+          items:
+            type: string
+        scale:
+          type: number
+    KpiDerivedMetricPageV4:
+      type: object
+      required: [items, total, page, page_size, rule_config_version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiDerivedMetricV4'
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
         rule_config_version:
           type: integer
 

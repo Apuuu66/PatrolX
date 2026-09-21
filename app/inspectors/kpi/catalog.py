@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import unicodedata
 import zoneinfo
@@ -70,6 +71,7 @@ class KpiAggregation:
 class KpiRatioFormula:
     numerator: str
     denominator: str
+    kind: str = "ratio"
     denominator_fallback_inputs: list[str] = field(default_factory=list)
     scale: float = 1.0
 
@@ -237,8 +239,17 @@ def _sum_input(values: list[Any]) -> float | None:
     return sum(numbers)
 
 
+def _format_formula_scale(scale: float) -> str:
+    """让公式展示保持用户输入的简洁形式，避免整数值显示为 100.0。"""
+    return str(int(scale)) if scale.is_integer() else str(scale)
+
+
 def _formula_text(formula: KpiRatioFormula) -> str:
-    return f"{formula.numerator} / {formula.denominator}"
+    scale = _format_formula_scale(formula.scale)
+    if formula.kind == "inverse_ratio":
+        return f"(1 - {formula.numerator} / {formula.denominator}) * {scale}"
+    base = f"{formula.numerator} / {formula.denominator}"
+    return base if formula.scale == 1 else f"{base} * {scale}"
 
 
 def aggregate_kpi_metric(
@@ -332,9 +343,10 @@ def aggregate_kpi_metric(
                     "fallback_used": fallback_used,
                 },
             )
+        numerator_value = 1 - numerator / denominator if formula.kind == "inverse_ratio" else numerator / denominator
         return KpiAggregationResult(
             key=definition.key,
-            main_value=numerator / denominator * formula.scale,
+            main_value=numerator_value * formula.scale,
             value_available=True,
             actual_aggregation=definition.aggregation.kind,
             provenance={
@@ -526,11 +538,13 @@ def _validate_formula(value: Any, context: str, metric_keys: set[str]) -> KpiRat
     _require_keys(formula, {"kind", "numerator", "denominator", "scale"}, context)
     if "denominator_fallback" not in formula:
         formula["denominator_fallback"] = None
-    if formula["kind"] != "ratio":
-        raise KpiCatalogError(f"{context}.kind: 当前只支持 ratio")
+    if formula["kind"] not in {"ratio", "inverse_ratio"}:
+        raise KpiCatalogError(f"{context}.kind: 当前只支持 ratio 或 inverse_ratio")
     numerator = _require_non_empty_str(formula["numerator"], f"{context}.numerator")
     denominator = _require_non_empty_str(formula["denominator"], f"{context}.denominator")
     scale = _require_number(formula["scale"], f"{context}.scale")
+    if not math.isfinite(scale) or scale <= 0:
+        raise KpiCatalogError(f"{context}.scale: 必须是大于 0 的有限数字")
     fallback_raw = formula["denominator_fallback"]
     fallback_inputs: list[str] = []
     if fallback_raw is not None:
@@ -848,6 +862,7 @@ def build_kpi_config_from_catalog(
                     numerator=formula_raw["numerator"],
                     denominator=formula_raw["denominator"],
                     denominator_fallback_inputs=list(fallback_raw["inputs"]) if fallback_raw else [],
+                    kind=str(formula_raw["kind"]),
                     scale=float(formula_raw["scale"]),
                 )
             definition = KpiMetricDefinition(

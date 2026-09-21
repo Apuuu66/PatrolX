@@ -108,3 +108,15 @@ test("maps metric key lists to display names", () => {
     ["呼叫成功率", "missing", "API Success Rate"],
   );
 });
+
+test("formats inverse ratio", () => {
+  const metrics = [
+    { key: "success", name_zh: "成功数", name_en: "Success", domain: "call", resource_id: "ME_1" },
+    { key: "total", name_zh: "总数", name_en: "Total", domain: "call", resource_id: "ME_2" },
+  ] as KpiResourceMetric[];
+
+  assert.equal(
+    formatKpiMetricFormula({ kind: "inverse_ratio", numerator: "success", denominator: "total", scale: 100 }, metrics),
+    "(1 - 成功数 / 总数) × 100",
+  );
+});

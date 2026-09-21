@@ -48,6 +48,11 @@ export type KpiCapacityRulePageV4 = components["schemas"]["KpiCapacityRulePageV4
 export type KpiDisplayRuleRequestV4 = components["schemas"]["KpiDisplayRuleRequestV4"];
 export type KpiDisplayRuleV4 = components["schemas"]["KpiDisplayRuleV4"];
 export type KpiDisplayRulePageV4 = components["schemas"]["KpiDisplayRulePageV4"];
+export type KpiDerivedFormulaV4 = components["schemas"]["KpiDerivedFormulaV4"];
+export type KpiDerivedMetricCreateRequestV4 = components["schemas"]["KpiDerivedMetricCreateRequestV4"];
+export type KpiDerivedMetricUpdateRequestV4 = components["schemas"]["KpiDerivedMetricUpdateRequestV4"];
+export type KpiDerivedMetricV4 = components["schemas"]["KpiDerivedMetricV4"];
+export type KpiDerivedMetricPageV4 = components["schemas"]["KpiDerivedMetricPageV4"];
 export type KpiCommonConfigRequestV4 = components["schemas"]["KpiCommonConfigRequestV4"];
 export type KpiCommonConfigV4 = components["schemas"]["KpiCommonConfigV4"];
 export type KpiConfigAuditV4 = components["schemas"]["KpiConfigAuditV4"];
@@ -263,6 +268,37 @@ export const api = {
   deleteKpiMetricRuleV4: (metricKey: string) =>
     request<components["schemas"]["KpiConfigDeleteResultV4"]>(
       `${KPI_V4_BASE}/kpi/config/metric-rules/${encodeURIComponent(metricKey)}`,
+      { method: "DELETE" },
+    ),
+
+  listKpiDerivedMetricsV4: (
+    query: { search?: string; domain?: KpiRegisteredDomainV4; enabled?: boolean; page?: number; page_size?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiDerivedMetricPageV4>(`${KPI_V4_BASE}/kpi/config/derived-metrics${qs ? `?${qs}` : ""}`);
+  },
+
+  createKpiDerivedMetricV4: (payload: KpiDerivedMetricCreateRequestV4) =>
+    request<KpiDerivedMetricV4>(`${KPI_V4_BASE}/kpi/config/derived-metrics`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  updateKpiDerivedMetricV4: (metricKey: string, payload: KpiDerivedMetricUpdateRequestV4) =>
+    request<KpiDerivedMetricV4>(`${KPI_V4_BASE}/kpi/config/derived-metrics/${encodeURIComponent(metricKey)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  deleteKpiDerivedMetricV4: (metricKey: string) =>
+    request<components["schemas"]["KpiConfigDeleteResultV4"]>(
+      `${KPI_V4_BASE}/kpi/config/derived-metrics/${encodeURIComponent(metricKey)}`,
       { method: "DELETE" },
     ),
 

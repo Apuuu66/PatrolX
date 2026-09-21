@@ -136,6 +136,30 @@ class KpiMetricFormula(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class KpiDerivedMetric(Base):
+    """在线维护的受控派生指标；只支持比率与反向比率。"""
+
+    __tablename__ = "kpi_derived_metrics"
+
+    metric_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    name_zh: Mapped[str] = mapped_column(String(256))
+    name_en: Mapped[str] = mapped_column(String(256))
+    domain: Mapped[str] = mapped_column(String(32), index=True)
+    metric_type: Mapped[str] = mapped_column(String(32))
+    semantic_group: Mapped[str] = mapped_column(String(32))
+    display_role: Mapped[str] = mapped_column(String(32))
+    unit: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    formula_kind: Mapped[str] = mapped_column(String(16))
+    numerator: Mapped[str] = mapped_column(String(128))
+    denominator: Mapped[str] = mapped_column(String(128))
+    denominator_fallback_inputs: Mapped[list] = mapped_column(JSON, default=list)
+    scale: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class KpiThresholdRule(Base):
     """按业务域和指标维护的默认与周期阈值。"""
 

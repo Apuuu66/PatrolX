@@ -11,6 +11,7 @@ import {
 import { KpiMetricName } from "../components/KpiMetricSelect";
 import { KpiResourceTable } from "../components/KpiResourceTable";
 import { resourceDomainLabel, RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
+import { KpiDerivedMetricEditor } from "../components/KpiDerivedMetricEditor";
 import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
 import { KpiThresholdEditor } from "../components/KpiThresholdEditor";
 import { KpiMetricCatalogProvider } from "../components/KpiMetricSelect";
@@ -295,6 +296,11 @@ export function KpiResourcesPage() {
               key: "formula",
               label: "指标公式",
               children: <KpiFormulaEditor operator={operator.trim()} />,
+            },
+            {
+              key: "derived-metrics",
+              label: "派生指标",
+              children: <KpiDerivedMetricEditor />,
             },
             {
               key: "thresholds",
