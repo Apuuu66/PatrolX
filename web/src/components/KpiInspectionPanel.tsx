@@ -1,6 +1,6 @@
 import { Card, Col, Row, Typography } from "antd";
 
-import { getKpiFocusItems, parseKpiMetadata, summarizeKpiMetadata } from "./kpiCatalogModel";
+import { getKpiFocusItems, hasKpiUnclassifiedMetrics, parseKpiMetadata, summarizeKpiMetadata } from "./kpiCatalogModel";
 import { KpiDetailTable } from "./KpiDetailTable";
 import { KpiMetricCatalog } from "./KpiMetricCatalog";
 import { KpiUnclassifiedList } from "./KpiUnclassifiedList";
@@ -58,9 +58,11 @@ export function KpiInspectionPanel({ metadata, taskId, ruleCode }: Props) {
         focusTotal={focusTotal}
       />
 
-      <div style={{ marginTop: 20 }}>
-        <KpiUnclassifiedList metadata={parsed} />
-      </div>
+      {hasKpiUnclassifiedMetrics(parsed) && (
+        <div style={{ marginTop: 20 }}>
+          <KpiUnclassifiedList metadata={parsed} />
+        </div>
+      )}
 
       <Typography.Text type="secondary" style={{ display: "block", marginTop: 16, fontSize: 12 }}>
         配置来源：{parsed.config_source} · 输入时区：{parsed.input_timezone}

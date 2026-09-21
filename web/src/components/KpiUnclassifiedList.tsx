@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Alert, Empty, Input, Table, Typography } from "antd";
+import { Alert, Input, Table, Typography } from "antd";
 
-import { buildKpiUnclassifiedRows, parseKpiMetadata } from "./kpiCatalogModel";
+import { buildKpiUnclassifiedRows, hasKpiUnclassifiedMetrics, parseKpiMetadata } from "./kpiCatalogModel";
 
 interface Props {
   metadata: unknown;
@@ -12,10 +12,7 @@ export function KpiUnclassifiedList({ metadata }: Props) {
   const parsed = parseKpiMetadata(metadata);
   const rows = useMemo(() => buildKpiUnclassifiedRows(metadata, { query }), [metadata, query]);
 
-  if (!parsed) return null;
-  if (!rows.length) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有未识别指标" />;
-  }
+  if (!hasKpiUnclassifiedMetrics(parsed)) return null;
 
   return (
     <div>

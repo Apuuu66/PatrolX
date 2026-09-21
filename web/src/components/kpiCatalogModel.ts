@@ -178,6 +178,10 @@ export function parseKpiMetadata(metadata: unknown): KpiMetadata | null {
   };
 }
 
+export function hasKpiUnclassifiedMetrics(metadata: KpiMetadata | null | undefined): boolean {
+  return (metadata?.unclassified_metrics?.length ?? 0) > 0;
+}
+
 export function buildKpiMetricNameIndex(metadata: unknown): Map<string, string> {
   const parsed = parseKpiMetadata(metadata);
   return new Map(

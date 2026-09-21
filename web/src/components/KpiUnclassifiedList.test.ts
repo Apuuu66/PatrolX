@@ -59,3 +59,11 @@ test("returns an explicit empty state", () => {
   assert.equal(buildKpiUnclassifiedRows({ ...metadata, unclassified_metrics: [] }, { query: "x" }).length, 0);
   assert.equal(buildKpiUnclassifiedRows(null).length, 0);
 });
+
+test("hides the unclassified section when no metrics are unclassified", async () => {
+  const { hasKpiUnclassifiedMetrics } = await import("./kpiCatalogModel.ts");
+  assert.equal(hasKpiUnclassifiedMetrics({ ...metadata, unclassified_metrics: [] }), false);
+  assert.equal(hasKpiUnclassifiedMetrics({ ...metadata, unclassified_metrics: undefined }), false);
+  assert.equal(hasKpiUnclassifiedMetrics(null), false);
+  assert.equal(hasKpiUnclassifiedMetrics(metadata), true);
+});
