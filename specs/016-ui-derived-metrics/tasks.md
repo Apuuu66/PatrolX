@@ -150,3 +150,14 @@ description: "界面新增动态派生指标实现任务列表"
 - 每个用户故事内部先写失败测试，再实现。
 - 涉及契约时必须同步 OpenAPI、Pydantic、生成客户端和测试。
 - 最终必须通过 `python build.py lint` 和 `python build.py test`；涉及全流程时必须通过 `python build.py verify`。
+
+---
+
+## 增量变更：派生指标 key 自动生成（2026-09-21）
+
+**目标**：新增派生指标时允许省略 key，由后端生成唯一稳定 key；编辑时 key 仍不可变，显式 key 的唯一性和格式校验不变。
+
+- [ ] T029 更新 `spec.md` 的 key 语义，并在 `docs/api/openapi.yaml` 将创建请求 `metric_key` 改为可选
+- [ ] T030 在 `tests/test_kpi_config_derived_metrics.py` 和前端模型测试中覆盖“省略 key 自动生成、显式 key 校验不变”
+- [ ] T031 在 `app/models/schemas.py`、`app/services/kpi_config.py` 和派生指标编辑器中实现可选 key 与自动生成
+- [ ] T032 运行 `python build.py contract`、`python build.py gen-web-api`、`python build.py lint`、`python build.py test` 和 `cd web && npm run build`
