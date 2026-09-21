@@ -149,11 +149,10 @@ export function KpiRecordTable({ taskId, ruleCode, item, sourceFiles }: Props) {
           {
             title: "时间",
             dataIndex: "startTimeText",
-            width: 170,
+            width: 340,
             render: (_, record: KpiRecordRow) => (
-              <div style={{ whiteSpace: "normal" }}>
-                <div>{record.startTimeText}</div>
-                <div>{record.endTimeText}</div>
+              <div style={{ whiteSpace: "nowrap" }}>
+                {record.startTimeText} — {record.endTimeText}
               </div>
             ),
           },

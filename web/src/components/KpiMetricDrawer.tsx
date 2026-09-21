@@ -16,14 +16,14 @@ interface Props {
 export function KpiMetricDrawer({ item, open, onClose, taskId, ruleCode, metricNames }: Props) {
   const displayName = (key: string) => metricNames?.get(key) ?? key;
   if (!item) {
-    return <Drawer open={open} onClose={onClose} width={860} title="指标详情" />;
+    return <Drawer open={open} onClose={onClose} width={1020} title="指标详情" />;
   }
 
   const view = getKpiMetricDetailView(item);
   const hasDiagnosticTags = view.fallbackUsed || view.denominatorZero;
 
   return (
-    <Drawer open={open} onClose={onClose} width={860} title={view.title}>
+    <Drawer open={open} onClose={onClose} width={1020} title={view.title}>
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
         <Typography.Text type="secondary">{view.description}</Typography.Text>
         <Descriptions size="small" column={2} bordered>
