@@ -56,6 +56,7 @@ export function TaskDetailPage() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [rebuildRuleCodes, setRebuildRuleCodes] = useState<string[]>([]);
@@ -162,6 +163,15 @@ export function TaskDetailPage() {
     for (const rule of filteredRules) map.set(rule.category, [...(map.get(rule.category) ?? []), rule]);
     return Array.from(map.entries());
   }, [filteredRules]);
+
+  useEffect(() => {
+    if (!statusFilter) return;
+    setExpandedCategories((current) => {
+      const next = new Set(current);
+      for (const rule of filteredRules) next.add(rule.category);
+      return Array.from(next);
+    });
+  }, [statusFilter, filteredRules]);
 
   const attentionRules = useMemo(
     () =>
@@ -357,6 +367,8 @@ export function TaskDetailPage() {
           <Empty description={statusFilter ? `当前状态"${statusFilter}"没有规则结果` : "暂无规则结果"} />
         ) : (
           <Collapse
+            activeKey={expandedCategories}
+            onChange={setExpandedCategories}
             items={grouped.map(([category, list]) => ({
               key: category,
               label: (
