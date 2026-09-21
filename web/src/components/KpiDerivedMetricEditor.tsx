@@ -134,7 +134,11 @@ export function KpiDerivedMetricEditor({ onChanged }: { onChanged?: () => void }
     try {
       if (editing) await api.updateKpiDerivedMetricV4(editing.metric_key, buildKpiDerivedMetricPayload(values));
       else {
-        await api.createKpiDerivedMetricV4({ metric_key: values.metric_key!.trim(), ...buildKpiDerivedMetricPayload(values) });
+        const metricKey = values.metric_key?.trim() || undefined;
+        await api.createKpiDerivedMetricV4({
+          ...(metricKey ? { metric_key: metricKey } : {}),
+          ...buildKpiDerivedMetricPayload(values),
+        });
       }
       message.success("派生指标已保存，仅影响新任务");
       setOpen(false);
@@ -263,10 +267,10 @@ export function KpiDerivedMetricEditor({ onChanged }: { onChanged?: () => void }
             <Form.Item
               name="metric_key"
               label="指标 key"
-              rules={editing ? [] : [{ required: true, message: "请输入派生指标 key" }]}
-              extra="3-128 位小写字母开头，可含数字和下划线"
+              rules={editing ? [] : [{ pattern: /^[a-z][a-z0-9_]{2,127}$/, message: "派生指标 key 格式不正确" }]}
+              extra="可不填，保存后自动生成；填写时为 3-128 位小写字母开头，可含数字和下划线"
             >
-              <Input placeholder="online_success_rate" disabled={Boolean(editing)} />
+              <Input placeholder="不填则自动生成" disabled={Boolean(editing)} />
             </Form.Item>
             <Form.Item name="domain" label="业务域" rules={[{ required: true }]}>
               <Select options={DOMAINS} />

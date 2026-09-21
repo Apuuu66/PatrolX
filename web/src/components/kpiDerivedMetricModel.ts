@@ -32,8 +32,7 @@ export function validateKpiDerivedMetricDraft(
   const errors: string[] = [];
   if (!editing) {
     const metricKey = values.metric_key?.trim();
-    if (!metricKey) errors.push("请输入派生指标 key");
-    else if (!DERIVED_METRIC_KEY_RE.test(metricKey)) errors.push("派生指标 key 格式不正确");
+    if (metricKey && !DERIVED_METRIC_KEY_RE.test(metricKey)) errors.push("派生指标 key 格式不正确");
   }
   if (!values.name_zh?.trim()) errors.push("请输入中文名");
   if (!values.name_en?.trim()) errors.push("请输入英文名");

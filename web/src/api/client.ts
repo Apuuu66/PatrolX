@@ -1529,7 +1529,8 @@ export interface components {
             rule_config_version: number;
         };
         KpiDerivedMetricCreateRequestV4: {
-            metric_key: string;
+            /** @description 派生指标 key；新增时可省略，省略后由服务端生成唯一稳定 key。 */
+            metric_key?: string;
             name_zh: string;
             name_en: string;
             domain: components["schemas"]["KpiRegisteredDomainV4"];

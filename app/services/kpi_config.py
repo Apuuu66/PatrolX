@@ -5,11 +5,13 @@ from __future__ import annotations
 import math
 import re
 from datetime import UTC, datetime
+from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.inspectors.kpi.catalog import REGISTERED_DOMAINS, load_kpi_catalog
 from app.models.db import (
@@ -305,15 +307,27 @@ def get_derived_metric(metric_key: str) -> KpiDerivedMetricV4:
         raise _database_unavailable(exc) from exc
 
 
+def _generate_derived_metric_key(session: Session) -> str:
+    """生成不与基础指标和在线派生指标冲突的稳定 key。"""
+    catalog = load_kpi_catalog()
+    unavailable = set(catalog.metrics) | set(catalog.units)
+    unavailable.update(key for (key,) in session.query(KpiDerivedMetric.metric_key).all())
+    while True:
+        candidate = f"derived_{uuid4().hex[:12]}"
+        if candidate not in unavailable:
+            return candidate
+
+
 def create_derived_metric(body: KpiDerivedMetricCreateRequestV4, operator: str) -> KpiDerivedMetricV4:
-    _validate_derived_metric(body.metric_key, body.domain.value, body.formula)
     try:
         with session_factory() as session, session.begin():
-            if session.get(KpiDerivedMetric, body.metric_key) is not None:
-                raise KpiConfigError("kpi_derived_metric_exists", f"派生指标已存在: {body.metric_key}", 409)
+            metric_key = body.metric_key or _generate_derived_metric_key(session)
+            _validate_derived_metric(metric_key, body.domain.value, body.formula)
+            if session.get(KpiDerivedMetric, metric_key) is not None:
+                raise KpiConfigError("kpi_derived_metric_exists", f"派生指标已存在: {metric_key}", 409)
             now = _now()
             row = KpiDerivedMetric(
-                metric_key=body.metric_key,
+                metric_key=metric_key,
                 name_zh=body.name_zh,
                 name_en=body.name_en,
                 domain=body.domain.value,

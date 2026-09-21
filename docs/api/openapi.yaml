@@ -3522,12 +3522,13 @@ components:
 
     KpiDerivedMetricCreateRequestV4:
       type: object
-      required: [metric_key, name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula]
+      required: [name_zh, name_en, domain, metric_type, semantic_group, display_role, unit, enabled, formula]
       properties:
         metric_key:
           type: string
           minLength: 3
           maxLength: 128
+          description: 派生指标 key；新增时可省略，省略后由服务端生成唯一稳定 key。
         name_zh:
           type: string
           minLength: 1

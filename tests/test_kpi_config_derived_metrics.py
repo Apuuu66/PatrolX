@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -94,6 +95,23 @@ def test_derived_metric_crud_and_audit(derived_env: Path) -> None:
         audits = session.query(KpiRuleConfigAudit).filter_by(entity_type="derived_metric").all()
         assert [item.operation for item in audits] == ["upsert", "upsert", "upsert", "delete"]
         assert audits[-1].before is not None
+
+
+def test_derived_metric_auto_generates_unique_key(derived_env: Path) -> None:
+    first_payload = _create_payload()
+    first_payload.pop("metric_key")
+    first = client.post("/api/v4/kpi/config/derived-metrics", json=first_payload)
+    assert first.status_code == 202, first.text
+    first_key = first.json()["metric_key"]
+    assert re.fullmatch(r"^[a-z][a-z0-9_]{2,127}$", first_key)
+    assert first.headers["Location"].endswith(f"/api/v4/kpi/config/derived-metrics/{first_key}")
+
+    second_payload = _create_payload()
+    second_payload.pop("metric_key")
+    second = client.post("/api/v4/kpi/config/derived-metrics", json=second_payload)
+    assert second.status_code == 202, second.text
+    second_key = second.json()["metric_key"]
+    assert second_key != first_key
 
 
 def test_derived_metric_validations(derived_env: Path) -> None:

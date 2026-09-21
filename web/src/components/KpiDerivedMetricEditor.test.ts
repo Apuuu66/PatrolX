@@ -21,11 +21,12 @@ const base = {
 
 test("validates representative derived metric fields", () => {
   const errors = validateKpiDerivedMetricDraft({}, false);
-  assert.ok(errors.includes("请输入派生指标 key"));
+  assert.ok(!errors.includes("请输入派生指标 key"));
   assert.ok(errors.includes("请选择分子"));
   assert.ok(errors.includes("请选择分母"));
   assert.ok(errors.includes("请输入大于 0 的倍率"));
 
+  assert.deepEqual(validateKpiDerivedMetricDraft({ ...base, metric_key: "online_success_rate" }, false), []);
   assert.deepEqual(validateKpiDerivedMetricDraft({ ...base, metric_key: "online_success_rate" }, true), []);
   assert.deepEqual(validateKpiDerivedMetricDraft({ ...base, metric_key: "Bad-Key" }, false), [
     "派生指标 key 格式不正确",

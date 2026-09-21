@@ -671,7 +671,7 @@ class KpiDerivedMetricRequestV4(BaseModel):
 
 
 class KpiDerivedMetricCreateRequestV4(KpiDerivedMetricRequestV4):
-    metric_key: str = Field(min_length=3, max_length=128)
+    metric_key: str | None = Field(default=None, min_length=3, max_length=128)
 
 
 KpiDerivedMetricUpdateRequestV4 = KpiDerivedMetricRequestV4
