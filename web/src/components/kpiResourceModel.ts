@@ -46,3 +46,27 @@ export function resourceRowSelection<T extends { key: string }>(
     getCheckboxProps: (row: T) => ({ disabled: row.key.length === 0 }),
   };
 }
+
+
+export type ResourceDomainSummary = Record<ResourceDomain, number>;
+export type ResourceDomainFilterValue = "all" | ResourceDomain;
+
+export interface ResourceDomainFilterOption {
+  value: ResourceDomainFilterValue;
+  label: string;
+  count: number;
+}
+
+export function buildResourceDomainFilterOptions(
+  summary: ResourceDomainSummary,
+  total: number,
+): ResourceDomainFilterOption[] {
+  return [
+    { value: "all", label: "全部", count: total },
+    ...(Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[]).map((domain) => ({
+      value: domain,
+      label: RESOURCE_DOMAIN_LABELS[domain],
+      count: summary[domain] ?? 0,
+    })),
+  ];
+}

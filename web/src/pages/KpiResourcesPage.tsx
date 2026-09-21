@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, App, Button, Card, Descriptions, Input, Select, Space, Table, Tabs, Tag } from "antd";
+import { Alert, App, Button, Card, Input, Segmented, Select, Space, Table, Tabs, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
@@ -10,7 +10,13 @@ import {
 } from "../api/http";
 import { KpiMetricName } from "../components/KpiMetricSelect";
 import { KpiResourceTable } from "../components/KpiResourceTable";
-import { resourceDomainLabel, RESOURCE_DOMAIN_LABELS, type ResourceDomain } from "../components/kpiResourceModel";
+import {
+  buildResourceDomainFilterOptions,
+  resourceDomainLabel,
+  RESOURCE_DOMAIN_LABELS,
+  type ResourceDomain,
+  type ResourceDomainFilterValue,
+} from "../components/kpiResourceModel";
 import { KpiDerivedMetricEditor } from "../components/KpiDerivedMetricEditor";
 import { KpiFormulaEditor } from "../components/KpiFormulaEditor";
 import { KpiMetricCatalogProvider } from "../components/KpiMetricSelect";
@@ -184,100 +190,113 @@ export function KpiResourcesPage() {
   ];
 
   const summary = pageData?.summary;
+  const totalMetricCount = summary
+    ? Object.values(summary).reduce((sum, count) => sum + count, 0)
+    : pageData?.total ?? 0;
+  const auditTable = (
+    <Table
+      rowKey="id"
+      size="small"
+      loading={auditLoading}
+      columns={auditColumns}
+      dataSource={audits}
+      pagination={{
+        current: auditPage,
+        pageSize: auditPageSize,
+        total: auditTotal,
+        showSizeChanger: true,
+        showTotal: (value) => `共 ${value} 条`,
+        onChange: handleAuditPageChange,
+      }}
+    />
+  );
 
   return (
     <KpiMetricCatalogProvider>
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Card title={<strong>基础指标配置</strong>}>
+      <Card
+        title={<strong>基础指标配置</strong>}
+        extra={<Typography.Text type="secondary">指标总数：{totalMetricCount}</Typography.Text>}
+      >
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          {pageData && (
-            <Descriptions
-              size="small"
-              column={3}
-              items={[{ key: "total", label: "指标总数", children: pageData.total }]}
+          {summary && (
+            <Segmented<ResourceDomainFilterValue>
+              value={domain ?? "all"}
+              onChange={(value) => handleDomainChange(value === "all" ? undefined : value)}
+              options={buildResourceDomainFilterOptions(summary, totalMetricCount).map((option) => ({
+                value: option.value,
+                label: `${option.label} ${option.count}`,
+              }))}
             />
           )}
-          <Space wrap>
-            {summary &&
-              (Object.keys(RESOURCE_DOMAIN_LABELS) as ResourceDomain[]).map((key) => (
-                <Tag key={key}>
-                  {RESOURCE_DOMAIN_LABELS[key]}: {summary[key]}
-                </Tag>
-              ))}
-          </Space>
-          <Space wrap>
-            <Input.Search
-              placeholder="搜索资源 ID / 中文名 / 英文名"
-              allowClear
-              style={{ width: 280 }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onSearch={handleSearch}
-            />
-            <Select
-              allowClear
-              placeholder="业务域"
-              style={{ width: 140 }}
-              options={DOMAIN_OPTIONS}
-              value={domain}
-              onChange={handleDomainChange}
-            />
-            {canWrite && (
-              <>
-                <Select
-                  allowClear
-                  placeholder="分类到"
-                  style={{ width: 140 }}
-                  options={DOMAIN_OPTIONS}
-                  value={targetDomain}
-                  onChange={setTargetDomain}
-                />
-                <Input
-                  placeholder="操作人"
-                  value={operator}
-                  disabled
-                  style={{ width: 140 }}
-                />
-                <Button
-                  type="primary"
-                  disabled={!targetDomain || selectedKeys.length === 0}
-                  loading={submitting}
-                  onClick={handleClassify}
-                >
-                  批量分类（{selectedKeys.length}）
-                </Button>
-              </>
-            )}
-          </Space>
-          <KpiResourceTable
-            items={pageData?.items ?? []}
-            total={pageData?.total ?? 0}
-            page={pageData?.page ?? page}
-            pageSize={pageData?.page_size ?? pageSize}
-            loading={loading}
-            selectable={canWrite}
-            selectedKeys={selectedKeys}
-            onSelectedKeysChange={setSelectedKeys}
-            onPageChange={handlePageChange}
+          <Tabs
+            defaultActiveKey="metrics"
+            items={[
+              {
+                key: "metrics",
+                label: "指标列表",
+                children: (
+                  <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <Input.Search
+                        placeholder="搜索资源 ID / 中文名 / 英文名"
+                        allowClear
+                        style={{ width: 320 }}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onSearch={handleSearch}
+                      />
+                      {canWrite && (
+                        <Space wrap style={{ justifyContent: "flex-end" }}>
+                          <Select
+                            allowClear
+                            placeholder="分类到"
+                            style={{ width: 140 }}
+                            options={DOMAIN_OPTIONS}
+                            value={targetDomain}
+                            onChange={setTargetDomain}
+                          />
+                          <Typography.Text type="secondary">操作人：{operator || "-"}</Typography.Text>
+                          <Button
+                            type="primary"
+                            disabled={!targetDomain || selectedKeys.length === 0}
+                            loading={submitting}
+                            onClick={handleClassify}
+                          >
+                            批量分类（{selectedKeys.length}）
+                          </Button>
+                        </Space>
+                      )}
+                    </div>
+                    <KpiResourceTable
+                      items={pageData?.items ?? []}
+                      total={pageData?.total ?? 0}
+                      page={pageData?.page ?? page}
+                      pageSize={pageData?.page_size ?? pageSize}
+                      loading={loading}
+                      selectable={canWrite}
+                      selectedKeys={selectedKeys}
+                      onSelectedKeysChange={setSelectedKeys}
+                      onPageChange={handlePageChange}
+                    />
+                  </Space>
+                ),
+              },
+              {
+                key: "classification-audits",
+                label: "分类审计",
+                children: auditTable,
+              },
+            ]}
           />
         </Space>
-      </Card>
-      <Card title="分类审计" styles={{ body: { paddingTop: 8 } }}>
-        <Table
-          rowKey="id"
-          size="small"
-          loading={auditLoading}
-          columns={auditColumns}
-          dataSource={audits}
-          pagination={{
-            current: auditPage,
-            pageSize: auditPageSize,
-            total: auditTotal,
-            showSizeChanger: true,
-            showTotal: (value) => `共 ${value} 条`,
-            onChange: handleAuditPageChange,
-          }}
-        />
       </Card>
 
       {!canWrite ? null : !operator.trim() ? (
