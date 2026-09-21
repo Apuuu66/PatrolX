@@ -199,7 +199,11 @@ def _unclassified_metrics(
     grouped: dict[str, dict[str, object]] = {}
     for kpi_file in files:
         registered = {name for name in kpi_file.objects if match_metric_name(name, domain_config) is not None}
-        reserved = {name for name in kpi_file.objects if normalize_metric_name(name) in reserved_alias_index}
+        reserved = {
+            name
+            for name in kpi_file.objects
+            if match_longest_prefix(normalize_metric_name(name), reserved_alias_index) is not None
+        }
         unclassified = [name for name in kpi_file.objects if name not in registered and name not in reserved]
         for name in unclassified:
             item = grouped.setdefault(

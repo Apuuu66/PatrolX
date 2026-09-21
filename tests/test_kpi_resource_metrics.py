@@ -85,8 +85,9 @@ def test_reserved_metric_is_hidden_from_task_unclassified(tmp_path, monkeypatch)
 
     content = (
         "设备类型：XXX\n测量单元名称：呼叫会话统计\n"
-        "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数,自定义指标\n"
-        "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,10,7\n"
+        "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),"
+        "呼叫请求次数,呼叫请求次数(次),自定义指标(个)\n"
+        "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,10,9,7\n"
     )
     path = tmp_path / "kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,4 +105,5 @@ def test_reserved_metric_is_hidden_from_task_unclassified(tmp_path, monkeypatch)
     result = registry.get("kpi.call").run(ctx)
     names = {item["source_name"] for item in result.metadata["unclassified_metrics"]}
     assert "呼叫请求次数" not in names
-    assert "自定义指标" in names
+    assert "呼叫请求次数(次)" not in names
+    assert "自定义指标(个)" in names
