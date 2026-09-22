@@ -439,6 +439,57 @@ export interface paths {
         patch: operations["setKpiMeasurementBindingStatusV5"];
         trace?: never;
     };
+    "/api/v5/kpi/measurement-resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Kpi Measurement Resources V5 */
+        get: operations["listKpiMeasurementResourcesV5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v5/kpi/measurement-bindings/{binding_id}/register-metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register Kpi Measurement Metric V5 */
+        post: operations["registerKpiMeasurementMetricV5"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v5/kpi/measurement-resources/{resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Kpi Measurement Resource V5 */
+        patch: operations["updateKpiMeasurementResourceV5"];
+        trace?: never;
+    };
     "/api/v5/kpi/measurement-derived": {
         parameters: {
             query?: never;
@@ -687,6 +738,11 @@ export interface components {
             task_id: string;
             /** Source File */
             source_file: string;
+            /**
+             * Metric Is Manual
+             * @default false
+             */
+            metric_is_manual: boolean;
         };
         /** KpiMeasurementBindingList */
         KpiMeasurementBindingList: {
@@ -760,6 +816,64 @@ export interface components {
             errors?: {
                 [key: string]: unknown;
             }[];
+        };
+        /** KpiMeasurementMetricRegisterRequest */
+        KpiMeasurementMetricRegisterRequest: {
+            /** Name Zh */
+            name_zh?: string | null;
+            /** Name En */
+            name_en?: string | null;
+            /** Bind Existing Resource Id */
+            bind_existing_resource_id?: string | null;
+        };
+        /** KpiMeasurementMetricRegisterResponse */
+        KpiMeasurementMetricRegisterResponse: {
+            binding: components["schemas"]["KpiMeasurementBinding"];
+            metric: components["schemas"]["KpiMeasurementResource"];
+        };
+        /** KpiMeasurementResource */
+        KpiMeasurementResource: {
+            /** Resource Id */
+            resource_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "mu" | "me" | "unit";
+            /** Name Zh */
+            name_zh: string;
+            /** Name En */
+            name_en: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Is Manual */
+            is_manual: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** KpiMeasurementResourceList */
+        KpiMeasurementResourceList: {
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["KpiMeasurementResource"][];
+        };
+        /** KpiMeasurementResourceUpdateRequest */
+        KpiMeasurementResourceUpdateRequest: {
+            /** Name Zh */
+            name_zh?: string | null;
+            /** Name En */
+            name_en?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
         };
         /** KpiMeasurementUnit */
         KpiMeasurementUnit: {
@@ -2133,6 +2247,117 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listKpiMeasurementResourcesV5: {
+        parameters: {
+            query?: {
+                kind?: string | null;
+                search?: string | null;
+                enabled?: boolean | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementResourceList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    registerKpiMeasurementMetricV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                binding_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementMetricRegisterRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementMetricRegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateKpiMeasurementResourceV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementResourceUpdateRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementResource"];
                 };
             };
             /** @description Validation Error */

@@ -405,6 +405,7 @@ class KpiMeasurementBinding(BaseModel):
     enabled: bool
     task_id: str
     source_file: str
+    metric_is_manual: bool = False
 
 
 class KpiMeasurementBindingList(BaseModel):
@@ -414,6 +415,39 @@ class KpiMeasurementBindingList(BaseModel):
 
 class KpiMeasurementBindingStatusRequest(BaseModel):
     status: Literal["candidate", "confirmed", "ignored"]
+    enabled: bool | None = None
+
+
+class KpiMeasurementResource(BaseModel):
+    resource_id: str
+    kind: Literal["mu", "me", "unit"]
+    name_zh: str
+    name_en: str
+    enabled: bool
+    is_manual: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class KpiMeasurementMetricRegisterRequest(BaseModel):
+    name_zh: str | None = Field(default=None, max_length=256)
+    name_en: str | None = Field(default=None, max_length=256)
+    bind_existing_resource_id: str | None = Field(default=None, max_length=128)
+
+
+class KpiMeasurementMetricRegisterResponse(BaseModel):
+    binding: KpiMeasurementBinding
+    metric: KpiMeasurementResource
+
+
+class KpiMeasurementResourceList(BaseModel):
+    total: int = Field(ge=0)
+    items: list[KpiMeasurementResource]
+
+
+class KpiMeasurementResourceUpdateRequest(BaseModel):
+    name_zh: str | None = Field(default=None, min_length=1, max_length=256)
+    name_en: str | None = Field(default=None, max_length=256)
     enabled: bool | None = None
 
 

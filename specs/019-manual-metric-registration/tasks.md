@@ -8,8 +8,8 @@ description: "人工注册指标实现任务列表"
 
 ## 阶段 1：设置
 
-- [ ] T001 在实现 worktree 中确认 `git worktree list`、`git branch --show-current` 和 Speckit 产物已提交到 `main`
-- [ ] T002 [P] 在 `app/services/kpi_measurement_units.py` 增加人工指标 ID 生成函数，固定 `ME__MANUAL_` 前缀并保证 ASCII、下划线和 128 字符约束
+- [x] T001 在实现 worktree 中确认 `git worktree list`、`git branch --show-current` 和 Speckit 产物已提交到 `main`
+- [x] T002 [P] 在 `app/services/kpi_measurement_units.py` 增加人工指标 ID 生成函数，固定 `ME__MANUAL_` 前缀并保证 ASCII、下划线和 128 字符约束
 
 **检查点**：实现分支与 worktree 就绪，ID 生成规则可独立测试。
 
@@ -21,17 +21,17 @@ description: "人工注册指标实现任务列表"
 
 ### 测试
 
-- [ ] T003 [P] [US1] 在 `tests/test_kpi_measurement_resources.py` 中先添加 ID 生成与人工资源创建测试，验证空英文名、长英文名、唯一后缀和长度限制
-- [ ] T004 [P] [US1] 在 `tests/test_kpi_measurement_api.py` 中先添加注册接口测试，验证空绑定关联成功、状态保持候选、非候选/已关联绑定拒绝
+- [x] T003 [P] [US1] 在 `tests/test_kpi_measurement_resources.py` 中先添加 ID 生成与人工资源创建测试，验证空英文名、长英文名、唯一后缀和长度限制
+- [x] T004 [P] [US1] 在 `tests/test_kpi_measurement_api.py` 中先添加注册接口测试，验证空绑定关联成功、状态保持候选、非候选/已关联绑定拒绝
 
 ### 实现
 
-- [ ] T005 [US1] 在 `app/services/kpi_measurement_units.py` 实现绑定现场注册服务：校验候选空绑定、创建 `kind=me` 的人工资源并只更新当前绑定 `metric_resource_id`
-- [ ] T006 [US1] 在 `app/models/schemas.py` 增加 `KpiMeasurementMetricRegisterRequest` 与资源/绑定响应所需 Pydantic Schema
-- [ ] T007 [US1] 先更新 `docs/api/openapi.yaml`，新增 `POST /api/v5/kpi/measurement-bindings/{binding_id}/register-metric` 契约
-- [ ] T008 [US1] 在 `app/api/router.py` 实现注册端点，使用 admin 权限并映射 `KpiMeasurementError`
-- [ ] T009 [US1] 更新 `web/src/api/http.ts` 与生成客户端所需的调用层，接入绑定注册接口
-- [ ] T010 [US1] 在 `web/src/pages/MeasurementUnitsPage.tsx` 为空指标候选绑定增加注册表单，预填基础列名和展示单位，提交后刷新绑定列表
+- [x] T005 [US1] 在 `app/services/kpi_measurement_units.py` 实现绑定现场注册服务：校验候选空绑定、创建 `kind=me` 的人工资源并只更新当前绑定 `metric_resource_id`
+- [x] T006 [US1] 在 `app/models/schemas.py` 增加 `KpiMeasurementMetricRegisterRequest` 与资源/绑定响应所需 Pydantic Schema
+- [x] T007 [US1] 先更新 `docs/api/openapi.yaml`，新增 `POST /api/v5/kpi/measurement-bindings/{binding_id}/register-metric` 契约
+- [x] T008 [US1] 在 `app/api/router.py` 实现注册端点，使用 admin 权限并映射 `KpiMeasurementError`
+- [x] T009 [US1] 更新 `web/src/api/http.ts` 与生成客户端所需的调用层，接入绑定注册接口
+- [x] T010 [US1] 在 `web/src/pages/MeasurementUnitsPage.tsx` 为空指标候选绑定增加注册表单，预填基础列名和展示单位，提交后刷新绑定列表
 
 **检查点**：API 与界面均可从未注册绑定完成注册，绑定仍未确认。
 
@@ -43,8 +43,8 @@ description: "人工注册指标实现任务列表"
 
 ### 测试
 
-- [ ] T011 [P] [US2] 在 `tests/test_kpi_measurement_api.py` 中验证注册返回的绑定 `metric_resource_id` 带人工前缀
-- [ ] T012 [US2] 在 `web/src/pages/MeasurementUnitsPage.tsx` 对 `ME__MANUAL_` 前缀指标渲染“人工注册”标签
+- [x] T011 [P] [US2] 在 `tests/test_kpi_measurement_api.py` 中验证注册返回的绑定 `metric_resource_id` 带人工前缀
+- [x] T012 [US2] 在 `web/src/pages/MeasurementUnitsPage.tsx` 对 `ME__MANUAL_` 前缀指标渲染“人工注册”标签
 
 **检查点**：接口数据与界面展示均可区分人工指标。
 
@@ -56,17 +56,17 @@ description: "人工注册指标实现任务列表"
 
 ### 测试
 
-- [ ] T013 [P] [US3] 在 `tests/test_kpi_measurement_resources.py` 中先添加编辑服务测试：人工指标可更新三个字段，非人工指标拒绝，中文名冲突拒绝
-- [ ] T014 [P] [US3] 在 `tests/test_kpi_measurement_api.py` 中先添加编辑接口测试：字段级更新、404、非人工资源和冲突错误
+- [x] T013 [P] [US3] 在 `tests/test_kpi_measurement_resources.py` 中先添加编辑服务测试：人工指标可更新三个字段，非人工指标拒绝，中文名冲突拒绝
+- [x] T014 [P] [US3] 在 `tests/test_kpi_measurement_api.py` 中先添加编辑接口测试：字段级更新、404、非人工资源和冲突错误
 
 ### 实现
 
-- [ ] T015 [US3] 在 `app/services/kpi_measurement_units.py` 实现人工指标编辑服务，仅更新 `name_zh`、`name_en`、`enabled`
-- [ ] T016 [US3] 在 `app/models/schemas.py` 增加 `KpiMeasurementResourceUpdateRequest` 和资源响应 Schema
-- [ ] T017 [US3] 先更新 `docs/api/openapi.yaml`，新增 `PATCH /api/v5/kpi/measurement-resources/{resource_id}` 契约
-- [ ] T018 [US3] 在 `app/api/router.py` 实现编辑端点，使用 admin 权限并映射业务错误
-- [ ] T019 [US3] 更新 `web/src/api/http.ts` 与生成客户端所需的调用层，接入人工指标编辑接口
-- [ ] T020 [US3] 在 `web/src/pages/MeasurementUnitsPage.tsx` 为人工指标提供编辑弹窗，仅展示可编辑字段并显示不可变 ID
+- [x] T015 [US3] 在 `app/services/kpi_measurement_units.py` 实现人工指标编辑服务，仅更新 `name_zh`、`name_en`、`enabled`
+- [x] T016 [US3] 在 `app/models/schemas.py` 增加 `KpiMeasurementResourceUpdateRequest` 和资源响应 Schema
+- [x] T017 [US3] 先更新 `docs/api/openapi.yaml`，新增 `PATCH /api/v5/kpi/measurement-resources/{resource_id}` 契约
+- [x] T018 [US3] 在 `app/api/router.py` 实现编辑端点，使用 admin 权限并映射业务错误
+- [x] T019 [US3] 更新 `web/src/api/http.ts` 与生成客户端所需的调用层，接入人工指标编辑接口
+- [x] T020 [US3] 在 `web/src/pages/MeasurementUnitsPage.tsx` 为人工指标提供编辑弹窗，仅展示可编辑字段并显示不可变 ID
 
 **检查点**：人工指标维护闭环可用，CSV 导入资源不受影响。
 
@@ -78,26 +78,26 @@ description: "人工注册指标实现任务列表"
 
 ### 测试
 
-- [ ] T021 [P] [US4] 在 `tests/test_kpi_measurement_resources.py` 中先添加同名冲突与改绑既有 ME 资源测试，验证不创建重复资源和不影响其他绑定
-- [ ] T022 [P] [US4] 在 `tests/test_kpi_measurement_api.py` 中先添加同名冲突、选择非 ME 资源和不存在资源的接口错误测试
+- [x] T021 [P] [US4] 在 `tests/test_kpi_measurement_resources.py` 中先添加同名冲突与改绑既有 ME 资源测试，验证不创建重复资源和不影响其他绑定
+- [x] T022 [P] [US4] 在 `tests/test_kpi_measurement_api.py` 中先添加同名冲突、选择非 ME 资源和不存在资源的接口错误测试
 
 ### 实现
 
-- [ ] T023 [US4] 在 `app/services/kpi_measurement_units.py` 注册服务中实现同类 ME 中文名冲突检测、绑定既有资源分支和事务边界
-- [ ] T024 [US4] 先在 `app/models/schemas.py` 和 `docs/api/openapi.yaml` 中新增 `GET /api/v5/kpi/measurement-resources` 契约，并补充 `bind_existing_resource_id` 校验
-- [ ] T025 [US4] 在 `app/services/kpi_measurement_units.py` 实现全局 ME 资源分页查询，支持 `kind`、搜索、启用过滤和默认每页 10 条
-- [ ] T026 [US4] 在 `app/api/router.py` 实现 ME 资源查询端点，使用 admin 权限并保持契约优先
-- [ ] T027 [US4] 在 `web/src/api/http.ts` 中接入资源查询，并在 `web/src/pages/MeasurementUnitsPage.tsx` 处理同名冲突提示和既有 ME 资源选择器
+- [x] T023 [US4] 在 `app/services/kpi_measurement_units.py` 注册服务中实现同类 ME 中文名冲突检测、绑定既有资源分支和事务边界
+- [x] T024 [US4] 先在 `app/models/schemas.py` 和 `docs/api/openapi.yaml` 中新增 `GET /api/v5/kpi/measurement-resources` 契约，并补充 `bind_existing_resource_id` 校验
+- [x] T025 [US4] 在 `app/services/kpi_measurement_units.py` 实现全局 ME 资源分页查询，支持 `kind`、搜索、启用过滤和默认每页 10 条
+- [x] T026 [US4] 在 `app/api/router.py` 实现 ME 资源查询端点，使用 admin 权限并保持契约优先
+- [x] T027 [US4] 在 `web/src/api/http.ts` 中接入资源查询，并在 `web/src/pages/MeasurementUnitsPage.tsx` 处理同名冲突提示和既有 ME 资源选择器
 
 **检查点**：重复与误绑场景均有明确错误或受控改绑路径。
 
 ## 阶段 6：收尾与验证
 
-- [ ] T028 [P] 检查 `specs/019-manual-metric-registration/quickstart.md` 与实际 API 字段一致，必要时修正文档
-- [ ] T029 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和前端客户端一致
-- [ ] T030 运行 `python build.py lint` 和 `python build.py test`
-- [ ] T031 运行 `python build.py verify`
-- [ ] T032 对照 spec 的 FR-001 到 FR-012 做完成审计并更新 `tasks.md` 复选框
+- [x] T028 [P] 检查 `specs/019-manual-metric-registration/quickstart.md` 与实际 API 字段一致，必要时修正文档
+- [x] T029 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和前端客户端一致
+- [x] T030 运行 `python build.py lint` 和 `python build.py test`
+- [x] T031 运行 `python build.py verify`
+- [x] T032 对照 spec 的 FR-001 到 FR-012 做完成审计并更新 `tasks.md` 复选框
 
 ## 依赖与执行顺序
 

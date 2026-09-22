@@ -963,6 +963,153 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-resources:
+    get:
+      summary: List Kpi Measurement Resources V5
+      operationId: listKpiMeasurementResourcesV5
+      parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 10
+          title: Page Size
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementResourceList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-bindings/{binding_id}/register-metric:
+    post:
+      summary: Register Kpi Measurement Metric V5
+      operationId: registerKpiMeasurementMetricV5
+      parameters:
+      - name: binding_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Binding Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/KpiMeasurementMetricRegisterRequest'
+              - type: 'null'
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementMetricRegisterResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-resources/{resource_id}:
+    patch:
+      summary: Update Kpi Measurement Resource V5
+      operationId: updateKpiMeasurementResourceV5
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Resource Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/KpiMeasurementResourceUpdateRequest'
+              - type: 'null'
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementResource'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v5/kpi/measurement-derived:
     post:
       summary: Create Kpi Measurement Derived V5
@@ -1416,6 +1563,10 @@ components:
         source_file:
           type: string
           title: Source File
+        metric_is_manual:
+          type: boolean
+          title: Metric Is Manual
+          default: false
       type: object
       required:
       - id
@@ -1553,6 +1704,120 @@ components:
           title: Errors
       type: object
       title: KpiMeasurementImportResult
+    KpiMeasurementMetricRegisterRequest:
+      properties:
+        name_zh:
+          anyOf:
+          - type: string
+            maxLength: 256
+          - type: 'null'
+          title: Name Zh
+        name_en:
+          anyOf:
+          - type: string
+            maxLength: 256
+          - type: 'null'
+          title: Name En
+        bind_existing_resource_id:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Bind Existing Resource Id
+      type: object
+      title: KpiMeasurementMetricRegisterRequest
+    KpiMeasurementMetricRegisterResponse:
+      properties:
+        binding:
+          $ref: '#/components/schemas/KpiMeasurementBinding'
+        metric:
+          $ref: '#/components/schemas/KpiMeasurementResource'
+      type: object
+      required:
+      - binding
+      - metric
+      title: KpiMeasurementMetricRegisterResponse
+    KpiMeasurementResource:
+      properties:
+        resource_id:
+          type: string
+          title: Resource Id
+        kind:
+          type: string
+          enum:
+          - mu
+          - me
+          - unit
+          title: Kind
+        name_zh:
+          type: string
+          title: Name Zh
+        name_en:
+          type: string
+          title: Name En
+        enabled:
+          type: boolean
+          title: Enabled
+        is_manual:
+          type: boolean
+          title: Is Manual
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - resource_id
+      - kind
+      - name_zh
+      - name_en
+      - enabled
+      - is_manual
+      - created_at
+      - updated_at
+      title: KpiMeasurementResource
+    KpiMeasurementResourceList:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/KpiMeasurementResource'
+          type: array
+          title: Items
+      type: object
+      required:
+      - total
+      - items
+      title: KpiMeasurementResourceList
+    KpiMeasurementResourceUpdateRequest:
+      properties:
+        name_zh:
+          anyOf:
+          - type: string
+            maxLength: 256
+            minLength: 1
+          - type: 'null'
+          title: Name Zh
+        name_en:
+          anyOf:
+          - type: string
+            maxLength: 256
+          - type: 'null'
+          title: Name En
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: KpiMeasurementResourceUpdateRequest
     KpiMeasurementUnit:
       properties:
         resource_id:

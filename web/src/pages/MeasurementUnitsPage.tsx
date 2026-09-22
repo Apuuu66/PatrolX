@@ -4,7 +4,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
-import { api, type MeasurementBinding, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
+import { api, type MeasurementBinding, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -205,6 +205,18 @@ function MeasurementUnitTab() {
   );
 }
 
+interface RegisterFormValues {
+  name_zh?: string;
+  name_en?: string;
+  bind_existing_resource_id?: string;
+}
+
+interface MetricEditFormValues {
+  name_zh: string;
+  name_en?: string;
+  enabled: boolean;
+}
+
 function MeasurementBindingTab() {
   const { message } = App.useApp();
   const { user } = useAuth();
@@ -216,12 +228,26 @@ function MeasurementBindingTab() {
   const [unitSearch, setUnitSearch] = useState("");
   const [status, setStatus] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
+  const [registerForm] = Form.useForm<RegisterFormValues>();
+  const [registerTarget, setRegisterTarget] = useState<MeasurementBinding | null>(null);
+  const [registerSubmitting, setRegisterSubmitting] = useState(false);
+  const [resourceSearch, setResourceSearch] = useState("");
+  const [resources, setResources] = useState<MeasurementResource[]>([]);
+  const [resourceLoading, setResourceLoading] = useState(false);
+  const [editForm] = Form.useForm<MetricEditFormValues>();
+  const [editingMetric, setEditingMetric] = useState<MeasurementResource | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const load = useCallback(
     async (nextPage = page, nextPageSize = pageSize) => {
       setLoading(true);
       try {
-        const data = await api.listMeasurementBindings({ page: nextPage, page_size: nextPageSize, measurement_unit_id: unitSearch || undefined, status });
+        const data = await api.listMeasurementBindings({
+          page: nextPage,
+          page_size: nextPageSize,
+          measurement_unit_id: unitSearch || undefined,
+          status,
+        });
         setItems(data.items);
         setTotal(data.total);
       } catch (err) {
@@ -235,9 +261,104 @@ function MeasurementBindingTab() {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    if (!registerTarget) return;
+    const loadResources = async () => {
+      setResourceLoading(true);
+      try {
+        const data = await api.listMeasurementResources({
+          kind: "me",
+          search: resourceSearch || undefined,
+          page_size: 50,
+        });
+        setResources(data.items);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "已有指标加载失败");
+      } finally {
+        setResourceLoading(false);
+      }
+    };
+    void loadResources();
+  }, [message, registerTarget, resourceSearch]);
+
+  const openRegister = (record: MeasurementBinding) => {
+    setResourceSearch("");
+    setResources([]);
+    registerForm.setFieldsValue({
+      name_zh: record.base_source_name,
+      name_en: undefined,
+      bind_existing_resource_id: undefined,
+    });
+    setRegisterTarget(record);
+  };
+
+  const submitRegister = async (values: RegisterFormValues) => {
+    if (!registerTarget) return;
+    setRegisterSubmitting(true);
+    try {
+      const payload = values.bind_existing_resource_id
+        ? { bind_existing_resource_id: values.bind_existing_resource_id }
+        : { name_zh: values.name_zh, name_en: values.name_en || null };
+      await api.registerMeasurementMetric(registerTarget.id, payload);
+      message.success("指标已注册");
+      setRegisterTarget(null);
+      registerForm.resetFields();
+      await load();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "注册指标失败");
+    } finally {
+      setRegisterSubmitting(false);
+    }
+  };
+
+  const openEdit = async (record: MeasurementBinding) => {
+    if (!record.metric_resource_id) return;
+    try {
+      const listed = await api.listMeasurementResources({
+        kind: "me",
+        search: record.metric_resource_id,
+        page_size: 50,
+      });
+      const metric = listed.items.find((item) => item.resource_id === record.metric_resource_id);
+      if (!metric) {
+        message.error("未找到待编辑指标");
+        return;
+      }
+      setEditingMetric(metric);
+      editForm.setFieldsValue({
+        name_zh: metric.name_zh,
+        name_en: metric.name_en || undefined,
+        enabled: metric.enabled,
+      });
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "待编辑指标加载失败");
+    }
+  };
+
+  const submitEdit = async (values: MetricEditFormValues) => {
+    if (!editingMetric) return;
+    setEditSubmitting(true);
+    try {
+      const updated = await api.updateMeasurementResource(editingMetric.resource_id, values);
+      message.success("指标已更新");
+      setEditingMetric(null);
+      editForm.resetFields();
+      await load();
+      return updated;
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "更新指标失败");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const updateBinding = async (binding: MeasurementBinding, nextStatus: "confirmed" | "ignored") => {
     try {
-      await api.setMeasurementBindingStatus(binding.id, nextStatus, nextStatus === "confirmed" ? true : binding.enabled);
+      await api.setMeasurementBindingStatus(
+        binding.id,
+        nextStatus,
+        nextStatus === "confirmed" ? true : binding.enabled,
+      );
       message.success(nextStatus === "confirmed" ? "已确认绑定" : "已忽略绑定");
       await load();
     } catch (err) {
@@ -246,17 +367,34 @@ function MeasurementBindingTab() {
   };
 
   const columns: ColumnsType<MeasurementBinding> = [
-    { title: "指标 ID", dataIndex: "metric_resource_id", key: "metric_resource_id", render: (value) => value || "-" },
+    {
+      title: "指标 ID", dataIndex: "metric_resource_id", key: "metric_resource_id",
+      render: (value: string | null, record) => value ? (
+        <Space>
+          <span>{value}</span>
+          {record.metric_is_manual ? <Tag color="blue">人工注册</Tag> : null}
+        </Space>
+      ) : "-",
+    },
     { title: "CSV 列名", dataIndex: "raw_source_name", key: "raw_source_name" },
     { title: "基础列名", dataIndex: "base_source_name", key: "base_source_name" },
     { title: "测量单元", dataIndex: "measurement_unit_id", key: "measurement_unit_id" },
     { title: "任务", dataIndex: "task_id", key: "task_id" },
     { title: "来源文件", dataIndex: "source_file", key: "source_file" },
-    { title: "状态", dataIndex: "status", key: "status", width: 110, render: (value: string) => <Tag color={STATUS_COLORS[value]}>{STATUS_LABELS[value]}</Tag> },
     {
-      title: "操作", key: "actions", width: 170,
+      title: "状态", dataIndex: "status", key: "status", width: 110,
+      render: (value: string) => <Tag color={STATUS_COLORS[value]}>{STATUS_LABELS[value]}</Tag>,
+    },
+    {
+      title: "操作", key: "actions", width: 280,
       render: (_, record) => isAdmin && record.status !== "conflict" ? (
         <Space>
+          {!record.metric_resource_id && record.status === "candidate" ? (
+            <Button size="small" type="primary" onClick={() => openRegister(record)}>注册指标</Button>
+          ) : null}
+          {record.metric_is_manual ? (
+            <Button size="small" onClick={() => void openEdit(record)}>编辑指标</Button>
+          ) : null}
           <Button size="small" disabled={record.status === "confirmed"} onClick={() => void updateBinding(record, "confirmed")}>确认</Button>
           <Button size="small" disabled={record.status === "ignored"} onClick={() => void updateBinding(record, "ignored")}>忽略</Button>
         </Space>
@@ -273,6 +411,66 @@ function MeasurementBindingTab() {
       </Space>
       <Table rowKey="id" loading={loading} columns={columns} dataSource={items}
         pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }} />
+
+      <Modal
+        open={registerTarget !== null}
+        title="注册未注册指标"
+        confirmLoading={registerSubmitting}
+        okText="注册"
+        onCancel={() => setRegisterTarget(null)}
+        onOk={() => registerForm.submit()}
+      >
+        <Form form={registerForm} layout="vertical" onFinish={(values) => void submitRegister(values)}>
+          <Typography.Paragraph type="secondary">
+            展示单位：{registerTarget?.display_unit || "无"}；注册后绑定仍需人工确认。
+          </Typography.Paragraph>
+          <Form.Item name="bind_existing_resource_id" label="绑定已有指标（可选）">
+            <Select
+              allowClear
+              showSearch
+              placeholder="搜索并选择已有 ME 指标"
+              filterOption={false}
+              loading={resourceLoading}
+              onSearch={setResourceSearch}
+              options={resources.map((item) => ({
+                value: item.resource_id,
+                label: `${item.name_zh} / ${item.resource_id}`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="name_zh"
+            label="中文名"
+            rules={[{ required: true, message: "未选择已有指标时中文名必填" }]}
+          >
+            <Input maxLength={256} />
+          </Form.Item>
+          <Form.Item name="name_en" label="英文名（可选）">
+            <Input maxLength={256} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={editingMetric !== null}
+        title={`编辑人工指标：${editingMetric?.resource_id ?? ""}`}
+        confirmLoading={editSubmitting}
+        okText="保存"
+        onCancel={() => setEditingMetric(null)}
+        onOk={() => editForm.submit()}
+      >
+        <Form form={editForm} layout="vertical" onFinish={(values) => void submitEdit(values)}>
+          <Form.Item name="name_zh" label="中文名" rules={[{ required: true, message: "中文名必填" }]}>
+            <Input maxLength={256} />
+          </Form.Item>
+          <Form.Item name="name_en" label="英文名">
+            <Input maxLength={256} />
+          </Form.Item>
+          <Form.Item name="enabled" label="启用状态">
+            <Select options={[{ value: true, label: "启用" }, { value: false, label: "停用" }]} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Card>
   );
 }

@@ -6,6 +6,7 @@ import csv
 import hashlib
 import io
 import re
+import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +36,12 @@ class KpiMeasurementError(Exception):
 
 
 _RESOURCE_PREFIXES = {"MU_": "mu", "ME_": "me", "UNIT_": "unit"}
+MANUAL_METRIC_PREFIX = "ME__MANUAL_"
+
+
+def is_manual_metric_id(resource_id: str | None) -> bool:
+    """判断 ME 资源 ID 是否来自人工注册。"""
+    return bool(resource_id and resource_id.upper().startswith(MANUAL_METRIC_PREFIX))
 
 
 def resource_kind(resource_id: str) -> str | None:
@@ -402,6 +409,204 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
     return matched_files
 
 
+def _metric_resource_dict(row: KpiMeasurementResource) -> dict[str, Any]:
+    """返回 ME/MU/UNIT 资源公共契约字典。"""
+    return {
+        "resource_id": row.resource_id,
+        "kind": row.kind,
+        "name_zh": row.name_zh,
+        "name_en": row.name_en,
+        "enabled": row.enabled,
+        "is_manual": is_manual_metric_id(row.resource_id),
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
+def _manual_metric_slug(name_en: str | None) -> str:
+    """把英文名转为 ID 中的可读片段，避免生成完全随机的资源 ID。"""
+    normalized = re.sub(r"[^A-Za-z0-9]+", "_", (name_en or "").strip()).strip("_").upper()
+    # 连续重复字符会消耗 ID 长度但降低可读性，保留四位即可区分常见缩写。
+    normalized = re.sub(r"(.)\1{4,}", r"\1\1\1\1", normalized)
+    return normalized or "UNNAMED"
+
+
+def _generate_manual_metric_id(session: Any, name_en: str | None) -> str:
+    """生成前缀、英文可读片段和短随机后缀组成的人工指标 ID。"""
+    suffix_length = 6
+    slug = _manual_metric_slug(name_en)
+    max_slug_length = 128 - len(MANUAL_METRIC_PREFIX) - suffix_length - 1
+    prefix = f"{MANUAL_METRIC_PREFIX}{slug[:max_slug_length]}_"
+    for _ in range(16):
+        resource_id = f"{prefix}{uuid.uuid4().hex[:suffix_length].upper()}"
+        if session.get(KpiMeasurementResource, resource_id) is None:
+            return resource_id
+    raise KpiMeasurementError("kpi_metric_id_generate_failed", "人工指标资源 ID 生成失败", 500)
+
+
+def register_metric_for_binding(
+    binding_id: int,
+    *,
+    name_zh: str | None = None,
+    name_en: str | None = None,
+    bind_existing_resource_id: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """为未注册绑定创建人工 ME 指标或关联既有 ME 指标。"""
+    init_db()
+    normalized_zh = None if name_zh is None else str(name_zh).strip()
+    normalized_en = None if name_en is None else str(name_en).strip()
+    existing_id = None if bind_existing_resource_id is None else str(bind_existing_resource_id).strip()
+    if existing_id:
+        if normalized_zh is not None or normalized_en is not None:
+            raise KpiMeasurementError("invalid_request", "绑定既有指标时不能提交中文名或英文名", 400)
+    elif not normalized_zh:
+        raise KpiMeasurementError("invalid_request", "注册新指标时中文名必填", 400)
+    if normalized_zh and len(normalized_zh) > 256:
+        raise KpiMeasurementError("invalid_request", "指标中文名长度不能超过 256", 400)
+    if normalized_en and len(normalized_en) > 256:
+        raise KpiMeasurementError("invalid_request", "指标英文名长度不能超过 256", 400)
+
+    with session_factory() as session:
+        binding = session.get(KpiMeasurementBinding, binding_id)
+        if binding is None:
+            raise KpiMeasurementError("kpi_binding_not_found", f"绑定不存在: {binding_id}", 404)
+        if binding.metric_resource_id is not None:
+            raise KpiMeasurementError(
+                "kpi_binding_already_registered", f"绑定已关联指标: {binding.metric_resource_id}", 409
+            )
+        if binding.status != "candidate":
+            raise KpiMeasurementError("kpi_binding_not_unregistered", "只有候选绑定可以注册指标", 409)
+
+        if existing_id:
+            metric = session.get(KpiMeasurementResource, existing_id)
+            if metric is None:
+                raise KpiMeasurementError("kpi_metric_not_found", f"指标不存在: {existing_id}", 404)
+            if metric.kind != "me":
+                raise KpiMeasurementError("kpi_metric_kind_invalid", f"资源不是 ME 指标: {existing_id}", 409)
+            binding.metric_resource_id = metric.resource_id
+            binding.status = "candidate"
+            binding.updated_at = _utc_now()
+            session.commit()
+            return _binding_dict(binding), _metric_resource_dict(metric)
+
+        duplicate = (
+            session.query(KpiMeasurementResource)
+            .filter(KpiMeasurementResource.kind == "me", KpiMeasurementResource.name_zh == normalized_zh)
+            .one_or_none()
+        )
+        if duplicate is not None:
+            raise KpiMeasurementError(
+                "kpi_metric_name_conflict",
+                f"同类指标中文名已存在: {normalized_zh}",
+                409,
+                {"existing_resource_id": duplicate.resource_id},
+            )
+        metric = KpiMeasurementResource(
+            resource_id=_generate_manual_metric_id(session, normalized_en),
+            kind="me",
+            name_zh=normalized_zh or "",
+            name_en=normalized_en or "",
+            filename_fragment=None,
+            enabled=True,
+            created_at=_utc_now(),
+            updated_at=_utc_now(),
+        )
+        session.add(metric)
+        session.flush()
+        binding.metric_resource_id = metric.resource_id
+        binding.status = "candidate"
+        binding.updated_at = _utc_now()
+        session.commit()
+        return _binding_dict(binding), _metric_resource_dict(metric)
+
+
+def update_manual_metric(
+    resource_id: str,
+    *,
+    name_zh: str | None = None,
+    name_en: str | None = None,
+    enabled: bool | None = None,
+) -> dict[str, Any]:
+    """编辑人工注册 ME 指标；资源 ID 与绑定来源不可修改。"""
+    if name_zh is None and name_en is None and enabled is None:
+        raise KpiMeasurementError("kpi_metric_no_fields", "至少提供一个可编辑字段", 400)
+    normalized_zh = None if name_zh is None else str(name_zh).strip()
+    normalized_en = None if name_en is None else str(name_en).strip()
+    if normalized_zh == "":
+        raise KpiMeasurementError("invalid_request", "指标中文名不能为空", 400)
+    if normalized_zh and len(normalized_zh) > 256:
+        raise KpiMeasurementError("invalid_request", "指标中文名长度不能超过 256", 400)
+    if normalized_en and len(normalized_en) > 256:
+        raise KpiMeasurementError("invalid_request", "指标英文名长度不能超过 256", 400)
+
+    init_db()
+    with session_factory() as session:
+        row = session.get(KpiMeasurementResource, resource_id)
+        if row is None or row.kind != "me":
+            raise KpiMeasurementError("kpi_metric_not_found", f"指标不存在: {resource_id}", 404)
+        if not is_manual_metric_id(row.resource_id):
+            raise KpiMeasurementError("kpi_metric_not_manual", "仅人工注册指标支持编辑", 409)
+        if normalized_zh:
+            conflict = (
+                session.query(KpiMeasurementResource)
+                .filter(
+                    KpiMeasurementResource.kind == "me",
+                    KpiMeasurementResource.name_zh == normalized_zh,
+                    KpiMeasurementResource.resource_id != row.resource_id,
+                )
+                .one_or_none()
+            )
+            if conflict is not None:
+                raise KpiMeasurementError(
+                    "kpi_metric_name_conflict",
+                    f"同类指标中文名已存在: {normalized_zh}",
+                    409,
+                    {"existing_resource_id": conflict.resource_id},
+                )
+            row.name_zh = normalized_zh
+        if normalized_en is not None:
+            row.name_en = normalized_en
+        if enabled is not None:
+            row.enabled = enabled
+        row.updated_at = _utc_now()
+        session.commit()
+        return _metric_resource_dict(row)
+
+
+def list_measurement_resources(
+    kind: str | None = None,
+    search: str | None = None,
+    enabled: bool | None = None,
+    page: int = 1,
+    page_size: int = 10,
+) -> dict[str, Any]:
+    """分页查询资源目录，供人工注册时选择已有 ME 指标。"""
+    if page < 1 or page_size < 1:
+        raise KpiMeasurementError("invalid_page", "分页参数非法", 400)
+    init_db()
+    with session_factory() as session:
+        query = session.query(KpiMeasurementResource)
+        if kind:
+            query = query.filter(KpiMeasurementResource.kind == kind)
+        if enabled is not None:
+            query = query.filter(KpiMeasurementResource.enabled == enabled)
+        if search:
+            like = f"%{search}%"
+            query = query.filter(
+                or_(
+                    KpiMeasurementResource.resource_id.like(like),
+                    KpiMeasurementResource.name_zh.like(like),
+                    KpiMeasurementResource.name_en.like(like),
+                )
+            )
+        rows = query.order_by(KpiMeasurementResource.resource_id.asc()).all()
+        start = (page - 1) * page_size
+        return {
+            "total": len(rows),
+            "items": [_metric_resource_dict(row) for row in rows[start : start + page_size]],
+        }
+
+
 def _binding_dict(row: KpiMeasurementBinding) -> dict[str, Any]:
     return {
         "id": row.id,
@@ -414,6 +619,7 @@ def _binding_dict(row: KpiMeasurementBinding) -> dict[str, Any]:
         "enabled": row.enabled,
         "task_id": row.task_id,
         "source_file": row.source_file,
+        "metric_is_manual": is_manual_metric_id(row.metric_resource_id),
     }
 
 

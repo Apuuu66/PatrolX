@@ -38,7 +38,7 @@
 - 绑定既有资源时：`name_zh` 和 `name_en` 必须为 `null`；`display_unit` 由绑定行已有数据提供，不作为请求字段。
 - `name_zh` 与同 `kind=me` 资源冲突且未选择该资源时，返回冲突错误和既有资源 ID。
 
-成功响应：`200`，返回更新后的绑定 JSON；`metric_resource_id` 有值，`status=candidate`。
+成功响应：`200`，返回 `{ binding, metric }`；`binding.metric_resource_id` 有值且 `binding.status=candidate`，`metric` 供界面回显。
 
 主要错误：
 

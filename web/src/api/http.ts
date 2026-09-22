@@ -17,6 +17,10 @@ export type MeasurementUnitImportResult = components["schemas"]["KpiMeasurementI
 export type MeasurementBinding = components["schemas"]["KpiMeasurementBinding"];
 export type MeasurementBindingList = components["schemas"]["KpiMeasurementBindingList"];
 export type MeasurementBindingStatus = MeasurementBinding["status"];
+export type MeasurementResource = components["schemas"]["KpiMeasurementResource"];
+export type MeasurementResourceList = components["schemas"]["KpiMeasurementResourceList"];
+export type MeasurementMetricRegisterPayload = components["schemas"]["KpiMeasurementMetricRegisterRequest"];
+export type MeasurementResourceUpdatePayload = components["schemas"]["KpiMeasurementResourceUpdateRequest"];
 export type MeasurementDerived = components["schemas"]["KpiMeasurementDerived"];
 export type MeasurementDerivedCreatePayload = components["schemas"]["KpiMeasurementDerivedCreateRequest"];
 export interface MeasurementMetadataMetricObservation {
@@ -258,6 +262,27 @@ export const api = {
     request<{ resource_id: string; enabled: boolean }>(
       `${KPI_V5_BASE}/kpi/measurement-units/${encodeURIComponent(resourceId)}`,
       { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) },
+    ),
+
+  listMeasurementResources: (query: { kind?: "mu" | "me" | "unit"; search?: string; enabled?: boolean; page?: number; page_size?: number } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<MeasurementResourceList>(`${KPI_V5_BASE}/kpi/measurement-resources${qs ? `?${qs}` : ""}`);
+  },
+
+  registerMeasurementMetric: (bindingId: number, payload: MeasurementMetricRegisterPayload) =>
+    request<components["schemas"]["KpiMeasurementMetricRegisterResponse"]>(
+      `${KPI_V5_BASE}/kpi/measurement-bindings/${bindingId}/register-metric`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    ),
+
+  updateMeasurementResource: (resourceId: string, payload: MeasurementResourceUpdatePayload) =>
+    request<MeasurementResource>(
+      `${KPI_V5_BASE}/kpi/measurement-resources/${encodeURIComponent(resourceId)}`,
+      { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
     ),
 
   listMeasurementBindings: (

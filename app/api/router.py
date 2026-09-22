@@ -27,12 +27,18 @@ from app.models.schemas import (
     InspectorInfo,
     InspectorState,
     InspectorStateListResponse,
+    KpiMeasurementBinding,
     KpiMeasurementBindingList,
     KpiMeasurementBindingStatusRequest,
     KpiMeasurementDerived,
     KpiMeasurementDerivedCreateRequest,
     KpiMeasurementEnabledRequest,
     KpiMeasurementImportResult,
+    KpiMeasurementMetricRegisterRequest,
+    KpiMeasurementMetricRegisterResponse,
+    KpiMeasurementResource,
+    KpiMeasurementResourceList,
+    KpiMeasurementResourceUpdateRequest,
     KpiMeasurementUnitList,
     LogEntry,
     LoginRequestV1,
@@ -71,9 +77,12 @@ from app.services.kpi_measurement_units import (
     create_measurement_derived,
     import_resource_csv,
     list_measurement_bindings,
+    list_measurement_resources,
     list_measurement_units,
+    register_metric_for_binding,
     set_measurement_binding_status,
     set_measurement_unit_enabled,
+    update_manual_metric,
 )
 from app.services.overview import build_overview
 from app.services.rule_states import RuleStateError, list_rule_states, update_rule_state
@@ -564,6 +573,77 @@ def set_kpi_measurement_binding_status_v5(
         return set_measurement_binding_status(binding_id, body.status, body.enabled)
     except KpiMeasurementError as exc:
         raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+
+
+@v5_router.get(
+    "/kpi/measurement-resources",
+    response_model=KpiMeasurementResourceList,
+    operation_id="listKpiMeasurementResourcesV5",
+)
+def list_kpi_measurement_resources_v5(
+    kind: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    enabled: bool | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=200),
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> KpiMeasurementResourceList:
+    try:
+        result = list_measurement_resources(kind, search, enabled, page, page_size)
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementResourceList.model_validate(result)
+
+
+@v5_router.post(
+    "/kpi/measurement-bindings/{binding_id}/register-metric",
+    response_model=KpiMeasurementMetricRegisterResponse,
+    operation_id="registerKpiMeasurementMetricV5",
+)
+def register_kpi_measurement_metric_v5(
+    binding_id: int = PathParam(),
+    body: KpiMeasurementMetricRegisterRequest | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> KpiMeasurementMetricRegisterResponse:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        binding, metric = register_metric_for_binding(
+            binding_id,
+            name_zh=body.name_zh,
+            name_en=body.name_en,
+            bind_existing_resource_id=body.bind_existing_resource_id,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementMetricRegisterResponse(
+        binding=KpiMeasurementBinding.model_validate(binding),
+        metric=KpiMeasurementResource.model_validate(metric),
+    )
+
+
+@v5_router.patch(
+    "/kpi/measurement-resources/{resource_id}",
+    response_model=KpiMeasurementResource,
+    operation_id="updateKpiMeasurementResourceV5",
+)
+def update_kpi_measurement_resource_v5(
+    resource_id: str = PathParam(),
+    body: KpiMeasurementResourceUpdateRequest | None = None,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> KpiMeasurementResource:
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        metric = update_manual_metric(
+            resource_id,
+            name_zh=body.name_zh,
+            name_en=body.name_en,
+            enabled=body.enabled,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementResource.model_validate(metric)
 
 
 @v5_router.post(
