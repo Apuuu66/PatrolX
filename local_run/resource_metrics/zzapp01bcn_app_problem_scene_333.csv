@@ -1,0 +1,16 @@
+资源id,中文描述,英文描述
+MU__CALL_SESSION_API_STATISTICS,呼叫会话API统计,Call Session API Statistics
+ME__CALL_REQUEST_COUNT,呼叫请求次数,Call Request Count
+ME__CALL_REQUEST_SUCCESS_COUNT,呼叫请求成功次数,Call Request Success Count
+ME__CALL_REQUEST_FAILURE_COUNT,呼叫请求失败次数,Call Request Failure Count
+ME__CALL_SUCCESS_RATE,呼叫成功率,Call Success Rate
+ME__CALL_FAILURE_RATE,呼叫失败率,Call Failure Rate
+ME__STATISTICS_PEAK,统计峰值,Statistics Peak
+ME__MAX_CONCURRENCY,最大并发,Max Concurrency
+MU__CONTAINER_METRIC_UNIT,容器指标单元,Container Metric Unit
+ME__CONTAINER_CPU_USAGE,容器CPU使用率,Container CPU Usage
+ME__CONTAINER_CPU_USAGE_PEAK,容器CPU使用率峰值,Container CPU Usage Peak
+ME__CONTAINER_MEMORY_USAGE,容器内存使用率,Container Memory Usage
+ME__CONTAINER_MEMORY_USAGE_PEAK,容器内存使用率峰值,Container Memory Usage Peak
+UNIT__COUNT,次,Count
+UNIT__PERCENT,百分比,Percent

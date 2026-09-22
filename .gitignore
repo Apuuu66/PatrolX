@@ -17,6 +17,7 @@ local_run/*
 !local_run/resource_metrics/
 local_run/resource_metrics/*
 !local_run/resource_metrics/.gitkeep
+!local_run/resource_metrics/zzapp01bcn_app_problem_scene_333.csv
 !uploads/.gitkeep
 !output/.gitkeep
 # 轻量合成测试包：允许随仓库分发
