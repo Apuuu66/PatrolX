@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from pathlib import Path
 
 import pytest
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 
 from app.models.db import init_db
 from app.services.kpi_measurement_units import (
@@ -210,6 +213,73 @@ def test_batch_confirm_returns_item_failures_without_blocking_others() -> None:
     assert by_id[ignored]["error_code"] == "kpi_binding_status_not_confirmable"
     assert _get_binding(missing_metric)["status"] == "candidate"
     assert _get_binding(ignored)["status"] == "ignored"
+
+
+def test_batch_confirm_rejects_more_than_two_hundred_unique_bindings() -> None:
+    from app.services.kpi_measurement_units import batch_confirm_measurement_bindings
+
+    binding_ids = list(range(1, 202))
+
+    with pytest.raises(KpiMeasurementError) as exc_info:
+        batch_confirm_measurement_bindings(binding_ids)
+
+    assert exc_info.value.code == "kpi_binding_batch_too_large"
+
+
+def test_batch_confirm_is_serialized_for_metric_conflicts() -> None:
+    """并发确认同一指标时，后提交方必须重新读取最终状态。"""
+    from app.services.kpi_measurement_units import batch_confirm_measurement_bindings
+
+    first = _create_binding(metric_resource_id="ME_CALL", measurement_unit_id="MU_CALL")
+    second = _create_binding(metric_resource_id="ME_CALL", measurement_unit_id="MU_OTHER")
+    selected_threads: set[int] = set()
+    condition = threading.Condition()
+
+    def _wait_for_stale_reads(_conn, _cursor, statement, *_args, **_kwargs) -> None:
+        normalized = " ".join(statement.lower().split())
+        if "from kpi_measurement_bindings" not in normalized:
+            return
+        thread_id = threading.get_ident()
+        with condition:
+            if thread_id in selected_threads:
+                return
+            selected_threads.add(thread_id)
+            if len(selected_threads) < 2:
+                # BEGIN IMMEDIATE serializes the second reader; do not deadlock while
+                # waiting for a read that can only happen after the first commit.
+                condition.wait(0.2)
+
+    event.listen(Engine, "before_cursor_execute", _wait_for_stale_reads)
+    try:
+        results: dict[str, object] = {}
+
+        def _confirm(key: str, binding_id: int) -> None:
+            results[key] = batch_confirm_measurement_bindings([binding_id])
+
+        threads = [
+            threading.Thread(target=_confirm, args=("first", first)),
+            threading.Thread(target=_confirm, args=("second", second)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        first_result = results["first"]
+        second_result = results["second"]
+        assert isinstance(first_result, dict)
+        assert isinstance(second_result, dict)
+        outcomes = (("first", first_result), ("second", second_result))
+        succeeded_keys = [key for key, result in outcomes if result["succeeded"]]
+        failed_keys = [key for key, result in outcomes if result["failed"]]
+        assert len(succeeded_keys) == 1
+        assert len(failed_keys) == 1
+        failed_result = second_result if failed_keys == ["second"] else first_result
+        assert failed_result["items"][0]["error_code"] == "kpi_binding_conflict"
+        assert [_get_binding(first)["status"], _get_binding(second)["status"]].count("confirmed") == 1
+        assert [_get_binding(first)["status"], _get_binding(second)["status"]].count("candidate") == 1
+    finally:
+        event.remove(Engine, "before_cursor_execute", _wait_for_stale_reads)
 
 
 def test_batch_confirm_blocks_cross_unit_metric_conflicts() -> None:
