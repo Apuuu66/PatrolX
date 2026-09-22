@@ -151,6 +151,17 @@ Windows 上推荐使用 Git Bash 或 WSL；路径可以用 `C:/data/sample.zip` 
 
 该命令只做 CSV -> 拆分配置基础文件的确定性转换；运行时分类和任务巡检不会在线导入 CSV。
 
+测量单元基础资源导入前可先做只读预览。该工具默认处理 `local_run/resource_metrics` 顶层的全部 CSV，
+不递归子目录，可选 `--dir` 覆盖目录；CSV 支持 UTF-8 和 GBK/GB2312/GB18030，表头必须包含
+`资源id`、`中文描述`、`英文描述`。工具只统计 MU / ME / UNIT 分类、可导入和跳过明细，不写入数据库；
+单个 CSV 表头或读取失败时继续处理其他文件。
+
+```bash
+.venv/bin/python tools/preview_measurement_units.py
+.venv/bin/python tools/preview_measurement_units.py --json
+.venv/bin/python tools/preview_measurement_units.py --dir /path/to/resource_metrics
+```
+
 ## 4. CLI 全流程入口
 
 CLI 的包发现逻辑在 `app/cli.py`：
