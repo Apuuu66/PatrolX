@@ -31,6 +31,10 @@ def test_resource_kind_and_filename_fragment() -> None:
     assert resource_kind("MU__CALL") == "mu"
     assert resource_kind("ME_CALL") == "me"
     assert resource_kind("UNIT_COUNT") == "unit"
+    assert resource_kind("mu__call") == "mu"
+    assert resource_kind("Mu__Call") == "mu"
+    assert resource_kind("me_call") == "me"
+    assert resource_kind("unit_count") == "unit"
     assert filename_fragment("Call Session API Statistics") == "Call_Session_API_Statistics"
 
 

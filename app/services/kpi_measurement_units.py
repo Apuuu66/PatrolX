@@ -38,9 +38,10 @@ _RESOURCE_PREFIXES = {"MU__": "mu", "ME_": "me", "UNIT_": "unit"}
 
 
 def resource_kind(resource_id: str) -> str | None:
-    """根据资源 ID 前缀识别资源类型。"""
+    """根据资源 ID 前缀识别资源类型；前缀大小写不敏感。"""
+    normalized_id = resource_id.upper()
     for prefix, kind in _RESOURCE_PREFIXES.items():
-        if resource_id.startswith(prefix):
+        if normalized_id.startswith(prefix):
             return kind
     return None
 
