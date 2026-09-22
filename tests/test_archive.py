@@ -221,10 +221,10 @@ def test_whitelist_has_priority_and_restores_normal_processing(tmp_path, monkeyp
     all_final = _relative_set(task_dir)
 
     assert "other/keep-inner.txt" in all_final
-    assert "logs/inner.txt" in all_final
+    assert "alarm/inner.txt" in all_final
     assert "alarm/alarm.txt" in all_final
     assert "other/skip/normal.zip" in all_final
-    assert "logs/plain.txt" in all_final
+    assert "alarm/plain.txt" in all_final
     assert "logs/inner.zip" not in all_final
     manifest = task_dir / ".patrolx-extracted.json"
     assert "whitelist_keyword" in manifest.read_text(encoding="utf-8")

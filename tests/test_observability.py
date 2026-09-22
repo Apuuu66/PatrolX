@@ -129,7 +129,7 @@ def test_policy_extraction_logs_include_task_and_path_context(tmp_path, monkeypa
     )
     assert restored["task_id"] == task.task_id
     assert restored["source"] == "skip/service_ALARM.zip"
-    assert restored["target"] == "logs"
+    assert restored["target"] == "alarm"
     assert restored["keyword"] == "alarm"
 
     hit = next(item for item in lines if item["message"] == "extract.policy.whitelist")

@@ -54,7 +54,12 @@ category:
     extensions:
       - .out
 
-# 压缩包成员归组：命中的压缩包内普通成员不再逐个分类，统一进入指定类别。
+# 压缩包归组：先按压缩包文件名关键字匹配类别并优先解压；
+# 命中的压缩包内普通成员不再逐个分类，统一进入该类别。
 archive_members:
   - archive: "*perfresult*"
     category: kpi
+  - archive: "*alarm*"
+    category: alarm
+  - archive: "*servicelog*"
+    category: log

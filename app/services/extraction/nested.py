@@ -289,7 +289,8 @@ def _extract_subpackage(
         }
         manifest["subpackages"].append(state)
         return
-    category, reason = _category_of(source, parent_category)
+    # 先按压缩包关键字段匹配分类，再展开。
+    category, reason = _category_of(source, parent_category, archive_name=source.name)
     state: dict[str, object] = {
         "source": _source_display(source_relative, source_kind),
         "parent": None,
