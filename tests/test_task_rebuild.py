@@ -1,15 +1,18 @@
 """任务重建重跑契约与保护语义测试。"""
 
 import json
+import shutil
+import threading
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.cli import run_task
 from app.core.checksum import sha256_file
 from app.main import app
-from app.models.schemas import RebuildMode, RebuildRequest
+from app.models.schemas import RebuildMode, RebuildRequest, TaskMode, TaskStatus, TaskTrigger
 from app.services import store
 from app.services.tasks import task_service
 from tests.baseline_helpers import load_rule, setup_env, strip_volatile, wait_for_task
@@ -176,3 +179,41 @@ def test_rebuild_prechecks_reject_without_output_change(tmp_path, monkeypatch) -
 
     assert tree_digest() == before
     assert store.load_task_meta(env.output, task_id) is not None
+
+
+def test_full_rebuild_keeps_local_task_visible(tmp_path, monkeypatch) -> None:
+    """本地全量重建期间 task.json 必须保留，列表不能出现任务消失。"""
+    env = setup_env(tmp_path, monkeypatch)
+    uploads_dir = env.uploads / "local-rebuild-visible"
+    uploads_dir.mkdir(parents=True)
+    package = uploads_dir / "rebuild-sample.zip"
+    shutil.copyfile(Path(__file__).parent / "fixtures" / "sample" / "sample.zip", package)
+    created = run_task(package, task_id="local-rebuild-visible", mode=TaskMode.LOCAL, trigger=TaskTrigger.CLI)
+    assert created.status == TaskStatus.COMPLETED
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def fake_run_task(*args, **kwargs):
+        entered.set()
+        assert release.wait(timeout=5)
+        current = store.load_task_meta(env.output, "local-rebuild-visible")
+        completed = current.model_copy(update={"status": TaskStatus.COMPLETED, "completed_at": current.created_at})
+        store.save_task_meta(env.output, completed)
+        return completed
+
+    monkeypatch.setattr("app.services.tasks.run_task", fake_run_task)
+
+    accepted = task_service.rebuild(
+        "local-rebuild-visible",
+        RebuildRequest(mode=RebuildMode.FULL, confirmed=True),
+    )
+    assert accepted is True
+    assert entered.wait(timeout=5)
+
+    items, total = task_service.list_tasks(page=1, page_size=10, status=None)
+    visible = {item.task_id: item for item in items}
+    assert total >= 1
+    assert "local-rebuild-visible" in visible
+    assert visible["local-rebuild-visible"].status == TaskStatus.PENDING
+    release.set()

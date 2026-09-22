@@ -265,6 +265,10 @@ class TaskService:
         }
         if plan.mode == RebuildMode.FULL:
             _remove_tree(settings.output / task_id, task_id, [f"output/{task_id}"])
+            # 本地任务没有 SQLite 兜底；全量重建期间必须保留任务元数据，避免列表闪空。
+            if old_task:
+                pending_task = old_task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
+                store.save_task_meta(settings.output, pending_task)
             append_log(settings.output, task_id, "info", "全量重建重跑开始", **log_detail)
             executed = run_task(
                 package,
