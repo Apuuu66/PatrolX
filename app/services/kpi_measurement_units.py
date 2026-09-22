@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from sqlalchemy import or_
+from sqlalchemy import exists, or_
 
 from app.core.encoding import decode_text_with_fallback, read_text_with_fallback
 from app.core.logging import get_logger
@@ -629,13 +629,28 @@ def list_measurement_bindings(
     measurement_unit_id: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    unit_search: str | None = None,
 ) -> dict[str, Any]:
-    """列出指标绑定候选。"""
+    """列出指标绑定候选；unit_search 支持测量单元 ID 和名称模糊匹配。"""
     init_db()
     with session_factory() as session:
         query = session.query(KpiMeasurementBinding)
         if measurement_unit_id:
             query = query.filter(KpiMeasurementBinding.measurement_unit_id == measurement_unit_id)
+        if unit_search:
+            like = f"%{unit_search}%"
+            query = query.filter(
+                or_(
+                    KpiMeasurementBinding.measurement_unit_id.like(like),
+                    exists().where(
+                        KpiMeasurementResource.resource_id == KpiMeasurementBinding.measurement_unit_id,
+                        or_(
+                            KpiMeasurementResource.name_zh.like(like),
+                            KpiMeasurementResource.name_en.like(like),
+                        ),
+                    ),
+                )
+            )
         if status:
             query = query.filter(KpiMeasurementBinding.status == status)
         if search:

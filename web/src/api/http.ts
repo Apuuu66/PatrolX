@@ -288,7 +288,7 @@ export const api = {
     ),
 
   listMeasurementBindings: (
-    query: { measurement_unit_id?: string; status?: string; search?: string; page?: number; page_size?: number } = {},
+    query: { measurement_unit_id?: string; unit_search?: string; status?: string; search?: string; page?: number; page_size?: number } = {},
   ) => {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {

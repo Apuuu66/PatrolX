@@ -549,12 +549,13 @@ def set_kpi_measurement_unit_enabled_v5(
 )
 def list_kpi_measurement_bindings_v5(
     measurement_unit_id: str | None = Query(default=None),
+    unit_search: str | None = Query(default=None),
     status: str | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=200),
 ) -> KpiMeasurementBindingList:
-    result = list_measurement_bindings(measurement_unit_id, status, search)
+    result = list_measurement_bindings(measurement_unit_id, status, search, unit_search=unit_search)
     start = (page - 1) * page_size
     items = result["items"][start : start + page_size]
     return KpiMeasurementBindingList(total=result["total"], items=items)

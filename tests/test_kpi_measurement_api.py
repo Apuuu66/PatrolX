@@ -47,9 +47,20 @@ def test_import_list_and_toggle_measurement_units() -> None:
 def test_binding_list_and_status_api() -> None:
     with _client() as client:
         _import_csv(client)
+        _create_unregistered_binding()
         listed = client.get("/api/v5/kpi/measurement-bindings")
         assert listed.status_code == 200, listed.text
-        assert listed.json() == {"total": 0, "items": []}
+        assert listed.json()["total"] == 1
+
+        for query in ("MU_", "呼叫", "Call"):
+            searched = client.get("/api/v5/kpi/measurement-bindings", params={"unit_search": query})
+            assert searched.status_code == 200, searched.text
+            assert searched.json()["total"] == 1
+            assert searched.json()["items"][0]["measurement_unit_id"] == "MU_CALL"
+
+        missing = client.get("/api/v5/kpi/measurement-bindings", params={"unit_search": "MU_OTHER"})
+        assert missing.status_code == 200, missing.text
+        assert missing.json() == {"total": 0, "items": []}
 
 
 def test_create_derived_api_validates_bindings() -> None:

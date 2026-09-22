@@ -2244,6 +2244,8 @@ export interface operations {
         parameters: {
             query?: {
                 measurement_unit_id?: string | null;
+                /** @description 按测量单元资源 ID、中文名或英文名模糊过滤绑定关系。 */
+                unit_search?: string | null;
                 status?: string | null;
                 search?: string | null;
                 page?: number;
