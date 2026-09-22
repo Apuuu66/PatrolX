@@ -145,7 +145,7 @@ function MeasurementUnitTab() {
       title: "说明", key: "description",
       render: (_, record) => {
         if (record.reason === "unsupported_resource_prefix") {
-          return "仅导入 MU__*、ME_*、UNIT_* 三类资源";
+          return "仅导入 MU_*、ME_*、UNIT_* 三类资源";
         }
         if (record.reason === "unchanged") {
           return "中英文名称均未变化";

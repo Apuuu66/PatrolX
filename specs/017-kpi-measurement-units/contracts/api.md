@@ -29,7 +29,7 @@ multipart/form-data：
 
 ## PATCH /api/v5/kpi/measurement-units/{resource_id}
 
-请求 `{"enabled": true|false}`，仅允许 `MU__*`。
+请求 `{"enabled": true|false}`，仅允许 `MU_*`。
 
 ## GET /api/v5/kpi/measurement-bindings
 
@@ -45,7 +45,7 @@ multipart/form-data：
 
 ```json
 {
-  "measurement_unit_id": "MU__CALL_SESSION_API_STATISTICS",
+  "measurement_unit_id": "MU_CALL_SESSION_API_STATISTICS",
   "metric_resource_id": "ME_SUCCESS_RATE",
   "numerator_metric_id": "ME_SUCCESS_CALLS",
   "denominator_metric_id": "ME_TOTAL_CALLS"

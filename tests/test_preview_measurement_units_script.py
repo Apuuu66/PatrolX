@@ -11,7 +11,7 @@ def test_preview_resource_csv_reports_kinds_without_import(tmp_path: Path) -> No
     path = tmp_path / "resources.csv"
     path.write_text(
         " 资源id , 中文描述 , 英文描述 \n"
-        "MU__CALL,呼叫统计,Call Statistics\n"
+        "MU_CALL,呼叫统计,Call Statistics\n"
         "ME_CALL,呼叫请求,Call Requests\n"
         "BAD_CALL,非法资源,Bad Resource\n",
         encoding="utf-8",
@@ -29,7 +29,7 @@ def test_preview_resource_csv_reports_kinds_without_import(tmp_path: Path) -> No
 
 def test_preview_directory_processes_all_root_level_csv_files(tmp_path: Path) -> None:
     (tmp_path / "b-call.csv").write_text(
-        "资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\n",
+        "资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n",
         encoding="utf-8",
     )
     (tmp_path / "A-UNIT.CSV").write_text(
@@ -57,7 +57,7 @@ def test_preview_directory_processes_all_root_level_csv_files(tmp_path: Path) ->
 def test_preview_directory_continues_after_invalid_header(tmp_path: Path) -> None:
     (tmp_path / "bad.csv").write_text("resource_id,name_zh,name_en\n", encoding="utf-8")
     (tmp_path / "good.csv").write_text(
-        "资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\n",
+        "资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n",
         encoding="utf-8",
     )
 
@@ -73,7 +73,7 @@ def test_preview_directory_continues_after_invalid_header(tmp_path: Path) -> Non
 
 def test_preview_directory_supports_csv_glob_pattern(tmp_path: Path) -> None:
     (tmp_path / "mu.csv").write_text(
-        "资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\n",
+        "资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n",
         encoding="utf-8",
     )
     (tmp_path / "me.CSV").write_text(

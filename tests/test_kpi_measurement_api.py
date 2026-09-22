@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-CSV = "资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n"
+CSV = "资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n"
 
 
 def _client() -> TestClient:
@@ -34,10 +34,10 @@ def test_import_list_and_toggle_measurement_units() -> None:
         assert listed.status_code == 200, listed.text
         assert listed.json()["total"] == 1
         unit = listed.json()["items"][0]
-        assert unit["resource_id"] == "MU__CALL"
+        assert unit["resource_id"] == "MU_CALL"
         assert unit["filename_fragment"] == "Call_Statistics"
 
-        updated = client.patch("/api/v5/kpi/measurement-units/MU__CALL", json={"enabled": False})
+        updated = client.patch("/api/v5/kpi/measurement-units/MU_CALL", json={"enabled": False})
         assert updated.status_code == 200, updated.text
         assert updated.json()["enabled"] is False
         filtered = client.get("/api/v5/kpi/measurement-units", params={"enabled": True})
@@ -58,7 +58,7 @@ def test_create_derived_api_validates_bindings() -> None:
         response = client.post(
             "/api/v5/kpi/measurement-derived",
             json={
-                "measurement_unit_id": "MU__CALL",
+                "measurement_unit_id": "MU_CALL",
                 "metric_resource_id": "ME_CALL",
                 "numerator_metric_id": "ME_CALL",
                 "denominator_metric_id": "ME_CALL",

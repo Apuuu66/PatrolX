@@ -4,7 +4,7 @@
 
 | 字段 | 类型 | 约束 | 说明 |
 | --- | --- | --- | --- |
-| resource_id | string | PK | `MU__*` / `ME_*` / `UNIT_*` |
+| resource_id | string | PK | `MU_*` / `ME_*` / `UNIT_*` |
 | kind | string | enum: mu/me/unit | 前缀派生 |
 | name_zh | string | required | 中文描述 |
 | name_en | string | required | 英文描述 |
@@ -18,7 +18,7 @@
 | --- | --- | --- | --- |
 | id | int | PK | 候选绑定 |
 | metric_resource_id | string / null | FK-like | `ME_*`；未知列为 null |
-| measurement_unit_id | string | FK-like | `MU__*` |
+| measurement_unit_id | string | FK-like | `MU_*` |
 | raw_source_name | string | required | CSV 原始列名 |
 | base_source_name | string | required | 去掉尾部单位括号 |
 | display_unit | string / null | nullable | 括号内单位 |

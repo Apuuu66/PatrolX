@@ -27,7 +27,7 @@ from tests.baseline_helpers import load_rule, setup_env
 HEADER = "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次)\n"
 RESOURCE_CSV = (
     "资源id,中文描述,英文描述\n"
-    "MU__CALL,呼叫统计,Call Statistics\n"
+    "MU_CALL,呼叫统计,Call Statistics\n"
     "ME_CALL,呼叫请求次数,Call Requests\n"
     "ME_RATE,呼叫成功率,Call Success Rate\n"
 )
@@ -45,7 +45,7 @@ def _confirm(call_binding: bool = True) -> None:
 
 def test_resource_import_rejects_invalid_header() -> None:
     with pytest.raises(KpiMeasurementError) as exc_info:
-        import_resource_csv(io.StringIO("id,name\nMU__CALL,呼叫统计\n"))
+        import_resource_csv(io.StringIO("id,name\nMU_CALL,呼叫统计\n"))
     assert exc_info.value.code == "kpi_resource_csv_invalid"
 
 
@@ -53,8 +53,8 @@ def test_binding_conflict_when_same_metric_belongs_to_other_unit(tmp_path: Path)
     import_resource_csv(
         io.StringIO(
             "资源id,中文描述,英文描述\n"
-            "MU__CALL,呼叫统计,Call Statistics\n"
-            "MU__API,接口统计,Api Statistics\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
+            "MU_API,接口统计,Api Statistics\n"
             "ME_CALL,呼叫请求次数,Call Requests\n"
         )
     )
@@ -68,10 +68,10 @@ def test_binding_conflict_when_same_metric_belongs_to_other_unit(tmp_path: Path)
     api_path.write_text(HEADER, encoding="utf-8")
     result = discover_measurement_bindings("task-api", [("ne333_Api_Statistics_15_0_202609020000.csv", api_path)])
     assert result["files"][0]["status"] == "matched"
-    assert list_measurement_bindings(measurement_unit_id="MU__API")["items"][0]["status"] == "conflict"
+    assert list_measurement_bindings(measurement_unit_id="MU_API")["items"][0]["status"] == "conflict"
 
     with pytest.raises(KpiMeasurementError) as exc_info:
-        conflict_id = list_measurement_bindings(measurement_unit_id="MU__API")["items"][0]["id"]
+        conflict_id = list_measurement_bindings(measurement_unit_id="MU_API")["items"][0]["id"]
         set_measurement_binding_status(conflict_id, "confirmed")
     assert exc_info.value.code == "kpi_binding_conflict"
 
@@ -121,14 +121,14 @@ def test_derived_creation_requires_existing_metrics(tmp_path: Path) -> None:
     path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
     path.write_text(header + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1\n", encoding="utf-8")
     with pytest.raises(KpiMeasurementError) as unconfirmed_error:
-        create_measurement_derived("MU__CALL", "ME_RATE", "ME_CALL", "ME_CALL")
+        create_measurement_derived("MU_CALL", "ME_RATE", "ME_CALL", "ME_CALL")
     assert unconfirmed_error.value.status_code == 409
 
     discover_measurement_bindings("task-derived", [(path.name, path)])
     _confirm()
-    create_measurement_derived("MU__CALL", "ME_RATE", "ME_CALL", "ME_CALL")
+    create_measurement_derived("MU_CALL", "ME_RATE", "ME_CALL", "ME_CALL")
     with pytest.raises(KpiMeasurementError) as exc_info:
-        create_measurement_derived("MU__MISSING", "ME_RATE", "ME_CALL", "ME_CALL")
+        create_measurement_derived("MU_MISSING", "ME_RATE", "ME_CALL", "ME_CALL")
     assert exc_info.value.status_code == 404
 
 
@@ -219,19 +219,19 @@ def test_measurement_mutation_api_requires_admin_and_reports_errors() -> None:
             == 400
         )
 
-        assert client.patch("/api/v5/kpi/measurement-units/MU__MISSING", json={"enabled": False}).status_code == 404
+        assert client.patch("/api/v5/kpi/measurement-units/MU_MISSING", json={"enabled": False}).status_code == 404
 
         app.dependency_overrides[get_current_user] = lambda: AuthSession(
             token="viewer-token", username="viewer", role="viewer"
         )
-        response = client.patch("/api/v5/kpi/measurement-units/MU__CALL", json={"enabled": False})
+        response = client.patch("/api/v5/kpi/measurement-units/MU_CALL", json={"enabled": False})
         assert response.status_code == 403
         assert response.json()["code"] == "forbidden"
 
 
 def test_resource_import_updates_measurement_unit_filename_fragment() -> None:
     import_resource_csv(io.StringIO(RESOURCE_CSV))
-    result = import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call New Statistics\n"))
+    result = import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call New Statistics\n"))
     assert result["updated"] == {"mu": 1, "me": 0, "unit": 0}
     assert list_measurement_units()["items"][0]["filename_fragment"] == "Call_New_Statistics"
 
@@ -288,7 +288,7 @@ def test_derived_success_rate_aggregates_objects_and_zero_denominator(tmp_path: 
     import_resource_csv(
         io.StringIO(
             "资源id,中文描述,英文描述\n"
-            "MU__CALL,呼叫统计,Call Statistics\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
             "ME_CALL,呼叫请求次数,Call Requests\n"
             "ME_TOTAL,请求总数,Call Total Requests\n"
             "ME_RATE,呼叫成功率,Call Success Rate\n"
@@ -303,7 +303,7 @@ def test_derived_success_rate_aggregates_objects_and_zero_denominator(tmp_path: 
     )
     discover_measurement_bindings("task-rate", [(path.name, path)])
     _confirm()
-    create_measurement_derived("MU__CALL", "ME_RATE", "ME_CALL", "ME_TOTAL")
+    create_measurement_derived("MU_CALL", "ME_RATE", "ME_CALL", "ME_TOTAL")
 
     result = inspect_measurement_files("task-rate", [(path.name, path)])
     derived = result["measurement_units"][0]["derived_metrics"][0]
@@ -318,7 +318,7 @@ def test_derived_success_rate_fails_when_one_object_dependency_is_missing(tmp_pa
     import_resource_csv(
         io.StringIO(
             "资源id,中文描述,英文描述\n"
-            "MU__CALL,呼叫统计,Call Statistics\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
             "ME_CALL,呼叫请求次数,Call Requests\n"
             "ME_TOTAL,请求总数,Call Total Requests\n"
             "ME_RATE,呼叫成功率,Call Success Rate\n"
@@ -333,7 +333,7 @@ def test_derived_success_rate_fails_when_one_object_dependency_is_missing(tmp_pa
     )
     discover_measurement_bindings("task-rate-missing", [(path.name, path)])
     _confirm()
-    create_measurement_derived("MU__CALL", "ME_RATE", "ME_CALL", "ME_TOTAL")
+    create_measurement_derived("MU_CALL", "ME_RATE", "ME_CALL", "ME_TOTAL")
 
     result = inspect_measurement_files("task-rate-missing", [(path.name, path)])
     unit = result["measurement_units"][0]
@@ -346,36 +346,36 @@ def test_ignored_bindings_do_not_block_new_unit_candidate(tmp_path: Path) -> Non
     import_resource_csv(
         io.StringIO(
             "资源id,中文描述,英文描述\n"
-            "MU__CALL,呼叫统计,Call Statistics\n"
-            "MU__API,接口统计,Api Statistics\n"
-            "MU__EXTRA,扩展统计,Extra Statistics\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
+            "MU_API,接口统计,Api Statistics\n"
+            "MU_EXTRA,扩展统计,Extra Statistics\n"
             "ME_CALL,呼叫请求次数,Call Requests\n"
         )
     )
     call_path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
     call_path.write_text(HEADER, encoding="utf-8")
     discover_measurement_bindings("task-call", [(call_path.name, call_path)])
-    call_binding = list_measurement_bindings(measurement_unit_id="MU__CALL")["items"][0]
+    call_binding = list_measurement_bindings(measurement_unit_id="MU_CALL")["items"][0]
     set_measurement_binding_status(call_binding["id"], "ignored")
 
     api_path = tmp_path / "ne333_Api_Statistics_15_0_202609020000.csv"
     api_path.write_text(HEADER, encoding="utf-8")
     discover_measurement_bindings("task-api", [(api_path.name, api_path)])
-    api_binding = list_measurement_bindings(measurement_unit_id="MU__API")["items"][0]
+    api_binding = list_measurement_bindings(measurement_unit_id="MU_API")["items"][0]
     set_measurement_binding_status(api_binding["id"], "ignored")
 
     extra_path = tmp_path / "ne333_Extra_Statistics_15_0_202609020000.csv"
     extra_path.write_text(HEADER, encoding="utf-8")
     discover_measurement_bindings("task-extra", [(extra_path.name, extra_path)])
-    assert list_measurement_bindings(measurement_unit_id="MU__EXTRA")["items"][0]["status"] == "candidate"
+    assert list_measurement_bindings(measurement_unit_id="MU_EXTRA")["items"][0]["status"] == "candidate"
 
 
 def test_multiple_units_are_inspected_independently(tmp_path: Path) -> None:
     import_resource_csv(
         io.StringIO(
             "资源id,中文描述,英文描述\n"
-            "MU__CALL,呼叫统计,Call Statistics\n"
-            "MU__API,接口统计,Api Statistics\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
+            "MU_API,接口统计,Api Statistics\n"
             "ME_CALL,呼叫请求次数,Call Requests\n"
             "ME_API,接口请求次数,Api Requests\n"
         )
@@ -390,13 +390,13 @@ def test_multiple_units_are_inspected_independently(tmp_path: Path) -> None:
     api_path.write_text(HEADER, encoding="utf-8")
     files = [(call_path.name, call_path), (api_path.name, api_path)]
     discover_measurement_bindings("task-mixed", files)
-    api_binding = list_measurement_bindings(measurement_unit_id="MU__API")["items"][0]
+    api_binding = list_measurement_bindings(measurement_unit_id="MU_API")["items"][0]
     set_measurement_binding_status(api_binding["id"], "confirmed")
 
     result = inspect_measurement_files("task-mixed", files)
     by_unit = {item["measurement_unit_id"]: item for item in result["measurement_units"]}
-    assert by_unit["MU__CALL"]["status"] == "skip"
-    assert by_unit["MU__API"]["status"] == "pass"
+    assert by_unit["MU_CALL"]["status"] == "skip"
+    assert by_unit["MU_API"]["status"] == "pass"
 
 
 def test_header_beyond_read_window_marks_unit_error(tmp_path: Path) -> None:

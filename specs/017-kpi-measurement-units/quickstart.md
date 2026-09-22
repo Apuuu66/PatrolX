@@ -4,7 +4,7 @@
 
 ```csv
 资源id,中文描述,英文描述
-MU__CALL_SESSION_API_STATISTICS,呼叫会话接口统计,Call Session API Statistics
+MU_CALL_SESSION_API_STATISTICS,呼叫会话接口统计,Call Session API Statistics
 ME_CALL_REQUESTS,呼叫请求次数,Call Requests
 ```
 

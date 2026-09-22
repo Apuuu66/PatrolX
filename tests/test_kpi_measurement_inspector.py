@@ -25,7 +25,7 @@ def _database() -> None:
 
 def _prepare_resources() -> None:
     import_resource_csv(
-        io.StringIO("资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n")
+        io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n")
     )
 
 

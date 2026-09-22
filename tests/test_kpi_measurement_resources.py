@@ -29,7 +29,7 @@ def _database() -> None:
 
 def test_resource_kind_and_filename_fragment() -> None:
     assert resource_kind("MU_CALL") == "mu"
-    assert resource_kind("MU__CALL") == "mu"
+    assert resource_kind("MU_CALL") == "mu"
     assert resource_kind("ME_CALL") == "me"
     assert resource_kind("UNIT_COUNT") == "unit"
     assert resource_kind("mu__call") == "mu"
@@ -41,11 +41,11 @@ def test_resource_kind_and_filename_fragment() -> None:
 
 def test_import_resource_csv_adds_and_upserts() -> None:
     first = import_resource_csv(
-        resource_csv(("MU__CALL", "呼叫统计", "Call Statistics"), ("ME_CALL", "呼叫请求", "Call Requests"))
+        resource_csv(("MU_CALL", "呼叫统计", "Call Statistics"), ("ME_CALL", "呼叫请求", "Call Requests"))
     )
     assert first["added"] == {"mu": 1, "me": 1, "unit": 0}
     assert first["errors"] == []
-    second = import_resource_csv(resource_csv(("MU__CALL", "呼叫统计", "Call Statistics New")))
+    second = import_resource_csv(resource_csv(("MU_CALL", "呼叫统计", "Call Statistics New")))
     assert second["added"] == {"mu": 0, "me": 0, "unit": 0}
     assert second["updated"] == {"mu": 1, "me": 0, "unit": 0}
     units = list_measurement_units()
@@ -56,12 +56,12 @@ def test_import_resource_csv_adds_and_upserts() -> None:
 def test_import_keeps_existing_resources_absent_from_csv() -> None:
     import_resource_csv(
         resource_csv(
-            ("MU__CALL", "呼叫统计", "Call Statistics"),
+            ("MU_CALL", "呼叫统计", "Call Statistics"),
             ("ME_CALL", "呼叫请求", "Call Requests"),
             ("UNIT_COUNT", "次", "Count"),
         )
     )
-    import_resource_csv(resource_csv(("MU__CALL", "呼叫统计", "Call Statistics")))
+    import_resource_csv(resource_csv(("MU_CALL", "呼叫统计", "Call Statistics")))
     units = list_measurement_units()
     assert units["total"] == 1
     assert units["items"][0]["metric_count"] == 1
@@ -90,8 +90,8 @@ def test_import_ignores_unknown_prefix_and_requires_mu_fields() -> None:
 
 
 def test_enable_toggle_only_affects_mu() -> None:
-    import_resource_csv(resource_csv(("MU__CALL", "呼叫统计", "Call Statistics")))
-    set_measurement_unit_enabled("MU__CALL", False)
+    import_resource_csv(resource_csv(("MU_CALL", "呼叫统计", "Call Statistics")))
+    set_measurement_unit_enabled("MU_CALL", False)
     assert list_measurement_units()["items"][0]["enabled"] is False
     with pytest.raises(KpiMeasurementError):
         set_measurement_unit_enabled("ME_CALL", False)

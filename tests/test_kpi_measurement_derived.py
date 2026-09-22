@@ -29,7 +29,7 @@ def _prepare() -> None:
     import_resource_csv(
         io.StringIO(
             "资源id,中文描述,英文描述\n"
-            "MU__CALL,呼叫统计,Call Statistics\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
             "ME_SUCCESS,成功请求次数,Success Requests\n"
             "ME_TOTAL,呼叫请求次数,Call Requests\n"
             "ME_RATE,呼叫成功率,Call Success Rate\n"
@@ -54,7 +54,7 @@ def test_success_rate_computed_per_object(tmp_path: Path) -> None:
         "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,9876,10000\n"
         "pod-b,2026-09-02 00:15:00,2026-09-02 00:30:00,15,90,100\n",
     )
-    create_measurement_derived("MU__CALL", "ME_RATE", "ME_SUCCESS", "ME_TOTAL")
+    create_measurement_derived("MU_CALL", "ME_RATE", "ME_SUCCESS", "ME_TOTAL")
     result = inspect_measurement_files("task-1", files)
     derived = result["measurement_units"][0]["derived_metrics"][0]
     values = {item["object_key"]: item["value"] for item in derived["observations"]}
@@ -67,7 +67,7 @@ def test_zero_denominator_is_not_failure(tmp_path: Path) -> None:
         tmp_path,
         "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,0,0\n",
     )
-    create_measurement_derived("MU__CALL", "ME_RATE", "ME_SUCCESS", "ME_TOTAL")
+    create_measurement_derived("MU_CALL", "ME_RATE", "ME_SUCCESS", "ME_TOTAL")
     result = inspect_measurement_files("task-1", files)
     derived = result["measurement_units"][0]["derived_metrics"][0]["observations"][0]
     assert derived["status"] == "pass"
@@ -80,7 +80,7 @@ def test_missing_derived_dependency_fails(tmp_path: Path) -> None:
         tmp_path,
         "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1,1\n",
     )
-    create_measurement_derived("MU__CALL", "ME_RATE", "ME_SUCCESS", "ME_TOTAL")
+    create_measurement_derived("MU_CALL", "ME_RATE", "ME_SUCCESS", "ME_TOTAL")
     path = files[0][1]
     path.write_text(
         "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次)\n"

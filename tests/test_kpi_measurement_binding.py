@@ -37,7 +37,7 @@ def call_file(tmp_path: Path) -> tuple[str, Path]:
 
 def _import_call_resources() -> None:
     import_resource_csv(
-        io.StringIO("资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n")
+        io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n")
     )
 
 
@@ -51,7 +51,7 @@ def test_discover_binding_strips_display_unit(call_file: tuple[str, Path]) -> No
     assert bindings[0]["base_source_name"] == "呼叫请求次数"
     assert bindings[0]["display_unit"] == "次"
     assert bindings[0]["metric_resource_id"] == "ME_CALL"
-    assert bindings[0]["measurement_unit_id"] == "MU__CALL"
+    assert bindings[0]["measurement_unit_id"] == "MU_CALL"
 
 
 def test_unconfirmed_binding_is_not_inspected(call_file: tuple[str, Path]) -> None:
@@ -77,11 +77,11 @@ def test_conflicting_metric_binding_is_not_auto_rebound(call_file: tuple[str, Pa
     discover_measurement_bindings("task-1", [call_file])
     first_id = list_measurement_bindings()["items"][0]["id"]
     set_measurement_binding_status(first_id, "confirmed")
-    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU__OTHER,其他统计,Other Statistics\n"))
+    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_OTHER,其他统计,Other Statistics\n"))
     other_path = call_file[1].with_name("ne333_Other_Statistics_15_0_202609020000.csv")
     other_path.write_text(CSV_TEXT, encoding="utf-8")
     discover_measurement_bindings("task-2", [("ne333_Other_Statistics_15_0_202609020000.csv", other_path)])
-    second = next(item for item in list_measurement_bindings()["items"] if item["measurement_unit_id"] == "MU__OTHER")
+    second = next(item for item in list_measurement_bindings()["items"] if item["measurement_unit_id"] == "MU_OTHER")
     assert second["status"] == "conflict"
     with pytest.raises(KpiMeasurementError):
         set_measurement_binding_status(second["id"], "confirmed")

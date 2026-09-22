@@ -25,9 +25,9 @@ def test_match_measurement_files_states(tmp_path: Path) -> None:
     import_resource_csv(
         io.StringIO(
             "资源id,中文描述,英文描述\n"
-            "MU__MATCH,呼叫统计,Call Session API Statistics\n"
-            "MU__LEFT,接口左,A B\n"
-            "MU__RIGHT,接口右,B C\n"
+            "MU_MATCH,呼叫统计,Call Session API Statistics\n"
+            "MU_LEFT,接口左,A B\n"
+            "MU_RIGHT,接口右,B C\n"
         )
     )
     files = [
@@ -49,8 +49,8 @@ def test_match_measurement_files_states(tmp_path: Path) -> None:
 def test_disabled_measurement_unit_file_is_visible_but_skipped(tmp_path: Path) -> None:
     from app.services.kpi_measurement_units import import_resource_csv, io, set_measurement_unit_enabled
 
-    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\n"))
-    set_measurement_unit_enabled("MU__CALL", False)
+    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
+    set_measurement_unit_enabled("MU_CALL", False)
     path = tmp_path / "disabled.csv"
     path.write_text("a,b,c\n", encoding="utf-8")
     result = match_measurement_files([("ne333_Call_Statistics_15_0_202609020000.csv", path)])
