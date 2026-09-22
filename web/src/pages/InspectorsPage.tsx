@@ -4,6 +4,8 @@ import type { ColumnsType } from "antd/es/table";
 import { api, type InspectorState } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
 
+const DEFAULT_PAGE_SIZE = 20;
+
 const CATEGORY_LABELS: Record<string, string> = {
   log: "日志",
   kpi: "KPI",
@@ -23,7 +25,7 @@ export function InspectorsPage() {
   const [loading, setLoading] = useState(true);
   const [updatingCode, setUpdatingCode] = useState<string>();
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [category, setCategory] = useState<string | undefined>();
   const [enabled, setEnabled] = useState<boolean | undefined>();
   const [search, setSearch] = useState("");
