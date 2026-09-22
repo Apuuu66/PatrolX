@@ -6,7 +6,7 @@ import io
 
 import pytest
 
-from app.models.db import init_db
+from app.models.db import KpiMeasurementResource, init_db, session_factory
 from app.services.kpi_measurement_units import (
     KpiMeasurementError,
     filename_fragment,
@@ -101,21 +101,26 @@ def test_import_updates_english_for_same_chinese_name() -> None:
     assert second["errors"] == []
 
 
-def test_import_conflicts_when_resource_id_has_different_chinese() -> None:
+def test_import_same_id_with_different_chinese_uses_conflict_key() -> None:
     import_resource_csv(resource_csv(("ME_CALL", "呼叫请求", "Call Requests")))
     result = import_resource_csv(resource_csv(("ME_CALL", "呼叫请求总数", "Call Request Total")))
 
-    assert result["added"] == {"mu": 0, "me": 0, "unit": 0}
+    assert result["added"] == {"mu": 0, "me": 1, "unit": 0}
     assert result["updated"] == {"mu": 0, "me": 0, "unit": 0}
-    assert result["errors"] == [
-        {
-            "resource_id": "ME_CALL",
-            "line_number": 2,
-            "reason": "resource_id_conflict",
-            "existing_name_zh": "呼叫请求",
-            "name_zh": "呼叫请求总数",
+    assert result["errors"] == []
+
+    repeat = import_resource_csv(resource_csv(("ME_CALL", "呼叫请求总数", "Call Request Total")))
+    assert repeat["added"] == {"mu": 0, "me": 0, "unit": 0}
+    assert repeat["updated"] == {"mu": 0, "me": 0, "unit": 0}
+    assert repeat["errors"] == []
+
+    with session_factory() as session:
+        names = {
+            item.name_zh: item.resource_id
+            for item in session.query(KpiMeasurementResource).filter(KpiMeasurementResource.kind == "me")
         }
-    ]
+    assert set(names) == {"呼叫请求", "呼叫请求总数"}
+    assert names["呼叫请求总数"].startswith("ME_CALL__CONFLICT_")
 
 
 def test_import_merges_by_chinese_name_not_resource_id() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import re
 from collections.abc import Iterable
@@ -47,6 +48,15 @@ def resource_kind(resource_id: str) -> str | None:
 def filename_fragment(name_en: str) -> str:
     """测量单元英文名转大小写敏感文件名片段。"""
     return "_".join(name_en.strip().split())
+
+
+def conflict_resource_id(resource_id: str, name_zh: str) -> str:
+    """为同 ID 不同中文名的资源生成稳定冲突键 ID。"""
+    digest = hashlib.sha256(f"{resource_id}\x00{name_zh}".encode()).hexdigest()[:8]
+    conflict_id = f"{resource_id}__CONFLICT_{digest}"
+    if len(conflict_id) <= 128:
+        return conflict_id
+    return f"{resource_id[:110]}__CONFLICT_{digest}"
 
 
 def _utc_now() -> datetime:
@@ -120,6 +130,13 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
             existing_by_id = resources_by_id.get(resource_id)
             if existing_by_id is None:
                 existing_by_id = session.get(KpiMeasurementResource, resource_id)
+            if existing_by_id is not None and existing_by_id.name_zh != name_zh:
+                # 同一个资源 ID 被不同中文名复用时，不覆盖已有资源；
+                # 为后续行生成稳定的新 ID，重复导入仍能合并到同一条资源。
+                resource_id = conflict_resource_id(resource_id, name_zh)
+                existing_by_id = resources_by_id.get(resource_id)
+                if existing_by_id is None:
+                    existing_by_id = session.get(KpiMeasurementResource, resource_id)
 
             if existing_by_name is not None:
                 resources_by_name[name_key] = existing_by_name
@@ -146,7 +163,7 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
                     skipped.append({"resource_id": existing_by_name.resource_id, "reason": "unchanged"})
                 continue
 
-            if existing_by_id is not None:
+            if existing_by_id is not None and existing_by_id.name_zh != name_zh:
                 resources_by_id[resource_id] = existing_by_id
                 errors.append(
                     {
