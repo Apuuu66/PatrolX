@@ -315,6 +315,43 @@ def test_derived_success_rate_aggregates_objects_and_zero_denominator(tmp_path: 
     ]
 
 
+def test_derived_reverse_success_rate_complements_success_rate(tmp_path: Path) -> None:
+    import_resource_csv(
+        io.StringIO(
+            "资源id,中文描述,英文描述\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
+            "ME_CALL,呼叫请求次数,Call Requests\n"
+            "ME_TOTAL,请求总数,Call Total Requests\n"
+            "ME_REVERSE,反向成功率,Reverse Success Rate\n"
+        )
+    )
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次),请求总数(次)\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,80,100\n"
+        "pod-b,2026-09-02 00:15:00,2026-09-02 00:30:00,15,0,0\n",
+        encoding="utf-8",
+    )
+    discover_measurement_bindings("task-reverse-rate", [(path.name, path)])
+    _confirm()
+    create_measurement_derived(
+        "MU_CALL",
+        "ME_REVERSE",
+        "ME_CALL",
+        "ME_TOTAL",
+        template="reverse_success_rate",
+    )
+
+    result = inspect_measurement_files("task-reverse-rate", [(path.name, path)])
+    derived = result["measurement_units"][0]["derived_metrics"][0]
+    assert derived["template"] == "reverse_success_rate"
+    assert derived["status"] == "pass"
+    assert [(item["object_key"], item["value"], item["message"]) for item in derived["observations"]] == [
+        ("pod-a", 20.0, None),
+        ("pod-b", None, "疑似业务未触发"),
+    ]
+
+
 def test_derived_success_rate_fails_when_one_object_dependency_is_missing(tmp_path: Path) -> None:
     import_resource_csv(
         io.StringIO(

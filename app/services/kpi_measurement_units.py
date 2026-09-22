@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import or_
 
@@ -1096,12 +1096,15 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         )
                         derived_failed = True
                         continue
+                    value = round(numerator_value / denominator_value * 100, 2)
+                    if derived.template == "reverse_success_rate":
+                        value = round(100 - value, 2)
                     observations.append(
                         {
                             "object_key": object_key,
                             "status": "pass",
                             "message": None,
-                            "value": round(numerator_value / denominator_value * 100, 2),
+                            "value": value,
                         }
                     )
                 if derived_failed:
@@ -1133,8 +1136,9 @@ def create_measurement_derived(
     metric_resource_id: str,
     numerator_metric_id: str,
     denominator_metric_id: str,
+    template: Literal["success_rate", "reverse_success_rate"] = "success_rate",
 ) -> dict[str, Any]:
-    """创建成功率派生指标定义。"""
+    """创建正向或反向成功率派生指标定义。"""
     init_db()
     with session_factory() as session:
         unit = session.get(KpiMeasurementResource, measurement_unit_id)
@@ -1176,7 +1180,7 @@ def create_measurement_derived(
                 metric_resource_id=metric_resource_id,
                 numerator_metric_id=numerator_metric_id,
                 denominator_metric_id=denominator_metric_id,
-                template="success_rate",
+                template=template,
                 enabled=True,
                 created_at=_utc_now(),
                 updated_at=_utc_now(),

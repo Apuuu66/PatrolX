@@ -1736,7 +1736,9 @@ components:
           title: Denominator Metric Id
         template:
           type: string
-          const: success_rate
+          enum:
+          - success_rate
+          - reverse_success_rate
           title: Template
           default: success_rate
         enabled:
@@ -1765,6 +1767,13 @@ components:
         denominator_metric_id:
           type: string
           title: Denominator Metric Id
+        template:
+          type: string
+          enum:
+          - success_rate
+          - reverse_success_rate
+          title: Template
+          default: success_rate
       type: object
       required:
       - measurement_unit_id

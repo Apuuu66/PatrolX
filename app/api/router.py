@@ -683,6 +683,7 @@ def create_kpi_measurement_derived_v5(
             body.metric_resource_id,
             body.numerator_metric_id,
             body.denominator_metric_id,
+            template=body.template,
         )
     except KpiMeasurementError as exc:
         raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc

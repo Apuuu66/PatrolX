@@ -475,6 +475,7 @@ class KpiMeasurementDerivedCreateRequest(BaseModel):
     metric_resource_id: str
     numerator_metric_id: str
     denominator_metric_id: str
+    template: Literal["success_rate", "reverse_success_rate"] = "success_rate"
 
 
 class KpiMeasurementDerived(BaseModel):
@@ -483,7 +484,7 @@ class KpiMeasurementDerived(BaseModel):
     metric_resource_id: str
     numerator_metric_id: str
     denominator_metric_id: str
-    template: Literal["success_rate"] = "success_rate"
+    template: Literal["success_rate", "reverse_success_rate"] = "success_rate"
     enabled: bool
 
 

@@ -824,9 +824,9 @@ export interface components {
             /**
              * Template
              * @default success_rate
-             * @constant
+             * @enum {string}
              */
-            template: "success_rate";
+            template: "success_rate" | "reverse_success_rate";
             /** Enabled */
             enabled: boolean;
         };
@@ -840,6 +840,12 @@ export interface components {
             numerator_metric_id: string;
             /** Denominator Metric Id */
             denominator_metric_id: string;
+            /**
+             * Template
+             * @default success_rate
+             * @enum {string}
+             */
+            template: "success_rate" | "reverse_success_rate";
         };
         /** KpiMeasurementEnabledRequest */
         KpiMeasurementEnabledRequest: {

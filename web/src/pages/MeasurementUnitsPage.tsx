@@ -538,19 +538,83 @@ interface DerivedFormValues {
   metric_resource_id: string;
   numerator_metric_id: string;
   denominator_metric_id: string;
+  template: "success_rate" | "reverse_success_rate";
 }
+
+const DERIVED_TEMPLATE_OPTIONS = [
+  { value: "success_rate", label: "成功率" },
+  { value: "reverse_success_rate", label: "反向成功率" },
+];
 
 function MeasurementDerivedTab() {
   const { message } = App.useApp();
   const [form] = Form.useForm<DerivedFormValues>();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>();
+  const [unitOptions, setUnitOptions] = useState<MeasurementUnit[]>([]);
+  const [metricOptions, setMetricOptions] = useState<MeasurementResource[]>([]);
+  const [bindingOptions, setBindingOptions] = useState<MeasurementBinding[]>([]);
+  const [unitLoading, setUnitLoading] = useState(false);
+  const [metricLoading, setMetricLoading] = useState(false);
+  const [bindingLoading, setBindingLoading] = useState(false);
+
+  const loadUnitOptions = useCallback(async (search: string) => {
+    setUnitLoading(true);
+    try {
+      const data = await api.listMeasurementUnits({ search: search || undefined });
+      setUnitOptions(data.items);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "测量单元加载失败");
+    } finally {
+      setUnitLoading(false);
+    }
+  }, [message]);
+
+  const loadMetricOptions = useCallback(async (search: string) => {
+    setMetricLoading(true);
+    try {
+      const data = await api.listMeasurementResources({ kind: "me", search: search || undefined, page_size: 100 });
+      setMetricOptions(data.items);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "指标加载失败");
+    } finally {
+      setMetricLoading(false);
+    }
+  }, [message]);
+
+  const loadBindingOptions = useCallback(async (unitId: string, search: string) => {
+    if (!unitId) {
+      setBindingOptions([]);
+      return;
+    }
+    setBindingLoading(true);
+    try {
+      const data = await api.listMeasurementBindings({
+        measurement_unit_id: unitId,
+        status: "confirmed",
+        search: search || undefined,
+      });
+      setBindingOptions(data.items.filter((item) => item.enabled && item.metric_resource_id));
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "确认绑定加载失败");
+    } finally {
+      setBindingLoading(false);
+    }
+  }, [message]);
+
+  useEffect(() => {
+    if (!open) return;
+    form.resetFields();
+    setSelectedUnitId(undefined);
+    void Promise.all([loadUnitOptions(""), loadMetricOptions(""), loadBindingOptions("", "")]);
+  }, [open, form, loadUnitOptions, loadMetricOptions, loadBindingOptions]);
 
   const create = async (values: DerivedFormValues) => {
     setSubmitting(true);
     try {
       await api.createMeasurementDerived(values);
-      message.success("派生成功率指标已创建");
+      message.success("派生指标已创建");
       setOpen(false);
       form.resetFields();
     } catch (err) {
@@ -562,15 +626,84 @@ function MeasurementDerivedTab() {
 
   return (
     <Card title="派生指标">
-      <Alert type="info" showIcon message="当前支持成功率模板" description="分母均值为 0 时展示为疑似业务未触发，默认不按业务阈值判定。" style={{ marginBottom: 16 }} />
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建派生成功率</Button>
-      <Modal open={open} title="派生成功率指标" confirmLoading={submitting} okText="创建" onCancel={() => setOpen(false)} onOk={() => form.submit()}>
-        <Form form={form} layout="vertical" onFinish={(values) => void create(values)}>
+      <Alert
+        type="info"
+        showIcon
+        message="支持成功率和反向成功率模板"
+        description="反向成功率等于 100 减去正向成功率；分母均值为 0 时展示为疑似业务未触发，默认不按业务阈值判定。"
+        style={{ marginBottom: 16 }}
+      />
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建派生指标</Button>
+      <Modal open={open} title="派生指标" confirmLoading={submitting} okText="创建" onCancel={() => setOpen(false)} onOk={() => form.submit()}>
+        <Form form={form} layout="vertical" initialValues={{ template: "success_rate" }} onFinish={(values) => void create(values)}>
           <Space direction="vertical" style={{ width: "100%" }}>
-            <Form.Item name="measurement_unit_id" label="测量单元 ID" rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name="metric_resource_id" label="派生指标 ID" rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name="numerator_metric_id" label="分子指标 ID" rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name="denominator_metric_id" label="分母指标 ID" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="template" label="模板" rules={[{ required: true }]}>
+              <Select options={DERIVED_TEMPLATE_OPTIONS} />
+            </Form.Item>
+            <Form.Item name="measurement_unit_id" label="测量单元" rules={[{ required: true }]}>
+              <Select
+                allowClear
+                showSearch
+                filterOption={false}
+                loading={unitLoading}
+                placeholder="搜索并选择测量单元"
+                onSearch={(value) => void loadUnitOptions(value)}
+                onChange={(value) => {
+                  const unitId = value || "";
+                  setSelectedUnitId(unitId || undefined);
+                  form.setFieldsValue({ numerator_metric_id: undefined, denominator_metric_id: undefined });
+                  void loadBindingOptions(unitId, "");
+                }}
+                options={unitOptions.map((item) => ({
+                  value: item.resource_id,
+                  label: `${item.name_zh} / ${item.resource_id}`,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="metric_resource_id" label="派生指标" rules={[{ required: true }]}>
+              <Select
+                allowClear
+                showSearch
+                filterOption={false}
+                loading={metricLoading}
+                placeholder="搜索并选择 ME 指标"
+                onSearch={(value) => void loadMetricOptions(value)}
+                options={metricOptions.map((item) => ({
+                  value: item.resource_id,
+                  label: `${item.name_zh} / ${item.resource_id}`,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="numerator_metric_id" label="分子指标" rules={[{ required: true }]}>
+              <Select
+                allowClear
+                showSearch
+                disabled={!selectedUnitId}
+                filterOption={false}
+                loading={bindingLoading}
+                placeholder={selectedUnitId ? "搜索已确认绑定指标" : "请先选择测量单元"}
+                onSearch={(value) => void loadBindingOptions(selectedUnitId || "", value)}
+                options={bindingOptions.map((item) => ({
+                  value: item.metric_resource_id,
+                  label: `${item.base_source_name} / ${item.metric_resource_id}`,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="denominator_metric_id" label="分母指标" rules={[{ required: true }]}>
+              <Select
+                allowClear
+                showSearch
+                disabled={!selectedUnitId}
+                filterOption={false}
+                loading={bindingLoading}
+                placeholder={selectedUnitId ? "搜索已确认绑定指标" : "请先选择测量单元"}
+                onSearch={(value) => void loadBindingOptions(selectedUnitId || "", value)}
+                options={bindingOptions.map((item) => ({
+                  value: item.metric_resource_id,
+                  label: `${item.base_source_name} / ${item.metric_resource_id}`,
+                }))}
+              />
+            </Form.Item>
           </Space>
         </Form>
       </Modal>
