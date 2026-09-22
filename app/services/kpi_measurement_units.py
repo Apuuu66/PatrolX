@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import or_
 
+from app.core.encoding import decode_text_with_fallback, read_text_with_fallback
 from app.models.db import (
     KpiMeasurementBinding,
     KpiMeasurementDerived,
@@ -55,12 +56,21 @@ def _utc_now() -> datetime:
 def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> dict[str, Any]:
     """按同类资源中文名合并资源目录；资源 ID 仅作存储主键，不删除 CSV 外资源。"""
     init_db()
-    if isinstance(text_or_file, io.BytesIO):
-        raw = text_or_file.getvalue().decode("utf-8-sig")
-    elif isinstance(text_or_file, io.StringIO):
-        raw = text_or_file.getvalue()
-    else:
-        raw = Path(text_or_file).read_text(encoding="utf-8-sig")
+    try:
+        if isinstance(text_or_file, io.BytesIO):
+            raw, _ = decode_text_with_fallback(text_or_file.getvalue())
+        elif isinstance(text_or_file, io.StringIO):
+            raw = text_or_file.getvalue()
+        else:
+            raw, _ = read_text_with_fallback(text_or_file)
+    except UnicodeDecodeError as exc:
+        raise KpiMeasurementError(
+            "kpi_resource_csv_encoding",
+            "资源 CSV 编码无法识别；支持 UTF-8 和 GB18030（含 GBK/GB2312）",
+            400,
+        ) from exc
+    except OSError as exc:
+        raise KpiMeasurementError("kpi_resource_csv_unreadable", f"资源 CSV 读取失败: {exc}", 400) from exc
     reader = csv.DictReader(io.StringIO(raw))
     if reader.fieldnames is None:
         raise KpiMeasurementError("kpi_resource_csv_invalid", "资源目录缺少表头", 400)
@@ -278,6 +288,12 @@ def _find_header(rows: list[list[str]]) -> tuple[int, list[str]] | None:
     return None
 
 
+def _read_csv_rows(path: Path) -> list[list[str]]:
+    """读取任务 CSV，兼容 UTF-8 与 GB18030 系列。"""
+    text, _ = read_text_with_fallback(path)
+    return list(csv.reader(io.StringIO(text, newline="")))
+
+
 def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
     """扫描任务 CSV 表头，发现指标候选绑定。"""
     init_db()
@@ -288,7 +304,7 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
                 continue
             path = Path(file_result["source_file"])
             try:
-                rows = list(csv.reader(path.open("r", encoding="utf-8-sig", newline="")))
+                rows = _read_csv_rows(path)
             except (OSError, UnicodeError, csv.Error) as exc:
                 file_result.update({"status": "parse_error", "reason": "csv_read_error", "detail": str(exc)})
                 continue
@@ -510,7 +526,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             result["file_count"] += 1
             result["source_files"].append(file_result["source_file"])
             try:
-                rows = list(csv.reader(Path(file_result["source_file"]).open("r", encoding="utf-8-sig", newline="")))
+                rows = _read_csv_rows(Path(file_result["source_file"]))
             except (OSError, UnicodeError, csv.Error) as exc:
                 result["status"] = "error"
                 result["reason"] = f"CSV 读取失败: {exc}"

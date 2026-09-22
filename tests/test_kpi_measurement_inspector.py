@@ -149,3 +149,16 @@ def test_no_dimension_uses_default_object(tmp_path: Path) -> None:
     set_measurement_binding_status(binding_id, "confirmed")
     result = inspect_measurement_files("task-1", files)
     assert set(result["measurement_units"][0]["objects"]) == {"__all__"}
+
+
+def test_gbk_measurement_csv_is_supported(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(HEADER + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1\n", encoding="gb18030")
+    files = [(path.name, path)]
+    discover_measurement_bindings("task-gbk", files)
+    binding_id = next(item["id"] for item in list_measurement_bindings()["items"] if item["metric_resource_id"])
+    set_measurement_binding_status(binding_id, "confirmed")
+
+    result = inspect_measurement_files("task-gbk", files)
+    assert result["measurement_units"][0]["status"] == "pass"

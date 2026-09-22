@@ -125,3 +125,11 @@ def test_import_merges_same_chinese_name_with_different_ids_in_one_csv() -> None
     assert result["updated"] == {"mu": 0, "me": 0, "unit": 0}
     assert result["skipped"] == [{"resource_id": "ME_CALL", "reason": "unchanged"}]
     assert result["errors"] == []
+
+
+def test_import_resource_csv_supports_gbk() -> None:
+    content = "资源id,中文描述,英文描述\nME_CALL,呼叫请求,Call Requests\n".encode("gb18030")
+    result = import_resource_csv(io.BytesIO(content))
+
+    assert result["added"] == {"mu": 0, "me": 1, "unit": 0}
+    assert result["errors"] == []
