@@ -12,7 +12,6 @@ from app.services.extraction.manifest import (
     validate_manifest,
     write_manifest,
 )
-from app.services.extraction.nested import _extract_log_gzip, _extract_subpackage, _ingest_file
 from app.services.extraction.site import category_failures, extract_main_site, policy_skipped_summary
 
 __all__ = [
@@ -23,9 +22,6 @@ __all__ = [
     "MANIFEST_NAME",
     "MANIFEST_VERSION",
     "WORK_CATEGORIES",
-    "_extract_log_gzip",
-    "_extract_subpackage",
-    "_ingest_file",
     "ExtractPolicyConfig",
     "ExtractPolicyError",
     "PolicyDecision",

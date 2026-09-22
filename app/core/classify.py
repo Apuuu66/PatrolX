@@ -16,20 +16,24 @@ def _load_rules() -> dict[str, dict]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
+def _match_pattern(name: str, pattern: str) -> bool:
+    """同时兼容通配符与正则；非法正则按未命中处理。"""
+    if fnmatch.fnmatch(name.lower(), pattern.lower()):
+        return True
+    try:
+        return re.search(pattern, name, re.IGNORECASE) is not None
+    except re.error:
+        return False
+
+
 def _match_name(name: str, rules: dict) -> RuleCategory | None:
     # 先按名称规律匹配，再按扩展名兜底；避免 alarm_*.csv 被通用 .csv 规则抢先分类。
     for cat in RuleCategory:
         if cat == RuleCategory.OTHER:
             continue
         spec = rules.get("category", {}).get(cat.value, {})
-        for pattern in spec.get("patterns", []):
-            if fnmatch.fnmatch(name.lower(), pattern.lower()):
-                return cat
-            try:
-                if re.search(pattern, name, re.IGNORECASE):
-                    return cat
-            except re.error:
-                continue
+        if any(_match_pattern(name, str(pattern)) for pattern in spec.get("patterns", [])):
+            return cat
     for cat in RuleCategory:
         if cat == RuleCategory.OTHER:
             continue
@@ -39,7 +43,7 @@ def _match_name(name: str, rules: dict) -> RuleCategory | None:
     return None
 
 
-def classify_member(name: str, archive_name: str | None) -> RuleCategory | None:
+def classify_member(archive_name: str | None) -> RuleCategory | None:
     """按父压缩包归组规则识别成员类别；未配置归组时返回 None。"""
     if not archive_name:
         return None
@@ -50,39 +54,22 @@ def classify_member(name: str, archive_name: str | None) -> RuleCategory | None:
             category = RuleCategory(category_name)
         except ValueError:
             continue
-        if not pattern:
-            continue
-        matched = fnmatch.fnmatch(archive_name.lower(), pattern.lower())
-        if not matched:
-            try:
-                matched = re.search(pattern, archive_name, re.IGNORECASE) is not None
-            except re.error:
-                matched = False
-        if matched:
+        if pattern and _match_pattern(archive_name, pattern):
             return category
     return None
 
 
 def classify_name(name: str) -> RuleCategory | None:
     """按名称/扩展名分类（不修改文件名，保留原始包名用于追溯）。"""
-    rules = _load_rules()
-    return _match_name(name, rules)
+    return _match_name(name, _load_rules())
 
 
-def classify_file(path: Path) -> RuleCategory | None:
-    """名称分类失败时，按内容嗅探兜底（嵌套子包查看内部文件名）。"""
-    cat = classify_name(path.name)
-    if cat:
-        return cat
+def classify_content(path: Path) -> RuleCategory | None:
+    """按内容嗅探分类；压缩包只查看内部成员文件名。"""
     if path.suffix.lower() in {".zip", ".tar", ".gz", ".tgz", ".tar.gz"}:
         members = peek_members(path, limit=20)
         for member in members:
-            cat = classify_name(Path(member).name)
-            if cat:
-                return cat
+            category = classify_name(Path(member).name)
+            if category:
+                return category
     return None
-
-
-def final_category(name: str, path: Path) -> RuleCategory:
-    cat = classify_name(name) or classify_file(path)
-    return cat or RuleCategory.OTHER

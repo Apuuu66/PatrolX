@@ -22,12 +22,6 @@ def test_classify_by_pattern() -> None:
 
 
 def test_archive_member_lock_overrides_member_name() -> None:
-    assert (
-        classify_member(
-            "ne333_Container_Metric_Unit_5_0.csv",
-            "PerfResult_202609010101137101.zip",
-        )
-        == RuleCategory.KPI
-    )
-    assert classify_member("unknown.csv", "unknown.zip") is None
-    assert classify_member("unknown.csv", "*invalid-[.zip") is None
+    assert classify_member("PerfResult_202609010101137101.zip") == RuleCategory.KPI
+    assert classify_member("unknown.zip") is None
+    assert classify_member("*invalid-[.zip") is None

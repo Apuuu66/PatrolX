@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.core.archive import ArchiveError, PathTooLongError, UnpackLimit, is_archive, unpack, unpack_gzip
 from app.core.checksum import sha256_file
+from app.core.classify import classify_name
 from app.models.schemas import RuleCategory
 from app.services.extraction.budget import ExtractionBudget, ExtractionLogger, _log_extract
 from app.services.extraction.layout import (
@@ -33,8 +34,6 @@ def _policy_detail(decision: PolicyDecision | None) -> dict[str, object] | None:
 
 def _name_category(source: Path, parent_category: str) -> str:
     """策略跳过只按名称分类，避免读取压缩成员或触发损坏包解析。"""
-    from app.core.classify import classify_name
-
     category = classify_name(source.name)
     if category is not None:
         return category.value
@@ -69,7 +68,7 @@ def _retain_evidence(
     path_policy: PathLimitPolicy | None = None,
 ) -> dict[str, object]:
     """把策略命中的压缩项按原文件保留到 category 现场。"""
-    relative = _destination_relative(source_relative, "evidence", "", category)
+    relative = _destination_relative(source_relative, "evidence", category)
     state: dict[str, object] = {
         "target": relative.as_posix(),
         "status": "skipped",
@@ -132,8 +131,6 @@ def _extract_log_gzip(
     source: Path,
     source_relative: Path,
     source_kind: str,
-    group: str,
-    category: str,
     data_dir: Path,
     manifest: dict,
     budget: ExtractionBudget,
@@ -142,8 +139,7 @@ def _extract_log_gzip(
     policy: ExtractPolicyConfig | None = None,
     path_policy: PathLimitPolicy | None = None,
 ) -> None:
-    if category != RuleCategory.LOG.value:
-        category = RuleCategory.LOG.value
+    category = RuleCategory.LOG.value
     decision = _evidence_policy(source_relative, policy, True) if source_kind == "evidence" else None
     if decision is not None and decision.action == "skip":
         state = {
@@ -166,7 +162,7 @@ def _extract_log_gzip(
         }
         manifest["log_gz"].append(state)
         return
-    relative = _destination_relative(source_relative.with_suffix(""), source_kind, group, category)
+    relative = _destination_relative(source_relative.with_suffix(""), source_kind, category)
     source_state = _source_display(source_relative, source_kind)
     state: dict[str, object] = {
         "source_relative_path": source_relative.as_posix(),
@@ -256,7 +252,6 @@ def _extract_subpackage(
     source: Path,
     source_relative: Path,
     source_kind: str,
-    group: str,
     parent_category: str,
     data_dir: Path,
     manifest: dict,
@@ -267,7 +262,6 @@ def _extract_subpackage(
     policy: ExtractPolicyConfig | None = None,
     path_policy: PathLimitPolicy | None = None,
 ) -> None:
-    del group
     limit = UnpackLimit()
     checksum = sha256_file(source)
     decision = _evidence_policy(source_relative, policy, True) if source_kind == "evidence" else None
@@ -387,7 +381,6 @@ def _extract_subpackage(
                 member,
                 member_relative,
                 "work",
-                "",
                 category,
                 data_dir,
                 manifest,
@@ -437,7 +430,6 @@ def _ingest_file(
     source: Path,
     source_relative: Path,
     source_kind: str,
-    group: str,
     parent_category: str,
     data_dir: Path,
     manifest: dict,
@@ -449,15 +441,12 @@ def _ingest_file(
     path_policy: PathLimitPolicy | None = None,
     archive_name: str | None = None,
 ) -> None:
-    del group
     name = source.name.lower()
     if name.endswith(".log.gz"):
         _extract_log_gzip(
             source,
             source_relative,
             source_kind,
-            "",
-            parent_category,
             data_dir,
             manifest,
             budget,
@@ -472,7 +461,6 @@ def _ingest_file(
             source,
             source_relative,
             source_kind,
-            "",
             parent_category,
             data_dir,
             manifest,
@@ -496,7 +484,7 @@ def _ingest_file(
         and source_relative.parts[0] != CATEGORY_DIRECTORIES[category]
     ):
         destination_source = Path(source_relative.name)
-    relative = _destination_relative(destination_source, source_kind, "", category)
+    relative = _destination_relative(destination_source, source_kind, category)
     state: dict[str, object] = {
         "source": _source_display(source_relative, source_kind),
         "category": CATEGORY_DIRECTORIES[category],

@@ -126,7 +126,6 @@ def extract_main_site(
             source_relative,
             "evidence",
             "",
-            "",
             data_dir,
             manifest,
             budget,

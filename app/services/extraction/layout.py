@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.archive import ArchiveError, PathTooLongError
-from app.core.classify import classify_file, classify_member, classify_name
+from app.core.classify import classify_content, classify_member, classify_name
 from app.models.schemas import RuleCategory
 
 MANIFEST_NAME = ".patrolx-extracted.json"
@@ -122,12 +122,13 @@ def _remove_empty_work_site(work_path: Path, category_root: Path) -> None:
 
 
 def _category_of(path: Path, parent_category: str, archive_name: str | None = None) -> tuple[str, str]:
-    locked_category = classify_member(path.name, archive_name)
+    locked_category = classify_member(archive_name)
     if locked_category is not None:
         return locked_category.value, "archive:member"
-    category = classify_name(path.name) or classify_file(path)
+    name_category = classify_name(path.name)
+    category = name_category or classify_content(path)
     if category is not None:
-        return category.value, "self:name" if classify_name(path.name) else "self:content"
+        return category.value, "self:name" if name_category is not None else "self:content"
     if parent_category:
         return parent_category, "parent:category"
     return RuleCategory.OTHER.value, "fallback:other"
@@ -136,7 +137,6 @@ def _category_of(path: Path, parent_category: str, archive_name: str | None = No
 def _destination_relative(
     source_relative: Path,
     source_kind: str,
-    group: str,
     category: str,
 ) -> Path:
     category_root = Path(CATEGORY_DIRECTORIES[category])

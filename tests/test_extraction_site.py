@@ -434,7 +434,6 @@ def test_path_limit_records_normal_file_and_cleans_partial_file(tmp_path, monkey
         Path("config/system.ini"),
         "evidence",
         "",
-        "",
         data_dir,
         manifest,
         ExtractionBudget(),
