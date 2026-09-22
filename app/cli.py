@@ -21,6 +21,7 @@ from app.inspectors.registry import registry
 from app.models.db import init_db
 from app.models.schemas import (
     InspectionTask,
+    RuleCategory,
     RuleStatus,
     SystemInspection,
     SystemStatus,
@@ -29,7 +30,7 @@ from app.models.schemas import (
     TaskStatus,
     TaskTrigger,
 )
-from app.services import store
+from app.services import extraction, store
 from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext
 from app.services.extraction import WORK_CATEGORIES
@@ -385,6 +386,73 @@ def run_single_rule(
     )
 
 
+def explain_match(
+    code: str,
+    *,
+    package: Path | None = None,
+    task_id: str | None = None,
+    package_checksum: str | None = None,
+) -> dict:
+    """输出规则匹配诊断：解压终态、任务清单和每个 pattern 的命中明细。"""
+    registry.load_all()
+    rule = registry.get(code)
+    if rule.hidden:
+        raise ValueError("隐藏解压规则不支持 explain-match")
+    if not rule.source_patterns:
+        raise ValueError(f"规则 {code} 没有可解释的 source_patterns")
+    enabled_rules = get_enabled_rule_codes()
+    package = package or latest_package()
+    task_id = task_id or generate_task_id(package.name)
+    task_dir = settings.output / task_id
+    ctx = _new_context(task_id, package, package_checksum)
+    executor = Executor(registry, enabled_rules)
+    if not (task_dir / EXTRACT_MANIFEST).exists():
+        extraction_result = executor.run_rule("pkg.extract.main", ctx)
+        store.save_rule_result(settings.output, task_id, extraction_result)
+
+    manifest = extraction.read_manifest(ctx.data_dir)
+    catalog = ctx.ensure_catalog()
+    matched = catalog.match(rule.source_patterns)
+    pattern_matches = {
+        pattern: [path.as_posix() for path in catalog.match([pattern])] for pattern in rule.source_patterns
+    }
+    category = "logs" if rule.category == RuleCategory.LOG else rule.category.value
+    category_entries = [
+        *[item for item in manifest.get("files", []) if item.get("category") == category],
+        *[item for item in manifest.get("subpackages", []) if item.get("category") == category],
+    ]
+    if category == "logs":
+        category_entries.extend(manifest.get("log_gz", []))
+    status_counts: dict[str, int] = {}
+    for item in category_entries:
+        status = str(item.get("status", "unknown"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+    return {
+        "task_id": task_id,
+        "package_file": package.name,
+        "rule": {
+            "code": rule.code,
+            "name": rule.name,
+            "priority": rule.priority.value,
+            "rule_version": rule.rule_version,
+            "enabled": code in enabled_rules,
+            "has_prepare": rule.prepare is not None,
+        },
+        "source_patterns": list(rule.source_patterns),
+        "pattern_matches": pattern_matches,
+        "matched_files": [path.as_posix() for path in matched],
+        "catalog_paths": [path.as_posix() for path in catalog.paths()],
+        "manifest": {
+            "version": manifest.get("version"),
+            "main": manifest.get("main"),
+            "category": category,
+            "status_counts": status_counts,
+            "failures": extraction.category_failures(manifest, category),
+            "policy_skipped": extraction.policy_skipped_summary(manifest, category),
+        },
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="patrolx", description="PatrolX 本地开发模式")
     parser.set_defaults(task_id=None)
@@ -395,6 +463,13 @@ def main(argv: list[str] | None = None) -> int:
     run_one.add_argument("--rule", required=True, help="规则 code")
     run_one.add_argument("--package-dir", default=None, help="输入目录（可选）")
     run_one.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<package>）")
+    explain_match_parser = sub.add_parser(
+        "explain-match",
+        help="解释规则解压状态与 source_patterns 匹配结果",
+    )
+    explain_match_parser.add_argument("--rule", required=True, help="规则 code")
+    explain_match_parser.add_argument("--package-dir", default=None, help="输入目录（可选）")
+    explain_match_parser.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<package>）")
     create_user_parser = sub.add_parser("create-user", help="创建认证用户（不支持在线注册）")
     create_user_parser.add_argument("--username", required=True, help="用户名")
     create_user_parser.add_argument("--password", required=True, help="密码")
@@ -419,6 +494,15 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
         for pkg in packages:
             run_single_rule(args.rule, pkg, task_id=args.task_id)
+        return 0
+    if args.cmd == "explain-match":
+        root = Path(args.package_dir) if args.package_dir else None
+        packages = find_packages(root)
+        if not packages:
+            raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
+        for pkg in packages:
+            report = explain_match(args.rule, package=pkg, task_id=args.task_id)
+            print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "create-user":
         init_db()
