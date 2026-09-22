@@ -6,9 +6,9 @@
 
 ## 阶段 1：契约与测试基线
 
-- [ ] T001 [P] 在 `docs/api/openapi.yaml` 中新增批量确认路径和 `KpiMeasurementBindingBatchConfirmRequest`、`KpiMeasurementBindingConfirmResult`、`KpiMeasurementBindingBatchConfirmResponse` Schema，约束 `binding_ids` 非空且最多 200 项
-- [ ] T002 [P] 在 `tests/test_kpi_measurement_binding.py` 中先编写批量确认服务测试，覆盖批量成功、幂等确认、去重、未选中不变和更新时间不回写
-- [ ] T003 [P] 在 `tests/test_kpi_measurement_api.py` 中先编写接口测试，覆盖 admin 成功响应、部分失败逐项原因、请求体为空和权限拒绝
+- [x] T001 [P] 在 `docs/api/openapi.yaml` 中新增批量确认路径和 `KpiMeasurementBindingBatchConfirmRequest`、`KpiMeasurementBindingConfirmResult`、`KpiMeasurementBindingBatchConfirmResponse` Schema，约束 `binding_ids` 非空且最多 200 项
+- [x] T002 [P] 在 `tests/test_kpi_measurement_binding.py` 中先编写批量确认服务测试，覆盖批量成功、幂等确认、去重、未选中不变和更新时间不回写
+- [x] T003 [P] 在 `tests/test_kpi_measurement_api.py` 中先编写接口测试，覆盖 admin 成功响应、部分失败逐项原因、请求体为空和权限拒绝
 
 ## 阶段 2：用户故事 1 - 批量确认候选绑定
 
@@ -18,10 +18,10 @@
 
 ### 实现
 
-- [ ] T004 [US1] 在 `app/models/schemas.py` 中新增批量确认请求、结果和响应模型，字段与 OpenAPI 契约一致
-- [ ] T005 [US1] 在 `app/services/kpi_measurement_units.py` 中实现去重、候选校验、状态更新、幂等返回和 UTC `updated_at` 维护
-- [ ] T006 [US1] 在 `app/api/router.py` 中新增 `POST /api/v5/kpi/measurement-bindings/batch-confirm`，使用 admin 权限并映射统一业务错误
-- [ ] T007 [US1] 在 `web/src/api/http.ts` 中接入生成的批量确认契约方法
+- [x] T004 [US1] 在 `app/models/schemas.py` 中新增批量确认请求、结果和响应模型，字段与 OpenAPI 契约一致
+- [x] T005 [US1] 在 `app/services/kpi_measurement_units.py` 中实现去重、候选校验、状态更新、幂等返回和 UTC `updated_at` 维护
+- [x] T006 [US1] 在 `app/api/router.py` 中新增 `POST /api/v5/kpi/measurement-bindings/batch-confirm`，使用 admin 权限并映射统一业务错误
+- [x] T007 [US1] 在 `web/src/api/http.ts` 中接入生成的批量确认契约方法
 
 **检查点**：API 批量确认闭环可用，后端测试通过。
 
@@ -33,9 +33,9 @@
 
 ### 实现
 
-- [ ] T008 [US2] 在批量确认服务中补充缺少指标、不存在、状态不可确认和状态冲突的错误码与消息
-- [ ] T009 [US2] 在 `web/src/pages/MeasurementUnitsPage.tsx` 中展示批量结果摘要，失败时使用警告提示并显示失败原因
-- [ ] T010 [US2] 在后端测试中补充混合成功/失败场景，验证失败项数据和未选中绑定不变
+- [x] T008 [US2] 在批量确认服务中补充缺少指标、不存在、状态不可确认和状态冲突的错误码与消息
+- [x] T009 [US2] 在 `web/src/pages/MeasurementUnitsPage.tsx` 中展示批量结果摘要，失败时使用警告提示并显示失败原因
+- [x] T010 [US2] 在后端测试中补充混合成功/失败场景，验证失败项数据和未选中绑定不变
 
 **检查点**：部分失败行为可观察、可解释、可定位。
 
@@ -47,8 +47,8 @@
 
 ### 实现
 
-- [ ] T011 [US3] 在批量确认服务中实现请求内候选按 ME 指标/测量单元聚合，以及与数据库已有确认绑定的冲突判断
-- [ ] T012 [US3] 在后端测试中覆盖请求内跨单元、请求外已确认跨单元和同单元重复指标场景
+- [x] T011 [US3] 在批量确认服务中实现请求内候选按 ME 指标/测量单元聚合，以及与数据库已有确认绑定的冲突判断
+- [x] T012 [US3] 在后端测试中覆盖请求内跨单元、请求外已确认跨单元和同单元重复指标场景
 
 **检查点**：冲突场景与现有单条确认语义一致且结果顺序无关。
 
@@ -60,19 +60,19 @@
 
 ### 实现
 
-- [ ] T013 [US1] 在 `web/src/pages/MeasurementUnitsPage.tsx` 的绑定关系表格中增加 row selection、批量确认按钮、禁用态和提交中状态
-- [ ] T014 [US1] 提交成功后刷新当前页、清理选中项，并根据响应展示成功、幂等和失败数量
+- [x] T013 [US1] 在 `web/src/pages/MeasurementUnitsPage.tsx` 的绑定关系表格中增加 row selection、批量确认按钮、禁用态和提交中状态
+- [x] T014 [US1] 提交成功后刷新当前页、清理选中项，并根据响应展示成功、幂等和失败数量
 
 **检查点**：前端交互完整并保持桌面端现有风格。
 
 ## 阶段 6：收尾与验证
 
-- [ ] T015 [P] 检查 `specs/020-batch-confirm-bindings/quickstart.md` 与实际 API 字段一致，必要时修正文档
-- [ ] T016 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和前端客户端一致
-- [ ] T017 运行 `python build.py lint` 和 `python build.py test`
-- [ ] T018 运行 `cd web && npm run build`
-- [ ] T019 运行 `python build.py verify`
-- [ ] T020 对照 spec 的 FR-001 到 FR-012 做完成审计并更新 `tasks.md` 复选框
+- [x] T015 [P] 检查 `specs/020-batch-confirm-bindings/quickstart.md` 与实际 API 字段一致，必要时修正文档
+- [x] T016 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和前端客户端一致
+- [x] T017 运行 `python build.py lint` 和 `python build.py test`
+- [x] T018 运行 `cd web && npm run build`
+- [x] T019 运行 `python build.py verify`
+- [x] T020 对照 spec 的 FR-001 到 FR-012 做完成审计并更新 `tasks.md` 复选框
 
 ## 依赖与执行顺序
 

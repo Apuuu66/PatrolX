@@ -921,6 +921,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-bindings/batch-confirm:
+    post:
+      summary: Batch Confirm Kpi Measurement Bindings V5
+      operationId: batchConfirmKpiMeasurementBindingsV5
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiMeasurementBindingBatchConfirmRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementBindingBatchConfirmResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v5/kpi/measurement-bindings/{binding_id}:
     patch:
       summary: Set Kpi Measurement Binding Status V5
@@ -1580,6 +1612,77 @@ components:
       - task_id
       - source_file
       title: KpiMeasurementBinding
+    KpiMeasurementBindingBatchConfirmRequest:
+      properties:
+        binding_ids:
+          items:
+            type: integer
+          type: array
+          maxItems: 200
+          minItems: 1
+          title: Binding Ids
+      type: object
+      required:
+      - binding_ids
+      title: KpiMeasurementBindingBatchConfirmRequest
+    KpiMeasurementBindingBatchConfirmResponse:
+      properties:
+        total:
+          type: integer
+          minimum: 1.0
+          title: Total
+        succeeded:
+          type: integer
+          minimum: 0.0
+          title: Succeeded
+        failed:
+          type: integer
+          minimum: 0.0
+          title: Failed
+        items:
+          items:
+            $ref: '#/components/schemas/KpiMeasurementBindingConfirmResult'
+          type: array
+          minItems: 1
+          title: Items
+      type: object
+      required:
+      - total
+      - succeeded
+      - failed
+      - items
+      title: KpiMeasurementBindingBatchConfirmResponse
+    KpiMeasurementBindingConfirmResult:
+      properties:
+        binding_id:
+          type: integer
+          title: Binding Id
+        outcome:
+          type: string
+          enum:
+          - confirmed
+          - already_confirmed
+          - failed
+          title: Outcome
+        binding:
+          anyOf:
+          - $ref: '#/components/schemas/KpiMeasurementBinding'
+          - type: 'null'
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+      type: object
+      required:
+      - binding_id
+      - outcome
+      title: KpiMeasurementBindingConfirmResult
     KpiMeasurementBindingList:
       properties:
         total:

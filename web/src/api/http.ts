@@ -17,6 +17,8 @@ export type MeasurementUnitImportResult = components["schemas"]["KpiMeasurementI
 export type MeasurementBinding = components["schemas"]["KpiMeasurementBinding"];
 export type MeasurementBindingList = components["schemas"]["KpiMeasurementBindingList"];
 export type MeasurementBindingStatus = MeasurementBinding["status"];
+export type MeasurementBindingBatchConfirmResult = components["schemas"]["KpiMeasurementBindingConfirmResult"];
+export type MeasurementBindingBatchConfirmResponse = components["schemas"]["KpiMeasurementBindingBatchConfirmResponse"];
 export type MeasurementResource = components["schemas"]["KpiMeasurementResource"];
 export type MeasurementResourceList = components["schemas"]["KpiMeasurementResourceList"];
 export type MeasurementMetricRegisterPayload = components["schemas"]["KpiMeasurementMetricRegisterRequest"];
@@ -295,6 +297,12 @@ export const api = {
     const qs = params.toString();
     return request<MeasurementBindingList>(`${KPI_V5_BASE}/kpi/measurement-bindings${qs ? `?${qs}` : ""}`);
   },
+
+  batchConfirmMeasurementBindings: (bindingIds: number[]) =>
+    request<MeasurementBindingBatchConfirmResponse>(
+      `${KPI_V5_BASE}/kpi/measurement-bindings/batch-confirm`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ binding_ids: bindingIds }) },
+    ),
 
   setMeasurementBindingStatus: (bindingId: number, status: "candidate" | "confirmed" | "ignored", enabled?: boolean) =>
     request<{ id: number; status: string; enabled: boolean }>(

@@ -28,6 +28,8 @@ from app.models.schemas import (
     InspectorState,
     InspectorStateListResponse,
     KpiMeasurementBinding,
+    KpiMeasurementBindingBatchConfirmRequest,
+    KpiMeasurementBindingBatchConfirmResponse,
     KpiMeasurementBindingList,
     KpiMeasurementBindingStatusRequest,
     KpiMeasurementDerived,
@@ -74,6 +76,7 @@ from app.services.auth import (
 )
 from app.services.kpi_measurement_units import (
     KpiMeasurementError,
+    batch_confirm_measurement_bindings,
     create_measurement_derived,
     import_resource_csv,
     list_measurement_bindings,
@@ -555,6 +558,22 @@ def list_kpi_measurement_bindings_v5(
     start = (page - 1) * page_size
     items = result["items"][start : start + page_size]
     return KpiMeasurementBindingList(total=result["total"], items=items)
+
+
+@v5_router.post(
+    "/kpi/measurement-bindings/batch-confirm",
+    response_model=KpiMeasurementBindingBatchConfirmResponse,
+    operation_id="batchConfirmKpiMeasurementBindingsV5",
+)
+def batch_confirm_kpi_measurement_bindings_v5(
+    body: KpiMeasurementBindingBatchConfirmRequest,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> KpiMeasurementBindingBatchConfirmResponse:
+    try:
+        result = batch_confirm_measurement_bindings(body.binding_ids)
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementBindingBatchConfirmResponse.model_validate(result)
 
 
 @v5_router.patch(

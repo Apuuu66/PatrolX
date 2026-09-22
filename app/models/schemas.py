@@ -413,6 +413,25 @@ class KpiMeasurementBindingList(BaseModel):
     items: list[KpiMeasurementBinding]
 
 
+class KpiMeasurementBindingBatchConfirmRequest(BaseModel):
+    binding_ids: list[int] = Field(min_length=1, max_length=200)
+
+
+class KpiMeasurementBindingConfirmResult(BaseModel):
+    binding_id: int
+    outcome: Literal["confirmed", "already_confirmed", "failed"]
+    binding: KpiMeasurementBinding | None = None
+    error_code: str | None = None
+    message: str | None = None
+
+
+class KpiMeasurementBindingBatchConfirmResponse(BaseModel):
+    total: int = Field(ge=1)
+    succeeded: int = Field(ge=0)
+    failed: int = Field(ge=0)
+    items: list[KpiMeasurementBindingConfirmResult] = Field(min_length=1)
+
+
 class KpiMeasurementBindingStatusRequest(BaseModel):
     status: Literal["candidate", "confirmed", "ignored"]
     enabled: bool | None = None

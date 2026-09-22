@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import pytest
@@ -98,3 +99,151 @@ def test_unknown_column_is_reported(tmp_path: Path) -> None:
     result = discover_measurement_bindings("task-1", [("ne333_Call_Statistics_15_0_202609020000.csv", path)])
     assert result["files"][0]["unknown_columns"] == ["未注册指标(个)"]
     assert list_measurement_bindings()["items"][0]["metric_resource_id"] is None
+
+
+def test_binding_search_matches_base_column_fuzzily() -> None:
+    """绑定搜索只匹配基础列名，避免来源列中的展示单位干扰结果。"""
+    matched = _create_binding(metric_resource_id="ME_CALL", base_source_name="呼叫请求次数")
+    unmatched = _create_binding(
+        metric_resource_id="ME_CPU",
+        measurement_unit_id="MU_CPU",
+        base_source_name="容器CPU使用率",
+    )
+
+    result = list_measurement_bindings(search="请求")
+
+    assert result["total"] == 1
+    assert result["items"][0]["id"] == matched
+    assert result["items"][0]["base_source_name"] == "呼叫请求次数"
+
+    raw_search = list_measurement_bindings(search="呼叫请求次数(次)")
+    assert raw_search["total"] == 0
+    assert all(item["id"] not in {matched, unmatched} for item in raw_search["items"])
+
+
+def _create_binding(
+    *,
+    metric_resource_id: str | None,
+    measurement_unit_id: str = "MU_CALL",
+    status: str = "candidate",
+    base_source_name: str = "呼叫请求次数",
+) -> int:
+    """为批量确认测试创建受控绑定行。"""
+    from datetime import UTC, datetime
+
+    from app.models.db import KpiMeasurementBinding, session_factory
+
+    now = datetime.now(UTC)
+    row = KpiMeasurementBinding(
+        metric_resource_id=metric_resource_id,
+        measurement_unit_id=measurement_unit_id,
+        base_source_name=base_source_name,
+        raw_source_name=f"{base_source_name}(次)-{uuid.uuid4().hex}",
+        display_unit="次",
+        status=status,
+        enabled=True,
+        task_id=f"task-{measurement_unit_id}-{status}",
+        source_file="ne333_Call_Statistics_15_0_202609020000.csv",
+        created_at=now,
+        updated_at=now,
+    )
+    with session_factory() as session:
+        session.add(row)
+        session.commit()
+        return row.id
+
+
+def _get_binding(binding_id: int) -> dict[str, object]:
+    from app.models.db import KpiMeasurementBinding, session_factory
+    from app.services.kpi_measurement_units import _binding_dict
+
+    with session_factory() as session:
+        row = session.get(KpiMeasurementBinding, binding_id)
+        assert row is not None
+        session.refresh(row)
+        result = _binding_dict(row)
+        result["updated_at"] = row.updated_at
+        return result
+
+
+def test_batch_confirm_updates_selected_candidates_and_is_idempotent() -> None:
+    from app.services.kpi_measurement_units import batch_confirm_measurement_bindings
+
+    first = _create_binding(metric_resource_id="ME_CALL")
+    second = _create_binding(metric_resource_id="ME_CALL")
+    confirmed = _create_binding(metric_resource_id="ME_CALL", status="confirmed")
+    unselected = _create_binding(metric_resource_id="ME_OTHER")
+
+    confirmed_before = _get_binding(confirmed)
+    result = batch_confirm_measurement_bindings([first, second, confirmed, first])
+
+    assert result["total"] == 3
+    assert result["succeeded"] == 3
+    assert result["failed"] == 0
+    assert [item["binding_id"] for item in result["items"]] == [first, second, confirmed]
+    assert [item["outcome"] for item in result["items"]] == ["confirmed", "confirmed", "already_confirmed"]
+    assert _get_binding(first)["status"] == "confirmed"
+    assert _get_binding(second)["status"] == "confirmed"
+    assert _get_binding(confirmed)["status"] == "confirmed"
+    assert _get_binding(confirmed)["updated_at"] == confirmed_before["updated_at"]
+    assert _get_binding(unselected)["status"] == "candidate"
+
+
+def test_batch_confirm_returns_item_failures_without_blocking_others() -> None:
+    from app.services.kpi_measurement_units import batch_confirm_measurement_bindings
+
+    valid = _create_binding(metric_resource_id="ME_CALL")
+    missing_metric = _create_binding(metric_resource_id=None)
+    ignored = _create_binding(metric_resource_id="ME_CALL", status="ignored")
+    missing = 999999
+
+    result = batch_confirm_measurement_bindings([valid, missing_metric, missing, ignored])
+
+    assert result["total"] == 4
+    assert result["succeeded"] == 1
+    assert result["failed"] == 3
+    by_id = {item["binding_id"]: item for item in result["items"]}
+    assert by_id[valid]["outcome"] == "confirmed"
+    assert by_id[missing_metric]["outcome"] == "failed"
+    assert by_id[missing_metric]["error_code"] == "kpi_binding_metric_missing"
+    assert by_id[missing]["error_code"] == "kpi_binding_not_found"
+    assert by_id[ignored]["error_code"] == "kpi_binding_status_not_confirmable"
+    assert _get_binding(missing_metric)["status"] == "candidate"
+    assert _get_binding(ignored)["status"] == "ignored"
+
+
+def test_batch_confirm_blocks_cross_unit_metric_conflicts() -> None:
+    from app.services.kpi_measurement_units import batch_confirm_measurement_bindings
+
+    call = _create_binding(metric_resource_id="ME_CALL", measurement_unit_id="MU_CALL")
+    other = _create_binding(metric_resource_id="ME_CALL", measurement_unit_id="MU_OTHER")
+
+    result = batch_confirm_measurement_bindings([call, other])
+
+    assert result["succeeded"] == 0
+    assert result["failed"] == 2
+    assert all(item["outcome"] == "failed" for item in result["items"])
+    assert all(item["error_code"] == "kpi_binding_conflict" for item in result["items"])
+    assert _get_binding(call)["status"] == "candidate"
+    assert _get_binding(other)["status"] == "candidate"
+
+
+def test_batch_confirm_respects_existing_confirmed_metric_in_other_unit() -> None:
+    from app.services.kpi_measurement_units import batch_confirm_measurement_bindings
+
+    call = _create_binding(metric_resource_id="ME_CALL", measurement_unit_id="MU_CALL")
+    other = _create_binding(
+        metric_resource_id="ME_CALL",
+        measurement_unit_id="MU_OTHER",
+        status="confirmed",
+    )
+
+    result = batch_confirm_measurement_bindings([call, other])
+
+    assert result["succeeded"] == 1
+    assert result["failed"] == 1
+    by_id = {item["binding_id"]: item for item in result["items"]}
+    assert by_id[other]["outcome"] == "already_confirmed"
+    assert by_id[call]["outcome"] == "failed"
+    assert by_id[call]["error_code"] == "kpi_binding_conflict"
+    assert _get_binding(call)["status"] == "candidate"

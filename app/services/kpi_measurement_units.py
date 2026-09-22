@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import or_
 
 from app.core.encoding import decode_text_with_fallback, read_text_with_fallback
+from app.core.logging import get_logger
 from app.models.db import (
     KpiMeasurementBinding,
     KpiMeasurementDerived,
@@ -36,6 +37,7 @@ class KpiMeasurementError(Exception):
 
 
 _RESOURCE_PREFIXES = {"MU_": "mu", "ME_": "me", "UNIT_": "unit"}
+logger = get_logger("patrolx.kpi_measurement_units")
 MANUAL_METRIC_PREFIX = "ME__MANUAL_"
 
 
@@ -637,13 +639,7 @@ def list_measurement_bindings(
         if status:
             query = query.filter(KpiMeasurementBinding.status == status)
         if search:
-            like = f"%{search}%"
-            query = query.filter(
-                or_(
-                    KpiMeasurementBinding.raw_source_name.like(like),
-                    KpiMeasurementBinding.base_source_name.like(like),
-                )
-            )
+            query = query.filter(KpiMeasurementBinding.base_source_name.contains(search, autoescape=True))
         rows = query.order_by(KpiMeasurementBinding.id.desc()).all()
         return {"total": len(rows), "items": [_binding_dict(row) for row in rows]}
 
@@ -681,6 +677,112 @@ def set_measurement_binding_status(binding_id: int, status: str, enabled: bool |
         row.updated_at = _utc_now()
         session.commit()
         return _binding_dict(row)
+
+
+def batch_confirm_measurement_bindings(binding_ids: list[int]) -> dict[str, Any]:
+    """批量确认指标绑定；失败项不影响其他独立可确认项。"""
+    init_db()
+    unique_ids = list(dict.fromkeys(binding_ids))
+    if not unique_ids:
+        raise KpiMeasurementError("kpi_binding_batch_empty", "批量确认绑定列表不能为空", 400)
+    if len(unique_ids) > 200:
+        raise KpiMeasurementError("kpi_binding_batch_too_large", "单次批量确认最多 200 条绑定", 400)
+
+    with session_factory() as session:
+        rows = session.query(KpiMeasurementBinding).filter(KpiMeasurementBinding.id.in_(unique_ids)).all()
+        rows_by_id = {row.id: row for row in rows}
+        items: list[dict[str, Any]] = []
+        candidates_by_metric: dict[str, list[KpiMeasurementBinding]] = {}
+
+        for binding_id in unique_ids:
+            row = rows_by_id.get(binding_id)
+            if row is None:
+                items.append(
+                    {
+                        "binding_id": binding_id,
+                        "outcome": "failed",
+                        "error_code": "kpi_binding_not_found",
+                        "message": f"绑定不存在: {binding_id}",
+                    }
+                )
+            elif row.status == "confirmed":
+                items.append({"binding_id": binding_id, "outcome": "already_confirmed"})
+            elif row.status != "candidate":
+                items.append(
+                    {
+                        "binding_id": binding_id,
+                        "outcome": "failed",
+                        "error_code": "kpi_binding_status_not_confirmable",
+                        "message": f"绑定状态 {row.status} 不允许批量确认",
+                    }
+                )
+            elif row.metric_resource_id is None:
+                items.append(
+                    {
+                        "binding_id": binding_id,
+                        "outcome": "failed",
+                        "error_code": "kpi_binding_metric_missing",
+                        "message": "绑定缺少 ME 指标，不能确认",
+                    }
+                )
+            else:
+                candidates_by_metric.setdefault(row.metric_resource_id, []).append(row)
+                items.append({"binding_id": binding_id, "outcome": "confirmed"})
+
+        confirmed_by_metric: dict[str, dict[int, KpiMeasurementBinding]] = {}
+        candidate_metric_ids = list(candidates_by_metric)
+        if candidate_metric_ids:
+            existing_confirmed = (
+                session.query(KpiMeasurementBinding)
+                .filter(
+                    KpiMeasurementBinding.metric_resource_id.in_(candidate_metric_ids),
+                    KpiMeasurementBinding.status == "confirmed",
+                )
+                .all()
+            )
+            for row in existing_confirmed:
+                confirmed_by_metric.setdefault(row.metric_resource_id, {})[row.measurement_unit_id] = row
+
+        for item in items:
+            if item["outcome"] != "confirmed":
+                continue
+            row = rows_by_id[item["binding_id"]]
+            metric_id = row.metric_resource_id
+            assert metric_id is not None
+            selected_units = {candidate.measurement_unit_id for candidate in candidates_by_metric[metric_id]}
+            existing_units = set(confirmed_by_metric.get(metric_id, {})) - {row.measurement_unit_id}
+            if len(selected_units) > 1 or existing_units:
+                item.update(
+                    {
+                        "outcome": "failed",
+                        "error_code": "kpi_binding_conflict",
+                        "message": "指标已绑定到其他测量单元",
+                    }
+                )
+                continue
+            row.status = "confirmed"
+            row.updated_at = _utc_now()
+
+        session.commit()
+        for item in items:
+            if item["outcome"] in {"confirmed", "already_confirmed"}:
+                item["binding"] = _binding_dict(rows_by_id[item["binding_id"]])
+
+    succeeded = sum(item["outcome"] in {"confirmed", "already_confirmed"} for item in items)
+    result = {
+        "total": len(items),
+        "succeeded": succeeded,
+        "failed": len(items) - succeeded,
+        "items": items,
+    }
+    logger.info(
+        "kpi_measurement_bindings_batch_confirmed",
+        requested=len(binding_ids),
+        unique=len(unique_ids),
+        succeeded=result["succeeded"],
+        failed=result["failed"],
+    )
+    return result
 
 
 def _parse_number(value: str) -> tuple[bool, float | None]:

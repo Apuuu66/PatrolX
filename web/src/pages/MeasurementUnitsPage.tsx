@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type Key } from "react";
 import {
   Alert, App, Button, Card, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography, Upload,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
-import { api, type MeasurementBinding, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
+import { api, type MeasurementBinding, type MeasurementBindingBatchConfirmResponse, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -18,6 +18,13 @@ const STATUS_LABELS: Record<string, string> = {
 const IMPORT_ERROR_LABELS: Record<string, string> = {
   invalid_resource: "资源行缺少必填字段",
   resource_id_conflict: "同一个资源 ID 对应不同中文名",
+};
+
+const BATCH_CONFIRM_ERROR_LABELS: Record<string, string> = {
+  kpi_binding_not_found: "绑定不存在",
+  kpi_binding_metric_missing: "缺少 ME 指标",
+  kpi_binding_status_not_confirmable: "当前状态不允许批量确认",
+  kpi_binding_conflict: "指标已绑定到其他测量单元",
 };
 
 const IMPORT_SKIP_LABELS: Record<string, string> = {
@@ -228,6 +235,9 @@ function MeasurementBindingTab() {
   const [unitSearch, setUnitSearch] = useState("");
   const [status, setStatus] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
+  const [selectedBindingIds, setSelectedBindingIds] = useState<Key[]>([]);
+  const [batchConfirming, setBatchConfirming] = useState(false);
+  const [batchResult, setBatchResult] = useState<MeasurementBindingBatchConfirmResponse | null>(null);
   const [registerForm] = Form.useForm<RegisterFormValues>();
   const [registerTarget, setRegisterTarget] = useState<MeasurementBinding | null>(null);
   const [registerSubmitting, setRegisterSubmitting] = useState(false);
@@ -352,6 +362,26 @@ function MeasurementBindingTab() {
     }
   };
 
+  const batchConfirm = async () => {
+    if (selectedBindingIds.length === 0) return;
+    setBatchConfirming(true);
+    try {
+      const result = await api.batchConfirmMeasurementBindings(selectedBindingIds.map(Number));
+      setBatchResult(result);
+      if (result.failed > 0) {
+        message.warning(`批量确认完成：成功 ${result.succeeded} 条，失败 ${result.failed} 条`);
+      } else {
+        message.success(`批量确认完成：成功 ${result.succeeded} 条`);
+      }
+      setSelectedBindingIds([]);
+      await load();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "批量确认失败");
+    } finally {
+      setBatchConfirming(false);
+    }
+  };
+
   const updateBinding = async (binding: MeasurementBinding, nextStatus: "confirmed" | "ignored") => {
     try {
       await api.setMeasurementBindingStatus(
@@ -402,15 +432,43 @@ function MeasurementBindingTab() {
     },
   ];
 
+  const rowSelection = {
+    selectedRowKeys: selectedBindingIds,
+    onChange: setSelectedBindingIds,
+    getCheckboxProps: (record: MeasurementBinding) => ({
+      disabled: !isAdmin || record.status !== "candidate" || !record.metric_resource_id,
+    }),
+  };
+
   return (
     <Card title="指标绑定关系">
       <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search allowClear placeholder="按测量单元 ID 精确过滤" style={{ width: 280 }} onSearch={(value) => { setUnitSearch(value); setPage(1); void load(1, pageSize); }} />
-        <Select allowClear placeholder="绑定状态" style={{ width: 160 }} value={status} onChange={(value) => { setStatus(value); setPage(1); void load(1, pageSize); }} options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))} />
+        <Input.Search allowClear placeholder="按测量单元 ID 精确过滤" style={{ width: 280 }} onSearch={(value) => { setUnitSearch(value); setPage(1); setSelectedBindingIds([]); void load(1, pageSize); }} />
+        <Select allowClear placeholder="绑定状态" style={{ width: 160 }} value={status} onChange={(value) => { setStatus(value); setPage(1); setSelectedBindingIds([]); void load(1, pageSize); }} options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))} />
         <Typography.Text type="secondary">共 {total} 条</Typography.Text>
+        {isAdmin ? (
+          <Button type="primary" disabled={selectedBindingIds.length === 0} loading={batchConfirming} onClick={() => void batchConfirm()}>
+            批量确认
+          </Button>
+        ) : null}
       </Space>
-      <Table rowKey="id" loading={loading} columns={columns} dataSource={items}
-        pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }} />
+      {batchResult && batchResult.failed > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          closable
+          style={{ marginBottom: 16 }}
+          message={`批量确认：成功 ${batchResult.succeeded} 条，失败 ${batchResult.failed} 条`}
+          description={batchResult.items.filter((item) => item.outcome === "failed").map((item) => (
+            <div key={item.binding_id}>
+              {item.binding_id}: {BATCH_CONFIRM_ERROR_LABELS[item.error_code ?? ""] ?? item.message ?? "确认失败"}
+            </div>
+          ))}
+          onClose={() => setBatchResult(null)}
+        />
+      ) : null}
+      <Table rowKey="id" loading={loading} columns={columns} dataSource={items} rowSelection={isAdmin ? rowSelection : undefined}
+        pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); setSelectedBindingIds([]); void load(nextPage, nextPageSize); } }} />
 
       <Modal
         open={registerTarget !== null}

@@ -422,6 +422,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v5/kpi/measurement-bindings/batch-confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Batch Confirm Kpi Measurement Bindings V5 */
+        post: operations["batchConfirmKpiMeasurementBindingsV5"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v5/kpi/measurement-bindings/{binding_id}": {
         parameters: {
             query?: never;
@@ -743,6 +760,37 @@ export interface components {
              * @default false
              */
             metric_is_manual: boolean;
+        };
+        /** KpiMeasurementBindingBatchConfirmRequest */
+        KpiMeasurementBindingBatchConfirmRequest: {
+            /** Binding Ids */
+            binding_ids: number[];
+        };
+        /** KpiMeasurementBindingBatchConfirmResponse */
+        KpiMeasurementBindingBatchConfirmResponse: {
+            /** Total */
+            total: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+            /** Items */
+            items: components["schemas"]["KpiMeasurementBindingConfirmResult"][];
+        };
+        /** KpiMeasurementBindingConfirmResult */
+        KpiMeasurementBindingConfirmResult: {
+            /** Binding Id */
+            binding_id: number;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "confirmed" | "already_confirmed" | "failed";
+            binding?: components["schemas"]["KpiMeasurementBinding"] | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Message */
+            message?: string | null;
         };
         /** KpiMeasurementBindingList */
         KpiMeasurementBindingList: {
@@ -2208,6 +2256,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KpiMeasurementBindingList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batchConfirmKpiMeasurementBindingsV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementBindingBatchConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementBindingBatchConfirmResponse"];
                 };
             };
             /** @description Validation Error */

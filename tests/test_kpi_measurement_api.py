@@ -222,3 +222,62 @@ def test_edit_manual_metric_supports_partial_and_conflict() -> None:
         )
         assert conflict.status_code == 409, conflict.text
         assert conflict.json()["code"] == "kpi_metric_name_conflict"
+
+
+def test_batch_confirm_bindings_api_supports_partial_success() -> None:
+    with _client() as client:
+        from tests.test_kpi_measurement_binding import _create_binding, _get_binding
+
+        valid = _create_binding(metric_resource_id="ME_CALL")
+        second = _create_binding(metric_resource_id="ME_CALL")
+        missing_metric = _create_binding(metric_resource_id=None)
+        ignored = _create_binding(metric_resource_id="ME_CALL", status="ignored")
+
+        response = client.post(
+            "/api/v5/kpi/measurement-bindings/batch-confirm",
+            json={"binding_ids": [valid, second, missing_metric, ignored, 999999]},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["total"] == 5
+        assert payload["succeeded"] == 2
+        assert payload["failed"] == 3
+        assert [item["binding_id"] for item in payload["items"]] == [
+            valid,
+            second,
+            missing_metric,
+            ignored,
+            999999,
+        ]
+        assert payload["items"][0]["outcome"] == "confirmed"
+        assert payload["items"][0]["binding"]["status"] == "confirmed"
+        assert payload["items"][2]["error_code"] == "kpi_binding_metric_missing"
+        assert _get_binding(missing_metric)["status"] == "candidate"
+        assert _get_binding(ignored)["status"] == "ignored"
+
+
+def test_batch_confirm_bindings_api_rejects_empty_and_non_admin() -> None:
+    with _client() as client:
+        empty = client.post("/api/v5/kpi/measurement-bindings/batch-confirm", json={"binding_ids": []})
+        assert empty.status_code == 422, empty.text
+
+        from app.main import app
+        from app.models.db import AuthSession
+        from app.services.auth import get_current_user
+
+        app.dependency_overrides[get_current_user] = lambda: AuthSession(
+            token="viewer-token", username="viewer", role="viewer"
+        )
+        try:
+            non_admin = client.post(
+                "/api/v5/kpi/measurement-bindings/batch-confirm",
+                json={"binding_ids": [1]},
+            )
+            assert non_admin.status_code == 403, non_admin.text
+            assert non_admin.json()["code"] == "forbidden"
+        finally:
+            app.dependency_overrides[get_current_user] = lambda: AuthSession(
+                token="integration-test-token",
+                username="integration-admin",
+                role="admin",
+            )
