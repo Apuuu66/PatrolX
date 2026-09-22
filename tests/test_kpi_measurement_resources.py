@@ -63,13 +63,25 @@ def test_import_keeps_existing_resources_absent_from_csv() -> None:
     assert units["items"][0]["unit_count"] == 1
 
 
-def test_import_rejects_unknown_prefix_and_requires_mu_fields() -> None:
+def test_import_ignores_unknown_prefix_and_requires_mu_fields() -> None:
     result = import_resource_csv(
         resource_csv(("BAD_CALL", "非法", "Bad"), ("ME_ORPHAN", "孤立", ""), ("ME_VALID", "有效", "Valid"))
     )
     assert result["added"] == {"mu": 0, "me": 1, "unit": 0}
-    assert len(result["errors"]) == 2
-    assert result["errors"][0]["resource_id"] == "BAD_CALL"
+    assert result["errors"] == [
+        {
+            "resource_id": "ME_ORPHAN",
+            "line_number": 3,
+            "reason": "invalid_resource",
+        }
+    ]
+    assert result["skipped"] == [
+        {
+            "resource_id": "BAD_CALL",
+            "line_number": 2,
+            "reason": "unsupported_resource_prefix",
+        }
+    ]
 
 
 def test_enable_toggle_only_affects_mu() -> None:

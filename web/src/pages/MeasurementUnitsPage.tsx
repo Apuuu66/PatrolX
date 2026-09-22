@@ -17,7 +17,6 @@ const STATUS_LABELS: Record<string, string> = {
 
 const IMPORT_ERROR_LABELS: Record<string, string> = {
   invalid_resource: "资源行缺少必填字段",
-  unknown_resource_prefix: "资源 ID 前缀不合法",
   resource_id_conflict: "同一个资源 ID 对应不同中文名",
 };
 

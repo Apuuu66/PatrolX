@@ -90,12 +90,21 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
             name_zh = str(row.get("中文描述") or "").strip()
             name_en = str(row.get("英文描述") or "").strip()
             kind = resource_kind(resource_id)
-            if not kind or not name_zh or not name_en:
+            if not kind:
+                skipped.append(
+                    {
+                        "resource_id": resource_id or None,
+                        "line_number": line_number,
+                        "reason": "unsupported_resource_prefix",
+                    }
+                )
+                continue
+            if not name_zh or not name_en:
                 errors.append(
                     {
                         "resource_id": resource_id or None,
                         "line_number": line_number,
-                        "reason": "invalid_resource" if kind else "unknown_resource_prefix",
+                        "reason": "invalid_resource",
                     }
                 )
                 continue
