@@ -8,8 +8,8 @@
 
 ## 阶段 2：021 自动目录
 
-- [ ] T004 [P] [US1] 在 `app/services/kpi_measurement_units.py` 中实现自动创建/复用 ME 指标
-- [ ] T005 [P] [US1] 在 `app/services/kpi_measurement_units.py` 中实现预制目录增量导入与合并
+- [ ] T004 [P] [US1] 在 `app/services/kpi_measurement_units.py` 中实现自动创建/复用 ME 指标，并初始化启用、方向、重要级别、分组、显示顺序和阈值默认值
+- [ ] T005 [P] [US1] 在 `app/services/kpi_measurement_units.py` 中实现预制目录增量导入与合并；缺失治理字段按默认值初始化，且不得覆盖已有值
 - [ ] T006 [US1] 在 `app/inspectors/kpi/measurement.py` 中默认启用自动入库指标并移除人工确认主流程
 - [ ] T007 [US1] 在 `tests/test_kpi_measurement_inspector.py` 中补充自动入库与幂等重跑测试
 - [ ] T008 [US1] 在 `tests/test_kpi_measurement_resources.py` 中补充预制目录增量导入测试
