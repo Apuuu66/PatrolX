@@ -62,3 +62,90 @@ def test_build_report_matches_rule_from_existing_task_site(tmp_path: Path, monke
     assert report["rule"]["code"] == "traffic.stat"
     assert report["matched_files"] == ["traffic/stat.csv"]
     assert report["catalog_paths"] == ["traffic/stat.csv"]
+
+
+def test_build_report_lists_extraction_entries_and_all_rule_matches(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "output_dir", tmp_path)
+    task_dir = _write_task(tmp_path, "task-local-new", mode="local", completed_at="2026-01-03T00:00:00Z")
+    (task_dir / "traffic").mkdir()
+    (task_dir / "traffic" / "stat.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (task_dir / ".patrolx-extracted.json").write_text(
+        json.dumps(
+            {
+                "version": 4,
+                "main": {"count": 1},
+                "files": [
+                    {
+                        "source": "stat.csv",
+                        "target": "traffic/stat.csv",
+                        "category": "traffic",
+                        "status": "extracted",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+
+    report = build_report(task_dir, task)
+
+    assert report["manifest"]["entries"] == [
+        {
+            "source": "stat.csv",
+            "target": "traffic/stat.csv",
+            "category": "traffic",
+            "status": "extracted",
+        }
+    ]
+    assert report["catalog_paths"] == ["traffic/stat.csv"]
+    match = next(item for item in report["rule_matches"] if item["code"] == "traffic.stat")
+    assert match["matched_files"] == ["traffic/stat.csv"]
+
+
+def test_human_report_shows_extraction_entries_and_rule_hits(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(settings, "output_dir", tmp_path)
+    task_dir = _write_task(tmp_path, "task-local-new", mode="local", completed_at="2026-01-03T00:00:00Z")
+    (task_dir / "traffic").mkdir()
+    (task_dir / "traffic" / "stat.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (task_dir / ".patrolx-extracted.json").write_text(
+        json.dumps(
+            {
+                "version": 4,
+                "main": {"count": 1},
+                "files": [
+                    {
+                        "source": "stat.csv",
+                        "target": "traffic/stat.csv",
+                        "category": "traffic",
+                        "status": "extracted",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    report = build_report(task_dir, task)
+
+    from scripts.debug_local import _print_human
+
+    _print_human(report)
+    output = capsys.readouterr().out
+
+    assert "解压条目" in output
+    assert "traffic/stat.csv <- stat.csv" in output
+    assert "规则命中" in output
+    assert "HIT traffic/stat.csv" in output
+
+
+def test_tree_lines_groups_files_by_top_level_directory() -> None:
+    from scripts.debug_local import _tree_lines
+
+    lines = _tree_lines(["traffic/stat.csv", "logs/service/a.log", "kpi/a.csv"])
+
+    assert "traffic/" in lines
+    assert "  stat.csv" in lines
+    assert "logs/service/" in lines
+    assert "  a.log" in lines
+    assert "kpi/" in lines
