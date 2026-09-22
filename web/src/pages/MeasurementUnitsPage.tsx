@@ -20,6 +20,11 @@ const IMPORT_ERROR_LABELS: Record<string, string> = {
   resource_id_conflict: "同一个资源 ID 对应不同中文名",
 };
 
+const IMPORT_SKIP_LABELS: Record<string, string> = {
+  unsupported_resource_prefix: "资源 ID 前缀不属于导入范围",
+  unchanged: "资源已存在且无变化",
+};
+
 function MeasurementUnitTab() {
   const { message } = App.useApp();
   const { user } = useAuth();
@@ -58,9 +63,13 @@ function MeasurementUnitTab() {
       const added = Object.values(result.added ?? {}).reduce((sum, value) => sum + value, 0);
       const updated = Object.values(result.updated ?? {}).reduce((sum, value) => sum + value, 0);
       const errorCount = (result.errors ?? []).length;
-      message.success(`导入完成：新增 ${added}，更新 ${updated}，错误 ${errorCount}`);
-      if (errorCount > 0) {
+      const skippedCount = (result.skipped ?? []).length;
+      const summary = `导入完成：新增 ${added}，更新 ${updated}，错误 ${errorCount}，跳过 ${skippedCount}`;
+      if (errorCount > 0 || skippedCount > 0) {
         setImportResult(result);
+        message.warning(summary);
+      } else {
+        message.success(summary);
       }
       setPage(1);
       await load(1, pageSize, search);
@@ -122,6 +131,30 @@ function MeasurementUnitTab() {
     },
   ];
 
+  const importSkippedColumns: ColumnsType<NonNullable<MeasurementUnitImportResult["skipped"]>[number]> = [
+    { title: "CSV 行号", dataIndex: "line_number", key: "line_number", width: 100 },
+    {
+      title: "资源 ID", dataIndex: "resource_id", key: "resource_id", width: 220,
+      render: (value: unknown) => (typeof value === "string" && value ? value : "-"),
+    },
+    {
+      title: "处理方式", dataIndex: "reason", key: "reason", width: 220,
+      render: (value: unknown) => IMPORT_SKIP_LABELS[String(value)] ?? String(value ?? "-"),
+    },
+    {
+      title: "说明", key: "description",
+      render: (_, record) => {
+        if (record.reason === "unsupported_resource_prefix") {
+          return "仅导入 MU__*、ME_*、UNIT_* 三类资源";
+        }
+        if (record.reason === "unchanged") {
+          return "中英文名称均未变化";
+        }
+        return "-";
+      },
+    },
+  ];
+
   return (
     <Card title="测量单元目录" extra={isAdmin ? (
       <Upload accept=".csv" showUploadList={false} customRequest={({ file }) => void importFile(file as File)}>
@@ -136,18 +169,37 @@ function MeasurementUnitTab() {
         pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }} />
       <Modal
         open={importResult !== null}
-        title="资源导入错误明细"
+        title="资源导入结果明细"
         footer={<Button type="primary" onClick={() => setImportResult(null)}>关闭</Button>}
         onCancel={() => setImportResult(null)}
         width={860}
       >
-        <Table
-          rowKey={(record) => `${record.line_number ?? "unknown"}-${String(record.resource_id ?? "")}`}
-          size="small"
-          columns={importErrorColumns}
-          dataSource={importResult?.errors ?? []}
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-        />
+        <Space direction="vertical" style={{ width: "100%" }}>
+          {(importResult?.errors ?? []).length > 0 && (
+            <>
+              <Typography.Text strong>错误明细</Typography.Text>
+              <Table
+                rowKey={(record) => `${record.line_number ?? "unknown"}-${String(record.resource_id ?? "")}`}
+                size="small"
+                columns={importErrorColumns}
+                dataSource={importResult?.errors ?? []}
+                pagination={{ pageSize: 10, showSizeChanger: false }}
+              />
+            </>
+          )}
+          {(importResult?.skipped ?? []).length > 0 && (
+            <>
+              <Typography.Text strong>跳过明细</Typography.Text>
+              <Table
+                rowKey={(record) => `${record.line_number ?? "unknown"}-${String(record.resource_id ?? "")}`}
+                size="small"
+                columns={importSkippedColumns}
+                dataSource={importResult?.skipped ?? []}
+                pagination={{ pageSize: 10, showSizeChanger: false }}
+              />
+            </>
+          )}
+        </Space>
       </Modal>
     </Card>
   );

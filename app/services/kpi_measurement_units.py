@@ -84,8 +84,10 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
     reader = csv.DictReader(io.StringIO(raw))
     if reader.fieldnames is None:
         raise KpiMeasurementError("kpi_resource_csv_invalid", "资源目录缺少表头", 400)
+    # 兼容现场导出的表头前后空格；必须同步修正 DictReader 的实际取值键。
+    reader.fieldnames = [name.strip() for name in reader.fieldnames]
     required = {"资源id", "中文描述", "英文描述"}
-    if not required.issubset({name.strip() for name in reader.fieldnames}):
+    if not required.issubset(set(reader.fieldnames)):
         raise KpiMeasurementError("kpi_resource_csv_invalid", "资源目录表头必须是资源id/中文描述/英文描述", 400)
 
     added = {"mu": 0, "me": 0, "unit": 0}

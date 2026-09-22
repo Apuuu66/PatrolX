@@ -150,3 +150,10 @@ def test_import_resource_csv_supports_gbk() -> None:
 
     assert result["added"] == {"mu": 0, "me": 1, "unit": 0}
     assert result["errors"] == []
+
+
+def test_import_resource_csv_supports_header_whitespace() -> None:
+    result = import_resource_csv(io.StringIO(" 资源id , 中文描述 , 英文描述 \nME_CALL,呼叫请求,Call Requests\n"))
+
+    assert result["added"] == {"mu": 0, "me": 1, "unit": 0}
+    assert result["errors"] == []
