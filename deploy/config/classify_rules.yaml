@@ -16,7 +16,6 @@ category:
       - "*指标*"
       - "*perf*"
       - "*call_session*"
-      - "*session_api*"
     extensions:
       - .csv
       - .xlsx
@@ -30,7 +29,6 @@ category:
     patterns:
       - "*alarm*"
       - "*告警*"
-      - "*fault*"
     extensions:
       - .alarm
   config:
@@ -52,7 +50,6 @@ category:
       - "*pod*"
       - "*mem*"
       - "*timer*"
-      - "*container_metric*"
       - "*container*"
     extensions:
       - .out
