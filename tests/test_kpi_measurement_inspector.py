@@ -39,6 +39,23 @@ def _task(tmp_path: Path, body: str) -> list[tuple[str, Path]]:
     return files
 
 
+def test_inspection_discovers_binding_candidates(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        HEADER + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
+        encoding="utf-8",
+    )
+    files = [("ne333_Call_Statistics_15_0_202609020000.csv", path)]
+
+    inspect_measurement_files("task-1", files)
+
+    bindings = list_measurement_bindings()["items"]
+    assert len(bindings) == 1
+    assert bindings[0]["status"] == "candidate"
+    assert bindings[0]["measurement_unit_id"] == "MU_CALL"
+
+
 def list_measurement_bindings():
     from app.services.kpi_measurement_units import list_measurement_bindings as function
 

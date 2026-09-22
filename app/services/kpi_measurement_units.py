@@ -508,6 +508,9 @@ def _merge_observation(target: dict[str, Any], source: dict[str, Any]) -> None:
 def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
     """执行测量单元可读性巡检并返回通用结构。"""
     init_db()
+    # 巡检前先做一次绑定发现，保证新任务表头能进入候选确认流程。
+    # 发现返回值会把解析失败文件降级，巡检需要重新按 matched 文件汇总错误。
+    discover_measurement_bindings(task_id, files)
     discovered = match_measurement_files(files)
     matched: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
