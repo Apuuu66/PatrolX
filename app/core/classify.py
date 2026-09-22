@@ -39,6 +39,30 @@ def _match_name(name: str, rules: dict) -> RuleCategory | None:
     return None
 
 
+def classify_member(name: str, archive_name: str | None) -> RuleCategory | None:
+    """按父压缩包归组规则识别成员类别；未配置归组时返回 None。"""
+    if not archive_name:
+        return None
+    for rule in _load_rules().get("archive_members", []):
+        pattern = str(rule.get("archive") or "")
+        category_name = str(rule.get("category") or "")
+        try:
+            category = RuleCategory(category_name)
+        except ValueError:
+            continue
+        if not pattern:
+            continue
+        matched = fnmatch.fnmatch(archive_name.lower(), pattern.lower())
+        if not matched:
+            try:
+                matched = re.search(pattern, archive_name, re.IGNORECASE) is not None
+            except re.error:
+                matched = False
+        if matched:
+            return category
+    return None
+
+
 def classify_name(name: str) -> RuleCategory | None:
     """按名称/扩展名分类（不修改文件名，保留原始包名用于追溯）。"""
     rules = _load_rules()

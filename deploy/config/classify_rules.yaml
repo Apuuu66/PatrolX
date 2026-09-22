@@ -56,3 +56,8 @@ category:
       - "*container*"
     extensions:
       - .out
+
+# 压缩包成员归组：命中的压缩包内普通成员不再逐个分类，统一进入指定类别。
+archive_members:
+  - archive: "*perfresult*"
+    category: kpi

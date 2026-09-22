@@ -11,9 +11,10 @@ groups:
     source_patterns:
       - '^config/.*$'
   resource_all:
-    description: 资源目录全量文件
+    description: 资源目录全量文件；兼容 PerfResult 归组到 kpi 的容器资源
     source_patterns:
       - '^resource/.*$'
+      - '^kpi/.*Container_Metric_Unit.*\.csv$'
   traffic_all:
     description: 话务目录全量文件
     source_patterns:

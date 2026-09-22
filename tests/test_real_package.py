@@ -71,7 +71,7 @@ def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Pat
         "config/system_info.ini",
         "config/version.ini",
         "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
-        "resource/ne333_Container_Metric_Unit_5_0_202609020000.csv",
+        "kpi/ne333_Container_Metric_Unit_5_0_202609020000.csv",
         "logs/UmfService/logs/paas-192.168.2.2/UmfService.log",
         "logs/UmfService/logs/paas-192.168.2.2/UmfService_20260901011314.log",
         "logs/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log",
@@ -80,6 +80,9 @@ def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Pat
     actual = {path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*") if path.is_file()}
     missing = expected - actual
     assert not missing, f"解压现场缺少目标文件: {sorted(missing)}"
+    locked_members = [item for item in manifest["files"] if "Container_Metric_Unit" in item["target"]]
+    assert locked_members
+    assert all(item["classification_reason"] == "archive:member" for item in locked_members)
     assert manifest["main"]["count"] == 5
     assert not manifest["rejected"]
 
@@ -91,8 +94,8 @@ def test_real_container_resource_and_alarm_rule_results(tmp_path: Path) -> None:
     resource_ctx = _ctx_with_task(
         tmp_path,
         [
-            "resource/ne333_Container_Metric_Unit_5_0_202609020000.csv",
-            "resource/ne333_Container_Metric_Unit_15_0_202609020000.csv",
+            "kpi/ne333_Container_Metric_Unit_5_0_202609020000.csv",
+            "kpi/ne333_Container_Metric_Unit_15_0_202609020000.csv",
         ],
     )
     resource_result = registry.get("resource.check").run(resource_ctx)

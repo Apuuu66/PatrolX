@@ -397,6 +397,7 @@ def _extract_subpackage(
                 log,
                 policy,
                 path_policy,
+                source.name,
             )
         shutil.rmtree(staging, ignore_errors=True)
         if source_kind != "evidence":
@@ -446,6 +447,7 @@ def _ingest_file(
     log: ExtractionLogger | None = None,
     policy: ExtractPolicyConfig | None = None,
     path_policy: PathLimitPolicy | None = None,
+    archive_name: str | None = None,
 ) -> None:
     del group
     name = source.name.lower()
@@ -484,7 +486,7 @@ def _ingest_file(
         return
 
     decision = _evidence_policy(source_relative, policy, False) if source_kind == "evidence" else None
-    category, _ = _category_of(source, parent_category)
+    category, reason = _category_of(source, parent_category, archive_name)
     # 主包内非语义根目录下的普通文件平铺；完整原始路径仍保留在 .main 证据现场。
     destination_source = source_relative
     if (
@@ -500,6 +502,7 @@ def _ingest_file(
         "category": CATEGORY_DIRECTORIES[category],
         "target": relative.as_posix(),
         "depth": depth,
+        "classification_reason": reason,
         "status": "extracted",
         "error": None,
     }

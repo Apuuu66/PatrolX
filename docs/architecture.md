@@ -243,6 +243,8 @@ deploy/config/classify_rules.yaml
 
 名称无法判定时，可解压后做内部文件名或内容嗅探；仍无法判定归入 `other/`。
 
+规则表还可声明 `archive_members`，将指定压缩包内普通成员统一归入一个类别。例如 `PerfResult_*.zip` 内的呼叫和容器 CSV 都属于测量单元，统一进入 `kpi/`；嵌套压缩包仍按自身名称分类。
+
 ### 6.2 嵌套包与 manifest
 
 - 主包先解压为 `.main/` 证据现场，原始子压缩包和原始 `.log.gz` 都保留在该现场。

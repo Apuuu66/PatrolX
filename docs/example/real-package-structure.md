@@ -26,7 +26,7 @@ ZZapp01BCN_app_Problem_scene_333.zip
                 └── ServiceLog_20260901011314.zip
 ```
 
-`alarm_history_*.zip` 内部只有多个告警 CSV，没有 `alarm_summary.json`。`PerfResult_*.zip` 内部包含呼叫 KPI 与容器资源 CSV。
+`alarm_history_*.zip` 内部只有多个告警 CSV，没有 `alarm_summary.json`。`PerfResult_*.zip` 内部都是测量单元 CSV；展开时按压缩包成员归组统一进入 `kpi/`。
 
 ## 嵌套子包结构
 
@@ -91,8 +91,8 @@ kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv
 kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv
 kpi/ne333_Call_Session_API_Statistics_30_0_202609020000.csv
 kpi/ne333_Call_Session_API_Statistics_60_0_202609020000.csv
-resource/ne333_Container_Metric_Unit_5_0_202609020000.csv
-resource/ne333_Container_Metric_Unit_15_0_202609020000.csv
+kpi/ne333_Container_Metric_Unit_5_0_202609020000.csv
+kpi/ne333_Container_Metric_Unit_15_0_202609020000.csv
 logs/UmfService/logs/paas-192.168.2.2/UmfService.log
 logs/UmfService/logs/paas-192.168.2.2/UmfService_20260901011314.log
 logs/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log
@@ -108,7 +108,7 @@ logs/UMFAcc/logs/paas-192.168.2.2/UMFAcc_20260901011314.log
 | `alarm_history_*.csv` | `alarm` | `alarm.stat` |
 | `system_info.ini`、`version.ini` | `config` | `config.check` |
 | `Call_Session_API_Statistics_*` | `kpi` | `kpi.call` |
-| `Container_Metric_Unit_*` | `resource` | `resource.check` |
+| `PerfResult_*` 内 `Container_Metric_Unit_*` | `kpi` | `kpi.measurement_units`、`resource.check` |
 | `UmfService/*.log` | `log` | `log.umf_service` |
 | `UMFAcc/*.log` | `log` | `log.umf_acc` |
 
