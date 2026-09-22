@@ -93,6 +93,26 @@ def _csv_files(directory: Path) -> list[Path]:
     )
 
 
+def _glob_csv_files(pattern: Path) -> list[Path]:
+    """展开 CSV 通配模式；相对模式以项目根目录为基准。"""
+    if pattern.is_absolute():
+        root = Path(pattern.anchor)
+        relative_pattern = str(pattern.relative_to(root))
+    else:
+        root = PROJECT_ROOT
+        relative_pattern = str(pattern)
+    patterns = [relative_pattern]
+    if relative_pattern.lower().endswith(".csv"):
+        patterns.append(relative_pattern[:-4] + ".[cC][sS][vV]")
+    matched = {
+        path
+        for csv_pattern in patterns
+        for path in root.glob(csv_pattern)
+        if path.is_file() and path.suffix.lower() == ".csv"
+    }
+    return sorted(matched, key=lambda path: str(path))
+
+
 def preview_directory(directory: str | Path = DEFAULT_RESOURCE_DIR, limit: int = 50) -> dict[str, Any]:
     """预览固定目录下全部顶层资源 CSV；单个文件失败不影响其他文件。"""
     resource_dir = Path(directory)
@@ -102,7 +122,9 @@ def preview_directory(directory: str | Path = DEFAULT_RESOURCE_DIR, limit: int =
     statuses: Counter[str] = Counter()
     file_count = 0
 
-    if not resource_dir.exists() or not resource_dir.is_dir():
+    if any(char in str(resource_dir) for char in "*?["):
+        paths = _glob_csv_files(resource_dir)
+    elif not resource_dir.exists() or not resource_dir.is_dir():
         return {
             "directory": str(resource_dir),
             "valid": False,
@@ -113,8 +135,10 @@ def preview_directory(directory: str | Path = DEFAULT_RESOURCE_DIR, limit: int =
             "statuses": {},
             "files": [],
         }
+    else:
+        paths = _csv_files(resource_dir)
 
-    for path in _csv_files(resource_dir):
+    for path in paths:
         file_count += 1
         try:
             result = preview_file(path, limit)

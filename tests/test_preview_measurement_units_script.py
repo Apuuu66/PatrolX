@@ -71,6 +71,24 @@ def test_preview_directory_continues_after_invalid_header(tmp_path: Path) -> Non
     assert result["files"][1]["valid"] is True
 
 
+def test_preview_directory_supports_csv_glob_pattern(tmp_path: Path) -> None:
+    (tmp_path / "mu.csv").write_text(
+        "资源id,中文描述,英文描述\nMU__CALL,呼叫统计,Call Statistics\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "me.CSV").write_text(
+        "资源id,中文描述,英文描述\nME_CALL,呼叫请求,Call Requests\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "bad.txt").write_text("ignored", encoding="utf-8")
+
+    result = preview_directory(tmp_path / "*.csv")
+
+    assert result["valid"] is True
+    assert result["file_count"] == 2
+    assert result["kinds"] == {"mu": 1, "me": 1}
+
+
 def test_preview_directory_reports_empty_directory(tmp_path: Path) -> None:
     result = preview_directory(tmp_path)
 
