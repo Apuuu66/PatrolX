@@ -104,8 +104,8 @@ def test_unknown_column_is_reported(tmp_path: Path) -> None:
     assert list_measurement_bindings()["items"][0]["metric_resource_id"] is None
 
 
-def test_binding_search_matches_base_column_fuzzily() -> None:
-    """绑定搜索只匹配基础列名，避免来源列中的展示单位干扰结果。"""
+def test_binding_search_matches_keywords_fuzzily() -> None:
+    """绑定搜索匹配指标 ID 和基础列名；不匹配原始列名中的展示单位。"""
     matched = _create_binding(metric_resource_id="ME_CALL", base_source_name="呼叫请求次数")
     unmatched = _create_binding(
         metric_resource_id="ME_CPU",

@@ -47,7 +47,7 @@ def test_import_list_and_toggle_measurement_units() -> None:
 def test_binding_list_and_status_api() -> None:
     with _client() as client:
         _import_csv(client)
-        _create_unregistered_binding()
+        _create_unregistered_binding(metric_resource_id="ME_CALL")
         listed = client.get("/api/v5/kpi/measurement-bindings")
         assert listed.status_code == 200, listed.text
         assert listed.json()["total"] == 1
@@ -61,6 +61,11 @@ def test_binding_list_and_status_api() -> None:
         missing = client.get("/api/v5/kpi/measurement-bindings", params={"unit_search": "MU_OTHER"})
         assert missing.status_code == 200, missing.text
         assert missing.json() == {"total": 0, "items": []}
+
+        metric_search = client.get("/api/v5/kpi/measurement-bindings", params={"search": "ME_CALL"})
+        assert metric_search.status_code == 200, metric_search.text
+        assert metric_search.json()["total"] == 1
+        assert metric_search.json()["items"][0]["metric_resource_id"] == "ME_CALL"
 
 
 def test_create_derived_api_validates_bindings() -> None:
@@ -91,14 +96,17 @@ def test_import_resource_csv_does_not_use_default_temp(monkeypatch: pytest.Monke
     assert result["added"] == {"mu": 1, "me": 1, "unit": 0}
 
 
-def _create_unregistered_binding(base_source_name: str = "呼叫请求次数") -> int:
+def _create_unregistered_binding(
+    base_source_name: str = "呼叫请求次数",
+    metric_resource_id: str | None = None,
+) -> int:
     from datetime import UTC, datetime
 
     from app.models.db import KpiMeasurementBinding, session_factory
 
     with session_factory() as session:
         row = KpiMeasurementBinding(
-            metric_resource_id=None,
+            metric_resource_id=metric_resource_id,
             measurement_unit_id="MU_CALL",
             raw_source_name=f"{base_source_name}(次)",
             base_source_name=base_source_name,

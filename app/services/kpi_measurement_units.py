@@ -654,7 +654,23 @@ def list_measurement_bindings(
         if status:
             query = query.filter(KpiMeasurementBinding.status == status)
         if search:
-            query = query.filter(KpiMeasurementBinding.base_source_name.contains(search, autoescape=True))
+            like = f"%{search}%"
+            query = query.filter(
+                or_(
+                    KpiMeasurementBinding.metric_resource_id.like(like),
+                    KpiMeasurementBinding.base_source_name.like(like),
+                    KpiMeasurementBinding.measurement_unit_id.like(like),
+                    KpiMeasurementBinding.task_id.like(like),
+                    KpiMeasurementBinding.source_file.like(like),
+                    exists().where(
+                        KpiMeasurementResource.resource_id == KpiMeasurementBinding.measurement_unit_id,
+                        or_(
+                            KpiMeasurementResource.name_zh.like(like),
+                            KpiMeasurementResource.name_en.like(like),
+                        ),
+                    ),
+                )
+            )
         rows = query.order_by(KpiMeasurementBinding.id.desc()).all()
         return {"total": len(rows), "items": [_binding_dict(row) for row in rows]}
 

@@ -2247,6 +2247,7 @@ export interface operations {
                 /** @description 按测量单元资源 ID、中文名或英文名模糊过滤绑定关系。 */
                 unit_search?: string | null;
                 status?: string | null;
+                /** @description 按指标 ID、基础列名、测量单元 ID/名称、任务 ID 或来源文件模糊过滤。 */
                 search?: string | null;
                 page?: number;
                 page_size?: number;

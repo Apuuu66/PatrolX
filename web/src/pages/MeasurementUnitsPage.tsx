@@ -255,7 +255,7 @@ function MeasurementBindingTab() {
         const data = await api.listMeasurementBindings({
           page: nextPage,
           page_size: nextPageSize,
-          unit_search: unitSearch || undefined,
+          search: unitSearch || undefined,
           status,
         });
         setItems(data.items);
@@ -443,7 +443,7 @@ function MeasurementBindingTab() {
   return (
     <Card title="指标绑定关系">
       <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search allowClear placeholder="搜索测量单元 ID / 名称" style={{ width: 280 }} onSearch={(value) => { setUnitSearch(value); setPage(1); setSelectedBindingIds([]); void load(1, pageSize); }} />
+        <Input.Search allowClear placeholder="搜索指标 ID / 列名 / 测量单元" style={{ width: 280 }} onSearch={(value) => { setUnitSearch(value); setPage(1); setSelectedBindingIds([]); void load(1, pageSize); }} />
         <Select allowClear placeholder="绑定状态" style={{ width: 160 }} value={status} onChange={(value) => { setStatus(value); setPage(1); setSelectedBindingIds([]); void load(1, pageSize); }} options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))} />
         <Typography.Text type="secondary">共 {total} 条</Typography.Text>
         {isAdmin ? (

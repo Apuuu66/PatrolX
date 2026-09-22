@@ -900,6 +900,7 @@ paths:
           - type: string
           - type: 'null'
           title: Search
+        description: 按指标 ID、基础列名、测量单元 ID/名称、任务 ID 或来源文件模糊过滤。
       - name: page
         in: query
         required: false
