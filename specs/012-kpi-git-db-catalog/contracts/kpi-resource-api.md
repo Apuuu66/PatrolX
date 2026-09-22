@@ -12,7 +12,7 @@
 | `domain` | string | 可选：`unclassified`、`call`、`api`、`media` |
 | `include_missing` | boolean | 可选，默认 `false`；为 true 时包含数据库中基础数据已移除的失效记录 |
 | `page` | integer | `>=1`，默认 `1` |
-| `page_size` | integer | `1..200`，默认 `20` |
+| `page_size` | integer | `1..200`，默认 `10` |
 
 ### Response 200
 
@@ -32,7 +32,7 @@
   ],
   "total": 1000,
   "page": 1,
-  "page_size": 20,
+  "page_size": 10,
   "base_data_version": "sha256:...",
   "classification_version": 12,
   "summary": {
@@ -99,7 +99,7 @@
 | `operator` | string | 可选 |
 | `domain` | string | 可选：`unclassified`、`call`、`api`、`media` |
 | `page` | integer | `>=1`，默认 `1` |
-| `page_size` | integer | `1..200`，默认 `20` |
+| `page_size` | integer | `1..200`，默认 `10` |
 
 ### Response 200
 
@@ -119,7 +119,7 @@
   ],
   "total": 2,
   "page": 1,
-  "page_size": 20
+  "page_size": 10
 }
 ```
 

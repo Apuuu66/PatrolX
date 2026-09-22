@@ -20,7 +20,7 @@ test("普通 API 请求自动携带登录 token", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push(init ?? {});
-    return new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), {
+    return new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 10 }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

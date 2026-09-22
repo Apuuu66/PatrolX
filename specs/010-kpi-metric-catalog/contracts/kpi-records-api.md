@@ -33,7 +33,7 @@ GET /api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records
 | `period_minutes` | integer | 否 | `5/15/30/60`。 |
 | `status` | string | 否 | `pass`、`warn`、`fail`、`neutral`、`unavailable`。 |
 | `page` | integer | 否 | 默认 `1`，最小 `1`。 |
-| `page_size` | integer | 否 | 默认 `50`，最小 `1`，最大 `200`。 |
+| `page_size` | integer | 否 | 默认 `10`，最小 `1`，最大 `200`。 |
 
 ### 响应
 
@@ -41,7 +41,7 @@ GET /api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records
 {
   "total": 120,
   "page": 1,
-  "page_size": 50,
+  "page_size": 10,
   "items": [
     {
       "metric_key": "call_success_rate",

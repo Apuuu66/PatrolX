@@ -80,7 +80,7 @@ export function InspectorsPage() {
         </Space>
       }
     >
-      <Table rowKey="code" size="small" loading={loading} dataSource={filtered} columns={columns} pagination={{ pageSize: 20 }} />
+      <Table rowKey="code" size="small" loading={loading} dataSource={filtered} columns={columns} pagination={{ pageSize: 10 }} />
     </Card>
   );
 }

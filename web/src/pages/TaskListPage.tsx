@@ -262,7 +262,7 @@ export function TaskListPage() {
   const [items, setItems] = useState<TaskSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const [status, setStatus] = useState<TaskStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);

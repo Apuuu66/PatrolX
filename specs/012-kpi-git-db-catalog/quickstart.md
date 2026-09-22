@@ -62,7 +62,7 @@ http://127.0.0.1:5173/kpi-resources
 API 抽查：
 
 ```bash
-curl -s 'http://127.0.0.1:8000/api/v3/kpi/resource-metrics?page=1&page_size=20'
+curl -s 'http://127.0.0.1:8000/api/v3/kpi/resource-metrics?page=1&page_size=10'
 curl -s -X PUT 'http://127.0.0.1:8000/api/v3/kpi/resource-metrics/classification' \
   -H 'Content-Type: application/json' \
   -d '{"metric_keys":["<key>"],"domain":"call","operator":"quickstart"}'
@@ -73,7 +73,7 @@ curl -s -X PUT 'http://127.0.0.1:8000/api/v3/kpi/resource-metrics/classification
 分类审计抽查：
 
 ```bash
-curl -s 'http://127.0.0.1:8000/api/v3/kpi/resource-metrics/classification-audits?page=1&page_size=20'
+curl -s 'http://127.0.0.1:8000/api/v3/kpi/resource-metrics/classification-audits?page=1&page_size=10'
 ```
 
 期望审计记录包含操作时间、操作类型、操作人、来源状态和目标状态。Web 页面也可分页查看审计。

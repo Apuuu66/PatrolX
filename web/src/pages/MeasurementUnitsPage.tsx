@@ -32,7 +32,7 @@ function MeasurementUnitTab() {
   const [items, setItems] = useState<MeasurementUnit[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -212,7 +212,7 @@ function MeasurementBindingTab() {
   const [items, setItems] = useState<MeasurementBinding[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const [unitSearch, setUnitSearch] = useState("");
   const [status, setStatus] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);

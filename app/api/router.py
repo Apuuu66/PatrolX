@@ -191,7 +191,7 @@ def get_overview_v2() -> OverviewSummary:
 @router.get("/tasks", response_model=TaskListResponse, operation_id="listTasksV2")
 def list_tasks_v2(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(10, ge=1, le=100),
     status: str | None = None,
 ) -> TaskListResponse:
     items, total = task_service.list_tasks(page, page_size, status)
@@ -452,7 +452,7 @@ def list_kpi_measurement_units_v5(
     search: str | None = Query(default=None),
     enabled: bool | None = Query(default=None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
+    page_size: int = Query(10, ge=1, le=200),
 ) -> KpiMeasurementUnitList:
     result = list_measurement_units(search=search, enabled=enabled)
     start = (page - 1) * page_size
@@ -488,7 +488,7 @@ def list_kpi_measurement_bindings_v5(
     status: str | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
+    page_size: int = Query(10, ge=1, le=200),
 ) -> KpiMeasurementBindingList:
     result = list_measurement_bindings(measurement_unit_id, status, search)
     start = (page - 1) * page_size
@@ -568,7 +568,7 @@ def auth_me(user=Depends(get_current_user)) -> UserInfoV1:
 @v1_router.get("/users", response_model=UserListResponseV1, operation_id="listUsersV1")
 def list_users_v1(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
+    page_size: int = Query(10, ge=1, le=200),
     _auth: AuthSession = Depends(require_role("admin")),
 ) -> UserListResponseV1:
     try:

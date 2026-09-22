@@ -101,7 +101,7 @@ paths:
           type: integer
           maximum: 200
           minimum: 1
-          default: 20
+          default: 10
           title: Page Size
       - name: authorization
         in: header
@@ -300,7 +300,7 @@ paths:
           type: integer
           maximum: 100
           minimum: 1
-          default: 20
+          default: 10
           title: Page Size
       - name: status
         in: query
@@ -706,7 +706,7 @@ paths:
           type: integer
           maximum: 200
           minimum: 1
-          default: 20
+          default: 10
           title: Page Size
       responses:
         '200':
@@ -807,7 +807,7 @@ paths:
           type: integer
           maximum: 200
           minimum: 1
-          default: 20
+          default: 10
           title: Page Size
       responses:
         '200':

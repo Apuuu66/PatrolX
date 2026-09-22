@@ -88,7 +88,7 @@ def change_password(username: str, old_password: str, new_password: str) -> None
         raise AuthError("database_unavailable", "数据库不可用", 500, {"reason": str(exc)}) from exc
 
 
-def list_users(page: int = 1, page_size: int = 20) -> dict[str, object]:
+def list_users(page: int = 1, page_size: int = 10) -> dict[str, object]:
     """返回认证用户台账；仅认证管理服务使用。"""
     offset = (page - 1) * page_size
     try:
