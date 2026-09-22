@@ -114,21 +114,13 @@ class RuleRegistry:
         if settings.scan_rules.exists():
             scan_config = load_scan_config(settings.scan_rules)
             self.resolve_scan_refs(scan_config.groups)
-            self._apply_disabled_rules(scan_config.disabled_rules)
+            self._validate_disabled_rules(scan_config.disabled_rules)
 
-    def _apply_disabled_rules(self, disabled_rules: list[str] | tuple[str, ...]) -> None:
-        """从注册表中移除禁用规则及其私有 prepare。"""
+    def _validate_disabled_rules(self, disabled_rules: list[str] | tuple[str, ...]) -> None:
+        """校验配置中的禁用规则；注册表继续装载全部规则供 UI 和重新启用使用。"""
         unknown = [code for code in disabled_rules if code not in self._rules]
         if unknown:
             raise ValueError(f"禁用规则未注册: {unknown[0]}")
-
-        for code in disabled_rules:
-            rule = self._rules.pop(code, None)
-            if rule is None:
-                continue
-            prepare = self._prepare_by_owner.pop(code, None)
-            if prepare is not None:
-                self._prepares.pop(prepare.code, None)
 
 
 registry = RuleRegistry()

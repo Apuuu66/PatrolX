@@ -584,6 +584,105 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/inspector-states:
+    get:
+      summary: List Inspector States V2
+      description: 返回普通规则启停状态分页列表。
+      operationId: listInspectorStatesV2
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Page Size
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectorStateListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/inspector-states/{rule_code}/enabled:
+    put:
+      summary: Update Inspector State V2
+      description: 更新一条普通规则的启停状态。
+      operationId: updateInspectorStateV2
+      parameters:
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleStateUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectorState'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/dicts:
     get:
       summary: List Dicts V2
@@ -1220,6 +1319,62 @@ components:
       - priority
       - rule_version
       title: InspectorInfo
+    InspectorState:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        category:
+          $ref: '#/components/schemas/RuleCategory'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        enabled:
+          type: boolean
+          title: Enabled
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - code
+      - name
+      - category
+      - priority
+      - enabled
+      - updated_at
+      title: InspectorState
+      description: 分页规则状态列表中的一条普通规则。
+    InspectorStateListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/InspectorState'
+          type: array
+          title: Items
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+        page_size:
+          type: integer
+          maximum: 100.0
+          minimum: 1.0
+          title: Page Size
+      type: object
+      required:
+      - total
+      - page
+      - page_size
+      title: InspectorStateListResponse
+      description: 规则启停状态分页契约；默认每页 10 条。
     KpiMeasurementBinding:
       properties:
         id:
@@ -1828,6 +1983,16 @@ components:
       - status
       - severity
       title: RuleResult
+    RuleStateUpdateRequest:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+      type: object
+      required:
+      - enabled
+      title: RuleStateUpdateRequest
+      description: 规则启停状态更新请求。
     RuleStatus:
       type: string
       enum:

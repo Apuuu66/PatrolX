@@ -25,6 +25,8 @@ from app.models.schemas import (
     DictUpdateRequest,
     InspectionTask,
     InspectorInfo,
+    InspectorState,
+    InspectorStateListResponse,
     KpiMeasurementBindingList,
     KpiMeasurementBindingStatusRequest,
     KpiMeasurementDerived,
@@ -39,6 +41,7 @@ from app.models.schemas import (
     RebuildRequest,
     RerunRequest,
     RuleResult,
+    RuleStateUpdateRequest,
     SystemInspection,
     TaskCreated,
     TaskListResponse,
@@ -73,6 +76,7 @@ from app.services.kpi_measurement_units import (
     set_measurement_unit_enabled,
 )
 from app.services.overview import build_overview
+from app.services.rule_states import RuleStateError, list_rule_states, update_rule_state
 from app.services.store import load_rule_result
 from app.services.tasks import DeleteResult, TaskDeleteError, TaskRebuildError, task_service
 
@@ -255,7 +259,11 @@ def rerun_task_v2(
         unknown = [code for code in codes if code not in registered]
         if unknown:
             raise AppError("unknown_rule", f"规则不存在: {', '.join(unknown)}", 400)
-    if not task_service.rerun(task_id, codes):
+    try:
+        accepted = task_service.rerun(task_id, codes)
+    except TaskRebuildError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code) from exc
+    if not accepted:
         raise AppError("not_found", "任务不存在或数据包缺失", 404)
     return TaskCreated(task_id=task_id)
 
@@ -391,6 +399,50 @@ def list_inspectors_v2(category: str | None = None, include_hidden: bool = False
         )
         for r in rules
     ]
+
+
+@router.get(
+    "/inspector-states",
+    response_model=InspectorStateListResponse,
+    operation_id="listInspectorStatesV2",
+)
+def list_inspector_states_v2(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    category: str | None = None,
+    enabled: bool | None = None,
+    search: str | None = None,
+) -> InspectorStateListResponse:
+    """返回普通规则启停状态分页列表。"""
+    try:
+        return list_rule_states(
+            page,
+            page_size,
+            category=category,
+            enabled=enabled,
+            search=search,
+        )
+    except ValueError as exc:
+        raise AppError("invalid_scan_config", str(exc), 400) from exc
+
+
+@router.put(
+    "/inspector-states/{rule_code}/enabled",
+    response_model=InspectorState,
+    operation_id="updateInspectorStateV2",
+)
+def update_inspector_state_v2(
+    body: RuleStateUpdateRequest,
+    rule_code: str = PathParam(),
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> InspectorState:
+    """更新一条普通规则的启停状态。"""
+    try:
+        return update_rule_state(rule_code, body.enabled)
+    except RuleStateError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code) from exc
+    except ValueError as exc:
+        raise AppError("invalid_scan_config", str(exc), 400) from exc
 
 
 @router.get("/dicts", response_model=DictsResponse, operation_id="listDictsV2")

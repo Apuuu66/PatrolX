@@ -164,7 +164,11 @@ def preview_directory(directory: str | Path = DEFAULT_RESOURCE_DIR, limit: int =
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="预览固定目录下的测量单元资源 CSV；不导入数据库")
-    parser.add_argument("--dir", default=str(DEFAULT_RESOURCE_DIR), help="资源 CSV 目录（默认 local_run/resource_metrics）")
+    parser.add_argument(
+        "--dir",
+        default=str(DEFAULT_RESOURCE_DIR),
+        help="资源 CSV 目录（默认 local_run/resource_metrics）",
+    )
     parser.add_argument("--limit", type=int, default=50, help="每个文件最多展示的行数（默认 50）")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     args = parser.parse_args()

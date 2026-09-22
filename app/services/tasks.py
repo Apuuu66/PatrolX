@@ -30,6 +30,7 @@ from app.models.schemas import (
 )
 from app.services import preparation, store
 from app.services.extraction.layout import PathLimitPolicy
+from app.services.rule_states import RuleStateError, assert_rule_enabled, ensure_rule_states
 from app.services.store import append_log, load_task_meta
 
 logger = get_logger("patrolx.tasks")
@@ -515,6 +516,12 @@ class TaskService:
             package = settings.uploads / package_file
         if not package.exists():
             return False
+        ensure_rule_states()
+        for code in rule_codes or []:
+            try:
+                assert_rule_enabled(code)
+            except RuleStateError as exc:
+                raise TaskRebuildError(exc.code, exc.message, exc.status_code) from exc
         self._rerun_plan[task_id] = rule_codes
         pending_task = task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
         store.save_task_meta(settings.output, pending_task)
@@ -527,10 +534,6 @@ class TaskService:
         with self._state_lock:
             if self._active_task == task_id or task_id in self._cancelled:
                 raise TaskRebuildError("task_busy", "任务正在排队或执行，不能重建", 409)
-
-        task, package = self._rebuild_package(task_id)
-        if task.status in {TaskStatus.PENDING, TaskStatus.RUNNING}:
-            raise TaskRebuildError("task_busy", "任务正在排队或执行，不能重建", 409)
 
         rule_codes: list[str] = []
         if request.mode == RebuildMode.INCREMENTAL:
@@ -551,6 +554,16 @@ class TaskService:
                     400,
                 )
             rule_codes = list(request.rule_codes or [])
+            ensure_rule_states()
+            for code in rule_codes:
+                try:
+                    assert_rule_enabled(code)
+                except RuleStateError as exc:
+                    raise TaskRebuildError(exc.code, exc.message, exc.status_code) from exc
+
+        task, package = self._rebuild_package(task_id)
+        if task.status in {TaskStatus.PENDING, TaskStatus.RUNNING}:
+            raise TaskRebuildError("task_busy", "任务正在排队或执行，不能重建", 409)
         plan = RebuildPlan(
             mode=request.mode,
             rule_codes=rule_codes,

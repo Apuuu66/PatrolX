@@ -9,6 +9,8 @@ export type RuleResult = components["schemas"]["RuleResult"];
 export type RuleStatus = components["schemas"]["RuleStatus"];
 export type Severity = components["schemas"]["Severity"];
 export type InspectorInfo = components["schemas"]["InspectorInfo"];
+export type InspectorState = components["schemas"]["InspectorState"];
+export type InspectorStateList = components["schemas"]["InspectorStateListResponse"];
 export type MeasurementUnit = components["schemas"]["KpiMeasurementUnit"];
 export type MeasurementUnitList = components["schemas"]["KpiMeasurementUnitList"];
 export type MeasurementUnitImportResult = components["schemas"]["KpiMeasurementImportResult"];
@@ -216,6 +218,22 @@ export const api = {
     const qs = params.toString();
     return request<InspectorInfo[]>(`${BASE}/inspectors${qs ? `?${qs}` : ""}`);
   },
+
+  listInspectorStates: (query: { page?: number; page_size?: number; category?: string; enabled?: boolean; search?: string } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<InspectorStateList>(`${BASE}/inspector-states${qs ? `?${qs}` : ""}`);
+  },
+
+  setInspectorStateEnabled: (ruleCode: string, enabled: boolean) =>
+    request<InspectorState>(`${BASE}/inspector-states/${encodeURIComponent(ruleCode)}/enabled`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    }),
 
   listDicts: () => request<DictsResponse>(`${BASE}/dicts`),
   importMeasurementUnits: (file: File) => {

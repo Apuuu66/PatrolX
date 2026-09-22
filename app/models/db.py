@@ -141,3 +141,13 @@ class AuthSession(Base):
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class RuleState(Base):
+    """界面管理的普通规则启停状态。"""
+
+    __tablename__ = "rule_states"
+
+    rule_code: Mapped[str] = mapped_column(String(128), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(default=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

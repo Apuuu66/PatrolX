@@ -35,10 +35,15 @@ def test_load_all_resolves_declared_source_refs() -> None:
     assert (settings.config / "scan_rules.yaml").is_file()
 
 
-def test_load_all_hides_disabled_rules_and_their_prepares() -> None:
-    """禁用规则不进入规则计划，也不能通过私有 prepare 影响任务。"""
-    registry.load_all()
+def test_load_all_retains_disabled_rules_and_their_prepares() -> None:
+    """配置禁用只影响执行计划；注册表仍保留规则元数据和私有 prepare。"""
+    from app.services.executor import Executor
+    from app.services.rule_states import get_enabled_rule_codes
 
-    assert DISABLED_RULES.isdisjoint(set(registry.codes()))
+    registry.load_all()
+    rules = {rule.code: rule for rule in registry.all()}
+    assert DISABLED_RULES <= set(rules)
     for code in DISABLED_RULES:
-        assert registry.prepare_for_owner(code) is None
+        assert not rules[code].hidden
+
+    assert DISABLED_RULES.isdisjoint(Executor(registry, get_enabled_rule_codes()).inspect_plan())

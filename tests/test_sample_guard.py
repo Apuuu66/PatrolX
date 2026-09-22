@@ -2,6 +2,7 @@
 
 from app.inspectors.registry import registry
 from app.services.executor import Executor
+from app.services.rule_states import get_enabled_rule_codes
 from tests.baseline_helpers import setup_env
 from tests.fixtures.make_real_package import build_real_package
 
@@ -18,7 +19,7 @@ def test_real_package_covers_app_scene_rules(tmp_path, monkeypatch) -> None:
     from app.cli import run_task
 
     registry.load_all()
-    expected_codes = set(Executor(registry).inspect_plan())
+    expected_codes = set(Executor(registry, get_enabled_rule_codes()).inspect_plan())
     assert expected_codes, "普通规则计划不能为空"
     assert CALL_KPI_RULES <= expected_codes
 

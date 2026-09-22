@@ -280,6 +280,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/inspector-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Inspector States V2
+         * @description 返回普通规则启停状态分页列表。
+         */
+        get: operations["listInspectorStatesV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inspector-states/{rule_code}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Inspector State V2
+         * @description 更新一条普通规则的启停状态。
+         */
+        put: operations["updateInspectorStateV2"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/dicts": {
         parameters: {
             query?: never;
@@ -589,6 +629,39 @@ export interface components {
                 [key: string]: string;
             }[];
         };
+        /**
+         * InspectorState
+         * @description 分页规则状态列表中的一条普通规则。
+         */
+        InspectorState: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            category: components["schemas"]["RuleCategory"];
+            priority: components["schemas"]["Priority"];
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * InspectorStateListResponse
+         * @description 规则启停状态分页契约；默认每页 10 条。
+         */
+        InspectorStateListResponse: {
+            /** Items */
+            items?: components["schemas"]["InspectorState"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** KpiMeasurementBinding */
         KpiMeasurementBinding: {
             /** Id */
@@ -892,6 +965,14 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * RuleStateUpdateRequest
+         * @description 规则启停状态更新请求。
+         */
+        RuleStateUpdateRequest: {
+            /** Enabled */
+            enabled: boolean;
         };
         /**
          * RuleStatus
@@ -1741,6 +1822,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InspectorInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listInspectorStatesV2: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                category?: string | null;
+                enabled?: boolean | null;
+                search?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorStateListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateInspectorStateV2: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rule_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleStateUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorState"];
                 };
             };
             /** @description Validation Error */

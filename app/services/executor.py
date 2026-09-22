@@ -68,8 +68,9 @@ class RuleContext:
 
 
 class Executor:
-    def __init__(self, registry: RuleRegistry) -> None:
+    def __init__(self, registry: RuleRegistry, enabled_rules: set[str] | None = None) -> None:
         self.registry = registry
+        self.enabled_rules = enabled_rules
         self.collected: dict[str, RuleResult] = {}
 
     def extract_plan(self) -> list[str]:
@@ -80,13 +81,16 @@ class Executor:
             key=lambda code: (0 if code == "pkg.extract.main" else 1, code),
         )
 
+    def _owner_enabled(self, owner_code: str) -> bool:
+        return self.enabled_rules is None or owner_code in self.enabled_rules
+
     def prepare_plan(self) -> list[str]:
         """prepare 阶段计划：owner priority → owner code → prepare code。"""
-        return [prepare.code for _owner, prepare in self.registry.prepares()]
+        return [prepare.code for owner, prepare in self.registry.prepares() if self._owner_enabled(owner.code)]
 
     def inspect_plan(self) -> list[str]:
         """普通规则 inspect 计划：priority → code。"""
-        return [rule.code for rule in self.registry.all() if not rule.hidden]
+        return [rule.code for rule in self.registry.all() if not rule.hidden and self._owner_enabled(rule.code)]
 
     def plan(self) -> list[str]:
         """兼容旧调用：返回 extract + inspect 的完整规则序列。"""
@@ -348,7 +352,8 @@ class Executor:
             raise
 
         for owner, prepare in self.registry.prepares():
-            self._run_prepare(owner, prepare, ctx)
+            if self._owner_enabled(owner.code):
+                self._run_prepare(owner, prepare, ctx)
 
         for code in self.inspect_plan():
             results[code] = self.run_one(code, ctx)
@@ -375,6 +380,8 @@ class Executor:
     ) -> RuleResult:
         """单规则重跑：先保证解压现场与 owner prepare 就绪，再只执行目标 inspect。"""
         rule = self.registry.get(code)
+        if not rule.hidden and not self._owner_enabled(code):
+            raise ValueError(f"规则已停用: {code}")
         self._ensure_extraction_site(ctx)
         ctx.ensure_catalog()
         if rule.prepare is not None:

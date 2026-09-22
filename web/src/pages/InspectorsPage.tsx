@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { App, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { App, Card, Input, Select, Space, Switch, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { api, type InspectorInfo } from "../api/http";
-import { SeverityTag } from "../components/StatusBadge";
+import { api, type InspectorState } from "../api/http";
+import { useAuth } from "../auth/AuthContext";
 
 const CATEGORY_LABELS: Record<string, string> = {
   log: "日志",
@@ -16,71 +16,139 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function InspectorsPage() {
   const { message } = App.useApp();
-  const [items, setItems] = useState<InspectorInfo[]>([]);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [items, setItems] = useState<InspectorState[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [updatingCode, setUpdatingCode] = useState<string>();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [category, setCategory] = useState<string | undefined>();
-  const [keyword, setKeyword] = useState("");
+  const [enabled, setEnabled] = useState<boolean | undefined>();
+  const [search, setSearch] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await api.listInspectorStates({ page, page_size: pageSize, category, enabled, search });
+      setItems(result.items ?? []);
+      setTotal(result.total);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "加载失败");
+    } finally {
+      setLoading(false);
+    }
+  }, [category, enabled, message, page, pageSize, search]);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        setItems(await api.listInspectors());
-      } catch (err) {
-        message.error(err instanceof Error ? err.message : "加载失败");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [message]);
+    void load();
+  }, [load]);
 
-  const filtered = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
-    return items.filter((i) => {
-      if (category && i.category !== category) return false;
-      if (kw && !`${i.code} ${i.name} ${i.description ?? ""}`.toLowerCase().includes(kw)) return false;
-      return true;
-    });
-  }, [items, category, keyword]);
+  const updateEnabled = async (rule: InspectorState, nextEnabled: boolean) => {
+    setUpdatingCode(rule.code);
+    try {
+      const updated = await api.setInspectorStateEnabled(rule.code, nextEnabled);
+      setItems((current) => current.map((item) => (item.code === updated.code ? updated : item)));
+      message.success(`规则 ${rule.code} 已${nextEnabled ? "启用" : "停用"}`);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "更新失败");
+    } finally {
+      setUpdatingCode(undefined);
+    }
+  };
 
-  const columns: ColumnsType<InspectorInfo> = [
-    { title: "规则编码", dataIndex: "code", width: 200 },
-    { title: "名称", dataIndex: "name", width: 150 },
+  const columns: ColumnsType<InspectorState> = [
+    { title: "规则编码", dataIndex: "code", width: 220 },
+    { title: "名称", dataIndex: "name", width: 180, ellipsis: true },
     {
       title: "类别",
       dataIndex: "category",
-      width: 90,
-      render: (v: string) => <Tag>{CATEGORY_LABELS[v] ?? v}</Tag>,
+      width: 100,
+      render: (value: string) => <Tag>{CATEGORY_LABELS[value] ?? value}</Tag>,
     },
-    { title: "优先级", dataIndex: "priority", width: 80, render: (v: number) => `P${v}` },
-    { title: "严重度", dataIndex: "severity", width: 90, render: (v: string) => <SeverityTag severity={v} /> },
-    { title: "版本", dataIndex: "rule_version", width: 80 },
-    { title: "描述", dataIndex: "description" },
-    { title: "处理建议", dataIndex: "recommendation" },
+    { title: "优先级", dataIndex: "priority", width: 90, render: (value: number) => `P${value}` },
     {
-      title: "源文件匹配",
-      dataIndex: "source_patterns",
-      width: 220,
-      render: (v: string[]) => (v ?? []).map((i) => <Tag key={i}>{i}</Tag>),
+      title: "启停状态",
+      dataIndex: "enabled",
+      width: 120,
+      render: (value: boolean, record) => (
+        <Switch
+          checked={value}
+          checkedChildren="启用"
+          unCheckedChildren="停用"
+          disabled={!isAdmin}
+          loading={updatingCode === record.code}
+          onChange={(checked) => void updateEnabled(record, checked)}
+        />
+      ),
+    },
+    {
+      title: "更新时间",
+      dataIndex: "updated_at",
+      width: 190,
+      render: (value: string) => new Date(value).toLocaleString("zh-CN", { hour12: false }),
     },
   ];
 
   return (
     <Card
-      title={<Typography.Text strong>规则管理（只读）</Typography.Text>}
+      title={<Typography.Text strong>规则启停管理</Typography.Text>}
       extra={
-        <Space>
+        <Space wrap>
           <Select
             allowClear
             placeholder="类别筛选"
             style={{ width: 120 }}
             options={Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }))}
-            onChange={setCategory}
+            onChange={(value) => {
+              setPage(1);
+              setCategory(value);
+            }}
           />
-          <Input.Search placeholder="搜索编码 / 名称 / 描述" allowClear style={{ width: 240 }} onChange={(e) => setKeyword(e.target.value)} />
+          <Select
+            allowClear
+            placeholder="状态筛选"
+            style={{ width: 110 }}
+            options={[
+              { value: true, label: "已启用" },
+              { value: false, label: "已停用" },
+            ]}
+            onChange={(value) => {
+              setPage(1);
+              setEnabled(value);
+            }}
+          />
+          <Input.Search
+            placeholder="搜索编码 / 名称"
+            allowClear
+            style={{ width: 240 }}
+            onSearch={(value) => {
+              setPage(1);
+              setSearch(value.trim());
+            }}
+          />
         </Space>
       }
     >
-      <Table rowKey="code" size="small" loading={loading} dataSource={filtered} columns={columns} pagination={{ pageSize: 10 }} />
+      <Table
+        rowKey="code"
+        size="small"
+        loading={loading}
+        dataSource={items}
+        columns={columns}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showSizeChanger: true,
+          showTotal: (value) => `共 ${value} 条`,
+          onChange: (nextPage, nextPageSize) => {
+            setPage(nextPage);
+            setPageSize(nextPageSize);
+          },
+        }}
+      />
     </Card>
   );
 }

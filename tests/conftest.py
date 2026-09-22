@@ -36,6 +36,7 @@ def _clean_measurement_unit_tables() -> None:
         KpiMeasurementBinding,
         KpiMeasurementDerived,
         KpiMeasurementResource,
+        RuleState,
         init_db,
         session_factory,
     )
@@ -45,10 +46,12 @@ def _clean_measurement_unit_tables() -> None:
         session.query(KpiMeasurementBinding).delete()
         session.query(KpiMeasurementDerived).delete()
         session.query(KpiMeasurementResource).delete()
+        session.query(RuleState).delete()
         session.commit()
     yield
     with session_factory() as session:
         session.query(KpiMeasurementBinding).delete()
         session.query(KpiMeasurementDerived).delete()
         session.query(KpiMeasurementResource).delete()
+        session.query(RuleState).delete()
         session.commit()

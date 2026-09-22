@@ -34,6 +34,7 @@ from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext
 from app.services.extraction import WORK_CATEGORIES
 from app.services.report import render_report
+from app.services.rule_states import assert_rule_enabled, get_enabled_rule_codes
 
 
 def _now() -> datetime:
@@ -102,9 +103,10 @@ def _rebuild_system(
     package_name: str,
     customer: dict,
     version: str | None,
+    enabled_rules: set[str] | None = None,
 ) -> SystemInspection:
     """单规则重跑后重建 system.json（保持摘要一致）。"""
-    plan = Executor(registry).inspect_plan()
+    plan = Executor(registry, enabled_rules).inspect_plan()
     results = [store.load_rule_result(settings.output, task_id, code) for code in plan]
     results = [result for result in results if result is not None and not registry.get(result.code).hidden]
     for index, result in enumerate(results):
@@ -139,6 +141,7 @@ def run_task(
     created_at: datetime | None = None,
 ) -> InspectionTask:
     registry.load_all()
+    enabled_rules = get_enabled_rule_codes()
     task_id = task_id or generate_task_id(package.name)
     store.append_log(
         settings.output,
@@ -151,7 +154,7 @@ def run_task(
         trigger=trigger.value,
     )
     ctx = _new_context(task_id, package)
-    executor = Executor(registry)
+    executor = Executor(registry, enabled_rules)
     results = executor.run_all(ctx)
     main_result = results.get("pkg.extract.main")
     if main_result is not None and main_result.status == RuleStatus.ERROR:
@@ -257,13 +260,16 @@ def run_incremental_rebuild(
     if not rule_codes:
         raise ValueError("增量重建必须指定至少一条普通规则")
     registry.load_all()
+    enabled_rules = get_enabled_rule_codes()
+    for code in rule_codes:
+        assert_rule_enabled(code)
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
     task_dir = settings.output / task_id
 
     checksum = package_checksum or sha256_file(package)
     ctx = _new_context(task_id, package, checksum)
-    executor = Executor(registry)
+    executor = Executor(registry, enabled_rules)
 
     # 只删除解压 manifest 和工作分类目录；规则结果、prepared 数据与任务元数据保留。
     extraction_manifest = task_dir / EXTRACT_MANIFEST
@@ -287,7 +293,7 @@ def run_incremental_rebuild(
     old = _load_old_task(task_id)
     customer = (old or {}).get("system", {}).get("customer") or {}
     version = (old or {}).get("system", {}).get("version")
-    system = _rebuild_system(task_id, package.name, customer, version)
+    system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
     store.save_system(settings.output, task_id, system)
     if old is not None:
         current_meta = store.load_task_meta(settings.output, task_id)
@@ -330,11 +336,13 @@ def run_single_rule(
     package_checksum: str | None = None,
 ) -> None:
     registry.load_all()
+    assert_rule_enabled(code)
+    enabled_rules = get_enabled_rule_codes()
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
     task_path = settings.output / task_id / "task.json"
     ctx = _new_context(task_id, package, package_checksum)
-    executor = Executor(registry)
+    executor = Executor(registry, enabled_rules)
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
         store.save_rule_result(settings.output, task_id, extraction)
@@ -351,7 +359,7 @@ def run_single_rule(
     old = _load_old_task(task_id) or {}
     customer = old.get("system", {}).get("customer") or {}
     version = old.get("system", {}).get("version")
-    system = _rebuild_system(task_id, package.name, customer, version)
+    system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
     store.save_system(settings.output, task_id, system)
     if old:
         old["completed_at"] = store.now_utc()

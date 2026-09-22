@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StrictBool, model_validator
 
 
 class TaskStatus(StrEnum):
@@ -247,6 +247,32 @@ class TaskListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class InspectorState(BaseModel):
+    """分页规则状态列表中的一条普通规则。"""
+
+    code: str
+    name: str
+    category: RuleCategory
+    priority: Priority
+    enabled: bool
+    updated_at: datetime
+
+
+class InspectorStateListResponse(BaseModel):
+    """规则启停状态分页契约；默认每页 10 条。"""
+
+    items: list[InspectorState] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
+
+
+class RuleStateUpdateRequest(BaseModel):
+    """规则启停状态更新请求。"""
+
+    enabled: StrictBool
 
 
 class OverviewSummary(BaseModel):
