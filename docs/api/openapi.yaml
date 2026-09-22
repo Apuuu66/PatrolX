@@ -1574,9 +1574,17 @@ components:
           - type: string
           - type: 'null'
           title: Metric Resource Id
+        metric_resource_name_zh:
+          type: string
+          nullable: true
+          title: Metric Resource Name Zh
         measurement_unit_id:
           type: string
           title: Measurement Unit Id
+        measurement_unit_name_zh:
+          type: string
+          nullable: true
+          title: Measurement Unit Name Zh
         raw_source_name:
           type: string
           title: Raw Source Name

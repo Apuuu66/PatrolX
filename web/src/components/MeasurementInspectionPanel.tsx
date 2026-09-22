@@ -1,6 +1,7 @@
 import { Card, Descriptions, Empty, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useMemo } from "react";
+import { ResourceNameCell } from "./ResourceNameCell";
 import type { MeasurementMetadataMetric, MeasurementMetadataUnit } from "../api/http";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -90,7 +91,14 @@ export function MeasurementInspectionPanel({ metadata }: { metadata?: Record<str
               rowKey={(metric) => `${metric.metric_resource_id}-${metric.raw_source_name}`}
               size="small"
               columns={[
-                { title: "指标 ID", dataIndex: "metric_resource_id", key: "metric_resource_id" },
+                {
+                  title: "指标",
+                  dataIndex: "metric_resource_id",
+                  key: "metric_resource_id",
+                  render: (_: unknown, metric: MeasurementMetadataMetric) => (
+                    <ResourceNameCell name={metric.metric_resource_name_zh || metric.base_source_name} id={metric.metric_resource_id} />
+                  ),
+                },
                 { title: "CSV 列名", dataIndex: "raw_source_name", key: "raw_source_name" },
                 { title: "单位", dataIndex: "display_unit", key: "display_unit", render: (value) => value || "-" },
                 {
@@ -115,12 +123,19 @@ export function MeasurementInspectionPanel({ metadata }: { metadata?: Record<str
             />
 
             {(unit.derived_metrics ?? []).length > 0 && (
-              <Card type="inner" title="派生指标（成功率）" size="small" style={{ marginTop: 12 }}>
+              <Card type="inner" title="派生指标" size="small" style={{ marginTop: 12 }}>
                 <Table
                   rowKey="metric_resource_id"
                   size="small"
                   columns={[
-                    { title: "派生指标", dataIndex: "metric_resource_id", key: "metric_resource_id" },
+                    {
+                      title: "派生指标",
+                      dataIndex: "metric_resource_id",
+                      key: "metric_resource_id",
+                      render: (_: unknown, metric: NonNullable<MeasurementMetadataUnit["derived_metrics"]>[number]) => (
+                        <ResourceNameCell name={metric.metric_resource_name_zh} id={metric.metric_resource_id} />
+                      ),
+                    },
                     {
                       title: "状态",
                       dataIndex: "status",

@@ -397,7 +397,9 @@ class KpiMeasurementEnabledRequest(BaseModel):
 class KpiMeasurementBinding(BaseModel):
     id: int
     metric_resource_id: str | None
+    metric_resource_name_zh: str | None = None
     measurement_unit_id: str
+    measurement_unit_name_zh: str | None = None
     raw_source_name: str
     base_source_name: str
     display_unit: str | None

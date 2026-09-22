@@ -40,6 +40,7 @@ export interface MeasurementMetadataMetricObservation {
 }
 export interface MeasurementMetadataMetric {
   metric_resource_id: string;
+  metric_resource_name_zh?: string | null;
   raw_source_name: string;
   base_source_name?: string;
   display_unit?: string | null;
@@ -76,6 +77,7 @@ export interface MeasurementMetadataUnit {
   source_files?: string[];
   derived_metrics?: {
     metric_resource_id: string;
+    metric_resource_name_zh?: string | null;
     template: string;
     status: "pass" | "warn" | "fail";
     message?: string | null;

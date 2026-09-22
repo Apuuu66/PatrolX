@@ -344,6 +344,8 @@ def test_derived_reverse_success_rate_complements_success_rate(tmp_path: Path) -
 
     result = inspect_measurement_files("task-reverse-rate", [(path.name, path)])
     derived = result["measurement_units"][0]["derived_metrics"][0]
+    assert derived["metric_resource_name_zh"] == "反向成功率"
+    assert result["measurement_units"][0]["metrics"][0]["metric_resource_name_zh"] == "呼叫请求次数"
     assert derived["template"] == "reverse_success_rate"
     assert derived["status"] == "pass"
     assert [(item["object_key"], item["value"], item["message"]) for item in derived["observations"]] == [

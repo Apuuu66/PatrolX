@@ -609,11 +609,26 @@ def list_measurement_resources(
         }
 
 
-def _binding_dict(row: KpiMeasurementBinding) -> dict[str, Any]:
+def _resource_name_map(session: Any, resource_ids: Iterable[str | None]) -> dict[str, str]:
+    """加载指定资源的中文名映射，供列表展示时避免逐行查询。"""
+    normalized_ids = sorted({resource_id for resource_id in resource_ids if resource_id})
+    if not normalized_ids:
+        return {}
+    rows = session.query(KpiMeasurementResource).filter(KpiMeasurementResource.resource_id.in_(normalized_ids)).all()
+    return {row.resource_id: row.name_zh for row in rows}
+
+
+def _binding_dict(
+    row: KpiMeasurementBinding,
+    resource_names: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    names = resource_names or {}
     return {
         "id": row.id,
         "metric_resource_id": row.metric_resource_id,
+        "metric_resource_name_zh": names.get(row.metric_resource_id or ""),
         "measurement_unit_id": row.measurement_unit_id,
+        "measurement_unit_name_zh": names.get(row.measurement_unit_id),
         "raw_source_name": row.raw_source_name,
         "base_source_name": row.base_source_name,
         "display_unit": row.display_unit,
@@ -672,7 +687,11 @@ def list_measurement_bindings(
                 )
             )
         rows = query.order_by(KpiMeasurementBinding.id.desc()).all()
-        return {"total": len(rows), "items": [_binding_dict(row) for row in rows]}
+        names = _resource_name_map(
+            session,
+            [row.metric_resource_id for row in rows] + [row.measurement_unit_id for row in rows],
+        )
+        return {"total": len(rows), "items": [_binding_dict(row, names) for row in rows]}
 
 
 def set_measurement_binding_status(binding_id: int, status: str, enabled: bool | None = None) -> dict[str, Any]:
@@ -865,6 +884,20 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
         by_unit: dict[str, list[KpiMeasurementBinding]] = {}
         for binding in bindings:
             by_unit.setdefault(binding.measurement_unit_id, []).append(binding)
+        derived_metric_ids = (
+            session.query(KpiMeasurementDerived.metric_resource_id)
+            .filter(
+                KpiMeasurementDerived.measurement_unit_id.in_(list(by_unit)),
+                KpiMeasurementDerived.enabled.is_(True),
+            )
+            .all()
+        )
+        resource_names = _resource_name_map(
+            session,
+            [binding.metric_resource_id for binding in bindings]
+            + list(by_unit)
+            + [row[0] for row in derived_metric_ids],
+        )
         for file_result in matched:
             unit_id = file_result["measurement_unit_id"]
             unit = session.get(KpiMeasurementResource, unit_id)
@@ -920,6 +953,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                     if metric_result is None:
                         result["metric_results"][metric_key] = {
                             "metric_resource_id": binding.metric_resource_id,
+                            "metric_resource_name_zh": resource_names.get(binding.metric_resource_id or ""),
                             "raw_source_name": binding.raw_source_name,
                             "base_source_name": binding.base_source_name,
                             "display_unit": binding.display_unit,
@@ -980,6 +1014,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 if metric_result is None:
                     result["metric_results"][metric_key] = {
                         "metric_resource_id": binding.metric_resource_id,
+                        "metric_resource_name_zh": resource_names.get(binding.metric_resource_id or ""),
                         "raw_source_name": binding.raw_source_name,
                         "base_source_name": binding.base_source_name,
                         "display_unit": binding.display_unit,
@@ -1027,6 +1062,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 finalized_metrics.append(
                     {
                         "metric_resource_id": metric_result["metric_resource_id"],
+                        "metric_resource_name_zh": metric_result.get("metric_resource_name_zh"),
                         "raw_source_name": metric_result["raw_source_name"],
                         "base_source_name": metric_result["base_source_name"],
                         "display_unit": metric_result["display_unit"],
@@ -1092,6 +1128,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                     result["derived_metrics"].append(
                         {
                             "metric_resource_id": derived.metric_resource_id,
+                            "metric_resource_name_zh": resource_names.get(derived.metric_resource_id),
                             "template": derived.template,
                             "status": "fail",
                             "message": "依赖指标缺失",
@@ -1144,6 +1181,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 result["derived_metrics"].append(
                     {
                         "metric_resource_id": derived.metric_resource_id,
+                        "metric_resource_name_zh": resource_names.get(derived.metric_resource_id),
                         "template": derived.template,
                         "status": "fail" if derived_failed else "pass",
                         "message": "依赖指标缺失或不可读" if derived_failed else None,

@@ -51,6 +51,9 @@ def test_binding_list_and_status_api() -> None:
         listed = client.get("/api/v5/kpi/measurement-bindings")
         assert listed.status_code == 200, listed.text
         assert listed.json()["total"] == 1
+        item = listed.json()["items"][0]
+        assert item["metric_resource_name_zh"] == "呼叫请求次数"
+        assert item["measurement_unit_name_zh"] == "呼叫统计"
 
         for query in ("MU_", "呼叫", "Call"):
             searched = client.get("/api/v5/kpi/measurement-bindings", params={"unit_search": query})

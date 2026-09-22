@@ -736,8 +736,12 @@ export interface components {
             id: number;
             /** Metric Resource Id */
             metric_resource_id: string | null;
+            /** Metric Resource Name Zh */
+            metric_resource_name_zh?: string | null;
             /** Measurement Unit Id */
             measurement_unit_id: string;
+            /** Measurement Unit Name Zh */
+            measurement_unit_name_zh?: string | null;
             /** Raw Source Name */
             raw_source_name: string;
             /** Base Source Name */

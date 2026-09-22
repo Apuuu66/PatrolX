@@ -5,6 +5,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { api, type MeasurementBinding, type MeasurementBindingBatchConfirmResponse, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
+import { ResourceNameCell } from "../components/ResourceNameCell";
 import { useAuth } from "../auth/AuthContext";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -398,17 +399,20 @@ function MeasurementBindingTab() {
 
   const columns: ColumnsType<MeasurementBinding> = [
     {
-      title: "指标 ID", dataIndex: "metric_resource_id", key: "metric_resource_id",
+      title: "指标", dataIndex: "metric_resource_id", key: "metric_resource_id",
       render: (value: string | null, record) => value ? (
         <Space>
-          <span>{value}</span>
+          <ResourceNameCell name={record.metric_resource_name_zh} id={value} />
           {record.metric_is_manual ? <Tag color="blue">人工注册</Tag> : null}
         </Space>
       ) : "-",
     },
     { title: "CSV 列名", dataIndex: "raw_source_name", key: "raw_source_name" },
     { title: "基础列名", dataIndex: "base_source_name", key: "base_source_name" },
-    { title: "测量单元", dataIndex: "measurement_unit_id", key: "measurement_unit_id" },
+    {
+      title: "测量单元", dataIndex: "measurement_unit_id", key: "measurement_unit_id",
+      render: (_, record) => <ResourceNameCell name={record.measurement_unit_name_zh} id={record.measurement_unit_id} />,
+    },
     { title: "任务", dataIndex: "task_id", key: "task_id" },
     { title: "来源文件", dataIndex: "source_file", key: "source_file" },
     {
@@ -511,7 +515,7 @@ function MeasurementBindingTab() {
 
       <Modal
         open={editingMetric !== null}
-        title={`编辑人工指标：${editingMetric?.resource_id ?? ""}`}
+        title={editingMetric ? `${editingMetric.name_zh} / ${editingMetric.resource_id}` : "编辑人工指标"}
         confirmLoading={editSubmitting}
         okText="保存"
         onCancel={() => setEditingMetric(null)}
@@ -685,7 +689,7 @@ function MeasurementDerivedTab() {
                 onSearch={(value) => void loadBindingOptions(selectedUnitId || "", value)}
                 options={bindingOptions.map((item) => ({
                   value: item.metric_resource_id,
-                  label: `${item.base_source_name} / ${item.metric_resource_id}`,
+                  label: `${item.metric_resource_name_zh || item.base_source_name} / ${item.metric_resource_id}`,
                 }))}
               />
             </Form.Item>
@@ -700,7 +704,7 @@ function MeasurementDerivedTab() {
                 onSearch={(value) => void loadBindingOptions(selectedUnitId || "", value)}
                 options={bindingOptions.map((item) => ({
                   value: item.metric_resource_id,
-                  label: `${item.base_source_name} / ${item.metric_resource_id}`,
+                  label: `${item.metric_resource_name_zh || item.base_source_name} / ${item.metric_resource_id}`,
                 }))}
               />
             </Form.Item>
