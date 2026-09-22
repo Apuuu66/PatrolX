@@ -3,6 +3,8 @@
 import gzip
 from pathlib import Path
 
+from app.inspectors.log import ccc_service as ccc_service_module
+from app.inspectors.log import ddd_service as ddd_service_module
 from app.inspectors.registry import registry
 from app.models.schemas import RuleStatus
 from app.services.executor import RuleContext
@@ -34,7 +36,12 @@ def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
 
 def _run_rule(code: str, ctx: RuleContext):
     registry.load_all()
-    rule = registry.get(code)
+    if code == ccc_service_module.inspector.code:
+        rule = ccc_service_module.inspector
+    elif code == ddd_service_module.inspector.code:
+        rule = ddd_service_module.inspector
+    else:
+        rule = registry.get(code)
     if rule.prepare is not None:
         rule.prepare.run(ctx)
     return rule.run(ctx)

@@ -8,8 +8,6 @@ from tests.fixtures.make_real_package import build_real_package
 CALL_KPI_RULES = {"kpi.measurement_units"}
 EXPECTED_SKIPS = {
     "kpi.measurement_units",
-    "log.ccc_service",
-    "log.ddd_service",
     "traffic.stat",
 }
 

@@ -596,7 +596,12 @@ groups:
     description: 告警历史 CSV
     source_patterns:
       - '^alarm/(?:.*/)?alarm_history_\d+\.csv$'
+disabled_rules:
+  - 'log.ccc_service'
 ```
+
+`disabled_rules` 用于离线屏蔽调测或暂不投入使用的规则；注册表装载后会同时移除命中的普通规则和其私有
+prepare。该列表只做启动期裁剪，不提供在线编辑接口，规则单元测试可以直接引用规则模块继续验证逻辑。
 
 ```python
 Inspector(

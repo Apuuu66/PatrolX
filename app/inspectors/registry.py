@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
-from app.core.scan_config import load_scan_groups, validate_scan_groups
+from app.core.scan_config import load_scan_config, validate_scan_groups
 from app.inspectors.base import Inspector, PrepareSpec
 
 
@@ -112,7 +112,23 @@ class RuleRegistry:
             importlib.import_module(mod.name)
         self._loaded = True
         if settings.scan_rules.exists():
-            self.resolve_scan_refs(load_scan_groups(settings.scan_rules))
+            scan_config = load_scan_config(settings.scan_rules)
+            self.resolve_scan_refs(scan_config.groups)
+            self._apply_disabled_rules(scan_config.disabled_rules)
+
+    def _apply_disabled_rules(self, disabled_rules: list[str] | tuple[str, ...]) -> None:
+        """从注册表中移除禁用规则及其私有 prepare。"""
+        unknown = [code for code in disabled_rules if code not in self._rules]
+        if unknown:
+            raise ValueError(f"禁用规则未注册: {unknown[0]}")
+
+        for code in disabled_rules:
+            rule = self._rules.pop(code, None)
+            if rule is None:
+                continue
+            prepare = self._prepare_by_owner.pop(code, None)
+            if prepare is not None:
+                self._prepares.pop(prepare.code, None)
 
 
 registry = RuleRegistry()

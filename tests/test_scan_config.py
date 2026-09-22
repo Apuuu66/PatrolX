@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.core.scan_config import load_scan_groups
+from app.core.scan_config import load_scan_config, load_scan_groups
 
 
 def _write_config(path: Path, payload: dict) -> Path:
@@ -28,6 +28,47 @@ def test_load_scan_groups_returns_normalized_groups(tmp_path: Path) -> None:
     )
 
     assert load_scan_groups(path) == {"alarm_history": [r"^alarm/(?:.*/)?alarm_history_\d+\.csv$"]}
+
+
+def test_load_scan_config_returns_groups_and_disabled_rules(tmp_path: Path) -> None:
+    """扫描配置应同时承载扫描组与禁用规则，供注册表一次读取。"""
+    path = _write_config(
+        tmp_path / "scan_rules.yaml",
+        {
+            "version": 1,
+            "groups": {
+                "alarm_history": {"source_patterns": [r"^alarm/(?:.*/)?alarm_history_\d+\.csv$"]},
+            },
+            "disabled_rules": ["log.ccc_service"],
+        },
+    )
+
+    config = load_scan_config(path)
+    assert config.groups == {"alarm_history": [r"^alarm/(?:.*/)?alarm_history_\d+\.csv$"]}
+    assert config.disabled_rules == ("log.ccc_service",)
+
+
+@pytest.mark.parametrize(
+    "disabled_rules",
+    [
+        "log.ccc_service",
+        [""],
+        [1],
+        ["log.ccc_service", "log.ccc_service"],
+    ],
+)
+def test_load_scan_config_rejects_invalid_disabled_rules(tmp_path: Path, disabled_rules: object) -> None:
+    path = _write_config(
+        tmp_path / "scan_rules.yaml",
+        {
+            "version": 1,
+            "groups": {"alarm_history": {"source_patterns": [r"^alarm/.*$"]}},
+            "disabled_rules": disabled_rules,
+        },
+    )
+
+    with pytest.raises(ValueError, match="disabled_rules"):
+        load_scan_config(path)
 
 
 @pytest.mark.parametrize(

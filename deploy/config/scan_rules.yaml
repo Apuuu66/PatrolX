@@ -36,3 +36,9 @@ groups:
     source_patterns:
       - '^kpi/.*\.csv$'
       - '^traffic/.*\.csv$'
+
+# 禁用的规则列表：命中的规则不参与执行计划和 API 展示。
+# 调测/占位规则在确认可用前列入此处。
+disabled_rules:
+  - "log.ccc_service"
+  - "log.ddd_service"
