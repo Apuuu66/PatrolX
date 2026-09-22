@@ -17,7 +17,7 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="2.0.2",
+    rule_version="2.0.3",
     description="按测量单元检查 KPI CSV 的文件归属、指标绑定与数值可读性",
     recommendation="处理未匹配文件，确认指标绑定，并修复空值或解析失败的指标列",
     source_refs=["kpi_all"],
@@ -55,11 +55,13 @@ def _run(ctx: RuleContext) -> object:
             },
         )
     if all(unit["status"] == "skip" for unit in unit_results):
+        unconfirmed_count = sum(1 for unit in unit_results if unit["status"] == "skip")
+        unconfirmed_ratio = f"{unconfirmed_count}/{len(unit_results)}"
         return make_result(
             inspector,
             status=RuleStatus.SKIP,
-            summary="测量单元尚未确认指标绑定",
-            skip_reason="所有匹配测量单元均未确认指标绑定",
+            summary=f"测量单元尚未确认指标绑定：{unconfirmed_ratio}",
+            skip_reason=f"{unconfirmed_ratio} 个测量单元未确认指标绑定",
             metadata={"measurement_units": unit_results},
         )
 

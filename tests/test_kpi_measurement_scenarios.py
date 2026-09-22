@@ -188,7 +188,8 @@ def test_measurement_rule_end_to_end_with_task_and_single_rerun(tmp_path: Path, 
     task_id = run_task(package).task_id
     first = load_rule(env, task_id, "kpi.measurement_units")
     assert first["status"] == "skip"
-    assert first["skip_reason"] == "所有匹配测量单元均未确认指标绑定"
+    assert first["summary"] == "测量单元尚未确认指标绑定：1/1"
+    assert first["skip_reason"] == "1/1 个测量单元未确认指标绑定"
 
     extracted_relative = "traffic/ne333_Call_Statistics_15_0_202609020000.csv"
     discover_measurement_bindings(
