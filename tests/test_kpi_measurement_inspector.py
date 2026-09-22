@@ -121,6 +121,22 @@ def test_missing_confirmed_column_fails(tmp_path: Path) -> None:
     assert result["measurement_units"][0]["status"] == "fail"
 
 
+def test_duplicate_column_diagnostic_is_isolated(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次),呼叫请求次数(次)\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1,2\n",
+        encoding="utf-8",
+    )
+    files = [(path.name, path)]
+    result = inspect_measurement_files("task-duplicate", files)
+    file_result = next(item for item in result["files"] if item["source_file"] == path.name)
+    assert file_result["status"] == "matched"
+    assert file_result["duplicate_columns"] == ["呼叫请求次数(次)"]
+    assert len(result["measurement_units"][0]["metrics"]) == 1
+
+
 def test_null_and_parse_errors_fail(tmp_path: Path) -> None:
     _prepare_resources()
     files = _task(

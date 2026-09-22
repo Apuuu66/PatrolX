@@ -525,7 +525,7 @@ function MeasurementBindingTab() {
     },
     {
       title: "操作", key: "actions", width: 280,
-      render: (_, record) => isAdmin && record.status !== "conflict" ? (
+      render: (_, record) => isAdmin ? (
         <Space>
           {!record.metric_resource_id && record.status === "candidate" ? (
             <Button size="small" type="primary" onClick={() => openRegister(record)}>注册指标</Button>

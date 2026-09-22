@@ -7,6 +7,7 @@ import hashlib
 import io
 import re
 import uuid
+from collections import Counter
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -598,6 +599,7 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
             matched_metrics: list[str] = []
             auto_registered: list[str] = []
             conflicts: list[str] = []
+            duplicate_columns = [name for name, count in Counter(metric_columns).items() if count > 1]
             for raw_name in metric_columns:
                 base_name, display_unit = _split_source_name(raw_name)
                 metric, outcome = _ensure_metric_for_column(
@@ -655,6 +657,7 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
             file_result["matched_metrics"] = matched_metrics
             file_result["auto_registered_metrics"] = auto_registered
             file_result["conflict_metrics"] = conflicts
+            file_result["duplicate_columns"] = duplicate_columns
         session.commit()
     return matched_files
 
@@ -1387,10 +1390,8 @@ def _kpi_overview(units: list[dict[str, Any]]) -> dict[str, Any]:
 def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
     """执行测量单元可读性巡检并返回通用结构。"""
     init_db()
-    # 巡检前先做一次绑定发现，保证新任务表头能进入候选确认流程。
-    # 发现返回值会把解析失败文件降级，巡检需要重新按 matched 文件汇总错误。
-    discover_measurement_bindings(task_id, files)
-    discovered = match_measurement_files(files)
+    # 绑定发现复用文件归属结果，并保留自动注册、冲突、重复列和解析失败诊断。
+    discovered = discover_measurement_bindings(task_id, files)
     matched: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     for file_result in discovered["files"]:
@@ -1419,6 +1420,35 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             + list(by_unit)
             + [row[0] for row in derived_metric_ids],
         )
+        # 发现阶段失败也要传导到所属单元；后续同单元正常文件不覆盖 error。
+        for file_result in discovered["files"]:
+            unit_id = file_result.get("measurement_unit_id")
+            if file_result.get("status") != "parse_error" or not unit_id or unit_id in unit_results:
+                continue
+            unit = session.get(KpiMeasurementResource, unit_id)
+            if unit is None:
+                continue
+            if file_result.get("reason") == "header_not_found":
+                parse_reason = "表头未找到"
+            elif file_result.get("reason") == "csv_read_error":
+                parse_reason = f"CSV 读取失败: {file_result.get('detail', '')}"
+            else:
+                parse_reason = "任务文件解析失败"
+            unit_results[unit_id] = {
+                "measurement_unit_id": unit_id,
+                "name_zh": unit.name_zh,
+                "name_en": unit.name_en,
+                "status": "error",
+                "reason": parse_reason,
+                "file_count": 1,
+                "object_count": 0,
+                "metric_coverage": "0/0",
+                "metrics": [],
+                "metric_results": {},
+                "object_results": {},
+                "objects": {},
+                "source_files": [file_result["source_file"]],
+            }
         metric_resource_rows = (
             session.query(KpiMeasurementResource)
             .filter(

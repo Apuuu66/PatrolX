@@ -90,6 +90,22 @@ def test_conflicting_metric_binding_is_not_auto_rebound(call_file: tuple[str, Pa
         set_measurement_binding_status(second["id"], "confirmed")
 
 
+def test_conflict_owner_can_be_corrected_after_ignoring_old_binding(call_file: tuple[str, Path]) -> None:
+    """先忽略旧归属后，冲突行必须仍可确认，用于完成归属修正。"""
+    _import_call_resources()
+    discover_measurement_bindings("task-1", [call_file])
+    first = list_measurement_bindings()["items"][0]
+    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_OTHER,其他统计,Other Statistics\n"))
+    other_path = call_file[1].with_name("ne333_Other_Statistics_15_0_202609020000.csv")
+    other_path.write_text(CSV_TEXT, encoding="utf-8")
+    discover_measurement_bindings("task-2", [("ne333_Other_Statistics_15_0_202609020000.csv", other_path)])
+    second = next(item for item in list_measurement_bindings()["items"] if item["measurement_unit_id"] == "MU_OTHER")
+    assert second["status"] == "conflict"
+    set_measurement_binding_status(first["id"], "ignored")
+    updated = set_measurement_binding_status(second["id"], "confirmed")
+    assert updated["status"] == "confirmed"
+
+
 def test_unknown_column_is_auto_registered(tmp_path: Path) -> None:
     _import_call_resources()
     path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
