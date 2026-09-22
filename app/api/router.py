@@ -1,6 +1,7 @@
 """在线模式 API 路由。"""
 
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -434,17 +435,11 @@ def update_dict_v2(
 async def import_kpi_measurement_units_v5(
     file: UploadFile = File(), _auth: AuthSession = Depends(require_role("admin"))
 ) -> KpiMeasurementImportResult:
-    suffix = Path(file.filename or "resources.csv").suffix or ".csv"
-    with tempfile.NamedTemporaryFile("w+b", suffix=suffix) as tmp:
-        await file.seek(0)
-        while chunk := await file.read(1024 * 1024):
-            tmp.write(chunk)
-        await file.seek(0)
-        tmp.seek(0)
-        try:
-            result = import_resource_csv(Path(tmp.name))
-        except KpiMeasurementError as exc:
-            raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    content = await file.read()
+    try:
+        result = import_resource_csv(io.BytesIO(content))
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
     return KpiMeasurementImportResult.model_validate(result)
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -65,3 +66,15 @@ def test_create_derived_api_validates_bindings() -> None:
         )
         assert response.status_code == 409, response.text
         assert response.json()["code"] == "kpi_binding_not_confirmed"
+
+
+def test_import_resource_csv_does_not_use_default_temp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """资源导入必须在内存解析，避免 Windows 默认 TEMP 无权限导致失败。"""
+
+    def fail(*args: object, **kwargs: object) -> object:
+        raise PermissionError("default temp is unavailable")
+
+    monkeypatch.setattr("app.api.router.tempfile.NamedTemporaryFile", fail)
+    with _client() as client:
+        result = _import_csv(client)
+    assert result["added"] == {"mu": 1, "me": 1, "unit": 0}

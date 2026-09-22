@@ -52,10 +52,12 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def import_resource_csv(text_or_file: io.StringIO | str | Path) -> dict[str, Any]:
+def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> dict[str, Any]:
     """按资源 ID upsert 资源目录；不删除 CSV 中缺失的资源。"""
     init_db()
-    if isinstance(text_or_file, io.StringIO):
+    if isinstance(text_or_file, io.BytesIO):
+        raw = text_or_file.getvalue().decode("utf-8-sig")
+    elif isinstance(text_or_file, io.StringIO):
         raw = text_or_file.getvalue()
     else:
         raw = Path(text_or_file).read_text(encoding="utf-8-sig")
