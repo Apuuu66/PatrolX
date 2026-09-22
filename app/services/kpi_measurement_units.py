@@ -34,7 +34,7 @@ class KpiMeasurementError(Exception):
         super().__init__(message)
 
 
-_RESOURCE_PREFIXES = {"MU__": "mu", "ME_": "me", "UNIT_": "unit"}
+_RESOURCE_PREFIXES = {"MU_": "mu", "ME_": "me", "UNIT_": "unit"}
 
 
 def resource_kind(resource_id: str) -> str | None:

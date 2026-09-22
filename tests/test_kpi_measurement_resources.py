@@ -28,6 +28,7 @@ def _database() -> None:
 
 
 def test_resource_kind_and_filename_fragment() -> None:
+    assert resource_kind("MU_CALL") == "mu"
     assert resource_kind("MU__CALL") == "mu"
     assert resource_kind("ME_CALL") == "me"
     assert resource_kind("UNIT_COUNT") == "unit"
