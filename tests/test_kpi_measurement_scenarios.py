@@ -187,17 +187,9 @@ def test_measurement_rule_end_to_end_with_task_and_single_rerun(tmp_path: Path, 
 
     task_id = run_task(package).task_id
     first = load_rule(env, task_id, "kpi.measurement_units")
-    assert first["status"] == "skip"
-    assert first["summary"] == "测量单元尚未确认指标绑定：1/1"
-    assert first["skip_reason"] == "1/1 个测量单元未确认指标绑定"
+    assert first["status"] == "pass"
+    assert first["metadata"]["measurement_units"][0]["objects"]["pod-a"]["avg_value"] == 100.0
 
-    extracted_relative = "traffic/ne333_Call_Statistics_15_0_202609020000.csv"
-    discover_measurement_bindings(
-        task_id,
-        [(extracted_relative, env.task_dir(task_id) / extracted_relative)],
-    )
-    binding_id = next(item["id"] for item in list_measurement_bindings()["items"] if item["metric_resource_id"])
-    set_measurement_binding_status(binding_id, "confirmed")
     run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
     second = load_rule(env, task_id, "kpi.measurement_units")
     assert second["status"] == "pass"
@@ -407,7 +399,7 @@ def test_ignored_bindings_do_not_block_new_unit_candidate(tmp_path: Path) -> Non
     extra_path = tmp_path / "ne333_Extra_Statistics_15_0_202609020000.csv"
     extra_path.write_text(HEADER, encoding="utf-8")
     discover_measurement_bindings("task-extra", [(extra_path.name, extra_path)])
-    assert list_measurement_bindings(measurement_unit_id="MU_EXTRA")["items"][0]["status"] == "candidate"
+    assert list_measurement_bindings(measurement_unit_id="MU_EXTRA")["items"][0]["status"] == "confirmed"
 
 
 def test_multiple_units_are_inspected_independently(tmp_path: Path) -> None:
@@ -427,15 +419,17 @@ def test_multiple_units_are_inspected_independently(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     api_path = tmp_path / "ne333_Api_Statistics_15_0_202609020000.csv"
-    api_path.write_text(HEADER, encoding="utf-8")
+    api_path.write_text(
+        "container,测量开始时间,测量结束时间,周期(分钟),接口请求次数(次)\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,2\n",
+        encoding="utf-8",
+    )
     files = [(call_path.name, call_path), (api_path.name, api_path)]
     discover_measurement_bindings("task-mixed", files)
-    api_binding = list_measurement_bindings(measurement_unit_id="MU_API")["items"][0]
-    set_measurement_binding_status(api_binding["id"], "confirmed")
 
     result = inspect_measurement_files("task-mixed", files)
     by_unit = {item["measurement_unit_id"]: item for item in result["measurement_units"]}
-    assert by_unit["MU_CALL"]["status"] == "skip"
+    assert by_unit["MU_CALL"]["status"] == "pass"
     assert by_unit["MU_API"]["status"] == "pass"
 
 

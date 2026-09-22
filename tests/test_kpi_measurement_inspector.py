@@ -12,7 +12,7 @@ from app.services.kpi_measurement_units import (
     import_resource_csv,
     inspect_measurement_files,
     io,
-    set_measurement_binding_status,
+    update_manual_metric,
 )
 
 HEADER = "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次)\n"
@@ -34,12 +34,10 @@ def _task(tmp_path: Path, body: str) -> list[tuple[str, Path]]:
     path.write_text(HEADER + body, encoding="utf-8")
     files = [("ne333_Call_Statistics_15_0_202609020000.csv", path)]
     discover_measurement_bindings("task-1", files)
-    binding_id = next(item["id"] for item in list_measurement_bindings()["items"] if item["metric_resource_id"])
-    set_measurement_binding_status(binding_id, "confirmed")
     return files
 
 
-def test_inspection_discovers_binding_candidates(tmp_path: Path) -> None:
+def test_inspection_auto_confirms_binding_and_result(tmp_path: Path) -> None:
     _prepare_resources()
     path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
     path.write_text(
@@ -52,8 +50,40 @@ def test_inspection_discovers_binding_candidates(tmp_path: Path) -> None:
 
     bindings = list_measurement_bindings()["items"]
     assert len(bindings) == 1
-    assert bindings[0]["status"] == "candidate"
+    assert bindings[0]["status"] == "confirmed"
     assert bindings[0]["measurement_unit_id"] == "MU_CALL"
+
+
+def test_unknown_column_auto_registers_with_defaults_and_rerun_is_idempotent(tmp_path: Path) -> None:
+    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "container,测量开始时间,测量结束时间,周期(分钟),异常请求次数(次)\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,3\n",
+        encoding="utf-8",
+    )
+    files = [(path.name, path)]
+    result = inspect_measurement_files("task-defaults", files)
+
+    from app.services.kpi_measurement_units import list_measurement_resources
+
+    metric = list_measurement_resources(kind="me", search="异常请求次数")["items"][0]
+    assert metric["enabled"] is True
+    assert metric["direction"] == "neutral"
+    assert metric["importance"] == "normal"
+    assert metric["metric_group"] == "未分组"
+    assert metric["warning_threshold"] is None
+    assert metric["critical_threshold"] is None
+    assert metric["source"] == "discovered"
+    assert metric["origin_task_id"] == "task-defaults"
+    assert metric["display_order"] == 1
+    assert result["measurement_units"][0]["metrics"][0]["metric_resource_id"] == metric["resource_id"]
+
+    inspect_measurement_files("task-defaults", files)
+    from app.models.db import KpiMeasurementResource, session_factory
+
+    with session_factory() as session:
+        assert session.query(KpiMeasurementResource).filter(KpiMeasurementResource.kind == "me").count() == 1
 
 
 def list_measurement_bindings():
@@ -81,8 +111,6 @@ def test_missing_confirmed_column_fails(tmp_path: Path) -> None:
     good.write_text(HEADER + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1\n", encoding="utf-8")
     files = [("ne333_Call_Statistics_15_1_202609020000.csv", good)]
     discover_measurement_bindings("task-1", files)
-    binding_id = next(item["id"] for item in list_measurement_bindings()["items"] if item["metric_resource_id"])
-    set_measurement_binding_status(binding_id, "confirmed")
     missing = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
     missing.write_text(
         "container,测量开始时间,测量结束时间,周期(分钟),其他列\npod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1\n",
@@ -130,8 +158,6 @@ def test_header_parse_error_is_isolated(tmp_path: Path) -> None:
         ("ne333_Call_Statistics_15_1_202609020000.csv", good),
     ]
     discover_measurement_bindings("task-1", files)
-    binding_id = next(item["id"] for item in list_measurement_bindings()["items"] if item["metric_resource_id"])
-    set_measurement_binding_status(binding_id, "confirmed")
     result = inspect_measurement_files("task-1", files)
     assert result["files"][0]["status"] == "parse_error"
     assert result["measurement_units"][0]["status"] == "error"
@@ -162,8 +188,6 @@ def test_no_dimension_uses_default_object(tmp_path: Path) -> None:
     )
     files = [("ne333_Call_Statistics_15_0_202609020000.csv", path)]
     discover_measurement_bindings("task-1", files)
-    binding_id = next(item["id"] for item in list_measurement_bindings()["items"] if item["metric_resource_id"])
-    set_measurement_binding_status(binding_id, "confirmed")
     result = inspect_measurement_files("task-1", files)
     assert set(result["measurement_units"][0]["objects"]) == {"__all__"}
 
@@ -174,8 +198,51 @@ def test_gbk_measurement_csv_is_supported(tmp_path: Path) -> None:
     path.write_text(HEADER + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1\n", encoding="gb18030")
     files = [(path.name, path)]
     discover_measurement_bindings("task-gbk", files)
-    binding_id = next(item["id"] for item in list_measurement_bindings()["items"] if item["metric_resource_id"])
-    set_measurement_binding_status(binding_id, "confirmed")
 
     result = inspect_measurement_files("task-gbk", files)
     assert result["measurement_units"][0]["status"] == "pass"
+
+
+def test_threshold_status_and_risk_summary(tmp_path: Path) -> None:
+    _prepare_resources()
+    update_manual_metric("ME_CALL", direction="higher_better", warning_threshold=80, critical_threshold=50)
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        HEADER
+        + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,60\n"
+        + "pod-b,2026-09-02 00:15:00,2026-09-02 00:30:00,15,30\n",
+        encoding="utf-8",
+    )
+    result = inspect_measurement_files("task-threshold", [(path.name, path)])
+    metric = result["measurement_units"][0]["metrics"][0]
+    statuses = {item["object_key"]: item["business_status"] for item in metric["observations"]}
+    assert statuses == {"pod-a": "warn", "pod-b": "fail"}
+    assert metric["business_status"] == "fail"
+    unit = result["measurement_units"][0]
+    assert unit["status"] == "fail"
+    assert unit["risk_summary"]["business_fail_count"] == 1
+    assert unit["risk_summary"]["health_score"] == 75
+    overview = result["kpi_overview"]
+    assert overview["business_fail_count"] == 1
+    assert overview["health_score"] == 75
+
+
+def test_trend_labels_are_isolated_by_object_and_period(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        HEADER
+        + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1\n"
+        + "pod-a,2026-09-02 00:15:00,2026-09-02 00:30:00,15,1.2\n"
+        + "pod-a,2026-09-02 00:30:00,2026-09-02 00:45:00,15,1.4\n"
+        + "pod-b,2026-09-02 00:00:00,2026-09-02 00:15:00,30,3\n"
+        + "pod-b,2026-09-02 00:15:00,2026-09-02 00:30:00,30,2.6\n",
+        encoding="utf-8",
+    )
+    result = inspect_measurement_files("task-trend", [(path.name, path)])
+    metric = result["measurement_units"][0]["metrics"][0]
+    trends = {(item["object_key"], item["period_minutes"]): item for item in metric["trends"]}
+    assert trends[("pod-a", 15)]["label"] == "rising"
+    assert trends[("pod-b", 30)]["label"] == "falling"
+    assert metric["trend_points"] == trends[("pod-a", 15)]["points"]
+    assert result["measurement_units"][0]["risk_summary"]["trend_worsened_count"] == 0

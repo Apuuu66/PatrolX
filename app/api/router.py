@@ -549,9 +549,12 @@ def set_kpi_measurement_unit_enabled_v5(
 )
 def list_kpi_measurement_bindings_v5(
     measurement_unit_id: str | None = Query(default=None),
-    unit_search: str | None = Query(default=None),
+    unit_search: str | None = Query(default=None, description="按测量单元资源 ID、中文名或英文名模糊过滤绑定关系。"),
     status: str | None = Query(default=None),
-    search: str | None = Query(default=None),
+    search: str | None = Query(
+        default=None,
+        description="按指标 ID、基础列名、测量单元 ID/名称、任务 ID 或来源文件模糊过滤。",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=200),
 ) -> KpiMeasurementBindingList:
@@ -660,6 +663,12 @@ def update_kpi_measurement_resource_v5(
             name_zh=body.name_zh,
             name_en=body.name_en,
             enabled=body.enabled,
+            display_order=body.display_order,
+            metric_group=body.metric_group,
+            direction=body.direction,
+            importance=body.importance,
+            warning_threshold=body.warning_threshold,
+            critical_threshold=body.critical_threshold,
         )
     except KpiMeasurementError as exc:
         raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc

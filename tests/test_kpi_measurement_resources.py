@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import re
 from pathlib import Path
 
 import pytest
@@ -13,9 +12,11 @@ from app.services.kpi_measurement_units import (
     KpiMeasurementError,
     filename_fragment,
     import_resource_csv,
+    list_measurement_resources,
     list_measurement_units,
     resource_kind,
     set_measurement_unit_enabled,
+    update_manual_metric,
 )
 
 
@@ -165,35 +166,35 @@ def test_import_resource_csv_supports_header_whitespace() -> None:
     assert result["errors"] == []
 
 
-def test_register_manual_metric_uses_readable_id(tmp_path: Path) -> None:
-    from app.services.kpi_measurement_units import (
-        discover_measurement_bindings,
-        list_measurement_bindings,
-        register_metric_for_binding,
+def test_import_fills_missing_defaults_without_overwriting_existing_policy(tmp_path: Path) -> None:
+    import_resource_csv(
+        io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求,Call Requests\n")
     )
-
-    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
-    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
-    path.write_text(
-        "container,测量开始时间,测量结束时间,周期(分钟),人工列(次)\n"
-        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
-        encoding="utf-8",
+    update_manual_metric(
+        "ME_CALL",
+        direction="higher_better",
+        importance="P0",
+        metric_group="业务质量",
+        warning_threshold=90,
+        critical_threshold=70,
     )
-    discover_measurement_bindings("task-readable", [(path.name, path)])
-    binding_id = list_measurement_bindings()["items"][0]["id"]
-
-    _, metric = register_metric_for_binding(binding_id, name_zh="人工呼叫请求", name_en="Call Requests")
-
-    assert re.fullmatch(r"ME__MANUAL_CALL_REQUESTS_[0-9A-F]{6}", metric["resource_id"])
-
-
-def test_register_manual_metric_creates_candidate_binding(tmp_path: Path) -> None:
-    from app.services.kpi_measurement_units import (
-        discover_measurement_bindings,
-        inspect_measurement_files,
-        list_measurement_bindings,
-        register_metric_for_binding,
+    result = import_resource_csv(
+        io.StringIO(
+            "资源id,中文描述,英文描述,所属测量单元id,显示顺序,指标分组,方向,重要级别,预警阈值,失败阈值\n"
+            "ME_CALL,呼叫请求,Call Requests,MU_CALL,9,标准分组,lower_better,P2,10,20\n"
+        )
     )
+    assert result["errors"] == []
+    metric = list_measurement_resources(kind="me", search="呼叫请求")["items"][0]
+    assert metric["direction"] == "higher_better"
+    assert metric["importance"] == "P0"
+    assert metric["metric_group"] == "业务质量"
+    assert metric["warning_threshold"] == 90
+    assert metric["critical_threshold"] == 70
+
+
+def test_discovered_metric_defaults_and_manual_policy_update(tmp_path: Path) -> None:
+    from app.services.kpi_measurement_units import discover_measurement_bindings
 
     import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
     path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
@@ -202,173 +203,47 @@ def test_register_manual_metric_creates_candidate_binding(tmp_path: Path) -> Non
         "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
         encoding="utf-8",
     )
-    discover_measurement_bindings("task-manual", [(path.name, path)])
-    binding = list_measurement_bindings()["items"][0]
-    assert binding["metric_resource_id"] is None
-
-    binding, metric = register_metric_for_binding(binding["id"], name_zh="呼叫请求次数", name_en="Call Requests")
-    assert metric["resource_id"].startswith("ME__MANUAL_")
-    assert metric["is_manual"] is True
-    assert binding["metric_resource_id"] == metric["resource_id"]
-    assert binding["metric_is_manual"] is True
-    assert binding["status"] == "candidate"
-    inspected = inspect_measurement_files("task-manual", [(path.name, path)])
-    assert inspected["measurement_units"][0]["status"] == "skip"
-
-
-def test_register_metric_rejects_conflict_and_binds_existing(tmp_path: Path) -> None:
-    from app.services.kpi_measurement_units import (
-        discover_measurement_bindings,
-        list_measurement_bindings,
-        register_metric_for_binding,
-    )
-
-    import_resource_csv(
-        io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,已有指标,Existing Metric\n")
-    )
-    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
-    path.write_text(
-        "container,测量开始时间,测量结束时间,周期(分钟),新列(次)\n"
-        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
-        encoding="utf-8",
-    )
-    discover_measurement_bindings("task-conflict", [(path.name, path)])
-    binding = list_measurement_bindings()["items"][0]
-    with pytest.raises(KpiMeasurementError) as conflict:
-        register_metric_for_binding(binding["id"], name_zh="已有指标")
-    assert conflict.value.code == "kpi_metric_name_conflict"
-    assert conflict.value.detail == {"existing_resource_id": "ME_CALL"}
-
-    result, metric = register_metric_for_binding(
-        binding["id"], name_zh=None, name_en=None, bind_existing_resource_id="ME_CALL"
-    )
-    assert result["metric_resource_id"] == "ME_CALL"
-    assert result["status"] == "candidate"
-    assert metric["resource_id"] == "ME_CALL"
-    assert metric["is_manual"] is False
-
-
-def test_update_manual_metric_and_resource_list(tmp_path: Path) -> None:
-    from app.services.kpi_measurement_units import (
-        discover_measurement_bindings,
-        list_measurement_bindings,
-        list_measurement_resources,
-        register_metric_for_binding,
-        update_manual_metric,
-    )
-
-    import_resource_csv(
-        io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,导入指标,Imported Metric\n")
-    )
-    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
-    path.write_text(
-        "container,测量开始时间,测量结束时间,周期(分钟),人工列(次)\n"
-        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
-        encoding="utf-8",
-    )
-    discover_measurement_bindings("task-update", [(path.name, path)])
-    binding_id = list_measurement_bindings()["items"][0]["id"]
-    _, metric = register_metric_for_binding(binding_id, name_zh="人工指标", name_en="Manual Metric")
+    discover_measurement_bindings("task-discovery", [(path.name, path)])
+    metric = list_measurement_resources(kind="me", search="呼叫请求次数")["items"][0]
+    assert metric["source"] == "discovered"
+    assert metric["origin_task_id"] == "task-discovery"
+    assert metric["origin_file"] == path.name
+    assert metric["display_order"] == 1
+    assert metric["direction"] == "neutral"
+    assert metric["importance"] == "normal"
+    assert metric["metric_group"] == "未分组"
+    assert metric["warning_threshold"] is None
+    assert metric["critical_threshold"] is None
 
     updated = update_manual_metric(
-        metric["resource_id"], name_zh="人工指标更新", name_en="Updated Metric", enabled=False
+        metric["resource_id"],
+        name_zh="呼叫请求次数",
+        direction="higher_better",
+        warning_threshold=80,
+        critical_threshold=50,
+        importance="P1",
+        metric_group="容量",
     )
-    assert updated["resource_id"] == metric["resource_id"]
-    assert updated["name_zh"] == "人工指标更新"
-    assert updated["enabled"] is False
-    assert list_measurement_bindings()["items"][0]["status"] == "candidate"
-
-    with pytest.raises(KpiMeasurementError) as not_manual:
-        update_manual_metric("ME_CALL", name_zh="导入指标更新")
-    assert not_manual.value.code == "kpi_metric_not_manual"
-
-    with pytest.raises(KpiMeasurementError) as conflict:
-        update_manual_metric(metric["resource_id"], name_zh="导入指标")
-    assert conflict.value.code == "kpi_metric_name_conflict"
-
-    listed = list_measurement_resources(kind="me", search="metric", page=1, page_size=10)
-    assert listed["total"] == 2
-    assert {item["is_manual"] for item in listed["items"]} == {True, False}
+    assert updated["direction"] == "higher_better"
+    assert updated["warning_threshold"] == 80
+    assert updated["critical_threshold"] == 50
+    assert updated["importance"] == "P1"
 
 
-def test_register_manual_metric_handles_empty_and_long_english(tmp_path: Path) -> None:
-    from app.services.kpi_measurement_units import (
-        discover_measurement_bindings,
-        list_measurement_bindings,
-        register_metric_for_binding,
+def test_update_metric_rejects_invalid_threshold_policy() -> None:
+    import_resource_csv(resource_csv(("ME_CALL", "呼叫请求", "Call Requests")))
+    with pytest.raises(KpiMeasurementError) as exc:
+        update_manual_metric("ME_CALL", direction="higher_better", warning_threshold=50, critical_threshold=80)
+    assert exc.value.code == "kpi_metric_threshold_conflict"
+
+
+def test_resource_list_searches_id_and_paginates() -> None:
+    import_resource_csv(
+        resource_csv(
+            ("ME_CALL", "呼叫请求", "Call Requests"),
+            ("ME_LOST", "丢失请求", "Lost Requests"),
+        )
     )
-
-    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
-    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
-    path.write_text(
-        "container,测量开始时间,测量结束时间,周期(分钟),空英文列(次),长英文列(次)\n"
-        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1,2\n",
-        encoding="utf-8",
-    )
-    discover_measurement_bindings("task-id-boundary", [(path.name, path)])
-    bindings = list_measurement_bindings()["items"]
-    empty_english = next(item for item in bindings if item["base_source_name"] == "空英文列")
-    long_english = next(item for item in bindings if item["base_source_name"] == "长英文列")
-
-    _, empty_metric = register_metric_for_binding(empty_english["id"], name_zh="空英文指标", name_en="全中文名称")
-    _, long_metric = register_metric_for_binding(long_english["id"], name_zh="长英文指标", name_en="X" * 256)
-
-    assert re.fullmatch(r"ME__MANUAL_UNNAMED_[0-9A-F]{6}", empty_metric["resource_id"])
-    assert len(long_metric["resource_id"]) <= 128
-    assert re.fullmatch(r"ME__MANUAL_X+_[0-9A-F]{6}", long_metric["resource_id"])
-
-
-def test_register_manual_metric_rejects_registered_and_ignored_binding(tmp_path: Path) -> None:
-    from app.services.kpi_measurement_units import (
-        discover_measurement_bindings,
-        list_measurement_bindings,
-        register_metric_for_binding,
-        set_measurement_binding_status,
-    )
-
-    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
-    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
-    path.write_text(
-        "container,测量开始时间,测量结束时间,周期(分钟),已注册列(次),忽略列(次)\n"
-        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1,2\n",
-        encoding="utf-8",
-    )
-    discover_measurement_bindings("task-register-invalid", [(path.name, path)])
-    bindings = list_measurement_bindings()["items"]
-    registered_binding = next(item for item in bindings if item["base_source_name"] == "已注册列")
-    ignored_binding = next(item for item in bindings if item["base_source_name"] == "忽略列")
-
-    register_metric_for_binding(registered_binding["id"], name_zh="已注册指标", name_en="Registered")
-    set_measurement_binding_status(ignored_binding["id"], "ignored")
-
-    with pytest.raises(KpiMeasurementError) as already_registered:
-        register_metric_for_binding(registered_binding["id"], name_zh="重复注册")
-    assert already_registered.value.code == "kpi_binding_already_registered"
-    with pytest.raises(KpiMeasurementError) as not_candidate:
-        register_metric_for_binding(ignored_binding["id"], name_zh="忽略后注册")
-    assert not_candidate.value.code == "kpi_binding_not_unregistered"
-
-
-def test_register_metric_keeps_other_candidates_unchanged(tmp_path: Path) -> None:
-    from app.services.kpi_measurement_units import (
-        discover_measurement_bindings,
-        list_measurement_bindings,
-        register_metric_for_binding,
-    )
-
-    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
-    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
-    path.write_text(
-        "container,测量开始时间,测量结束时间,周期(分钟),保持列(次),注册列(次)\n"
-        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1,2\n",
-        encoding="utf-8",
-    )
-    discover_measurement_bindings("task-other-binding", [(path.name, path)])
-    before = {item["base_source_name"]: item for item in list_measurement_bindings()["items"]}
-
-    _, metric = register_metric_for_binding(before["注册列"]["id"], name_zh="注册列指标", name_en="Registered")
-
-    after = {item["base_source_name"]: item for item in list_measurement_bindings()["items"]}
-    assert after["注册列"]["metric_resource_id"] == metric["resource_id"]
-    assert after["保持列"]["metric_resource_id"] is None
-    assert after["保持列"]["status"] == "candidate"
+    result = list_measurement_resources(kind="me", search="ME_CALL", page=1, page_size=10)
+    assert result["total"] == 1
+    assert result["items"][0]["resource_id"] == "ME_CALL"

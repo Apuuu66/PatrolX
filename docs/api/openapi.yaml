@@ -882,6 +882,7 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
+          description: 按测量单元资源 ID、中文名或英文名模糊过滤绑定关系。
           title: Unit Search
         description: 按测量单元资源 ID、中文名或英文名模糊过滤绑定关系。
       - name: status
@@ -899,6 +900,7 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
+          description: 按指标 ID、基础列名、测量单元 ID/名称、任务 ID 或来源文件模糊过滤。
           title: Search
         description: 按指标 ID、基础列名、测量单元 ID/名称、任务 ID 或来源文件模糊过滤。
       - name: page
@@ -1575,15 +1577,17 @@ components:
           - type: 'null'
           title: Metric Resource Id
         metric_resource_name_zh:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Metric Resource Name Zh
         measurement_unit_id:
           type: string
           title: Measurement Unit Id
         measurement_unit_name_zh:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Measurement Unit Name Zh
         raw_source_name:
           type: string
@@ -1891,6 +1895,63 @@ components:
         is_manual:
           type: boolean
           title: Is Manual
+        display_order:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Display Order
+        metric_group:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Metric Group
+        direction:
+          anyOf:
+          - type: string
+            enum:
+            - higher_better
+            - lower_better
+            - neutral
+          - type: 'null'
+          title: Direction
+        importance:
+          anyOf:
+          - type: string
+            enum:
+            - P0
+            - P1
+            - P2
+            - normal
+          - type: 'null'
+          title: Importance
+        warning_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Warning Threshold
+        critical_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Critical Threshold
+        source:
+          type: string
+          enum:
+          - preset
+          - discovered
+          - manual
+          title: Source
+          default: preset
+        origin_task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Origin Task Id
+        origin_file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Origin File
         created_at:
           type: string
           format: date-time
@@ -1946,6 +2007,47 @@ components:
           - type: boolean
           - type: 'null'
           title: Enabled
+        display_order:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Display Order
+        metric_group:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Metric Group
+        direction:
+          anyOf:
+          - type: string
+            enum:
+            - higher_better
+            - lower_better
+            - neutral
+          - type: 'null'
+          title: Direction
+        importance:
+          anyOf:
+          - type: string
+            enum:
+            - P0
+            - P1
+            - P2
+            - normal
+          - type: 'null'
+          title: Importance
+        warning_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Warning Threshold
+        critical_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Critical Threshold
       type: object
       title: KpiMeasurementResourceUpdateRequest
     KpiMeasurementUnit:

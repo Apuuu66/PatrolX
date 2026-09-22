@@ -446,6 +446,15 @@ class KpiMeasurementResource(BaseModel):
     name_en: str
     enabled: bool
     is_manual: bool
+    display_order: int | None = None
+    metric_group: str | None = None
+    direction: Literal["higher_better", "lower_better", "neutral"] | None = None
+    importance: Literal["P0", "P1", "P2", "normal"] | None = None
+    warning_threshold: float | None = None
+    critical_threshold: float | None = None
+    source: Literal["preset", "discovered", "manual"] = "preset"
+    origin_task_id: str | None = None
+    origin_file: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -470,6 +479,12 @@ class KpiMeasurementResourceUpdateRequest(BaseModel):
     name_zh: str | None = Field(default=None, min_length=1, max_length=256)
     name_en: str | None = Field(default=None, max_length=256)
     enabled: bool | None = None
+    display_order: int | None = Field(default=None, ge=0)
+    metric_group: str | None = Field(default=None, max_length=64)
+    direction: Literal["higher_better", "lower_better", "neutral"] | None = None
+    importance: Literal["P0", "P1", "P2", "normal"] | None = None
+    warning_threshold: float | None = None
+    critical_threshold: float | None = None
 
 
 class KpiMeasurementDerivedCreateRequest(BaseModel):

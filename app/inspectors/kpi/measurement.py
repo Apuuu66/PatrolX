@@ -17,9 +17,9 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="2.1.0",
-    description="按测量单元检查 KPI CSV 的文件归属、指标绑定与数值可读性",
-    recommendation="处理未匹配文件，确认指标绑定，并修复空值或解析失败的指标列",
+    rule_version="3.0.0",
+    description="自动入库测量单元指标，检查文件归属、数值可读性、业务阈值与任务内趋势",
+    recommendation="处理未匹配文件与跨单元冲突，配置阈值，并修复空值、解析失败或趋势恶化的指标",
     source_refs=["kpi_all"],
     outputs_metrics=[
         {"key": "matched_files", "label": "匹配文件数", "unit": "个"},
@@ -65,6 +65,7 @@ def _run(ctx: RuleContext) -> object:
             metadata={"measurement_units": unit_results},
         )
 
+    overview = result["kpi_overview"]
     failed = sum(1 for unit in unit_results if unit["status"] in {"fail", "error"})
     if failed:
         status = RuleStatus.FAIL
@@ -75,6 +76,13 @@ def _run(ctx: RuleContext) -> object:
     else:
         status = RuleStatus.PASS
         summary = f"KPI 测量单元检查通过：{len(unit_results)} 个测量单元"
+    diagnostic_parts = [
+        f"阈值失败 {overview['business_fail_count']}",
+        f"阈值预警 {overview['business_warn_count']}",
+        f"数据异常 {overview['data_error_count']}",
+        f"趋势恶化 {overview['trend_worsened_count']}",
+    ]
+    summary = f"{summary}；{'，'.join(diagnostic_parts)}"
 
     metrics = [
         {"key": "matched_files", "label": "匹配文件数", "value": len(result["files"]) - unmatched_count, "unit": "个"},

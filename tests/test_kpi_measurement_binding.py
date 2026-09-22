@@ -50,7 +50,7 @@ def test_discover_binding_strips_display_unit(call_file: tuple[str, Path]) -> No
     result = discover_measurement_bindings("task-1", [call_file])
     assert result["files"][0]["binding_candidates"] == 1
     bindings = list_measurement_bindings()["items"]
-    assert bindings[0]["status"] == "candidate"
+    assert bindings[0]["status"] == "confirmed"
     assert bindings[0]["raw_source_name"] == "呼叫请求次数(次)"
     assert bindings[0]["base_source_name"] == "呼叫请求次数"
     assert bindings[0]["display_unit"] == "次"
@@ -58,12 +58,11 @@ def test_discover_binding_strips_display_unit(call_file: tuple[str, Path]) -> No
     assert bindings[0]["measurement_unit_id"] == "MU_CALL"
 
 
-def test_unconfirmed_binding_is_not_inspected(call_file: tuple[str, Path]) -> None:
+def test_auto_confirmed_binding_is_inspected(call_file: tuple[str, Path]) -> None:
     _import_call_resources()
     discover_measurement_bindings("task-1", [call_file])
     result = inspect_measurement_files("task-1", [call_file])
-    assert result["measurement_units"][0]["status"] == "skip"
-    assert "未配置已确认指标绑定" in result["measurement_units"][0]["reason"]
+    assert result["measurement_units"][0]["status"] == "pass"
 
 
 def test_confirm_binding_enables_inspection(call_file: tuple[str, Path]) -> None:
@@ -91,7 +90,7 @@ def test_conflicting_metric_binding_is_not_auto_rebound(call_file: tuple[str, Pa
         set_measurement_binding_status(second["id"], "confirmed")
 
 
-def test_unknown_column_is_reported(tmp_path: Path) -> None:
+def test_unknown_column_is_auto_registered(tmp_path: Path) -> None:
     _import_call_resources()
     path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
     path.write_text(
@@ -100,8 +99,11 @@ def test_unknown_column_is_reported(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     result = discover_measurement_bindings("task-1", [("ne333_Call_Statistics_15_0_202609020000.csv", path)])
-    assert result["files"][0]["unknown_columns"] == ["未注册指标(个)"]
-    assert list_measurement_bindings()["items"][0]["metric_resource_id"] is None
+    assert result["files"][0]["unknown_columns"] == []
+    assert result["files"][0]["auto_registered_metrics"] == ["未注册指标(个)"]
+    binding = list_measurement_bindings()["items"][0]
+    assert binding["metric_resource_id"] is not None
+    assert binding["status"] == "confirmed"
 
 
 def test_binding_search_matches_keywords_fuzzily() -> None:

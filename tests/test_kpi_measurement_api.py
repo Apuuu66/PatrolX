@@ -180,7 +180,7 @@ def test_register_existing_metric_and_resource_list_api() -> None:
         assert missing.json()["code"] == "kpi_binding_not_found"
 
 
-def test_register_metric_api_rejects_conflict_and_non_admin() -> None:
+def test_register_metric_api_rejects_conflict_and_resource_patch_supports_policy() -> None:
     with _client() as client:
         _import_csv(client)
         binding_id = _create_unregistered_binding(base_source_name="新列")
@@ -200,9 +200,20 @@ def test_register_metric_api_rejects_conflict_and_non_admin() -> None:
         assert missing_metric.status_code == 404, missing_metric.text
         assert missing_metric.json()["code"] == "kpi_metric_not_found"
 
-        non_manual = client.patch("/api/v5/kpi/measurement-resources/ME_CALL", json={"name_zh": "不允许"})
-        assert non_manual.status_code == 409, non_manual.text
-        assert non_manual.json()["code"] == "kpi_metric_not_manual"
+        patched = client.patch(
+            "/api/v5/kpi/measurement-resources/ME_CALL",
+            json={
+                "direction": "higher_better",
+                "importance": "P0",
+                "metric_group": "业务质量",
+                "warning_threshold": 80,
+                "critical_threshold": 50,
+            },
+        )
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["direction"] == "higher_better"
+        assert patched.json()["warning_threshold"] == 80
+        assert patched.json()["critical_threshold"] == 50
 
         app.dependency_overrides[get_current_user] = lambda: AuthSession(
             token="viewer-token", username="viewer", role="viewer"

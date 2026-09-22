@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type Key } from "react";
 import {
-  Alert, App, Button, Card, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography, Upload,
+  Alert, App, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table, Tabs, Tag, Typography, Upload,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
@@ -19,7 +19,35 @@ const STATUS_LABELS: Record<string, string> = {
 const IMPORT_ERROR_LABELS: Record<string, string> = {
   invalid_resource: "资源行缺少必填字段",
   resource_id_conflict: "同一个资源 ID 对应不同中文名",
+  metric_owner_conflict: "指标已归属其他测量单元",
+  invalid_display_order: "显示顺序必须是整数",
+  invalid_direction: "指标方向非法",
+  invalid_importance: "重要级别非法",
+  invalid_warning_threshold: "预警阈值必须是数字",
+  invalid_critical_threshold: "失败阈值必须是数字",
+  threshold_direction_conflict: "预警/失败阈值与指标方向矛盾",
 };
+
+const DIRECTION_OPTIONS = [
+  { value: "higher_better", label: "越高越好" },
+  { value: "lower_better", label: "越低越好" },
+  { value: "neutral", label: "不判定" },
+];
+
+const IMPORTANCE_OPTIONS = [
+  { value: "P0", label: "P0" },
+  { value: "P1", label: "P1" },
+  { value: "P2", label: "P2" },
+  { value: "normal", label: "普通" },
+];
+
+const DIRECTION_LABELS: Record<string, string> = {
+  higher_better: "越高越好",
+  lower_better: "越低越好",
+  neutral: "不判定",
+};
+
+const IMPORTANCE_COLORS: Record<string, string> = { P0: "red", P1: "orange", P2: "gold", normal: "blue" };
 
 const BATCH_CONFIRM_ERROR_LABELS: Record<string, string> = {
   kpi_binding_not_found: "绑定不存在",
@@ -223,6 +251,12 @@ interface MetricEditFormValues {
   name_zh: string;
   name_en?: string;
   enabled: boolean;
+  display_order?: number;
+  metric_group?: string;
+  direction?: "higher_better" | "lower_better" | "neutral";
+  importance?: "P0" | "P1" | "P2" | "normal";
+  warning_threshold?: number | null;
+  critical_threshold?: number | null;
 }
 
 function MeasurementBindingTab() {
@@ -245,9 +279,31 @@ function MeasurementBindingTab() {
   const [resourceSearch, setResourceSearch] = useState("");
   const [resources, setResources] = useState<MeasurementResource[]>([]);
   const [resourceLoading, setResourceLoading] = useState(false);
+  const [resourceMap, setResourceMap] = useState<Record<string, MeasurementResource>>({});
   const [editForm] = Form.useForm<MetricEditFormValues>();
   const [editingMetric, setEditingMetric] = useState<MeasurementResource | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const loadResourceGovernance = useCallback(async (bindings: MeasurementBinding[]) => {
+    const boundIds = [...new Set(bindings.flatMap((item) => item.metric_resource_id ? [item.metric_resource_id] : []))];
+    if (boundIds.length === 0) {
+      setResourceMap({});
+      return;
+    }
+
+    const nextResourceMap: Record<string, MeasurementResource> = {};
+    let currentPage = 1;
+    let resourceTotal = 0;
+    do {
+      const data = await api.listMeasurementResources({ kind: "me", page: currentPage, page_size: 200 });
+      resourceTotal = data.total;
+      for (const resource of data.items) {
+        if (boundIds.includes(resource.resource_id)) nextResourceMap[resource.resource_id] = resource;
+      }
+      currentPage += 1;
+    } while (Object.keys(nextResourceMap).length < boundIds.length && (currentPage - 1) * 200 < resourceTotal);
+    setResourceMap(nextResourceMap);
+  }, []);
 
   const load = useCallback(
     async (nextPage = page, nextPageSize = pageSize) => {
@@ -261,13 +317,14 @@ function MeasurementBindingTab() {
         });
         setItems(data.items);
         setTotal(data.total);
+        await loadResourceGovernance(data.items);
       } catch (err) {
         message.error(err instanceof Error ? err.message : "绑定关系加载失败");
       } finally {
         setLoading(false);
       }
     },
-    [message, page, pageSize, status, unitSearch],
+    [loadResourceGovernance, message, page, pageSize, status, unitSearch],
   );
 
   useEffect(() => { void load(); }, [load]);
@@ -324,6 +381,23 @@ function MeasurementBindingTab() {
 
   const openEdit = async (record: MeasurementBinding) => {
     if (!record.metric_resource_id) return;
+    const cachedMetric = resourceMap[record.metric_resource_id];
+    if (cachedMetric) {
+      setEditingMetric(cachedMetric);
+      editForm.setFieldsValue({
+        name_zh: cachedMetric.name_zh,
+        name_en: cachedMetric.name_en || undefined,
+        enabled: cachedMetric.enabled,
+        display_order: cachedMetric.display_order ?? undefined,
+        metric_group: cachedMetric.metric_group || "未分组",
+        direction: cachedMetric.direction || "neutral",
+        importance: cachedMetric.importance || "normal",
+        warning_threshold: cachedMetric.warning_threshold,
+        critical_threshold: cachedMetric.critical_threshold,
+      });
+      return;
+    }
+
     try {
       const listed = await api.listMeasurementResources({
         kind: "me",
@@ -340,6 +414,12 @@ function MeasurementBindingTab() {
         name_zh: metric.name_zh,
         name_en: metric.name_en || undefined,
         enabled: metric.enabled,
+        display_order: metric.display_order ?? undefined,
+        metric_group: metric.metric_group || "未分组",
+        direction: metric.direction || "neutral",
+        importance: metric.importance || "normal",
+        warning_threshold: metric.warning_threshold,
+        critical_threshold: metric.critical_threshold,
       });
     } catch (err) {
       message.error(err instanceof Error ? err.message : "待编辑指标加载失败");
@@ -355,6 +435,7 @@ function MeasurementBindingTab() {
       setEditingMetric(null);
       editForm.resetFields();
       await load();
+      setResourceMap((current) => ({ ...current, [updated.resource_id]: updated }));
       return updated;
     } catch (err) {
       message.error(err instanceof Error ? err.message : "更新指标失败");
@@ -416,6 +497,29 @@ function MeasurementBindingTab() {
     { title: "任务", dataIndex: "task_id", key: "task_id" },
     { title: "来源文件", dataIndex: "source_file", key: "source_file" },
     {
+      title: "分组", key: "metric_group", width: 120,
+      render: (_, record) => {
+        if (!record.metric_resource_id) return "-";
+        return resourceMap[record.metric_resource_id]?.metric_group || "未分组";
+      },
+    },
+    {
+      title: "方向", key: "direction", width: 110,
+      render: (_, record) => {
+        if (!record.metric_resource_id) return "-";
+        const direction = resourceMap[record.metric_resource_id]?.direction;
+        return direction ? DIRECTION_LABELS[direction] : "未配置";
+      },
+    },
+    {
+      title: "重点", key: "importance", width: 90,
+      render: (_, record) => {
+        if (!record.metric_resource_id) return "-";
+        const importance = resourceMap[record.metric_resource_id]?.importance || "normal";
+        return <Tag color={IMPORTANCE_COLORS[importance]}>{importance}</Tag>;
+      },
+    },
+    {
       title: "状态", dataIndex: "status", key: "status", width: 110,
       render: (value: string) => <Tag color={STATUS_COLORS[value]}>{STATUS_LABELS[value]}</Tag>,
     },
@@ -426,8 +530,8 @@ function MeasurementBindingTab() {
           {!record.metric_resource_id && record.status === "candidate" ? (
             <Button size="small" type="primary" onClick={() => openRegister(record)}>注册指标</Button>
           ) : null}
-          {record.metric_is_manual ? (
-            <Button size="small" onClick={() => void openEdit(record)}>编辑指标</Button>
+          {record.metric_resource_id ? (
+            <Button size="small" onClick={() => void openEdit(record)}>调整指标</Button>
           ) : null}
           <Button size="small" disabled={record.status === "confirmed"} onClick={() => void updateBinding(record, "confirmed")}>确认</Button>
           <Button size="small" disabled={record.status === "ignored"} onClick={() => void updateBinding(record, "ignored")}>忽略</Button>
@@ -484,7 +588,7 @@ function MeasurementBindingTab() {
       >
         <Form form={registerForm} layout="vertical" onFinish={(values) => void submitRegister(values)}>
           <Typography.Paragraph type="secondary">
-            展示单位：{registerTarget?.display_unit || "无"}；注册后绑定仍需人工确认。
+            展示单位：{registerTarget?.display_unit || "无"}；常规表头列会自动入库，这里仅用于异常修正。
           </Typography.Paragraph>
           <Form.Item name="bind_existing_resource_id" label="绑定已有指标（可选）">
             <Select
@@ -515,7 +619,7 @@ function MeasurementBindingTab() {
 
       <Modal
         open={editingMetric !== null}
-        title={editingMetric ? `${editingMetric.name_zh} / ${editingMetric.resource_id}` : "编辑人工指标"}
+        title={editingMetric ? `${editingMetric.name_zh} / ${editingMetric.resource_id}` : "编辑指标"}
         confirmLoading={editSubmitting}
         okText="保存"
         onCancel={() => setEditingMetric(null)}
@@ -530,6 +634,24 @@ function MeasurementBindingTab() {
           </Form.Item>
           <Form.Item name="enabled" label="启用状态">
             <Select options={[{ value: true, label: "启用" }, { value: false, label: "停用" }]} />
+          </Form.Item>
+          <Form.Item name="display_order" label="显示顺序">
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="metric_group" label="指标分组">
+            <Input maxLength={64} />
+          </Form.Item>
+          <Form.Item name="direction" label="方向">
+            <Select options={DIRECTION_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="importance" label="重要级别">
+            <Select options={IMPORTANCE_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="warning_threshold" label="预警阈值">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="critical_threshold" label="失败阈值">
+            <InputNumber style={{ width: "100%" }} />
           </Form.Item>
         </Form>
       </Modal>

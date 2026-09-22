@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from sqlalchemy import exists, or_
+from sqlalchemy import exists, func, or_
 
 from app.core.encoding import decode_text_with_fallback, read_text_with_fallback
 from app.core.logging import get_logger
@@ -74,7 +74,7 @@ def _utc_now() -> datetime:
 
 
 def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> dict[str, Any]:
-    """按同类资源中文名合并资源目录；资源 ID 仅作存储主键，不删除 CSV 外资源。"""
+    """增量导入资源目录；同中文名的自动指标会被合并，不删除已有资源。"""
     init_db()
     try:
         if isinstance(text_or_file, io.BytesIO):
@@ -94,7 +94,6 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
     reader = csv.DictReader(io.StringIO(raw))
     if reader.fieldnames is None:
         raise KpiMeasurementError("kpi_resource_csv_invalid", "资源目录缺少表头", 400)
-    # 兼容现场导出的表头前后空格；必须同步修正 DictReader 的实际取值键。
     reader.fieldnames = [name.strip() for name in reader.fieldnames]
     required = {"资源id", "中文描述", "英文描述"}
     if not required.issubset(set(reader.fieldnames)):
@@ -130,6 +129,91 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
                     }
                 )
                 continue
+            if kind == "me":
+                owner_id = str(row.get("所属测量单元id") or "").strip()
+                if owner_id:
+                    owner = session.get(KpiMeasurementResource, owner_id)
+                    if owner is None or owner.kind != "mu":
+                        errors.append(
+                            {
+                                "resource_id": resource_id,
+                                "line_number": line_number,
+                                "reason": "measurement_unit_not_found",
+                            }
+                        )
+                        continue
+                display_order_raw = str(row.get("显示顺序") or "").strip()
+                try:
+                    display_order = int(display_order_raw) if display_order_raw else None
+                except ValueError:
+                    errors.append(
+                        {
+                            "resource_id": resource_id,
+                            "line_number": line_number,
+                            "reason": "invalid_display_order",
+                        }
+                    )
+                    continue
+                direction = str(row.get("方向") or "").strip() or None
+                if direction and direction not in {"higher_better", "lower_better", "neutral"}:
+                    errors.append(
+                        {
+                            "resource_id": resource_id,
+                            "line_number": line_number,
+                            "reason": "invalid_direction",
+                        }
+                    )
+                    continue
+                importance = str(row.get("重要级别") or "").strip() or None
+                if importance and importance not in {"P0", "P1", "P2", "normal"}:
+                    errors.append(
+                        {
+                            "resource_id": resource_id,
+                            "line_number": line_number,
+                            "reason": "invalid_importance",
+                        }
+                    )
+                    continue
+                warning_threshold, threshold_errors = _parse_threshold(
+                    row.get("预警阈值"),
+                    "warning_threshold",
+                    line_number,
+                )
+                critical_threshold, more_errors = _parse_threshold(
+                    row.get("失败阈值"),
+                    "critical_threshold",
+                    line_number,
+                )
+                errors.extend(threshold_errors)
+                errors.extend(more_errors)
+                errors.extend(
+                    _threshold_policy_errors(
+                        direction,
+                        warning_threshold,
+                        critical_threshold,
+                        line_number=line_number,
+                        resource_id=resource_id,
+                    )
+                )
+                if any(
+                    error.get("reason")
+                    in {
+                        "invalid_warning_threshold",
+                        "invalid_critical_threshold",
+                        "threshold_direction_conflict",
+                    }
+                    for error in errors
+                ):
+                    continue
+                metric_group = str(row.get("指标分组") or "").strip() or None
+            else:
+                owner_id = None
+                display_order = None
+                metric_group = None
+                direction = None
+                importance = None
+                warning_threshold = None
+                critical_threshold = None
 
             name_key = (kind, name_zh)
             existing_by_name = resources_by_name.get(name_key)
@@ -143,12 +227,8 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
             if existing_by_id is None:
                 existing_by_id = session.get(KpiMeasurementResource, resource_id)
             if existing_by_id is not None and existing_by_id.name_zh != name_zh:
-                # 同一个资源 ID 被不同中文名复用时，不覆盖已有资源；
-                # 为后续行生成稳定的新 ID，重复导入仍能合并到同一条资源。
                 resource_id = conflict_resource_id(resource_id, name_zh)
-                existing_by_id = resources_by_id.get(resource_id)
-                if existing_by_id is None:
-                    existing_by_id = session.get(KpiMeasurementResource, resource_id)
+                existing_by_id = resources_by_id.get(resource_id) or session.get(KpiMeasurementResource, resource_id)
 
             if existing_by_name is not None:
                 resources_by_name[name_key] = existing_by_name
@@ -164,10 +244,45 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
                         }
                     )
                     continue
+                if kind == "me" and owner_id:
+                    current_owner = _metric_ownership_unit(session, existing_by_name.resource_id)
+                    if current_owner and current_owner != owner_id:
+                        errors.append(
+                            {
+                                "resource_id": existing_by_name.resource_id,
+                                "line_number": line_number,
+                                "reason": "metric_owner_conflict",
+                                "existing_measurement_unit_id": current_owner,
+                                "requested_measurement_unit_id": owner_id,
+                            }
+                        )
+                        continue
                 changed = existing_by_name.name_en != name_en
                 existing_by_name.name_en = name_en
                 if kind == "mu":
                     existing_by_name.filename_fragment = filename_fragment(name_en)
+                if kind == "me":
+                    if owner_id:
+                        existing_by_name.source = "preset"
+                        existing_by_name.origin_task_id = None
+                        existing_by_name.origin_file = None
+                    defaults = {
+                        "display_order": display_order
+                        if display_order is not None
+                        else (
+                            None
+                            if getattr(existing_by_name, "display_order", None) is not None
+                            else _next_display_order(session)
+                        ),
+                        "metric_group": metric_group or "未分组",
+                        "direction": direction or "neutral",
+                        "importance": importance or "normal",
+                    }
+                    for field, value in defaults.items():
+                        if getattr(existing_by_name, field, None) is None:
+                            setattr(existing_by_name, field, value)
+                            changed = True
+                    # 增量导入只补充缺失治理字段；已有值必须通过资源编辑显式调整。
                 existing_by_name.updated_at = _utc_now()
                 if changed:
                     updated[kind] += 1
@@ -188,6 +303,12 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
                 )
                 continue
 
+            if kind == "me":
+                if display_order is None:
+                    display_order = _next_display_order(session)
+                metric_group = metric_group or "未分组"
+                direction = direction or "neutral"
+                importance = importance or "normal"
             row_resource = KpiMeasurementResource(
                 resource_id=resource_id,
                 kind=kind,
@@ -195,6 +316,15 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
                 name_en=name_en,
                 filename_fragment=filename_fragment(name_en) if kind == "mu" else None,
                 enabled=True,
+                display_order=display_order,
+                metric_group=metric_group,
+                direction=direction,
+                importance=importance,
+                warning_threshold=warning_threshold,
+                critical_threshold=critical_threshold,
+                source="preset",
+                origin_task_id=None,
+                origin_file=None,
                 created_at=_utc_now(),
                 updated_at=_utc_now(),
             )
@@ -276,7 +406,8 @@ def match_measurement_files(files: Iterable[tuple[str, Path]]) -> dict[str, Any]
                 matched.append(
                     {
                         "filename": filename,
-                        "source_file": str(path),
+                        "source_file": filename,
+                        "source_path": str(path),
                         "status": "ambiguous",
                         "measurement_unit_id": None,
                         "reason": "multiple_measurement_units",
@@ -299,7 +430,8 @@ def match_measurement_files(files: Iterable[tuple[str, Path]]) -> dict[str, Any]
         matched.append(
             {
                 "filename": filename,
-                "source_file": str(path),
+                "source_file": filename,
+                "source_path": str(path),
                 "status": "matched" if unit.enabled else "disabled",
                 "measurement_unit_id": unit.resource_id,
                 "reason": None if unit.enabled else "measurement_unit_disabled",
@@ -332,6 +464,116 @@ def _read_csv_rows(path: Path) -> list[list[str]]:
     return list(csv.reader(io.StringIO(text, newline="")))
 
 
+def _next_display_order(session: Any) -> int:
+    """返回下一个资源显示顺序；空目录从 1 开始。"""
+    current = session.query(func.max(KpiMeasurementResource.display_order)).scalar()
+    return int(current or 0) + 1
+
+
+def _parse_threshold(value: Any, field: str, line_number: int) -> tuple[Any, list[dict[str, Any]]]:
+    """解析可选阈值；非法值返回错误明细而不中断整份目录导入。"""
+    text_value = str(value or "").strip()
+    if not text_value:
+        return None, []
+    try:
+        return float(text_value), []
+    except ValueError:
+        return None, [{"resource_id": None, "line_number": line_number, "reason": f"invalid_{field}"}]
+
+
+def _threshold_policy_errors(
+    direction: str | None,
+    warning_threshold: float | None,
+    critical_threshold: float | None,
+    *,
+    line_number: int | None = None,
+    resource_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """校验方向和预警/失败阈值的方向性关系。"""
+    if not direction or direction == "neutral" or warning_threshold is None or critical_threshold is None:
+        return []
+    invalid = (direction == "higher_better" and critical_threshold >= warning_threshold) or (
+        direction == "lower_better" and critical_threshold <= warning_threshold
+    )
+    if not invalid:
+        return []
+    item: dict[str, Any] = {"reason": "threshold_direction_conflict", "direction": direction}
+    if line_number is not None:
+        item["line_number"] = line_number
+    if resource_id is not None:
+        item["resource_id"] = resource_id
+    return [item]
+
+
+def _metric_ownership_unit(session: Any, metric_id: str, exclude_unit_id: str | None = None) -> str | None:
+    """返回指标当前的唯一启用归属测量单元。"""
+    row = (
+        session.query(KpiMeasurementBinding)
+        .filter(
+            KpiMeasurementBinding.metric_resource_id == metric_id,
+            KpiMeasurementBinding.status == "confirmed",
+            KpiMeasurementBinding.enabled.is_(True),
+        )
+        .filter(KpiMeasurementBinding.measurement_unit_id != exclude_unit_id if exclude_unit_id else True)
+        .first()
+    )
+    return row.measurement_unit_id if row else None
+
+
+def _ensure_metric_for_column(
+    session: Any,
+    *,
+    task_id: str,
+    source_file: str,
+    measurement_unit_id: str,
+    raw_name: str,
+    base_name: str,
+    display_unit: str | None,
+) -> tuple[KpiMeasurementResource, str]:
+    """复用或自动创建指标，并返回资源与匹配结果。"""
+    metric = (
+        session.query(KpiMeasurementResource)
+        .filter(
+            KpiMeasurementResource.kind == "me",
+            or_(KpiMeasurementResource.name_zh == base_name, KpiMeasurementResource.name_en == base_name),
+        )
+        .first()
+    )
+    if metric is not None:
+        owner = _metric_ownership_unit(session, metric.resource_id, exclude_unit_id=measurement_unit_id)
+        if owner is not None:
+            return metric, "conflict"
+        return metric, "preset_hit" if getattr(metric, "source", "preset") == "preset" else "reuse"
+
+    suffix = hashlib.sha256(f"{measurement_unit_id}\x00{raw_name}".encode()).hexdigest()[:6].upper()
+    slug = _manual_metric_slug(base_name)[:24] or "AUTO"
+    resource_id = f"ME__AUTO_{slug}_{suffix}"
+    attempt = 0
+    while session.get(KpiMeasurementResource, resource_id) is not None:
+        attempt += 1
+        resource_id = f"ME__AUTO_{slug}_{suffix}_{attempt}"
+    metric = KpiMeasurementResource(
+        resource_id=resource_id,
+        kind="me",
+        name_zh=base_name,
+        name_en="",
+        filename_fragment=None,
+        enabled=True,
+        display_order=_next_display_order(session),
+        metric_group="未分组",
+        direction="neutral",
+        importance="normal",
+        source="discovered",
+        origin_task_id=task_id,
+        origin_file=source_file,
+        created_at=_utc_now(),
+        updated_at=_utc_now(),
+    )
+    session.add(metric)
+    session.flush()
+    return metric, "auto_registered"
+
+
 def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
     """扫描任务 CSV 表头，发现指标候选绑定。"""
     init_db()
@@ -340,7 +582,7 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
         for file_result in matched_files["files"]:
             if file_result["status"] != "matched":
                 continue
-            path = Path(file_result["source_file"])
+            path = Path(file_result["source_path"])
             try:
                 rows = _read_csv_rows(path)
             except (OSError, UnicodeError, csv.Error) as exc:
@@ -353,20 +595,28 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
             anchor_index = header[1].index("周期(分钟)")
             metric_columns = header[1][anchor_index + 1 :]
             candidates: list[dict[str, Any]] = []
-            unknown: list[str] = []
+            matched_metrics: list[str] = []
+            auto_registered: list[str] = []
+            conflicts: list[str] = []
             for raw_name in metric_columns:
                 base_name, display_unit = _split_source_name(raw_name)
-                metric = (
-                    session.query(KpiMeasurementResource)
-                    .filter(
-                        KpiMeasurementResource.kind == "me",
-                        or_(KpiMeasurementResource.name_zh == base_name, KpiMeasurementResource.name_en == base_name),
-                    )
-                    .first()
+                metric, outcome = _ensure_metric_for_column(
+                    session,
+                    task_id=task_id,
+                    source_file=file_result["filename"],
+                    measurement_unit_id=file_result["measurement_unit_id"],
+                    raw_name=raw_name,
+                    base_name=base_name,
+                    display_unit=display_unit,
                 )
-                metric_id = metric.resource_id if metric else None
-                if metric_id is None:
-                    unknown.append(raw_name)
+                metric_id = metric.resource_id
+                if outcome == "auto_registered":
+                    auto_registered.append(raw_name)
+                    matched_metrics.append(raw_name)
+                elif outcome == "conflict":
+                    conflicts.append(raw_name)
+                else:
+                    matched_metrics.append(raw_name)
                 existing = (
                     session.query(KpiMeasurementBinding)
                     .filter(
@@ -376,29 +626,24 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
                     .one_or_none()
                 )
                 if existing:
+                    if outcome == "auto_registered" or existing.metric_resource_id is None:
+                        existing.metric_resource_id = metric_id
+                        existing.updated_at = _utc_now()
+                    if outcome != "conflict" and existing.status != "confirmed":
+                        existing.status = "confirmed"
+                        existing.updated_at = _utc_now()
                     candidates.append(_binding_dict(existing))
                     continue
-                conflict = (
-                    metric_id is not None
-                    and session.query(KpiMeasurementBinding)
-                    .filter(
-                        KpiMeasurementBinding.metric_resource_id == metric_id,
-                        KpiMeasurementBinding.measurement_unit_id != file_result["measurement_unit_id"],
-                        KpiMeasurementBinding.status != "ignored",
-                    )
-                    .first()
-                    is not None
-                )
                 row = KpiMeasurementBinding(
                     metric_resource_id=metric_id,
                     measurement_unit_id=file_result["measurement_unit_id"],
                     raw_source_name=raw_name,
                     base_source_name=base_name,
                     display_unit=display_unit,
-                    status="conflict" if conflict else "candidate",
+                    status="conflict" if outcome == "conflict" else "confirmed",
                     enabled=True,
                     task_id=task_id,
-                    source_file=file_result["source_file"],
+                    source_file=file_result["filename"],
                     created_at=_utc_now(),
                     updated_at=_utc_now(),
                 )
@@ -406,7 +651,10 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
                 session.flush()
                 candidates.append(_binding_dict(row))
             file_result["binding_candidates"] = len(candidates)
-            file_result["unknown_columns"] = unknown
+            file_result["unknown_columns"] = []
+            file_result["matched_metrics"] = matched_metrics
+            file_result["auto_registered_metrics"] = auto_registered
+            file_result["conflict_metrics"] = conflicts
         session.commit()
     return matched_files
 
@@ -420,6 +668,15 @@ def _metric_resource_dict(row: KpiMeasurementResource) -> dict[str, Any]:
         "name_en": row.name_en,
         "enabled": row.enabled,
         "is_manual": is_manual_metric_id(row.resource_id),
+        "display_order": getattr(row, "display_order", None),
+        "metric_group": getattr(row, "metric_group", None),
+        "direction": getattr(row, "direction", None),
+        "importance": getattr(row, "importance", None),
+        "warning_threshold": getattr(row, "warning_threshold", None),
+        "critical_threshold": getattr(row, "critical_threshold", None),
+        "source": getattr(row, "source", "preset"),
+        "origin_task_id": getattr(row, "origin_task_id", None),
+        "origin_file": getattr(row, "origin_file", None),
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
@@ -510,6 +767,11 @@ def register_metric_for_binding(
             name_en=normalized_en or "",
             filename_fragment=None,
             enabled=True,
+            display_order=_next_display_order(session),
+            metric_group="未分组",
+            direction="neutral",
+            importance="normal",
+            source="manual",
             created_at=_utc_now(),
             updated_at=_utc_now(),
         )
@@ -528,10 +790,33 @@ def update_manual_metric(
     name_zh: str | None = None,
     name_en: str | None = None,
     enabled: bool | None = None,
+    display_order: int | None = None,
+    metric_group: str | None = None,
+    direction: str | None = None,
+    importance: str | None = None,
+    warning_threshold: float | None = None,
+    critical_threshold: float | None = None,
 ) -> dict[str, Any]:
-    """编辑人工注册 ME 指标；资源 ID 与绑定来源不可修改。"""
-    if name_zh is None and name_en is None and enabled is None:
+    """编辑 ME 指标口径、默认值和阈值；资源 ID 与绑定来源不可修改。"""
+    provided = {
+        name_zh,
+        name_en,
+        enabled,
+        display_order,
+        metric_group,
+        direction,
+        importance,
+        warning_threshold,
+        critical_threshold,
+    }
+    if all(value is None for value in provided):
         raise KpiMeasurementError("kpi_metric_no_fields", "至少提供一个可编辑字段", 400)
+    if direction is not None and direction not in {"higher_better", "lower_better", "neutral"}:
+        raise KpiMeasurementError("kpi_metric_direction_invalid", f"指标方向非法: {direction}", 400)
+    if importance is not None and importance not in {"P0", "P1", "P2", "normal"}:
+        raise KpiMeasurementError("kpi_metric_importance_invalid", f"重要级别非法: {importance}", 400)
+    if display_order is not None and display_order < 0:
+        raise KpiMeasurementError("kpi_metric_display_order_invalid", "显示顺序不能小于 0", 400)
     normalized_zh = None if name_zh is None else str(name_zh).strip()
     normalized_en = None if name_en is None else str(name_en).strip()
     if normalized_zh == "":
@@ -546,8 +831,6 @@ def update_manual_metric(
         row = session.get(KpiMeasurementResource, resource_id)
         if row is None or row.kind != "me":
             raise KpiMeasurementError("kpi_metric_not_found", f"指标不存在: {resource_id}", 404)
-        if not is_manual_metric_id(row.resource_id):
-            raise KpiMeasurementError("kpi_metric_not_manual", "仅人工注册指标支持编辑", 409)
         if normalized_zh:
             conflict = (
                 session.query(KpiMeasurementResource)
@@ -570,6 +853,28 @@ def update_manual_metric(
             row.name_en = normalized_en
         if enabled is not None:
             row.enabled = enabled
+        if display_order is not None:
+            row.display_order = display_order
+        if metric_group is not None:
+            row.metric_group = metric_group or "未分组"
+        if direction is not None:
+            row.direction = direction
+        if importance is not None:
+            row.importance = importance
+        if warning_threshold is not None:
+            row.warning_threshold = warning_threshold
+        if critical_threshold is not None:
+            row.critical_threshold = critical_threshold
+        policy_errors = _threshold_policy_errors(
+            row.direction, row.warning_threshold, row.critical_threshold, resource_id=row.resource_id
+        )
+        if policy_errors:
+            raise KpiMeasurementError(
+                "kpi_metric_threshold_conflict",
+                "预警阈值和失败阈值与指标方向矛盾",
+                400,
+                {"errors": policy_errors},
+            )
         row.updated_at = _utc_now()
         session.commit()
         return _metric_resource_dict(row)
@@ -601,7 +906,10 @@ def list_measurement_resources(
                     KpiMeasurementResource.name_en.like(like),
                 )
             )
-        rows = query.order_by(KpiMeasurementResource.resource_id.asc()).all()
+        rows = query.order_by(
+            KpiMeasurementResource.display_order.asc().nullslast(),
+            KpiMeasurementResource.resource_id.asc(),
+        ).all()
         start = (page - 1) * page_size
         return {
             "total": len(rows),
@@ -863,6 +1171,219 @@ def _merge_observation(target: dict[str, Any], source: dict[str, Any]) -> None:
     target["source_rows"].extend(source["source_rows"])
 
 
+def _parse_measurement_time(value: str) -> datetime | None:
+    """解析 CSV 中的测量时间；无法解析时返回 None。"""
+    text_value = str(value or "").strip()
+    if not text_value:
+        return None
+    try:
+        return datetime.fromisoformat(text_value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _parse_period_minutes(value: str) -> int | None:
+    """解析周期分钟数，用于避免混合不同粒度的时间序列。"""
+    valid, number = _parse_number(value)
+    if not valid or number is None or number <= 0:
+        return None
+    return int(number)
+
+
+def _deduplicate_series(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """同一对象/周期/时间的重复值求均值，并保留来源证据。"""
+    grouped: dict[tuple[str, int | None], dict[str, Any]] = {}
+    for point in points:
+        key = (point["time"], point["period_minutes"])
+        target = grouped.setdefault(
+            key,
+            {
+                "time": point["time"],
+                "period_minutes": point["period_minutes"],
+                "object_key": point["object_key"],
+                "value": 0.0,
+                "count": 0,
+                "source_rows": [],
+            },
+        )
+        target["value"] += point["value"]
+        target["count"] += 1
+        target["source_rows"].extend(point["source_rows"])
+    result = []
+    for item in grouped.values():
+        result.append(
+            {
+                "time": item["time"],
+                "period_minutes": item["period_minutes"],
+                "object_key": item["object_key"],
+                "value": round(item["value"] / item["count"], 6),
+                "source_rows": item["source_rows"],
+            }
+        )
+    return sorted(result, key=lambda item: (item["time"], item["period_minutes"] is None, item["period_minutes"] or 0))
+
+
+def _classify_trend(points: list[dict[str, Any]], direction: str | None) -> dict[str, Any]:
+    """按规则生成单对象、单周期的趋势标签和方向信号。"""
+    if len(points) < 2:
+        return {
+            "label": "cannot_determine",
+            "signal": "none",
+            "reason": "insufficient_points",
+            "points": points,
+        }
+    values = [point["value"] for point in points]
+    if all(value == 0 for value in values):
+        label = "all_zero"
+    else:
+        mean = sum(values) / len(values)
+        tolerance = max(abs(mean) * 0.05, 1e-9)
+        if max(values) - min(values) <= tolerance:
+            label = "stable"
+        else:
+            previous = values[:-1]
+            baseline = sum(previous) / len(previous)
+            change = values[-1] - baseline
+            change_tolerance = max(abs(baseline) * 0.3, 1e-9)
+            if abs(change) > change_tolerance:
+                label = "spike" if change > 0 else "plunge"
+            elif all(values[i] <= values[i + 1] + tolerance for i in range(len(values) - 1)):
+                label = "rising"
+            elif all(values[i] >= values[i + 1] - tolerance for i in range(len(values) - 1)):
+                label = "falling"
+            else:
+                lower = min(values)
+                lower_index = values.index(lower)
+                if 0 < lower_index < len(values) - 1 and values[-1] > values[lower_index] + tolerance:
+                    label = "recovering"
+                else:
+                    label = "fluctuating"
+    signal = "none"
+    if direction == "higher_better":
+        if label in {"falling", "plunge", "all_zero"}:
+            signal = "worsened"
+        elif label in {"rising", "spike"}:
+            signal = "improved"
+    elif direction == "lower_better":
+        if label in {"rising", "spike"}:
+            signal = "worsened"
+        elif label in {"falling", "plunge"}:
+            signal = "improved"
+    return {"label": label, "signal": signal, "reason": None, "points": points}
+
+
+def _business_status(
+    value: float | None,
+    direction: str | None,
+    warning_threshold: float | None,
+    critical_threshold: float | None,
+) -> str:
+    """按方向输出独立于可读性的业务状态；等于阈值视为触发。"""
+    if value is None:
+        return "not_judgeable"
+    if not direction or direction == "neutral":
+        return "not_applicable"
+    if warning_threshold is None and critical_threshold is None:
+        return "unconfigured"
+    if direction == "higher_better":
+        if critical_threshold is not None and value <= critical_threshold:
+            return "fail"
+        if warning_threshold is not None and value <= warning_threshold:
+            return "warn"
+        return "normal"
+    if critical_threshold is not None and value >= critical_threshold:
+        return "fail"
+    if warning_threshold is not None and value >= warning_threshold:
+        return "warn"
+    return "normal"
+
+
+def _metric_business_status(statuses: list[str]) -> str:
+    """聚合同一指标多个行对象的业务状态，失败优先于预警。"""
+    if "fail" in statuses:
+        return "fail"
+    if "warn" in statuses:
+        return "warn"
+    if statuses and all(status == "normal" for status in statuses):
+        return "normal"
+    if "not_applicable" in statuses:
+        return "not_applicable"
+    if "unconfigured" in statuses:
+        return "unconfigured"
+    return "not_judgeable"
+
+
+def _unit_risk_summary(unit: dict[str, Any]) -> dict[str, Any]:
+    """汇总测量单元健康分与诊断数量，健康分只用于排序定位。"""
+    score = 100
+    business_fail = 0
+    business_warn = 0
+    data_error = 0
+    trend_worsened = 0
+    unconfigured = 0
+    for metric in unit.get("metrics", []):
+        status = metric.get("business_status")
+        if status == "fail":
+            business_fail += 1
+            score -= 25
+        elif status == "warn":
+            business_warn += 1
+            score -= 12
+        elif metric.get("read_status") in {"missing", "parse_error"}:
+            data_error += 1
+            score -= 10
+        elif status == "unconfigured":
+            unconfigured += 1
+        if metric.get("trend_signal") == "worsened":
+            trend_worsened += 1
+            score -= 5
+    health_score = max(0, min(100, score))
+    return {
+        "health_score": health_score,
+        "business_fail_count": business_fail,
+        "business_warn_count": business_warn,
+        "data_error_count": data_error,
+        "trend_worsened_count": trend_worsened,
+        "unconfigured_count": unconfigured,
+    }
+
+
+RISK_COUNT_KEYS = (
+    "business_fail_count",
+    "business_warn_count",
+    "data_error_count",
+    "trend_worsened_count",
+    "unconfigured_count",
+)
+
+
+def _kpi_overview(units: list[dict[str, Any]]) -> dict[str, Any]:
+    """生成任务级 KPI 总览，所有数量都能下钻到对应单元和指标。"""
+    status_counts = {"pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 0}
+    summary = {
+        "unit_count": len(units),
+        "status_counts": status_counts,
+        "health_score": 100,
+        "business_fail_count": 0,
+        "business_warn_count": 0,
+        "data_error_count": 0,
+        "trend_worsened_count": 0,
+        "unconfigured_count": 0,
+        "metric_count": 0,
+    }
+    scores: list[int] = []
+    for unit in units:
+        status_counts[unit.get("status", "skip")] = status_counts.get(unit.get("status", "skip"), 0) + 1
+        risk = unit.get("risk_summary", _unit_risk_summary(unit))
+        unit["risk_summary"] = risk
+        scores.append(risk["health_score"])
+        for key in RISK_COUNT_KEYS:
+            summary[key] += risk[key]
+        summary["metric_count"] += len(unit.get("metrics", []))
+    summary["health_score"] = min(scores) if scores else 100
+    return summary
+
+
 def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
     """执行测量单元可读性巡检并返回通用结构。"""
     init_db()
@@ -898,6 +1419,17 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             + list(by_unit)
             + [row[0] for row in derived_metric_ids],
         )
+        metric_resource_rows = (
+            session.query(KpiMeasurementResource)
+            .filter(
+                KpiMeasurementResource.resource_id.in_(
+                    [binding.metric_resource_id for binding in bindings if binding.metric_resource_id],
+                ),
+                KpiMeasurementResource.kind == "me",
+            )
+            .all()
+        )
+        metric_resources = {row.resource_id: row for row in metric_resource_rows}
         for file_result in matched:
             unit_id = file_result["measurement_unit_id"]
             unit = session.get(KpiMeasurementResource, unit_id)
@@ -930,7 +1462,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             result["file_count"] += 1
             result["source_files"].append(file_result["source_file"])
             try:
-                rows = _read_csv_rows(Path(file_result["source_file"]))
+                rows = _read_csv_rows(Path(file_result["source_path"]))
             except (OSError, UnicodeError, csv.Error) as exc:
                 result["status"] = "error"
                 result["reason"] = f"CSV 读取失败: {exc}"
@@ -947,6 +1479,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             column_index = {name: index for index, name in enumerate(header_row)}
             confirmed_bindings = by_unit[unit_id]
             for binding in confirmed_bindings:
+                series_points: list[dict[str, Any]] = []
                 if binding.raw_source_name not in column_index:
                     metric_key = (binding.metric_resource_id, binding.raw_source_name)
                     metric_result = result["metric_results"].get(metric_key)
@@ -958,6 +1491,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                             "base_source_name": binding.base_source_name,
                             "display_unit": binding.display_unit,
                             "observations": {},
+                            "time_series": [],
                             "source_files": [file_result["source_file"]],
                             "errors": [{"reason": "column_missing"}],
                         }
@@ -1009,6 +1543,26 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         number if observation["max_value"] is None else max(observation["max_value"], number)
                     )
                     observation["sum_value"] += number
+                    measured_at = _parse_measurement_time(data_row[start_index])
+                    period_minutes = _parse_period_minutes(
+                        data_row[column_index["周期(分钟)"]] if "周期(分钟)" in column_index else ""
+                    )
+                    if measured_at is not None:
+                        series_points.append(
+                            {
+                                "object_key": object_key,
+                                "time": measured_at.isoformat(),
+                                "period_minutes": period_minutes,
+                                "value": number,
+                                "source_rows": [
+                                    {
+                                        "source_file": file_result["source_file"],
+                                        "line_number": line_number,
+                                        "value": raw_value,
+                                    }
+                                ],
+                            }
+                        )
                 metric_key = (binding.metric_resource_id, binding.raw_source_name)
                 metric_result = result["metric_results"].get(metric_key)
                 if metric_result is None:
@@ -1019,6 +1573,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         "base_source_name": binding.base_source_name,
                         "display_unit": binding.display_unit,
                         "observations": observations,
+                        "time_series": series_points,
                         "source_files": [file_result["source_file"]],
                     }
                 else:
@@ -1027,6 +1582,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                             _merge_observation(metric_result["observations"][object_key], observation)
                         else:
                             metric_result["observations"][object_key] = observation
+                    metric_result.setdefault("time_series", []).extend(series_points)
                     metric_result["source_files"].append(file_result["source_file"])
                 for object_key, observation in observations.items():
                     if object_key in result["object_results"]:
@@ -1059,6 +1615,31 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         observation["sum_value"] / observation["valid_count"] if observation["valid_count"] else None
                     )
                     observation.pop("sum_value", None)
+                resource = metric_resources.get(metric_result["metric_resource_id"])
+                direction = getattr(resource, "direction", None)
+                warning_threshold = getattr(resource, "warning_threshold", None)
+                critical_threshold = getattr(resource, "critical_threshold", None)
+                for observation in observations:
+                    observation["business_status"] = _business_status(
+                        observation.get("avg_value"), direction, warning_threshold, critical_threshold
+                    )
+                business_status = _metric_business_status([item["business_status"] for item in observations])
+
+                trend_groups: dict[tuple[str, int | None], list[dict[str, Any]]] = {}
+                for point in metric_result.get("time_series", []):
+                    trend_groups.setdefault((point["object_key"], point["period_minutes"]), []).append(point)
+                trends = [
+                    _classify_trend(_deduplicate_series(points), direction)
+                    for _, points in sorted(
+                        trend_groups.items(),
+                        key=lambda item: (item[0][0], item[0][1] is None, item[0][1] or 0),
+                    )
+                ]
+                for trend in trends:
+                    first_point = trend["points"][0] if trend["points"] else {}
+                    trend["object_key"] = first_point.get("object_key")
+                    trend["period_minutes"] = first_point.get("period_minutes")
+                primary_trend = max(trends, key=lambda item: len(item["points"])) if trends else None
                 finalized_metrics.append(
                     {
                         "metric_resource_id": metric_result["metric_resource_id"],
@@ -1073,6 +1654,12 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                             if any(item["read_status"] != "ok" for item in observations)
                             else "ok"
                         ),
+                        "business_status": business_status,
+                        "direction": direction or "neutral",
+                        "importance": getattr(resource, "importance", None) or "normal",
+                        "metric_group": getattr(resource, "metric_group", None) or "未分组",
+                        "warning_threshold": warning_threshold,
+                        "critical_threshold": critical_threshold,
                         "value_pattern": (
                             "unknown"
                             if not observations
@@ -1080,6 +1667,11 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                             if all(item["value_pattern"] == "all_zero" for item in observations)
                             else "normal"
                         ),
+                        "trend_label": primary_trend["label"] if primary_trend else "cannot_determine",
+                        "trend_signal": primary_trend["signal"] if primary_trend else "none",
+                        "trend_reason": primary_trend["reason"] if primary_trend else "no_time_series",
+                        "trend_points": primary_trend["points"] if primary_trend else [],
+                        "trends": trends,
                         "observations": observations,
                         "source_files": metric_result["source_files"],
                         "errors": metric_result.get("errors"),
@@ -1089,6 +1681,13 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 result["status"] = "fail"
                 result["reason"] = "指标存在缺失、空值或解析错误"
             result["metrics"] = finalized_metrics
+            result["risk_summary"] = _unit_risk_summary(result)
+            if result["status"] != "error" and result["risk_summary"]["business_fail_count"]:
+                result["status"] = "fail"
+                result["reason"] = "指标存在业务阈值失败"
+            elif result["status"] == "pass" and result["risk_summary"]["business_warn_count"]:
+                result["status"] = "warn"
+                result["reason"] = "指标存在业务阈值预警"
             result["objects"] = {}
             for object_key, observation in result["object_results"].items():
                 observation["read_status"] = (
@@ -1192,9 +1791,17 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 result["reason"] = None
             result.pop("metric_results", None)
             result.pop("object_results", None)
+    final_units = list(unit_results.values())
+    kpi_overview = _kpi_overview(final_units)
+    kpi_overview["auto_registered_count"] = sum(
+        len(item.get("auto_registered_metrics", [])) for item in discovered["files"]
+    )
+    kpi_overview["conflict_count"] = sum(len(item.get("conflict_metrics", [])) for item in discovered["files"])
+    kpi_overview["unmatched_file_count"] = len(unmatched)
     return {
         "task_id": task_id,
-        "measurement_units": list(unit_results.values()),
+        "kpi_overview": kpi_overview,
+        "measurement_units": final_units,
         "files": discovered["files"],
         "unmatched_files": unmatched,
     }

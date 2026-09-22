@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import JSON, DateTime, Engine, String, UniqueConstraint, create_engine, inspect, text
+from sqlalchemy import JSON, DateTime, Engine, Float, String, UniqueConstraint, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.core.config import settings
@@ -66,6 +66,30 @@ def init_db() -> None:
         _rebuild_legacy_tasks(engine)
     else:
         Base.metadata.create_all(engine)
+    _ensure_kpi_measurement_columns(engine)
+
+
+def _ensure_kpi_measurement_columns(engine: Engine) -> None:
+    """为旧 SQLite 目录表补充 021-024 需要的增量字段。"""
+    table = KpiMeasurementResource.__tablename__
+    if not inspect(engine).has_table(table):
+        return
+    existing = {column["name"] for column in inspect(engine).get_columns(table)}
+    wanted = {
+        "display_order": "INTEGER",
+        "metric_group": "VARCHAR(64)",
+        "direction": "VARCHAR(16)",
+        "importance": "VARCHAR(16)",
+        "warning_threshold": "FLOAT",
+        "critical_threshold": "FLOAT",
+        "source": "VARCHAR(16) NOT NULL DEFAULT 'preset'",
+        "origin_task_id": "VARCHAR(64)",
+        "origin_file": "VARCHAR(512)",
+    }
+    with engine.begin() as connection:
+        for name, ddl in wanted.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
 
 class KpiMeasurementResource(Base):
@@ -79,6 +103,15 @@ class KpiMeasurementResource(Base):
     name_en: Mapped[str] = mapped_column(String(256))
     filename_fragment: Mapped[str | None] = mapped_column(String(256), nullable=True)
     enabled: Mapped[bool] = mapped_column(default=True)
+    display_order: Mapped[int | None] = mapped_column(nullable=True)
+    metric_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    direction: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    importance: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    warning_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    critical_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(16), default="preset")
+    origin_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    origin_file: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

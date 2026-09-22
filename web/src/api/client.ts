@@ -906,6 +906,28 @@ export interface components {
             enabled: boolean;
             /** Is Manual */
             is_manual: boolean;
+            /** Display Order */
+            display_order?: number | null;
+            /** Metric Group */
+            metric_group?: string | null;
+            /** Direction */
+            direction?: ("higher_better" | "lower_better" | "neutral") | null;
+            /** Importance */
+            importance?: ("P0" | "P1" | "P2" | "normal") | null;
+            /** Warning Threshold */
+            warning_threshold?: number | null;
+            /** Critical Threshold */
+            critical_threshold?: number | null;
+            /**
+             * Source
+             * @default preset
+             * @enum {string}
+             */
+            source: "preset" | "discovered" | "manual";
+            /** Origin Task Id */
+            origin_task_id?: string | null;
+            /** Origin File */
+            origin_file?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -932,6 +954,18 @@ export interface components {
             name_en?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Display Order */
+            display_order?: number | null;
+            /** Metric Group */
+            metric_group?: string | null;
+            /** Direction */
+            direction?: ("higher_better" | "lower_better" | "neutral") | null;
+            /** Importance */
+            importance?: ("P0" | "P1" | "P2" | "normal") | null;
+            /** Warning Threshold */
+            warning_threshold?: number | null;
+            /** Critical Threshold */
+            critical_threshold?: number | null;
         };
         /** KpiMeasurementUnit */
         KpiMeasurementUnit: {

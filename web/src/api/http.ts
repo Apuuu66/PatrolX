@@ -36,8 +36,27 @@ export interface MeasurementMetadataMetricObservation {
   max_value: number | null;
   avg_value?: number | null;
   value_pattern: "normal" | "all_zero" | "unknown";
+  business_status?: "normal" | "warn" | "fail" | "unconfigured" | "not_applicable" | "not_judgeable";
   source_rows?: { source_file: string; line_number: number; value: string }[];
 }
+
+export interface MeasurementTrendPoint {
+  time: string;
+  period_minutes?: number | null;
+  object_key?: string | null;
+  value: number;
+  source_rows?: { source_file: string; line_number: number; value: string }[];
+}
+
+export interface MeasurementTrend {
+  label: "stable" | "rising" | "falling" | "spike" | "plunge" | "fluctuating" | "all_zero" | "recovering" | "cannot_determine";
+  signal: "improved" | "worsened" | "none";
+  reason?: string | null;
+  object_key?: string | null;
+  period_minutes?: number | null;
+  points: MeasurementTrendPoint[];
+}
+
 export interface MeasurementMetadataMetric {
   metric_resource_id: string;
   metric_resource_name_zh?: string | null;
@@ -46,6 +65,17 @@ export interface MeasurementMetadataMetric {
   display_unit?: string | null;
   read_status: "ok" | "missing" | "parse_error";
   value_pattern: "normal" | "all_zero" | "unknown";
+  business_status?: "normal" | "warn" | "fail" | "unconfigured" | "not_applicable" | "not_judgeable";
+  direction?: "higher_better" | "lower_better" | "neutral";
+  importance?: "P0" | "P1" | "P2" | "normal";
+  metric_group?: string | null;
+  warning_threshold?: number | null;
+  critical_threshold?: number | null;
+  trend_label?: string;
+  trend_signal?: "improved" | "worsened" | "none";
+  trend_reason?: string | null;
+  trend_points?: MeasurementTrendPoint[];
+  trends?: MeasurementTrend[];
   source_file?: string;
   source_files?: string[];
   observations?: MeasurementMetadataMetricObservation[];
@@ -63,6 +93,24 @@ export interface MeasurementMetadataObject {
   avg_value?: number | null;
   value_pattern: "normal" | "all_zero" | "unknown";
 }
+export interface MeasurementRiskSummary {
+  health_score: number;
+  business_fail_count: number;
+  business_warn_count: number;
+  data_error_count: number;
+  trend_worsened_count: number;
+  unconfigured_count: number;
+}
+
+export interface MeasurementKpiOverview extends MeasurementRiskSummary {
+  unit_count: number;
+  status_counts: Record<string, number>;
+  metric_count: number;
+  auto_registered_count?: number;
+  conflict_count?: number;
+  unmatched_file_count?: number;
+}
+
 export interface MeasurementMetadataUnit {
   measurement_unit_id: string;
   name_zh: string;
@@ -74,6 +122,7 @@ export interface MeasurementMetadataUnit {
   metric_coverage?: string;
   metrics: MeasurementMetadataMetric[];
   objects?: Record<string, MeasurementMetadataObject>;
+  risk_summary?: MeasurementRiskSummary;
   source_files?: string[];
   derived_metrics?: {
     metric_resource_id: string;
