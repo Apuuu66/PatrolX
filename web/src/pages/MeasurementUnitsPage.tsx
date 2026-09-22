@@ -4,7 +4,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
-import { api, type MeasurementBinding, type MeasurementUnit } from "../api/http";
+import { api, type MeasurementBinding, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -13,6 +13,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   candidate: "候选", confirmed: "已确认", conflict: "冲突", ignored: "忽略",
+};
+
+const IMPORT_ERROR_LABELS: Record<string, string> = {
+  invalid_resource: "资源行缺少必填字段",
+  unknown_resource_prefix: "资源 ID 前缀不合法",
+  resource_id_conflict: "同一个资源 ID 对应不同中文名",
 };
 
 function MeasurementUnitTab() {
@@ -26,6 +32,7 @@ function MeasurementUnitTab() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<MeasurementUnitImportResult | null>(null);
 
   const load = useCallback(
     async (nextPage = page, nextPageSize = pageSize, nextSearch = search) => {
@@ -51,7 +58,11 @@ function MeasurementUnitTab() {
       const result = await api.importMeasurementUnits(file);
       const added = Object.values(result.added ?? {}).reduce((sum, value) => sum + value, 0);
       const updated = Object.values(result.updated ?? {}).reduce((sum, value) => sum + value, 0);
-      message.success(`导入完成：新增 ${added}，更新 ${updated}，错误 ${(result.errors ?? []).length}`);
+      const errorCount = (result.errors ?? []).length;
+      message.success(`导入完成：新增 ${added}，更新 ${updated}，错误 ${errorCount}`);
+      if (errorCount > 0) {
+        setImportResult(result);
+      }
       setPage(1);
       await load(1, pageSize, search);
     } catch (err) {
@@ -91,6 +102,27 @@ function MeasurementUnitTab() {
     },
   ];
 
+  const importErrorColumns: ColumnsType<NonNullable<MeasurementUnitImportResult["errors"]>[number]> = [
+    { title: "CSV 行号", dataIndex: "line_number", key: "line_number", width: 100 },
+    {
+      title: "资源 ID", dataIndex: "resource_id", key: "resource_id", width: 220,
+      render: (value: unknown) => (typeof value === "string" && value ? value : "-"),
+    },
+    {
+      title: "错误原因", dataIndex: "reason", key: "reason", width: 200,
+      render: (value: unknown) => IMPORT_ERROR_LABELS[String(value)] ?? String(value ?? "-"),
+    },
+    {
+      title: "说明", key: "description",
+      render: (_, record) => {
+        if (record.reason === "resource_id_conflict") {
+          return `资源 ID 已对应「${String(record.existing_name_zh ?? "-")}」，当前行中文名是「${String(record.name_zh ?? "-")}」`;
+        }
+        return "该行未导入";
+      },
+    },
+  ];
+
   return (
     <Card title="测量单元目录" extra={isAdmin ? (
       <Upload accept=".csv" showUploadList={false} customRequest={({ file }) => void importFile(file as File)}>
@@ -103,6 +135,21 @@ function MeasurementUnitTab() {
       </Space>
       <Table rowKey="resource_id" loading={loading} columns={columns} dataSource={items}
         pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }} />
+      <Modal
+        open={importResult !== null}
+        title="资源导入错误明细"
+        footer={<Button type="primary" onClick={() => setImportResult(null)}>关闭</Button>}
+        onCancel={() => setImportResult(null)}
+        width={860}
+      >
+        <Table
+          rowKey={(record) => `${record.line_number ?? "unknown"}-${String(record.resource_id ?? "")}`}
+          size="small"
+          columns={importErrorColumns}
+          dataSource={importResult?.errors ?? []}
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+        />
+      </Modal>
     </Card>
   );
 }

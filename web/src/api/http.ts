@@ -11,6 +11,7 @@ export type Severity = components["schemas"]["Severity"];
 export type InspectorInfo = components["schemas"]["InspectorInfo"];
 export type MeasurementUnit = components["schemas"]["KpiMeasurementUnit"];
 export type MeasurementUnitList = components["schemas"]["KpiMeasurementUnitList"];
+export type MeasurementUnitImportResult = components["schemas"]["KpiMeasurementImportResult"];
 export type MeasurementBinding = components["schemas"]["KpiMeasurementBinding"];
 export type MeasurementBindingList = components["schemas"]["KpiMeasurementBindingList"];
 export type MeasurementBindingStatus = MeasurementBinding["status"];
