@@ -40,11 +40,11 @@ def test_import_resource_csv_adds_and_upserts() -> None:
     )
     assert first["added"] == {"mu": 1, "me": 1, "unit": 0}
     assert first["errors"] == []
-    second = import_resource_csv(resource_csv(("MU__CALL", "呼叫统计新", "Call Statistics New")))
+    second = import_resource_csv(resource_csv(("MU__CALL", "呼叫统计", "Call Statistics New")))
     assert second["added"] == {"mu": 0, "me": 0, "unit": 0}
     assert second["updated"] == {"mu": 1, "me": 0, "unit": 0}
     units = list_measurement_units()
-    assert units["items"][0]["name_zh"] == "呼叫统计新"
+    assert units["items"][0]["name_zh"] == "呼叫统计"
     assert units["items"][0]["name_en"] == "Call Statistics New"
 
 
@@ -78,3 +78,50 @@ def test_enable_toggle_only_affects_mu() -> None:
     assert list_measurement_units()["items"][0]["enabled"] is False
     with pytest.raises(KpiMeasurementError):
         set_measurement_unit_enabled("ME_CALL", False)
+
+
+def test_import_updates_english_for_same_chinese_name() -> None:
+    first = import_resource_csv(resource_csv(("ME_CALL", "呼叫请求", "Call Requests")))
+    assert first["added"] == {"mu": 0, "me": 1, "unit": 0}
+
+    second = import_resource_csv(resource_csv(("ME_CALL", "呼叫请求", "Call Request Count")))
+    assert second["updated"] == {"mu": 0, "me": 1, "unit": 0}
+    assert second["errors"] == []
+
+
+def test_import_conflicts_when_resource_id_has_different_chinese() -> None:
+    import_resource_csv(resource_csv(("ME_CALL", "呼叫请求", "Call Requests")))
+    result = import_resource_csv(resource_csv(("ME_CALL", "呼叫请求总数", "Call Request Total")))
+
+    assert result["added"] == {"mu": 0, "me": 0, "unit": 0}
+    assert result["updated"] == {"mu": 0, "me": 0, "unit": 0}
+    assert result["errors"] == [
+        {
+            "resource_id": "ME_CALL",
+            "line_number": 2,
+            "reason": "resource_id_conflict",
+            "existing_name_zh": "呼叫请求",
+            "name_zh": "呼叫请求总数",
+        }
+    ]
+
+
+def test_import_merges_by_chinese_name_not_resource_id() -> None:
+    first = import_resource_csv(resource_csv(("ME_CALL", "呼叫请求", "Call Requests")))
+    assert first["added"] == {"mu": 0, "me": 1, "unit": 0}
+
+    second = import_resource_csv(resource_csv(("ME_REQUEST", "呼叫请求", "Call Request Count")))
+    assert second["added"] == {"mu": 0, "me": 0, "unit": 0}
+    assert second["updated"] == {"mu": 0, "me": 1, "unit": 0}
+    assert second["errors"] == []
+
+
+def test_import_merges_same_chinese_name_with_different_ids_in_one_csv() -> None:
+    result = import_resource_csv(
+        resource_csv(("ME_CALL", "呼叫请求", "Call Requests"), ("ME_REQUEST", "呼叫请求", "Call Requests"))
+    )
+
+    assert result["added"] == {"mu": 0, "me": 1, "unit": 0}
+    assert result["updated"] == {"mu": 0, "me": 0, "unit": 0}
+    assert result["skipped"] == [{"resource_id": "ME_CALL", "reason": "unchanged"}]
+    assert result["errors"] == []

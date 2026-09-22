@@ -53,7 +53,7 @@ def _utc_now() -> datetime:
 
 
 def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> dict[str, Any]:
-    """按资源 ID upsert 资源目录；不删除 CSV 中缺失的资源。"""
+    """按同类资源中文名合并资源目录；资源 ID 仅作存储主键，不删除 CSV 外资源。"""
     init_db()
     if isinstance(text_or_file, io.BytesIO):
         raw = text_or_file.getvalue().decode("utf-8-sig")
@@ -72,6 +72,8 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
     updated = {"mu": 0, "me": 0, "unit": 0}
     errors: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    resources_by_name: dict[tuple[str, str], KpiMeasurementResource] = {}
+    resources_by_id: dict[str, KpiMeasurementResource] = {}
     with session_factory() as session:
         for line_number, row in enumerate(reader, start=2):
             resource_id = str(row.get("资源id") or "").strip()
@@ -87,32 +89,71 @@ def import_resource_csv(text_or_file: io.StringIO | io.BytesIO | str | Path) -> 
                     }
                 )
                 continue
-            existing = session.get(KpiMeasurementResource, resource_id)
-            if existing:
-                changed = existing.name_zh != name_zh or existing.name_en != name_en
-                existing.name_zh = name_zh
-                existing.name_en = name_en
+
+            name_key = (kind, name_zh)
+            existing_by_name = resources_by_name.get(name_key)
+            if existing_by_name is None:
+                existing_by_name = (
+                    session.query(KpiMeasurementResource)
+                    .filter(KpiMeasurementResource.kind == kind, KpiMeasurementResource.name_zh == name_zh)
+                    .one_or_none()
+                )
+            existing_by_id = resources_by_id.get(resource_id)
+            if existing_by_id is None:
+                existing_by_id = session.get(KpiMeasurementResource, resource_id)
+
+            if existing_by_name is not None:
+                resources_by_name[name_key] = existing_by_name
+                resources_by_id.setdefault(existing_by_name.resource_id, existing_by_name)
+                if existing_by_id is not None and existing_by_id is not existing_by_name:
+                    errors.append(
+                        {
+                            "resource_id": resource_id,
+                            "line_number": line_number,
+                            "reason": "resource_id_conflict",
+                            "existing_name_zh": existing_by_id.name_zh,
+                            "name_zh": name_zh,
+                        }
+                    )
+                    continue
+                changed = existing_by_name.name_en != name_en
+                existing_by_name.name_en = name_en
                 if kind == "mu":
-                    existing.filename_fragment = filename_fragment(name_en)
-                existing.updated_at = _utc_now()
+                    existing_by_name.filename_fragment = filename_fragment(name_en)
+                existing_by_name.updated_at = _utc_now()
                 if changed:
                     updated[kind] += 1
                 else:
-                    skipped.append({"resource_id": resource_id, "reason": "unchanged"})
-            else:
-                session.add(
-                    KpiMeasurementResource(
-                        resource_id=resource_id,
-                        kind=kind,
-                        name_zh=name_zh,
-                        name_en=name_en,
-                        filename_fragment=filename_fragment(name_en) if kind == "mu" else None,
-                        enabled=True,
-                        created_at=_utc_now(),
-                        updated_at=_utc_now(),
-                    )
+                    skipped.append({"resource_id": existing_by_name.resource_id, "reason": "unchanged"})
+                continue
+
+            if existing_by_id is not None:
+                resources_by_id[resource_id] = existing_by_id
+                errors.append(
+                    {
+                        "resource_id": resource_id,
+                        "line_number": line_number,
+                        "reason": "resource_id_conflict",
+                        "existing_name_zh": existing_by_id.name_zh,
+                        "name_zh": name_zh,
+                    }
                 )
-                added[kind] += 1
+                continue
+
+            row_resource = KpiMeasurementResource(
+                resource_id=resource_id,
+                kind=kind,
+                name_zh=name_zh,
+                name_en=name_en,
+                filename_fragment=filename_fragment(name_en) if kind == "mu" else None,
+                enabled=True,
+                created_at=_utc_now(),
+                updated_at=_utc_now(),
+            )
+            session.add(row_resource)
+            resources_by_name[name_key] = row_resource
+            resources_by_id[resource_id] = row_resource
+            added[kind] += 1
         session.commit()
 
     return {"added": added, "updated": updated, "skipped": skipped, "errors": errors}

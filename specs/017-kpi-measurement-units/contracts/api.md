@@ -19,7 +19,7 @@ multipart/form-data：
 }
 ```
 
-规则：按 `resource_id` upsert；不删除 CSV 中未出现的资源；单行错误跳过并返回 errors。
+规则：同一类资源按中文名合并；同名不同 `resource_id` 保留既有或首个 `resource_id` 并允许更新英文名。同一 `resource_id` 对应不同中文名时返回行级 `resource_id_conflict` 且不覆盖。不删除 CSV 中未出现的资源；单行错误跳过并返回 errors。
 
 ## GET /api/v5/kpi/measurement-units
 
