@@ -84,18 +84,20 @@ description: "人工注册指标实现任务列表"
 ### 实现
 
 - [ ] T023 [US4] 在 `app/services/kpi_measurement_units.py` 注册服务中实现同类 ME 中文名冲突检测、绑定既有资源分支和事务边界
-- [ ] T024 [US4] 在 `docs/api/openapi.yaml` 和 `app/models/schemas.py` 中补充 `bind_existing_resource_id` 契约与校验
-- [ ] T025 [US4] 在 `web/src/pages/MeasurementUnitsPage.tsx` 中处理同名冲突提示，并允许从既有 ME 资源中选择绑定
+- [ ] T024 [US4] 先在 `app/models/schemas.py` 和 `docs/api/openapi.yaml` 中新增 `GET /api/v5/kpi/measurement-resources` 契约，并补充 `bind_existing_resource_id` 校验
+- [ ] T025 [US4] 在 `app/services/kpi_measurement_units.py` 实现全局 ME 资源分页查询，支持 `kind`、搜索、启用过滤和默认每页 10 条
+- [ ] T026 [US4] 在 `app/api/router.py` 实现 ME 资源查询端点，使用 admin 权限并保持契约优先
+- [ ] T027 [US4] 在 `web/src/api/http.ts` 中接入资源查询，并在 `web/src/pages/MeasurementUnitsPage.tsx` 处理同名冲突提示和既有 ME 资源选择器
 
 **检查点**：重复与误绑场景均有明确错误或受控改绑路径。
 
 ## 阶段 6：收尾与验证
 
-- [ ] T026 [P] 检查 `specs/019-manual-metric-registration/quickstart.md` 与实际 API 字段一致，必要时修正文档
-- [ ] T027 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和前端客户端一致
-- [ ] T028 运行 `python build.py lint` 和 `python build.py test`
-- [ ] T029 运行 `python build.py verify`
-- [ ] T030 对照 spec 的 FR-001 到 FR-012 做完成审计并更新 `tasks.md` 复选框
+- [ ] T028 [P] 检查 `specs/019-manual-metric-registration/quickstart.md` 与实际 API 字段一致，必要时修正文档
+- [ ] T029 运行 `python build.py contract` 和 `python build.py gen-web-api`，确认 OpenAPI、Pydantic 和前端客户端一致
+- [ ] T030 运行 `python build.py lint` 和 `python build.py test`
+- [ ] T031 运行 `python build.py verify`
+- [ ] T032 对照 spec 的 FR-001 到 FR-012 做完成审计并更新 `tasks.md` 复选框
 
 ## 依赖与执行顺序
 
@@ -110,7 +112,7 @@ description: "人工注册指标实现任务列表"
 
 - T003、T004 可并行。
 - T011、T013、T014、T021、T022 可在对应服务实现前并行设计。
-- 文档检查 T026 与代码验证 T027-T029 无相互写入冲突时可并行。
+- 文档检查 T028 与代码验证 T029-T031 无相互写入冲突时可并行。
 
 ## MVP 范围
 

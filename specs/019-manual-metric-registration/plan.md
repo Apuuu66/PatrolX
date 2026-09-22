@@ -93,12 +93,13 @@ web/src/
    - 不允许修改 `resource_id`、`kind`、`filename_fragment`；资源目录本不保存绑定来源。
    - 中文名冲突返回明确错误；编辑不触碰绑定状态、原始列名和任务来源。
 4. API：
+   - `GET /api/v5/kpi/measurement-resources`，支持 `kind=me`、搜索和默认 10 条分页
    - `POST /api/v5/kpi/measurement-bindings/{binding_id}/register-metric`
    - `PATCH /api/v5/kpi/measurement-resources/{resource_id}`
    - 两者使用 admin 权限，返回资源/绑定形态的 JSON，并同步 OpenAPI。
 5. 前端：
    - 候选且未关联指标的绑定提供“注册指标”入口。
-   - 表单预填基础列名与展示单位，支持改绑已有指标。
+   - 表单预填基础列名与展示单位，遇到同名冲突时可从 ME 资源分页列表中选择已有指标改绑。
    - ID 以 `ME__MANUAL_` 开头的指标显示“人工注册”标签并提供编辑入口。
    - 编辑弹窗只暴露中文名、英文名、启用状态。
 

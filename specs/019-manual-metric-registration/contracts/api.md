@@ -2,6 +2,21 @@
 
 实际契约以 `docs/api/openapi.yaml` 为准；实现时先同步 OpenAPI，再生成前端客户端。
 
+## 查询可选择的全局资源
+
+`GET /api/v5/kpi/measurement-resources`
+
+权限：`admin`。
+
+查询参数：
+
+- `kind`：可选，本功能使用 `me`。
+- `search`：可选，按资源 ID、中文名、英文名搜索。
+- `enabled`：可选布尔值。
+- `page` / `page_size`：默认 `1` / `10`，最大 `200`。
+
+成功响应：返回 `total` 和 `items`；`items` 中至少包含 `resource_id`、`kind`、`name_zh`、`name_en`、`enabled`。
+
 ## 注册或改绑当前未注册指标
 
 `POST /api/v5/kpi/measurement-bindings/{binding_id}/register-metric`
