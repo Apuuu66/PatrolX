@@ -77,6 +77,13 @@ export function historyMatchAlert(match: MeasurementHistoryTrend["match"]): Hist
     history_index_missing: "历史索引缺失，请先重跑当前任务生成历史索引",
     metric_dimension_missing: "当前任务没有该指标、对象和周期的有效趋势点",
     history_time_outside_window: "同设备历史数据不在当前 7 天对比窗口内",
+    history_candidate_not_completed: "同设备候选任务未完成或缺少完成时间",
+    history_candidate_after_current: "同设备候选任务完成时间晚于当前任务",
+    history_candidate_index_missing: "同设备候选任务历史索引缺失",
+    history_candidate_index_empty: "同设备候选任务历史索引为空或无效",
+    history_candidate_unit_or_metric_missing: "同设备候选任务没有该测量单元或指标",
+    history_candidate_object_or_period_mismatch: "同设备候选任务对象或周期不一致",
+    history_candidate_mismatch: "同设备候选任务的测量单元、指标、对象、周期或时间窗口不一致",
     period_mismatch: "历史任务周期与当前任务不一致",
     metric_not_supported: "该指标不支持历史对比",
   };

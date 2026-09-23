@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.models.schemas import InspectionTask, RuleResult, RuleStatus, Summary, SystemInspection, TaskStats
+from app.models.schemas import (
+    InspectionTask,
+    RuleResult,
+    RuleStatus,
+    Summary,
+    SystemInspection,
+    TaskStats,
+    TaskStatus,
+)
 from app.services.kpi_history import get_history_trend, write_history_index
 from app.services.store import save_task_meta
 
@@ -128,6 +136,80 @@ def test_no_history_reports_history_time_outside_window(tmp_path, monkeypatch) -
     assert result.match.reason_code == "history_time_outside_window"
     assert "2026-09-01" in result.match.message
     assert "2026-09-04" in result.match.message
+
+
+def test_no_history_reports_candidate_index_missing(tmp_path, monkeypatch) -> None:
+    from tests.baseline_helpers import setup_env
+
+    env = setup_env(tmp_path, monkeypatch)
+    _task(env, "current", datetime(2026, 9, 10, 12, tzinfo=UTC), "device-a")
+    _write(env, "current", datetime(2026, 9, 10, 10, tzinfo=UTC), 10)
+    _task(env, "same-device", datetime(2026, 9, 9, 12, tzinfo=UTC), "device-a")
+
+    result = _query(env, "current")
+
+    assert result.match.status == "no_history"
+    assert result.match.reason_code == "history_candidate_index_missing"
+    assert "历史索引缺失 1 个" in result.match.message
+
+
+def test_no_history_reports_same_device_candidate_reasons(tmp_path, monkeypatch) -> None:
+    from app.services.store import load_task_meta
+    from tests.baseline_helpers import setup_env
+
+    env = setup_env(tmp_path, monkeypatch)
+    _task(env, "current", datetime(2026, 9, 10, 12, tzinfo=UTC), "device-a")
+    _write(env, "current", datetime(2026, 9, 10, 10, tzinfo=UTC), 10)
+
+    _task(env, "pending", datetime(2026, 9, 9, 12, tzinfo=UTC), "device-a")
+    pending = load_task_meta(env.output, "pending")
+    assert pending is not None
+    save_task_meta(
+        env.output,
+        pending.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None}),
+    )
+
+    _task(env, "future", datetime(2026, 9, 11, 12, tzinfo=UTC), "device-a")
+    _task(env, "no-index", datetime(2026, 9, 9, 12, tzinfo=UTC), "device-a")
+    _task(env, "other-metric", datetime(2026, 9, 9, 12, tzinfo=UTC), "device-a")
+    _task(env, "wrong-object", datetime(2026, 9, 9, 12, tzinfo=UTC), "device-a")
+    _task(env, "old-time", datetime(2026, 9, 9, 12, tzinfo=UTC), "device-a")
+
+    for task_id, metric, object_key in (
+        ("other-metric", "OTHER", "pod-a"),
+        ("wrong-object", "ME", "pod-b"),
+    ):
+        write_history_index(
+            task_id,
+            [
+                {
+                    "task_id": task_id,
+                    "measurement_unit_id": "MU",
+                    "metric_resource_id": metric,
+                    "object_key": object_key,
+                    "period_minutes": 15,
+                    "measured_at": "2026-09-09T10:00:00+00:00",
+                    "value": 1,
+                    "source_file": "data.csv",
+                    "line_number": 1,
+                }
+            ],
+            output=env.output,
+        )
+    _write(env, "old-time", datetime(2026, 9, 1, 10, tzinfo=UTC), 1)
+
+    result = _query(env, "current")
+
+    assert result.match.status == "no_history"
+    assert result.match.reason_code == "history_candidate_mismatch"
+    message = result.match.message
+    assert "6 个任务未进入对比" in message
+    assert "未完成" in message
+    assert "完成时间晚于当前任务" in message
+    assert "历史索引缺失" in message
+    assert "没有该测量单元或指标" in message
+    assert "对象或周期不一致" in message
+    assert "数据时间不在当前 7 天窗口" in message
 
 
 def test_baseline_median_mad_and_insufficient(tmp_path, monkeypatch) -> None:

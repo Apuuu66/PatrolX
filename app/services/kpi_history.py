@@ -330,7 +330,7 @@ def get_history_trend(
     source_tasks: list[str] = []
     history_task_count = 0
     outside_window_dates: list[date] = []
-    outside_window_task_count = 0
+    candidate_reason_counts: dict[str, int] = defaultdict(int)
     if current_index_available and device_id and current_records:
         current_completed_at = _task_completed_at(task_id, output)
         seen_task_ids = {task_id}
@@ -342,38 +342,53 @@ def get_history_trend(
                 candidate = load_task_meta(output, candidate_id)
             except Exception:  # noqa: BLE001 - 单个坏任务不阻断历史读取
                 continue
-            if candidate is None or candidate.status.value != "completed" or candidate.completed_at is None:
+            if candidate is None:
+                continue
+            candidate_device_id = _task_device_id(candidate_id, output)
+            if candidate_device_id != device_id:
+                continue
+            if candidate.status.value != "completed" or candidate.completed_at is None:
+                candidate_reason_counts["not_completed"] += 1
                 continue
             candidate_completed_at = candidate.completed_at
             if candidate_completed_at.tzinfo is None:
                 candidate_completed_at = candidate_completed_at.replace(tzinfo=UTC)
             if candidate_completed_at > current_completed_at:
-                continue
-            candidate_device_id = _task_device_id(candidate_id, output)
-            if candidate_device_id != device_id:
+                candidate_reason_counts["after_current"] += 1
                 continue
             try:
-                dimension_records = [
-                    record
-                    for record in iter_history_index(candidate_id, output=output)
-                    if record["measurement_unit_id"] == measurement_unit_id
-                    and record["metric_resource_id"] == metric_resource_id
-                    and record["object_key"] == object_key
-                    and record["period_minutes"] == period_minutes
-                ]
-                matched = [
-                    record for record in dimension_records if start_date <= record["measured_at"].date() <= end_date
-                ]
+                candidate_records = list(iter_history_index(candidate_id, output=output))
             except FileNotFoundError:
+                candidate_reason_counts["index_missing"] += 1
                 continue
+            if not candidate_records:
+                candidate_reason_counts["index_empty"] += 1
+                continue
+
+            same_unit_metric = [
+                record
+                for record in candidate_records
+                if record["measurement_unit_id"] == measurement_unit_id
+                and record["metric_resource_id"] == metric_resource_id
+            ]
+            same_dimension = [
+                record
+                for record in same_unit_metric
+                if record["object_key"] == object_key and record["period_minutes"] == period_minutes
+            ]
+            matched = [record for record in same_dimension if start_date <= record["measured_at"].date() <= end_date]
             if matched:
                 history_records.extend(matched)
                 source_tasks.append(candidate_id)
                 history_task_count += 1
                 seen_task_ids.add(candidate_id)
-            elif dimension_records:
-                outside_window_task_count += 1
-                outside_window_dates.extend(record["measured_at"].date() for record in dimension_records)
+            elif same_dimension:
+                outside_window_dates.extend(record["measured_at"].date() for record in same_dimension)
+                candidate_reason_counts["time_outside_window"] += 1
+            elif not same_unit_metric:
+                candidate_reason_counts["unit_or_metric_missing"] += 1
+            else:
+                candidate_reason_counts["object_or_period_mismatch"] += 1
 
     # 跨任务同时间点保留完成时间最新的任务；完成时间相同按 task_id 倒序。
     completed_by_task: dict[str, datetime] = {}
@@ -427,14 +442,43 @@ def get_history_trend(
     message = None
     if match_status == MeasurementHistoryMatchStatus.MATCHED and not history_task_count:
         match_status = MeasurementHistoryMatchStatus.NO_HISTORY
-        if outside_window_task_count:
-            reason_code = "history_time_outside_window"
-            latest_outside_date = max(outside_window_dates).isoformat()
-            message = (
-                f"同设备有 {outside_window_task_count} 个历史任务，但数据时间不在当前 "
-                f"{HISTORY_WINDOW_DAYS} 天窗口（{start_date.isoformat()} ~ {end_date.isoformat()}）；"
-                f"最近为 {latest_outside_date}。"
+        if candidate_reason_counts:
+            time_count = candidate_reason_counts.get("time_outside_window", 0)
+            detail_by_cause = {
+                "not_completed": "未完成或缺少完成时间",
+                "after_current": "完成时间晚于当前任务",
+                "index_missing": "历史索引缺失",
+                "index_empty": "历史索引为空或无效",
+                "unit_or_metric_missing": "没有该测量单元或指标",
+                "object_or_period_mismatch": "对象或周期不一致",
+            }
+            details = [
+                f"{label} {candidate_reason_counts[cause]} 个"
+                for cause, label in detail_by_cause.items()
+                if candidate_reason_counts.get(cause)
+            ]
+            if time_count:
+                latest_outside_date = max(outside_window_dates).isoformat()
+                details.append(
+                    f"数据时间不在当前 {HISTORY_WINDOW_DAYS} 天窗口"
+                    f"（{start_date.isoformat()} ~ {end_date.isoformat()}），"
+                    f"最近为 {latest_outside_date}，共 {time_count} 个"
+                )
+            reason_codes = {
+                "not_completed": "history_candidate_not_completed",
+                "after_current": "history_candidate_after_current",
+                "index_missing": "history_candidate_index_missing",
+                "index_empty": "history_index_empty",
+                "unit_or_metric_missing": "history_candidate_unit_or_metric_missing",
+                "object_or_period_mismatch": "history_candidate_object_or_period_mismatch",
+                "time_outside_window": "history_time_outside_window",
+            }
+            reason_code = (
+                reason_codes[next(iter(candidate_reason_counts))]
+                if len(candidate_reason_counts) == 1
+                else "history_candidate_mismatch"
             )
+            message = f"同设备有 {sum(candidate_reason_counts.values())} 个任务未进入对比：{'；'.join(details)}。"
         else:
             reason_code = None
             message = "未找到可对比的历史任务"

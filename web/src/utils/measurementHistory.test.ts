@@ -57,6 +57,24 @@ test("historyMatchAlert 映射降级原因", () => {
   );
   assert.equal(historyMatchAlert({ status: "degraded", reason_code: "device_id_missing", message: "" }).description, "当前任务未填写设备 ID，无法匹配历史任务");
   assert.equal(historyMatchAlert({ status: "degraded", reason_code: "history_index_missing", message: "" }).description, "历史索引缺失，请先重跑当前任务生成历史索引");
+});
+
+test("historyMatchAlert 映射同设备候选任务未匹配原因", () => {
+  const descriptions: Record<string, string> = {
+    history_candidate_not_completed: "同设备候选任务未完成或缺少完成时间",
+    history_candidate_after_current: "同设备候选任务完成时间晚于当前任务",
+    history_candidate_index_missing: "同设备候选任务历史索引缺失",
+    history_candidate_index_empty: "同设备候选任务历史索引为空或无效",
+    history_candidate_unit_or_metric_missing: "同设备候选任务没有该测量单元或指标",
+    history_candidate_object_or_period_mismatch: "同设备候选任务对象或周期不一致",
+    history_candidate_mismatch: "同设备候选任务的测量单元、指标、对象、周期或时间窗口不一致",
+  };
+  for (const [reason_code, description] of Object.entries(descriptions)) {
+    assert.equal(
+      historyMatchAlert({ status: "no_history", reason_code, message: "" }).description,
+      description,
+    );
+  }
   assert.equal(historyMatchAlert({ status: "degraded", reason_code: "unknown", message: "后端说明" }).description, "后端说明");
 });
 
