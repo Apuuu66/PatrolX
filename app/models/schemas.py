@@ -315,6 +315,80 @@ class MeasurementHistoryBaselinePoint(BaseModel):
     significance: MeasurementBaselineSignificance
 
 
+class MeasurementVersionDirection(StrEnum):
+    UP = "up"
+    DOWN = "down"
+    FLAT = "flat"
+    UNKNOWN = "unknown"
+
+
+class MeasurementVersionComparisonTask(BaseModel):
+    """参与版本对比的单个任务来源。"""
+
+    task_id: str
+    completed_at: datetime | None = None
+    version: str | None = None
+    version_known: bool
+
+
+class MeasurementVersionCandidateTask(MeasurementVersionComparisonTask):
+    """同设备候选版本中的任务。"""
+
+
+class MeasurementVersionCandidate(BaseModel):
+    """同设备历史任务的版本分组。"""
+
+    version: str | None = None
+    version_known: bool
+    latest_task_id: str
+    latest_completed_at: datetime
+    task_count: int = Field(ge=1)
+    tasks: list[MeasurementVersionCandidateTask] = Field(min_length=1)
+
+
+class MeasurementVersionCandidateList(BaseModel):
+    """同设备版本候选响应。"""
+
+    task_id: str
+    rule_code: str
+    measurement_unit_id: str
+    metric_resource_id: str
+    device_id: str | None = None
+    current_version: str | None = None
+    items: list[MeasurementVersionCandidate] = Field(default_factory=list)
+
+
+class MeasurementVersionComparisonSummary(BaseModel):
+    current_value: float | None = None
+    baseline_value: float | None = None
+    absolute_change: float | None = None
+    change_ratio: float | None = None
+    direction: MeasurementVersionDirection = MeasurementVersionDirection.UNKNOWN
+    sample_count: int = Field(ge=0)
+    message: str
+
+
+class MeasurementVersionComparison(BaseModel):
+    """同设备不同系统版本的单指标对比响应。"""
+
+    task_id: str
+    baseline_task_id: str
+    rule_code: str
+    measurement_unit_id: str
+    metric_resource_id: str
+    device_id: str | None = None
+    object_key: str
+    period_minutes: int | None = None
+    current_version: str | None = None
+    baseline_version: str | None = None
+    current_task: MeasurementVersionComparisonTask
+    baseline_task: MeasurementVersionComparisonTask | None = None
+    current_points: list[MeasurementHistoryPoint] = Field(default_factory=list)
+    baseline_points: list[MeasurementHistoryPoint] = Field(default_factory=list)
+    summary: MeasurementVersionComparisonSummary
+    match: MeasurementHistoryMatch
+
+
 class MeasurementHistoryTrend(BaseModel):
     """KPI 单指标跨任务历史趋势响应。"""
 

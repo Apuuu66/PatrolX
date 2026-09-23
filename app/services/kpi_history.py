@@ -24,6 +24,13 @@ from app.models.schemas import (
     MeasurementHistoryPoint,
     MeasurementHistoryTrend,
     MeasurementHistoryWindow,
+    MeasurementVersionCandidate,
+    MeasurementVersionCandidateList,
+    MeasurementVersionCandidateTask,
+    MeasurementVersionComparison,
+    MeasurementVersionComparisonSummary,
+    MeasurementVersionComparisonTask,
+    MeasurementVersionDirection,
 )
 from app.services.store import load_task_meta
 
@@ -511,6 +518,330 @@ def get_history_trend(
         baseline_points=baseline_points,
         source_tasks=source_tasks,
     )
+
+
+def _task_version(task: object) -> str | None:
+    """读取任务系统版本；空值统一为版本未知。"""
+    version = getattr(getattr(task, "system", None), "version", None)
+    if not isinstance(version, str) or not version.strip():
+        return None
+    return version.strip()
+
+
+def _ensure_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _version_task(task_id: str, task: object) -> MeasurementVersionComparisonTask:
+    return MeasurementVersionComparisonTask(
+        task_id=task_id,
+        completed_at=_ensure_utc(getattr(task, "completed_at", None)),
+        version=_task_version(task),
+        version_known=_task_version(task) is not None,
+    )
+
+
+def _dimension_records(
+    task_id: str,
+    *,
+    measurement_unit_id: str,
+    metric_resource_id: str,
+    object_key: str,
+    period_minutes: int | None,
+    output: Path,
+) -> list[IndexRecord]:
+    """流式读取并过滤当前任务的单维度历史点。"""
+    return [
+        record
+        for record in iter_history_index(task_id, output=output)
+        if record["measurement_unit_id"] == measurement_unit_id
+        and record["metric_resource_id"] == metric_resource_id
+        and record["object_key"] == object_key
+        and record["period_minutes"] == period_minutes
+    ]
+
+
+def _candidate_tasks_for_device(task_id: str, device_id: str, output: Path) -> list[tuple[object, str]]:
+    """读取同设备已完成候选任务，不读取历史索引。"""
+    candidates: list[tuple[object, str]] = []
+    for candidate_dir in sorted((path for path in output.iterdir() if path.is_dir()), key=lambda path: path.name):
+        candidate_id = candidate_dir.name
+        if candidate_id == task_id:
+            continue
+        try:
+            candidate = load_task_meta(output, candidate_id)
+        except Exception:  # noqa: BLE001 - 单个坏任务不阻断候选读取
+            continue
+        if candidate is None or _task_device_id(candidate_id, output) != device_id:
+            continue
+        if candidate.status.value != "completed" or candidate.completed_at is None:
+            continue
+        candidates.append((candidate, candidate_id))
+    return candidates
+
+
+def get_version_candidates(
+    task_id: str,
+    *,
+    rule_code: str,
+    measurement_unit_id: str,
+    metric_resource_id: str,
+    object_key: str,
+    period_minutes: int | None,
+    output: Path | None = None,
+) -> MeasurementVersionCandidateList:
+    """按设备读取已完成历史任务的系统版本候选。"""
+    output = output or settings.output
+    if rule_code != KPI_RULE_CODE:
+        raise ValueError(f"不支持的规则: {rule_code}")
+    current_task = load_task_meta(output, task_id)
+    if current_task is None:
+        raise FileNotFoundError(output / task_id / "task.json")
+    device_id = _task_device_id(task_id, output)
+    grouped: dict[str | None, list[tuple[object, str]]] = defaultdict(list)
+    if device_id:
+        for candidate, candidate_id in _candidate_tasks_for_device(task_id, device_id, output):
+            grouped[_task_version(candidate)].append((candidate, candidate_id))
+
+    items: list[MeasurementVersionCandidate] = []
+    for version, candidates in grouped.items():
+        ordered = sorted(
+            candidates,
+            key=lambda item: (
+                _ensure_utc(item[0].completed_at) or datetime.min.replace(tzinfo=UTC),
+                item[1],
+            ),
+            reverse=True,
+        )
+        candidate_models = [
+            MeasurementVersionCandidateTask(
+                task_id=candidate_id,
+                completed_at=_ensure_utc(candidate.completed_at),
+                version=version,
+                version_known=version is not None,
+            )
+            for candidate, candidate_id in ordered
+        ]
+        items.append(
+            MeasurementVersionCandidate(
+                version=version,
+                version_known=version is not None,
+                latest_task_id=candidate_models[0].task_id,
+                latest_completed_at=candidate_models[0].completed_at or _utc_now(),
+                task_count=len(candidate_models),
+                tasks=candidate_models,
+            )
+        )
+    items.sort(key=lambda item: (item.version is None, item.version or ""))
+    return MeasurementVersionCandidateList(
+        task_id=task_id,
+        rule_code=rule_code,
+        measurement_unit_id=measurement_unit_id,
+        metric_resource_id=metric_resource_id,
+        device_id=device_id,
+        current_version=_task_version(current_task),
+        items=items,
+    )
+
+
+def _version_summary(
+    current_records: list[IndexRecord],
+    baseline_records: list[IndexRecord],
+    *,
+    current_version: str | None,
+    baseline_version: str | None,
+) -> MeasurementVersionComparisonSummary:
+    """使用第一版均值口径输出版本涨跌摘要。"""
+    current_value = statistics.mean(record["value"] for record in current_records) if current_records else None
+    baseline_value = statistics.mean(record["value"] for record in baseline_records) if baseline_records else None
+    absolute_change = (
+        current_value - baseline_value if current_value is not None and baseline_value is not None else None
+    )
+    change_ratio = (
+        absolute_change / abs(baseline_value)
+        if absolute_change is not None and baseline_value is not None and baseline_value != 0
+        else None
+    )
+    if absolute_change is None:
+        direction = MeasurementVersionDirection.UNKNOWN
+        message = "缺少当前或基线有效数据，无法计算版本对比摘要。"
+    elif abs(absolute_change) <= 1e-9:
+        direction = MeasurementVersionDirection.FLAT
+        message = f"当前版本均值与基线版本均值基本持平，均为 {baseline_value:.4g}。"
+    elif absolute_change > 0:
+        direction = MeasurementVersionDirection.UP
+        message = f"当前版本均值较基线版本均值上涨 {absolute_change:.4g}（{change_ratio * 100:.2f}%）。"
+    else:
+        direction = MeasurementVersionDirection.DOWN
+        message = f"当前版本均值较基线版本均值下降 {abs(absolute_change):.4g}（{abs(change_ratio) * 100:.2f}%）。"
+
+    unknown_parts = []
+    if current_version is None:
+        unknown_parts.append("当前任务")
+    if baseline_version is None:
+        unknown_parts.append("基线任务")
+    if unknown_parts:
+        message += f"{'、'.join(unknown_parts)}版本未知。"
+    return MeasurementVersionComparisonSummary(
+        current_value=current_value,
+        baseline_value=baseline_value,
+        absolute_change=absolute_change,
+        change_ratio=change_ratio,
+        direction=direction,
+        sample_count=len(current_records) + len(baseline_records),
+        message=message,
+    )
+
+
+def get_version_compare(
+    task_id: str,
+    *,
+    rule_code: str,
+    measurement_unit_id: str,
+    metric_resource_id: str,
+    object_key: str,
+    period_minutes: int | None,
+    baseline_task_id: str,
+    output: Path | None = None,
+) -> MeasurementVersionComparison:
+    """组装同设备、不同系统版本的单指标任务对比。"""
+    output = output or settings.output
+    if rule_code != KPI_RULE_CODE:
+        raise ValueError(f"不支持的规则: {rule_code}")
+    current_task = load_task_meta(output, task_id)
+    if current_task is None:
+        raise FileNotFoundError(output / task_id / "task.json")
+
+    device_id = _task_device_id(task_id, output)
+    current_version = _task_version(current_task)
+    current_task_model = _version_task(task_id, current_task)
+    current_records: list[IndexRecord] = []
+    baseline_records: list[IndexRecord] = []
+    baseline_task: object | None = None
+    baseline_task_id_safe = baseline_task_id
+    reason_code: str | None = None
+    message = ""
+
+    def finish(
+        status: MeasurementHistoryMatchStatus,
+        summary: MeasurementVersionComparisonSummary | None = None,
+    ) -> MeasurementVersionComparison:
+        nonlocal message
+        if status == MeasurementHistoryMatchStatus.DEGRADED:
+            label = {
+                "device_id_missing": "当前任务设备 ID 缺失，无法进行同设备版本对比",
+                "current_index_missing": "当前任务历史索引缺失",
+                "current_metric_dimension_missing": "当前任务没有指定指标、对象和周期的有效趋势点",
+                "baseline_task_not_found": "基线任务不存在或元数据无效",
+                "baseline_device_mismatch": "基线任务设备 ID 与当前任务不一致",
+                "baseline_task_not_completed": "基线任务未完成或缺少完成时间",
+                "baseline_same_version": "版本相同，不能作为版本对比基线",
+                "baseline_index_missing": "基线任务索引缺失",
+                "baseline_index_empty": "基线任务历史索引为空或无效",
+                "baseline_object_or_period_mismatch": "基线任务没有该测量单元、指标、对象或周期的有效数据",
+            }.get(reason_code or "", "版本对比不可用")
+            message = message or label
+        elif status == MeasurementHistoryMatchStatus.NO_HISTORY and not message:
+            message = "基线任务没有可对比的数据点"
+        return MeasurementVersionComparison(
+            task_id=task_id,
+            baseline_task_id=baseline_task_id_safe,
+            rule_code=rule_code,
+            measurement_unit_id=measurement_unit_id,
+            metric_resource_id=metric_resource_id,
+            device_id=device_id,
+            object_key=object_key,
+            period_minutes=period_minutes,
+            current_version=current_version,
+            baseline_version=_task_version(baseline_task) if baseline_task is not None else None,
+            current_task=current_task_model,
+            baseline_task=_version_task(baseline_task_id_safe, baseline_task) if baseline_task is not None else None,
+            current_points=[_point_from_record(record) for record in current_records],
+            baseline_points=[_point_from_record(record) for record in baseline_records],
+            summary=summary
+            or MeasurementVersionComparisonSummary(
+                direction=MeasurementVersionDirection.UNKNOWN,
+                sample_count=0,
+                message="版本对比不可用。",
+            ),
+            match=MeasurementHistoryMatch(
+                status=status,
+                reason_code=reason_code,
+                message=message,
+            ),
+        )
+
+    if not device_id:
+        reason_code = "device_id_missing"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+
+    baseline_task = load_task_meta(output, baseline_task_id_safe)
+    if baseline_task is None:
+        reason_code = "baseline_task_not_found"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+    if _task_device_id(baseline_task_id_safe, output) != device_id:
+        reason_code = "baseline_device_mismatch"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+    if baseline_task.status.value != "completed" or baseline_task.completed_at is None:
+        reason_code = "baseline_task_not_completed"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+
+    baseline_version = _task_version(baseline_task)
+    if current_version is not None and baseline_version is not None and current_version == baseline_version:
+        reason_code = "baseline_same_version"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+
+    try:
+        current_records = _dimension_records(
+            task_id,
+            measurement_unit_id=measurement_unit_id,
+            metric_resource_id=metric_resource_id,
+            object_key=object_key,
+            period_minutes=period_minutes,
+            output=output,
+        )
+    except FileNotFoundError:
+        reason_code = "current_index_missing"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+
+    if not current_records:
+        reason_code = "current_metric_dimension_missing"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+
+    try:
+        baseline_records = _dimension_records(
+            baseline_task_id_safe,
+            measurement_unit_id=measurement_unit_id,
+            metric_resource_id=metric_resource_id,
+            object_key=object_key,
+            period_minutes=period_minutes,
+            output=output,
+        )
+    except FileNotFoundError:
+        reason_code = "baseline_index_missing"
+        return finish(MeasurementHistoryMatchStatus.DEGRADED)
+
+    if not baseline_records:
+        reason_code = "baseline_object_or_period_mismatch"
+        status = MeasurementHistoryMatchStatus.NO_HISTORY
+        message = "基线任务没有该测量单元、指标、对象或周期的有效数据"
+        return finish(status)
+
+    summary = _version_summary(
+        current_records,
+        baseline_records,
+        current_version=current_version,
+        baseline_version=baseline_version,
+    )
+    if current_version is None or baseline_version is None:
+        message = "当前或基线任务版本未知，以下为同设备任务级对比。"
+        status = MeasurementHistoryMatchStatus.MATCHED
+        return finish(status, summary)
+    return finish(MeasurementHistoryMatchStatus.MATCHED, summary)
 
 
 def validate_history_model(payload: MeasurementHistoryTrend) -> MeasurementHistoryTrend:

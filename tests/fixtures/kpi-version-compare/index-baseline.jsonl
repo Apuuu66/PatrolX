@@ -1,0 +1,2 @@
+{"task_id":"task-version-baseline","measurement_unit_id":"MU_CALL","metric_resource_id":"ME_CALL","object_key":"pod-a","period_minutes":15,"measured_at":"2026-09-01T08:00:00+00:00","value":100,"source_file":"baseline.csv","line_number":1}
+{"task_id":"task-version-baseline","measurement_unit_id":"MU_CALL","metric_resource_id":"ME_CALL","object_key":"pod-a","period_minutes":15,"measured_at":"2026-09-01T09:00:00+00:00","value":110,"source_file":"baseline.csv","line_number":2}

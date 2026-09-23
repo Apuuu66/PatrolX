@@ -48,6 +48,8 @@ from app.models.schemas import (
     LoginResponseV1,
     MeasurementHistoryTrend,
     MeasurementMetricDetail,
+    MeasurementVersionCandidateList,
+    MeasurementVersionComparison,
     OverviewSummary,
     RebuildRequest,
     RerunRequest,
@@ -79,7 +81,7 @@ from app.services.auth import (
     reset_user_password,
     update_user_role,
 )
-from app.services.kpi_history import get_history_trend
+from app.services.kpi_history import get_history_trend, get_version_candidates, get_version_compare
 from app.services.kpi_measurement_units import (
     KpiMeasurementError,
     batch_confirm_measurement_bindings,
@@ -250,6 +252,72 @@ def update_task_device_id_v2(
         return task_service.update_device_id(task_id, body.device_id)
     except TaskDeviceIdError as exc:
         raise AppError(exc.code, exc.message, exc.status_code) from exc
+
+
+@router.get(
+    "/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-candidates",
+    response_model=MeasurementVersionCandidateList,
+    operation_id="getMeasurementVersionCandidatesV2",
+)
+def get_measurement_version_candidates_v2(
+    period_minutes: OptionalIntQuery,
+    task_id: str = PathParam(),
+    rule_code: str = PathParam(),
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+    object_key: str = Query(...),
+) -> MeasurementVersionCandidateList:
+    """按设备返回系统版本候选；不读取历史点位。"""
+    if task_service.get(task_id) is None:
+        raise AppError("not_found", "任务不存在", 404)
+    rule_path = settings.output / task_id / "rules" / f"{rule_code}.json"
+    if not rule_path.is_file():
+        raise AppError("not_found", "规则不存在", 404)
+    try:
+        return get_version_candidates(
+            task_id,
+            rule_code=rule_code,
+            measurement_unit_id=measurement_unit_id,
+            metric_resource_id=metric_resource_id,
+            object_key=object_key,
+            period_minutes=period_minutes,
+        )
+    except FileNotFoundError as exc:
+        raise AppError("not_found", "任务不存在", 404) from exc
+
+
+@router.get(
+    "/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-compare",
+    response_model=MeasurementVersionComparison,
+    operation_id="getMeasurementVersionCompareV2",
+)
+def get_measurement_version_compare_v2(
+    period_minutes: OptionalIntQuery,
+    baseline_task_id: str = Query(...),
+    task_id: str = PathParam(),
+    rule_code: str = PathParam(),
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+    object_key: str = Query(...),
+) -> MeasurementVersionComparison:
+    """按需返回同设备不同版本的单指标任务对比。"""
+    if task_service.get(task_id) is None:
+        raise AppError("not_found", "任务不存在", 404)
+    rule_path = settings.output / task_id / "rules" / f"{rule_code}.json"
+    if not rule_path.is_file():
+        raise AppError("not_found", "规则不存在", 404)
+    try:
+        return get_version_compare(
+            task_id,
+            rule_code=rule_code,
+            measurement_unit_id=measurement_unit_id,
+            metric_resource_id=metric_resource_id,
+            object_key=object_key,
+            period_minutes=period_minutes,
+            baseline_task_id=baseline_task_id,
+        )
+    except FileNotFoundError as exc:
+        raise AppError("not_found", "任务不存在", 404) from exc
 
 
 @router.get(

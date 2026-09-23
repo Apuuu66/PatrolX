@@ -65,7 +65,7 @@ def _rule_result(task_id: str):
     )
 
 
-def _seed_task(task_id: str, csv_body: str, created_at: datetime, completed_at: datetime) -> None:
+def _seed_task(task_id: str, csv_body: str, created_at: datetime, completed_at: datetime, version: str) -> None:
     task_dir = settings.output / task_id
     upload_dir = settings.uploads / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -80,6 +80,7 @@ def _seed_task(task_id: str, csv_body: str, created_at: datetime, completed_at: 
         status="completed",
         summary=summary,
         rules=[rule.model_copy(update={"metadata": {}, "findings": [], "metrics": []})],
+        version=version,
         customer={"device_id": "demo-device-001"},
     )
     from app.models.schemas import InspectionTask
@@ -112,12 +113,14 @@ def main() -> None:
         CURRENT_CSV,
         datetime(2026, 9, 20, 9, 0, tzinfo=UTC),
         datetime(2026, 9, 20, 10, 30, tzinfo=UTC),
+        version="V2",
     )
     _seed_task(
         HISTORY_TASK_ID,
         HISTORY_CSV,
         datetime(2026, 9, 16, 9, 0, tzinfo=UTC),
         datetime(2026, 9, 18, 10, 30, tzinfo=UTC),
+        version="V1",
     )
 
 

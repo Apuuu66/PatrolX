@@ -687,6 +687,126 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-candidates:
+    get:
+      summary: Get Measurement Version Candidates V2
+      description: 返回同设备、已完成任务的系统版本候选；版本缺失时显示版本未知。
+      operationId: getMeasurementVersionCandidatesV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: object_key
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Object Key
+      - name: period_minutes
+        in: query
+        required: true
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementVersionCandidateList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-compare:
+    get:
+      summary: Get Measurement Version Compare V2
+      description: 按任务、版本和当前维度返回两条独立曲线与均值摘要。
+      operationId: getMeasurementVersionCompareV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: baseline_task_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Baseline Task Id
+      - name: object_key
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Object Key
+      - name: period_minutes
+        in: query
+        required: true
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementVersionComparison'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/inspectors:
     get:
       summary: List Inspectors V2
@@ -3224,6 +3344,271 @@ components:
       - date_count
       - significance
       title: MeasurementHistoryBaselinePoint
+    MeasurementVersionDirection:
+      properties:
+        direction:
+          type: string
+          enum:
+          - up
+          - down
+          - flat
+          - unknown
+          title: Direction
+      type: object
+      title: MeasurementVersionDirection
+    MeasurementVersionComparisonTask:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        version_known:
+          type: boolean
+          title: Version Known
+      type: object
+      required:
+      - task_id
+      - completed_at
+      - version
+      - version_known
+      title: MeasurementVersionComparisonTask
+    MeasurementVersionCandidateTask:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        version_known:
+          type: boolean
+          title: Version Known
+      type: object
+      required:
+      - task_id
+      - completed_at
+      - version
+      - version_known
+      title: MeasurementVersionCandidateTask
+    MeasurementVersionCandidate:
+      properties:
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        version_known:
+          type: boolean
+          title: Version Known
+        latest_task_id:
+          type: string
+          title: Latest Task Id
+        latest_completed_at:
+          type: string
+          format: date-time
+          title: Latest Completed At
+        task_count:
+          type: integer
+          minimum: 1
+          title: Task Count
+        tasks:
+          items:
+            $ref: '#/components/schemas/MeasurementVersionCandidateTask'
+          type: array
+          title: Tasks
+      type: object
+      required:
+      - version
+      - version_known
+      - latest_task_id
+      - latest_completed_at
+      - task_count
+      - tasks
+      title: MeasurementVersionCandidate
+    MeasurementVersionCandidateList:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        current_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Version
+        items:
+          items:
+            $ref: '#/components/schemas/MeasurementVersionCandidate'
+          type: array
+          title: Items
+      type: object
+      required:
+      - task_id
+      - rule_code
+      - measurement_unit_id
+      - metric_resource_id
+      - device_id
+      - current_version
+      - items
+      title: MeasurementVersionCandidateList
+    MeasurementVersionComparisonSummary:
+      properties:
+        current_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Current Value
+        baseline_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Baseline Value
+        absolute_change:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Absolute Change
+        change_ratio:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Change Ratio
+        direction:
+          type: string
+          enum:
+          - up
+          - down
+          - flat
+          - unknown
+          title: Direction
+        sample_count:
+          type: integer
+          minimum: 0
+          title: Sample Count
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - current_value
+      - baseline_value
+      - absolute_change
+      - change_ratio
+      - direction
+      - sample_count
+      - message
+      title: MeasurementVersionComparisonSummary
+    MeasurementVersionComparison:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        baseline_task_id:
+          type: string
+          title: Baseline Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        object_key:
+          type: string
+          title: Object Key
+        period_minutes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+        current_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Version
+        baseline_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Baseline Version
+        current_task:
+          $ref: '#/components/schemas/MeasurementVersionComparisonTask'
+        baseline_task:
+          anyOf:
+          - $ref: '#/components/schemas/MeasurementVersionComparisonTask'
+          - type: 'null'
+          title: Baseline Task
+        current_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Current Points
+        baseline_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Baseline Points
+        summary:
+          $ref: '#/components/schemas/MeasurementVersionComparisonSummary'
+        match:
+          $ref: '#/components/schemas/MeasurementHistoryMatch'
+      type: object
+      required:
+      - task_id
+      - baseline_task_id
+      - rule_code
+      - measurement_unit_id
+      - metric_resource_id
+      - device_id
+      - object_key
+      - period_minutes
+      - current_version
+      - baseline_version
+      - current_task
+      - baseline_task
+      - current_points
+      - baseline_points
+      - summary
+      - match
+      title: MeasurementVersionComparison
     MeasurementHistoryTrend:
       properties:
         task_id:

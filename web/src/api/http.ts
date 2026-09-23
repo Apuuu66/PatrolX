@@ -46,6 +46,9 @@ export interface MeasurementMetadataMetricObservation {
 
 export type MeasurementHistoryTrend = components["schemas"]["MeasurementHistoryTrend"];
 export type MeasurementHistoryPoint = components["schemas"]["MeasurementHistoryPoint"];
+export type MeasurementVersionCandidateList = components["schemas"]["MeasurementVersionCandidateList"];
+export type MeasurementVersionCandidate = components["schemas"]["MeasurementVersionCandidate"];
+export type MeasurementVersionComparison = components["schemas"]["MeasurementVersionComparison"];
 
 export interface MeasurementTrendPoint {
   time: string;
@@ -323,6 +326,39 @@ export const api = {
       `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}` +
         `/measurement-units/${encodeURIComponent(unitId)}/metrics/${encodeURIComponent(metricId)}` +
         `/history-trend?${params.toString()}`,
+    );
+  },
+
+  getMeasurementVersionCandidates: (
+    taskId: string,
+    ruleCode: string,
+    unitId: string,
+    metricId: string,
+    query: { object_key: string; period_minutes: number | null },
+  ) => {
+    const params = new URLSearchParams({ object_key: query.object_key });
+    params.set("period_minutes", query.period_minutes === null ? "none" : String(query.period_minutes));
+    return request<MeasurementVersionCandidateList>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}` +
+        `/measurement-units/${encodeURIComponent(unitId)}/metrics/${encodeURIComponent(metricId)}` +
+        `/version-candidates?${params.toString()}`,
+    );
+  },
+
+  getMeasurementVersionCompare: (
+    taskId: string,
+    ruleCode: string,
+    unitId: string,
+    metricId: string,
+    query: { baseline_task_id: string; object_key: string; period_minutes: number | null },
+  ) => {
+    const params = new URLSearchParams({ object_key: query.object_key });
+    params.set("baseline_task_id", query.baseline_task_id);
+    params.set("period_minutes", query.period_minutes === null ? "none" : String(query.period_minutes));
+    return request<MeasurementVersionComparison>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}` +
+        `/measurement-units/${encodeURIComponent(unitId)}/metrics/${encodeURIComponent(metricId)}` +
+        `/version-compare?${params.toString()}`,
     );
   },
 

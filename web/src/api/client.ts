@@ -320,6 +320,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Measurement Version Candidates V2
+         * @description 返回同设备、已完成任务的系统版本候选；版本缺失时显示版本未知。
+         */
+        get: operations["getMeasurementVersionCandidatesV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Measurement Version Compare V2
+         * @description 按任务、版本和当前维度返回两条独立曲线与均值摘要。
+         */
+        get: operations["getMeasurementVersionCompareV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/inspectors": {
         parameters: {
             query?: never;
@@ -1545,6 +1585,123 @@ export interface components {
              */
             significance: "insufficient" | "normal" | "higher" | "lower";
         };
+        /** MeasurementVersionDirection */
+        MeasurementVersionDirection: {
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction?: "up" | "down" | "flat" | "unknown";
+        };
+        /** MeasurementVersionComparisonTask */
+        MeasurementVersionComparisonTask: {
+            /** Task Id */
+            task_id: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Version */
+            version: string | null;
+            /** Version Known */
+            version_known: boolean;
+        };
+        /** MeasurementVersionCandidateTask */
+        MeasurementVersionCandidateTask: {
+            /** Task Id */
+            task_id: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Version */
+            version: string | null;
+            /** Version Known */
+            version_known: boolean;
+        };
+        /** MeasurementVersionCandidate */
+        MeasurementVersionCandidate: {
+            /** Version */
+            version: string | null;
+            /** Version Known */
+            version_known: boolean;
+            /** Latest Task Id */
+            latest_task_id: string;
+            /**
+             * Latest Completed At
+             * Format: date-time
+             */
+            latest_completed_at: string;
+            /** Task Count */
+            task_count: number;
+            /** Tasks */
+            tasks: components["schemas"]["MeasurementVersionCandidateTask"][];
+        };
+        /** MeasurementVersionCandidateList */
+        MeasurementVersionCandidateList: {
+            /** Task Id */
+            task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Device Id */
+            device_id: string | null;
+            /** Current Version */
+            current_version: string | null;
+            /** Items */
+            items: components["schemas"]["MeasurementVersionCandidate"][];
+        };
+        /** MeasurementVersionComparisonSummary */
+        MeasurementVersionComparisonSummary: {
+            /** Current Value */
+            current_value: number | null;
+            /** Baseline Value */
+            baseline_value: number | null;
+            /** Absolute Change */
+            absolute_change: number | null;
+            /** Change Ratio */
+            change_ratio: number | null;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down" | "flat" | "unknown";
+            /** Sample Count */
+            sample_count: number;
+            /** Message */
+            message: string;
+        };
+        /** MeasurementVersionComparison */
+        MeasurementVersionComparison: {
+            /** Task Id */
+            task_id: string;
+            /** Baseline Task Id */
+            baseline_task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Device Id */
+            device_id: string | null;
+            /** Object Key */
+            object_key: string;
+            /** Period Minutes */
+            period_minutes: number | null;
+            /** Current Version */
+            current_version: string | null;
+            /** Baseline Version */
+            baseline_version: string | null;
+            current_task: components["schemas"]["MeasurementVersionComparisonTask"];
+            /** Baseline Task */
+            baseline_task: components["schemas"]["MeasurementVersionComparisonTask"] | null;
+            /** Current Points */
+            current_points: components["schemas"]["MeasurementHistoryPoint"][];
+            /** Baseline Points */
+            baseline_points: components["schemas"]["MeasurementHistoryPoint"][];
+            summary: components["schemas"]["MeasurementVersionComparisonSummary"];
+            match: components["schemas"]["MeasurementHistoryMatch"];
+        };
         /** MeasurementHistoryTrend */
         MeasurementHistoryTrend: {
             /** Task Id */
@@ -2305,6 +2462,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeasurementHistoryTrend"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMeasurementVersionCandidatesV2: {
+        parameters: {
+            query: {
+                object_key: string;
+                period_minutes: number | null;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementVersionCandidateList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMeasurementVersionCompareV2: {
+        parameters: {
+            query: {
+                baseline_task_id: string;
+                object_key: string;
+                period_minutes: number | null;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementVersionComparison"];
                 };
             };
             /** @description Validation Error */

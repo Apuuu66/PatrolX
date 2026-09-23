@@ -1,0 +1,2 @@
+{"task_id":"task-version-current","measurement_unit_id":"MU_CALL","metric_resource_id":"ME_CALL","object_key":"pod-a","period_minutes":15,"measured_at":"2026-09-10T08:00:00+00:00","value":120,"source_file":"current.csv","line_number":1}
+{"task_id":"task-version-current","measurement_unit_id":"MU_CALL","metric_resource_id":"ME_CALL","object_key":"pod-a","period_minutes":15,"measured_at":"2026-09-10T09:00:00+00:00","value":140,"source_file":"current.csv","line_number":2}
