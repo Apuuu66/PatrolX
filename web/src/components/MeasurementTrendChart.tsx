@@ -1,8 +1,14 @@
-import { Button, Empty, Modal } from "antd";
+import { Alert, Button, Descriptions, Empty, Modal } from "antd";
+import type { ECharts } from "echarts/core";
 import { useEffect, useRef, useState } from "react";
 import type { MeasurementMetadataMetric, MeasurementTrendPoint } from "../api/http";
 import echarts from "../lib/echarts";
-import { buildTrendChartOption } from "../utils/measurementTrend";
+import {
+  analyzeTrendComparison,
+  buildDailyTrendChartOption,
+  buildTrendChartOption,
+  type TrendComparison,
+} from "../utils/measurementTrend";
 
 function MetricDisplayName(metric: { metric_resource_id: string; metric_resource_name_zh?: string | null; base_source_name?: string }) {
   return metric.metric_resource_name_zh || metric.base_source_name || metric.metric_resource_id;
@@ -24,6 +30,73 @@ function MiniTrend({ points }: { points: MeasurementTrendPoint[] }) {
     <svg width="104" height="32" role="img" aria-label="任务内迷你趋势">
       <path d={path} fill="none" stroke="#1677ff" strokeWidth={2} />
     </svg>
+  );
+}
+
+function formatValue(value: number | null | undefined, unit?: string | null): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return `${value}${unit ? ` ${unit}` : ""}`;
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function TrendComparisonSummary({ comparison, unit }: { comparison: TrendComparison; unit?: string | null }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <Alert
+        type={comparison.mode === "insufficient" ? "warning" : "info"}
+        showIcon
+        message={comparison.message}
+      />
+      {comparison.mode !== "insufficient" && (
+        <Descriptions size="small" column={4} style={{ marginTop: 8 }}>
+          <Descriptions.Item label="最新值">{formatValue(comparison.latestValue, unit)}</Descriptions.Item>
+          <Descriptions.Item label="基线值">{formatValue(comparison.baselineValue, unit)}</Descriptions.Item>
+          <Descriptions.Item label="偏差">{formatValue(comparison.deviation, unit)}</Descriptions.Item>
+          <Descriptions.Item label="偏差比例">{formatPercent(comparison.deviationRatio)}</Descriptions.Item>
+        </Descriptions>
+      )}
+    </div>
+  );
+}
+
+function DailyTrendChart({
+  metricName,
+  points,
+  unit,
+}: {
+  metricName: string;
+  points: MeasurementTrendPoint[];
+  unit?: string | null;
+}) {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const option = buildDailyTrendChartOption(points, metricName, unit);
+
+  useEffect(() => {
+    const element = chartRef.current;
+    if (!element || !option) return;
+
+    const chart: ECharts = echarts.init(element);
+    chart.setOption(option);
+    const onResize = () => chart.resize();
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      chart.dispose();
+    };
+  }, [metricName, option, points, unit]);
+
+  if (!option) return null;
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ marginBottom: 8, fontWeight: 600 }}>按日对齐对比</div>
+      <div ref={chartRef} style={{ height: 360 }} />
+    </div>
   );
 }
 
@@ -62,6 +135,7 @@ export function MetricTrendCell({ metric }: { metric: MetricTrendCellMetric }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const points = metric.trend_points ?? [];
   const metricName = MetricDisplayName(metric);
+  const comparison = analyzeTrendComparison(points);
 
   if (points.length < 2) {
     return <span style={{ color: "rgba(0, 0, 0, 0.45)" }}>趋势点不足</span>;
@@ -86,7 +160,11 @@ export function MetricTrendCell({ metric }: { metric: MetricTrendCellMetric }) {
         width={960}
         onCancel={() => setIsModalOpen(false)}
       >
+        <TrendComparisonSummary comparison={comparison} unit={metric.display_unit} />
         <TrendChart metricName={metricName} points={points} unit={metric.display_unit} />
+        {comparison.mode === "multi_day" && (
+          <DailyTrendChart metricName={metricName} points={points} unit={metric.display_unit} />
+        )}
       </Modal>
     </>
   );
