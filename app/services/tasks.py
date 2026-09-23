@@ -31,7 +31,7 @@ from app.models.schemas import (
 from app.services import preparation, store
 from app.services.extraction.layout import PathLimitPolicy
 from app.services.rule_states import RuleStateError, assert_rule_enabled, ensure_rule_states
-from app.services.store import append_log, load_task_meta
+from app.services.store import append_log, load_task_meta, write_json_atomic
 
 logger = get_logger("patrolx.tasks")
 NOW = datetime.now
@@ -56,6 +56,16 @@ class TaskDeleteError(Exception):
         self.path_length = path_length
         self.path_limit = path_limit
         super().__init__(reason)
+
+
+class TaskDeviceIdError(Exception):
+    """设备 ID 更新业务错误。"""
+
+    def __init__(self, code: str, message: str, status_code: int) -> None:
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+        super().__init__(message)
 
 
 class TaskRebuildError(Exception):
@@ -344,6 +354,7 @@ class TaskService:
         operator: str | None,
         version: str | None,
         product: str | None = None,
+        device_id: str | None = None,
     ) -> TaskCreated:
         task_id = generate_task_id(package_file)
         customer: dict[str, str] = {}
@@ -353,6 +364,9 @@ class TaskService:
             customer["operator"] = operator
         if product:
             customer["product"] = product
+        normalized_device_id = device_id.strip() if device_id else ""
+        if normalized_device_id:
+            customer["device_id"] = normalized_device_id
         with session_factory() as session:
             session.add(
                 TaskRecord(
@@ -432,6 +446,7 @@ class TaskService:
                         customer_operator=customer.get("operator"),
                         customer_product=customer.get("product"),
                         customer_version=task.system.version if task.system else None,
+                        device_id=customer.get("device_id"),
                     )
                 )
                 seen_ids.add(task.task_id)
@@ -458,6 +473,7 @@ class TaskService:
                         customer_operator=record.customer.get("operator"),
                         customer_product=record.customer.get("product"),
                         customer_version=record.version,
+                        device_id=record.customer.get("device_id"),
                     )
                 )
 
@@ -471,6 +487,61 @@ class TaskService:
         total = len(items)
         start = (page - 1) * page_size
         return items[start : start + page_size], total
+
+    @staticmethod
+    def _validate_device_id(device_id: str) -> str:
+        normalized = device_id.strip()
+        if normalized and not 1 <= len(normalized) <= 128:
+            raise TaskDeviceIdError("invalid_device_id", "设备 ID 长度必须为 1-128", 400)
+        return normalized
+
+    def update_device_id(self, task_id: str, device_id: str) -> TaskSummary:
+        """修改任务设备 ID，并同步 SQLite 与任务输出元数据。"""
+        normalized = self._validate_device_id(device_id)
+        task = load_task_meta(settings.output, task_id)
+        if task is None:
+            raise TaskDeviceIdError("not_found", "任务不存在", 404)
+        if task.status in {TaskStatus.PENDING, TaskStatus.RUNNING}:
+            raise TaskDeviceIdError("task_busy", "任务正在排队或执行，不能修改设备 ID", 409)
+        if task.system is None:
+            raise TaskDeviceIdError("not_found", "任务不存在", 404)
+
+        customer = dict(task.system.customer)
+        customer["device_id"] = normalized
+        updated_task = task.model_copy(
+            update={
+                "system": task.system.model_copy(update={"customer": customer}),
+            }
+        )
+        store.save_task_meta(settings.output, updated_task)
+        write_json_atomic(
+            settings.output / task_id / "system.json",
+            updated_task.system.model_dump(by_alias=True, mode="json"),
+        )
+        with session_factory() as session:
+            record = session.get(TaskRecord, task_id)
+            if record:
+                record.customer = {**(record.customer or {}), "device_id": normalized}
+                session.commit()
+
+        customer = updated_task.system.customer if updated_task.system else {}
+        return TaskSummary(
+            task_id=updated_task.task_id,
+            name=updated_task.name,
+            mode=updated_task.mode,
+            status=updated_task.status,
+            trigger=updated_task.trigger,
+            created_at=updated_task.created_at,
+            completed_at=updated_task.completed_at,
+            stats=updated_task.stats,
+            preparation=preparation.load_preparation(settings.output / task_id),
+            system=None,
+            customer_province=customer.get("province"),
+            customer_operator=customer.get("operator"),
+            customer_product=customer.get("product"),
+            customer_version=updated_task.system.version if updated_task.system else None,
+            device_id=customer.get("device_id"),
+        )
 
     def delete(self, task_id: str) -> DeleteResult:
         """删除任务；文件现场全部成功后才删除数据库记录。"""

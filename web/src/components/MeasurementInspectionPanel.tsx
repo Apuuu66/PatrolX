@@ -335,7 +335,7 @@ export function MeasurementInspectionPanel({
                           {TREND_SIGNAL_LABELS[metric.trend_signal ?? "none"]}
                         </Tag>
                       </Space>
-                      <MetricTrendCell metric={metric} />
+                      <MetricTrendCell metric={metric} taskId={taskId} ruleCode={ruleCode} unitId={unit.measurement_unit_id} />
                     </Space>
                   ),
                 },

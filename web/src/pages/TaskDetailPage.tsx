@@ -9,6 +9,7 @@ import {
   Descriptions,
   Empty,
   Modal,
+  Input,
   Popconfirm,
   Select,
   Space,
@@ -30,6 +31,7 @@ import {
 } from "../api/http";
 import { RuleStatusTag, SeverityTag, TaskStatusTag } from "../components/StatusBadge";
 import { SummaryCards } from "../components/SummaryCards";
+import { useAuth } from "../auth/AuthContext";
 import { usePolling } from "../hooks/usePolling";
 import { latestTaskFailure } from "../utils/taskFailure";
 import { countByStatus, filterByStatus, toggleStatusFilter, type StatusFilter } from "../utils/taskFilter";
@@ -47,6 +49,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 export function TaskDetailPage() {
   const { taskId = "" } = useParams();
   const { message } = App.useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const navigate = useNavigate();
   const [task, setTask] = useState<TaskSummary | null>(null);
   const [system, setSystem] = useState<SystemInspection | null>(null);
@@ -58,6 +62,9 @@ export function TaskDetailPage() {
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [rebuildRuleCodes, setRebuildRuleCodes] = useState<string[]>([]);
   const [rebuilding, setRebuilding] = useState(false);
+  const [deviceOpen, setDeviceOpen] = useState(false);
+  const [deviceValue, setDeviceValue] = useState("");
+  const [deviceSaving, setDeviceSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -103,6 +110,20 @@ export function TaskDetailPage() {
       await load();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "重跑失败");
+    }
+  };
+
+  const saveDeviceId = async () => {
+    setDeviceSaving(true);
+    try {
+      await api.updateTaskDeviceId(taskId, deviceValue.trim());
+      message.success("设备 ID 已更新");
+      setDeviceOpen(false);
+      await load();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "设备 ID 更新失败");
+    } finally {
+      setDeviceSaving(false);
     }
   };
 
@@ -283,9 +304,35 @@ export function TaskDetailPage() {
             { key: "package", label: "数据包", children: system?.package_file ?? "-" },
             { key: "version", label: "版本", children: system?.version ?? "-" },
             {
+              key: "device_id",
+              label: "设备 ID",
+              children: (
+                <Space size={4}>
+                  <Typography.Text>{task.device_id ?? system?.customer?.device_id ?? "-"}</Typography.Text>
+                  {isAdmin && !busy && (
+                    <Button
+                      size="small"
+                      type="text"
+                      onClick={() => {
+                        setDeviceValue(task.device_id ?? system?.customer?.device_id ?? "");
+                        setDeviceOpen(true);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                  )}
+                </Space>
+              ),
+            },
+            {
               key: "customer",
               label: "客户信息",
-              children: system?.customer && Object.keys(system.customer).length ? JSON.stringify(system.customer) : "-",
+              children: (() => {
+                const customer = system?.customer;
+                if (!customer) return "-";
+                const fields = Object.entries(customer).filter(([key]) => key !== "device_id");
+                return fields.length ? JSON.stringify(Object.fromEntries(fields)) : "-";
+              })(),
             },
             { key: "mode", label: "模式", children: task.mode === "online" ? "在线" : "本地" },
             { key: "trigger", label: "触发方式", children: task.trigger },
@@ -364,6 +411,23 @@ export function TaskDetailPage() {
           value={rebuildRuleCodes}
           onChange={setRebuildRuleCodes}
           options={rules.map((rule) => ({ value: rule.code, label: `${rule.name} (${rule.code})` }))}
+        />
+      </Modal>
+      <Modal
+        title="修改设备 ID"
+        open={deviceOpen}
+        confirmLoading={deviceSaving}
+        okText="保存"
+        cancelText="取消"
+        onOk={() => void saveDeviceId()}
+        onCancel={() => setDeviceOpen(false)}
+      >
+        <Input
+          value={deviceValue}
+          maxLength={128}
+          allowClear
+          placeholder="输入设备 ID"
+          onChange={(event) => setDeviceValue(event.target.value)}
         />
       </Modal>
     </div>

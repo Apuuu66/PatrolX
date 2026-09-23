@@ -24,6 +24,11 @@ export type MeasurementDailyTrendChartOption = {
     connectNulls: boolean;
     lineStyle?: { type: "dashed" };
     data: Array<number | null>;
+    markPoint?: {
+      data: Array<{ coord: [string, number]; value: number; significance: "higher" | "lower" }>;
+      symbolSize?: number;
+      itemStyle?: { color: string };
+    };
   }>;
 };
 

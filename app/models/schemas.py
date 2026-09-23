@@ -71,6 +71,19 @@ class RebuildTriggerSource(StrEnum):
     API = "api"
 
 
+class MeasurementHistoryMatchStatus(StrEnum):
+    MATCHED = "matched"
+    DEGRADED = "degraded"
+    NO_HISTORY = "no_history"
+
+
+class MeasurementBaselineSignificance(StrEnum):
+    INSUFFICIENT = "insufficient"
+    NORMAL = "normal"
+    HIGHER = "higher"
+    LOWER = "lower"
+
+
 class PreparationStatus(StrEnum):
     PASS = "pass"
     WARN = "warn"
@@ -241,10 +254,84 @@ class InspectionTask(BaseModel):
 
 
 class TaskSummary(InspectionTask):
+    device_id: str | None = None
     customer_province: str | None = None
     customer_operator: str | None = None
     customer_product: str | None = None
     customer_version: str | None = None
+
+
+class TaskDeviceIdUpdateRequest(BaseModel):
+    """任务设备 ID 修改请求。"""
+
+    device_id: str = Field(min_length=1, max_length=128)
+
+
+class MeasurementHistoryWindow(BaseModel):
+    end_date: str
+    start_date: str
+    days: int = Field(ge=1)
+    anchor_measured_at: datetime
+
+
+class MeasurementHistoryMatch(BaseModel):
+    status: MeasurementHistoryMatchStatus
+    reason_code: str | None = None
+    message: str
+
+
+class MeasurementHistoryCoverage(BaseModel):
+    history_task_count: int = Field(ge=0)
+    history_date_count: int = Field(ge=0)
+    history_point_count: int = Field(ge=0)
+    current_point_count: int = Field(ge=0)
+    latest_history_date: str | None = None
+
+
+class MeasurementHistoryPoint(BaseModel):
+    measured_at: datetime
+    date: str
+    time_label: str
+    value: float
+    task_id: str
+    source_file: str
+    line_number: int | None = None
+
+
+class MeasurementHistoryDateSeries(BaseModel):
+    date: str
+    source_task_ids: list[str]
+    points: list[MeasurementHistoryPoint]
+
+
+class MeasurementHistoryBaselinePoint(BaseModel):
+    time_label: str
+    baseline_value: float | None = None
+    current_value: float | None = None
+    deviation: float | None = None
+    deviation_ratio: float | None = None
+    sample_count: int = Field(ge=0)
+    date_count: int = Field(ge=0)
+    significance: MeasurementBaselineSignificance
+
+
+class MeasurementHistoryTrend(BaseModel):
+    """KPI 单指标跨任务历史趋势响应。"""
+
+    task_id: str
+    rule_code: str
+    measurement_unit_id: str
+    metric_resource_id: str
+    device_id: str | None = None
+    object_key: str
+    period_minutes: int | None = None
+    window: MeasurementHistoryWindow
+    match: MeasurementHistoryMatch
+    coverage: MeasurementHistoryCoverage
+    current_points: list[MeasurementHistoryPoint] = Field(default_factory=list)
+    history_series: list[MeasurementHistoryDateSeries] = Field(default_factory=list)
+    baseline_points: list[MeasurementHistoryBaselinePoint] = Field(default_factory=list)
+    source_tasks: list[str] = Field(default_factory=list)
 
 
 class TaskCreated(BaseModel):

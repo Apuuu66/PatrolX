@@ -600,6 +600,93 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/tasks/{task_id}/device-id:
+    patch:
+      summary: Update Task Device Id V2
+      operationId: updateTaskDeviceIdV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskDeviceIdUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskSummary'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/history-trend:
+    get:
+      summary: Get Measurement History Trend V2
+      description: 按设备、测量单元、指标、行对象和周期返回 7 天历史对比趋势。
+      operationId: getMeasurementHistoryTrendV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: object_key
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Object Key
+      - name: period_minutes
+        in: query
+        required: true
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementHistoryTrend'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/inspectors:
     get:
       summary: List Inspectors V2
@@ -1301,6 +1388,11 @@ components:
           - type: string
           - type: 'null'
           title: Product
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
       type: object
       required:
       - package_file
@@ -2813,6 +2905,11 @@ components:
           - type: string
           - type: 'null'
           title: Customer Version
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
       type: object
       required:
       - task_id
@@ -2939,6 +3036,264 @@ components:
       - created_at
       - updated_at
       title: UserV1
+    TaskDeviceIdUpdateRequest:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+      type: object
+      required:
+      - device_id
+      title: TaskDeviceIdUpdateRequest
+    MeasurementHistoryWindow:
+      properties:
+        end_date:
+          type: string
+          title: End Date
+        start_date:
+          type: string
+          title: Start Date
+        days:
+          type: integer
+          title: Days
+        anchor_measured_at:
+          type: string
+          format: date-time
+          title: Anchor Measured At
+      type: object
+      required:
+      - end_date
+      - start_date
+      - days
+      - anchor_measured_at
+      title: MeasurementHistoryWindow
+    MeasurementHistoryMatch:
+      properties:
+        status:
+          type: string
+          enum:
+          - matched
+          - degraded
+          - no_history
+          title: Status
+        reason_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason Code
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - status
+      - reason_code
+      - message
+      title: MeasurementHistoryMatch
+    MeasurementHistoryCoverage:
+      properties:
+        history_task_count:
+          type: integer
+          title: History Task Count
+        history_date_count:
+          type: integer
+          title: History Date Count
+        history_point_count:
+          type: integer
+          title: History Point Count
+        current_point_count:
+          type: integer
+          title: Current Point Count
+        latest_history_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Latest History Date
+      type: object
+      required:
+      - history_task_count
+      - history_date_count
+      - history_point_count
+      - current_point_count
+      - latest_history_date
+      title: MeasurementHistoryCoverage
+    MeasurementHistoryPoint:
+      properties:
+        measured_at:
+          type: string
+          format: date-time
+          title: Measured At
+        date:
+          type: string
+          title: Date
+        time_label:
+          type: string
+          title: Time Label
+        value:
+          type: number
+          title: Value
+        task_id:
+          type: string
+          title: Task Id
+        source_file:
+          type: string
+          title: Source File
+        line_number:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Line Number
+      type: object
+      required:
+      - measured_at
+      - date
+      - time_label
+      - value
+      - task_id
+      - source_file
+      - line_number
+      title: MeasurementHistoryPoint
+    MeasurementHistoryDateSeries:
+      properties:
+        date:
+          type: string
+          title: Date
+        source_task_ids:
+          items:
+            type: string
+          type: array
+          title: Source Task Ids
+        points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Points
+      type: object
+      required:
+      - date
+      - source_task_ids
+      - points
+      title: MeasurementHistoryDateSeries
+    MeasurementHistoryBaselinePoint:
+      properties:
+        time_label:
+          type: string
+          title: Time Label
+        baseline_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Baseline Value
+        current_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Current Value
+        deviation:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Deviation
+        deviation_ratio:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Deviation Ratio
+        sample_count:
+          type: integer
+          title: Sample Count
+        date_count:
+          type: integer
+          title: Date Count
+        significance:
+          type: string
+          enum:
+          - insufficient
+          - normal
+          - higher
+          - lower
+          title: Significance
+      type: object
+      required:
+      - time_label
+      - baseline_value
+      - current_value
+      - deviation
+      - deviation_ratio
+      - sample_count
+      - date_count
+      - significance
+      title: MeasurementHistoryBaselinePoint
+    MeasurementHistoryTrend:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        object_key:
+          type: string
+          title: Object Key
+        period_minutes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+        window:
+          $ref: '#/components/schemas/MeasurementHistoryWindow'
+        match:
+          $ref: '#/components/schemas/MeasurementHistoryMatch'
+        coverage:
+          $ref: '#/components/schemas/MeasurementHistoryCoverage'
+        current_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Current Points
+        history_series:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryDateSeries'
+          type: array
+          title: History Series
+        baseline_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryBaselinePoint'
+          type: array
+          title: Baseline Points
+        source_tasks:
+          items:
+            type: string
+          type: array
+          title: Source Tasks
+      type: object
+      required:
+      - task_id
+      - rule_code
+      - measurement_unit_id
+      - metric_resource_id
+      - device_id
+      - object_key
+      - period_minutes
+      - window
+      - match
+      - coverage
+      - current_points
+      - history_series
+      - baseline_points
+      - source_tasks
+      title: MeasurementHistoryTrend
     ValidationError:
       properties:
         loc:

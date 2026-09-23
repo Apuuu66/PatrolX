@@ -283,6 +283,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/tasks/{task_id}/device-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Task Device Id V2 */
+        patch: operations["updateTaskDeviceIdV2"];
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/history-trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Measurement History Trend V2
+         * @description 按设备、测量单元、指标、行对象和周期返回 7 天历史对比趋势。
+         */
+        get: operations["getMeasurementHistoryTrendV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/inspectors": {
         parameters: {
             query?: never;
@@ -596,6 +633,8 @@ export interface components {
             operator?: string | null;
             /** Product */
             product?: string | null;
+            /** Device Id */
+            device_id?: string | null;
         };
         /** Body_importKpiMeasurementUnitsV5 */
         Body_importKpiMeasurementUnitsV5: {
@@ -1343,6 +1382,8 @@ export interface components {
             customer_product?: string | null;
             /** Customer Version */
             customer_version?: string | null;
+            /** Device Id */
+            device_id?: string | null;
         };
         /**
          * TaskTrigger
@@ -1408,6 +1449,129 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** TaskDeviceIdUpdateRequest */
+        TaskDeviceIdUpdateRequest: {
+            /** Device Id */
+            device_id: string;
+        };
+        /** MeasurementHistoryWindow */
+        MeasurementHistoryWindow: {
+            /** End Date */
+            end_date: string;
+            /** Start Date */
+            start_date: string;
+            /** Days */
+            days: number;
+            /**
+             * Anchor Measured At
+             * Format: date-time
+             */
+            anchor_measured_at: string;
+        };
+        /** MeasurementHistoryMatch */
+        MeasurementHistoryMatch: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "matched" | "degraded" | "no_history";
+            /** Reason Code */
+            reason_code: string | null;
+            /** Message */
+            message: string;
+        };
+        /** MeasurementHistoryCoverage */
+        MeasurementHistoryCoverage: {
+            /** History Task Count */
+            history_task_count: number;
+            /** History Date Count */
+            history_date_count: number;
+            /** History Point Count */
+            history_point_count: number;
+            /** Current Point Count */
+            current_point_count: number;
+            /** Latest History Date */
+            latest_history_date: string | null;
+        };
+        /** MeasurementHistoryPoint */
+        MeasurementHistoryPoint: {
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /** Date */
+            date: string;
+            /** Time Label */
+            time_label: string;
+            /** Value */
+            value: number;
+            /** Task Id */
+            task_id: string;
+            /** Source File */
+            source_file: string;
+            /** Line Number */
+            line_number: number | null;
+        };
+        /** MeasurementHistoryDateSeries */
+        MeasurementHistoryDateSeries: {
+            /** Date */
+            date: string;
+            /** Source Task Ids */
+            source_task_ids: string[];
+            /** Points */
+            points: components["schemas"]["MeasurementHistoryPoint"][];
+        };
+        /** MeasurementHistoryBaselinePoint */
+        MeasurementHistoryBaselinePoint: {
+            /** Time Label */
+            time_label: string;
+            /** Baseline Value */
+            baseline_value: number | null;
+            /** Current Value */
+            current_value: number | null;
+            /** Deviation */
+            deviation: number | null;
+            /** Deviation Ratio */
+            deviation_ratio: number | null;
+            /** Sample Count */
+            sample_count: number;
+            /** Date Count */
+            date_count: number;
+            /**
+             * Significance
+             * @enum {string}
+             */
+            significance: "insufficient" | "normal" | "higher" | "lower";
+        };
+        /** MeasurementHistoryTrend */
+        MeasurementHistoryTrend: {
+            /** Task Id */
+            task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Device Id */
+            device_id: string | null;
+            /** Object Key */
+            object_key: string;
+            /** Period Minutes */
+            period_minutes: number | null;
+            window: components["schemas"]["MeasurementHistoryWindow"];
+            match: components["schemas"]["MeasurementHistoryMatch"];
+            coverage: components["schemas"]["MeasurementHistoryCoverage"];
+            /** Current Points */
+            current_points: components["schemas"]["MeasurementHistoryPoint"][];
+            /** History Series */
+            history_series: components["schemas"]["MeasurementHistoryDateSeries"][];
+            /** Baseline Points */
+            baseline_points: components["schemas"]["MeasurementHistoryBaselinePoint"][];
+            /** Source Tasks */
+            source_tasks: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -2069,6 +2233,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeasurementMetricDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateTaskDeviceIdV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskDeviceIdUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMeasurementHistoryTrendV2: {
+        parameters: {
+            query: {
+                object_key: string;
+                period_minutes: number | null;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementHistoryTrend"];
                 };
             };
             /** @description Validation Error */

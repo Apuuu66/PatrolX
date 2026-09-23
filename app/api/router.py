@@ -7,12 +7,13 @@ import os
 import shutil
 import tempfile
 from pathlib import Path, PureWindowsPath
+from typing import Annotated
 
 import yaml
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import HTMLResponse, Response
-from pydantic import ValidationError
+from pydantic import BeforeValidator, ValidationError
 
 from app.cli import generate_task_id
 from app.core.checksum import sha256_file
@@ -45,6 +46,7 @@ from app.models.schemas import (
     LogEntry,
     LoginRequestV1,
     LoginResponseV1,
+    MeasurementHistoryTrend,
     MeasurementMetricDetail,
     OverviewSummary,
     RebuildRequest,
@@ -53,8 +55,10 @@ from app.models.schemas import (
     RuleStateUpdateRequest,
     SystemInspection,
     TaskCreated,
+    TaskDeviceIdUpdateRequest,
     TaskListResponse,
     TaskLogs,
+    TaskSummary,
     UserCreateRequestV1,
     UserInfoV1,
     UserListResponseV1,
@@ -75,6 +79,7 @@ from app.services.auth import (
     reset_user_password,
     update_user_role,
 )
+from app.services.kpi_history import get_history_trend
 from app.services.kpi_measurement_units import (
     KpiMeasurementError,
     batch_confirm_measurement_bindings,
@@ -92,7 +97,24 @@ from app.services.overview import build_overview
 from app.services.results import find_kpi_metric_detail, summarize_kpi_result
 from app.services.rule_states import RuleStateError, list_rule_states, update_rule_state
 from app.services.store import load_rule_result
-from app.services.tasks import DeleteResult, TaskDeleteError, TaskRebuildError, task_service
+from app.services.tasks import (
+    DeleteResult,
+    TaskDeleteError,
+    TaskDeviceIdError,
+    TaskRebuildError,
+    task_service,
+)
+
+
+def _parse_optional_int_query(value: object) -> object:
+    """兼容 query 中的空值/none，FastAPI 仍按 integer|null 生成契约。"""
+    if value in ("", "none", "None", None):
+        return None
+    return value
+
+
+OptionalIntQuery = Annotated[int | None, BeforeValidator(_parse_optional_int_query)]
+
 
 v1_router = APIRouter(prefix="/api/v1")
 router = APIRouter(prefix="/api/v2")
@@ -147,6 +169,7 @@ async def create_task_v2(
     province: str | None = Form(None),
     operator: str | None = Form(None),
     product: str | None = Form(None),
+    device_id: str | None = Form(None),
 ) -> TaskCreated:
     filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
     if len(filename.encode("utf-8")) > 255:
@@ -183,6 +206,7 @@ async def create_task_v2(
             operator,
             version,
             product=product,
+            device_id=device_id,
         )
         task_dir = settings.uploads / created.task_id
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -214,6 +238,50 @@ def list_tasks_v2(
 ) -> TaskListResponse:
     items, total = task_service.list_tasks(page, page_size, status)
     return TaskListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.patch("/tasks/{task_id}/device-id", response_model=TaskSummary, operation_id="updateTaskDeviceIdV2")
+def update_task_device_id_v2(
+    task_id: str = PathParam(),
+    body: TaskDeviceIdUpdateRequest = ...,
+    _auth: AuthSession = Depends(require_role("admin")),
+) -> TaskSummary:
+    try:
+        return task_service.update_device_id(task_id, body.device_id)
+    except TaskDeviceIdError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code) from exc
+
+
+@router.get(
+    "/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/history-trend",
+    response_model=MeasurementHistoryTrend,
+    operation_id="getMeasurementHistoryTrendV2",
+)
+def get_measurement_history_trend_v2(
+    period_minutes: OptionalIntQuery,
+    task_id: str = PathParam(),
+    rule_code: str = PathParam(),
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+    object_key: str = Query(...),
+) -> MeasurementHistoryTrend:
+    """按需返回单指标跨任务历史趋势；历史索引缺失时明确降级。"""
+    if task_service.get(task_id) is None:
+        raise AppError("not_found", "任务不存在", 404)
+    rule_path = settings.output / task_id / "rules" / f"{rule_code}.json"
+    if not rule_path.is_file():
+        raise AppError("not_found", "规则不存在", 404)
+    try:
+        return get_history_trend(
+            task_id,
+            rule_code=rule_code,
+            measurement_unit_id=measurement_unit_id,
+            metric_resource_id=metric_resource_id,
+            object_key=object_key,
+            period_minutes=period_minutes,
+        )
+    except FileNotFoundError as exc:
+        raise AppError("not_found", "任务不存在", 404) from exc
 
 
 @router.get("/tasks/{task_id}", response_model=InspectionTask, operation_id="getTaskV2")

@@ -41,6 +41,9 @@ export interface MeasurementMetadataMetricObservation {
   source_rows?: { source_file: string; line_number: number; value: string }[];
 }
 
+export type MeasurementHistoryTrend = components["schemas"]["MeasurementHistoryTrend"];
+export type MeasurementHistoryPoint = components["schemas"]["MeasurementHistoryPoint"];
+
 export interface MeasurementTrendPoint {
   time: string;
   period_minutes?: number | null;
@@ -266,6 +269,29 @@ export const api = {
     const query = excludeRecords ? "?exclude_records=true" : "";
     return request<RuleResult>(
       `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}${query}`,
+    );
+  },
+
+  updateTaskDeviceId: (taskId: string, deviceId: string) =>
+    request<TaskSummary>(`${BASE}/tasks/${encodeURIComponent(taskId)}/device-id`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId }),
+    }),
+
+  getMeasurementHistoryTrend: (
+    taskId: string,
+    ruleCode: string,
+    unitId: string,
+    metricId: string,
+    query: { object_key: string; period_minutes: number | null },
+  ) => {
+    const params = new URLSearchParams({ object_key: query.object_key });
+    params.set("period_minutes", query.period_minutes === null ? "none" : String(query.period_minutes));
+    return request<MeasurementHistoryTrend>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}` +
+        `/measurement-units/${encodeURIComponent(unitId)}/metrics/${encodeURIComponent(metricId)}` +
+        `/history-trend?${params.toString()}`,
     );
   },
 

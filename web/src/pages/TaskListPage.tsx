@@ -326,6 +326,7 @@ export function TaskListPage() {
       if (values.operator) fd.append("operator", values.operator);
       if (values.product) fd.append("product", values.product);
       if (values.version) fd.append("version", values.version);
+      if (values.device_id) fd.append("device_id", String(values.device_id).trim());
       const created = await api.createTask(fd);
       message.success("任务已创建，开始执行");
       setOpen(false);
@@ -685,6 +686,9 @@ export function TaskListPage() {
           </Form.Item>
           <Form.Item label="任务名称" name="name">
             <Input placeholder="可选，默认取压缩包名" />
+          </Form.Item>
+          <Form.Item label="设备 ID" name="device_id">
+            <Input allowClear placeholder="可选，用于跨任务历史对比" maxLength={128} />
           </Form.Item>
           <Form.Item label="省份" name="province">
             <Select allowClear placeholder="选择省份" options={dictOptions(dicts?.province)} />

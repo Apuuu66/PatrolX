@@ -24,6 +24,7 @@ from app.models.db import (
     init_db,
     session_factory,
 )
+from app.services.kpi_history import write_history_index
 
 
 class KpiMeasurementError(Exception):
@@ -1456,6 +1457,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
     matched: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    history_records: list[dict[str, Any]] = []
     for file_result in discovered["files"]:
         if file_result["status"] == "matched":
             matched.append(file_result)
@@ -1639,6 +1641,19 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                                         "value": raw_value,
                                     }
                                 ],
+                            }
+                        )
+                        history_records.append(
+                            {
+                                "task_id": task_id,
+                                "measurement_unit_id": unit_id,
+                                "metric_resource_id": binding.metric_resource_id,
+                                "object_key": object_key,
+                                "period_minutes": period_minutes,
+                                "measured_at": measured_at.isoformat(),
+                                "value": number,
+                                "source_file": file_result["source_file"],
+                                "line_number": line_number,
                             }
                         )
                 metric_key = (binding.metric_resource_id, binding.raw_source_name)
@@ -1873,6 +1888,8 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 result["reason"] = None
             result.pop("metric_results", None)
             result.pop("object_results", None)
+    # KPI 结果组织完成后立即生成任务私有历史索引；失败不影响规则结果由调用方统一处理。
+    write_history_index(task_id, history_records)
     final_units = list(unit_results.values())
     kpi_overview = _kpi_overview(final_units)
     kpi_overview["auto_registered_count"] = sum(

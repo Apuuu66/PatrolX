@@ -565,6 +565,7 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
   快照不可变，单规则重跑优先复用。快照缺失时从基础资源 + SQLite 重建，损坏时任务失败，不回退旧配置。
 - 目录化结果写入 `metric_catalog`、`kpi_results`、`unclassified_metrics`；未登记列只保留来源和样例，不改变规则状态。
 - 历史结果 `metadata.version=1` 前端回退明细表，后端不迁移、不重算；分页原始记录通过 `/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records` 按需查询。
+- KPI 结果组织完成后同步重建任务私有历史索引 `kpi/history/index.jsonl`；索引按 JSONL 增行存储当前任务有效点，不保存 `device_id`，删除任务目录即随任务隔离生命周期消失。跨任务历史查询只按需流式读取候选任务索引。
 - `统计峰值`、`最大并发` 等容量指标只展示和追溯，不参与成功/失败率判断。
 - 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
 - 时间输入按 SQLite 公共配置中的 `input_timezone` 解释，持久化为 UTC。
