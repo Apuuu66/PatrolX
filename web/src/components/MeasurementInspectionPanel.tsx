@@ -8,9 +8,9 @@ import type {
   MeasurementMetadataUnit,
   MeasurementMetricDetail,
   MeasurementTrend,
-  MeasurementTrendPoint,
 } from "../api/http";
 import { api } from "../api/http";
+import { MetricTrendCell } from "./MeasurementTrendChart";
 
 const STATUS_COLORS: Record<string, string> = {
   pass: "green",
@@ -86,28 +86,6 @@ function MetricBusinessTag({ metric }: { metric: MeasurementMetadataMetric }) {
   if (!status) return <Tag>旧数据</Tag>;
   const color = status === "fail" ? "red" : status === "warn" ? "gold" : status === "normal" ? "green" : "blue";
   return <Tag color={color}>{BUSINESS_STATUS_LABELS[status] ?? status}</Tag>;
-}
-
-function MiniTrend({ points }: { points: MeasurementTrendPoint[] }) {
-  if (points.length < 2) {
-    return <Typography.Text type="secondary">趋势点不足</Typography.Text>;
-  }
-  const values = points.map((point) => point.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const path = points
-    .map((point, index) => {
-      const x = (index / (points.length - 1)) * 96;
-      const y = 28 - ((point.value - min) / range) * 24;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-  return (
-    <svg width="104" height="32" role="img" aria-label="任务内迷你趋势">
-      <path d={path} fill="none" stroke="#1677ff" strokeWidth="2" />
-    </svg>
-  );
 }
 
 function TrendTable({ trends }: { trends: MeasurementTrend[] }) {
@@ -357,7 +335,7 @@ export function MeasurementInspectionPanel({
                           {TREND_SIGNAL_LABELS[metric.trend_signal ?? "none"]}
                         </Tag>
                       </Space>
-                      <MiniTrend points={metric.trend_points ?? []} />
+                      <MetricTrendCell metric={metric} />
                     </Space>
                   ),
                 },
