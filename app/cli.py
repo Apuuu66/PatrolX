@@ -247,7 +247,7 @@ def run_task(
         f"error={summary.error} skip={summary.skip} | 报告: {report} "
         f"| 日志: {settings.output / task_id / 'execution.log'}"
     )
-    return task
+    return store.summary_task(task)
 
 
 def run_incremental_rebuild(
@@ -373,7 +373,7 @@ def run_single_rule(
             "skip": system.summary.skip,
             "systems": 1,
         }
-        old["system"] = system.model_dump(by_alias=True, mode="json")
+        old["system"] = store.summary_system(system).model_dump(by_alias=True, mode="json")
         task_path = settings.output / task_id / "task.json"
         store.write_json_atomic(task_path, old)
     report = render_report(settings.output, task_id, system, completed_at=store.now_utc())

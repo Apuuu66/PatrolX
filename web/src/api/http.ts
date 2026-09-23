@@ -54,7 +54,8 @@ export interface MeasurementTrend {
   reason?: string | null;
   object_key?: string | null;
   period_minutes?: number | null;
-  points: MeasurementTrendPoint[];
+  point_count?: number;
+  points?: MeasurementTrendPoint[];
 }
 
 export interface MeasurementMetadataMetric {

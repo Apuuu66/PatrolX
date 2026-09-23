@@ -260,5 +260,29 @@ def test_trend_labels_are_isolated_by_object_and_period(tmp_path: Path) -> None:
     trends = {(item["object_key"], item["period_minutes"]): item for item in metric["trends"]}
     assert trends[("pod-a", 15)]["label"] == "rising"
     assert trends[("pod-b", 30)]["label"] == "falling"
-    assert metric["trend_points"] == trends[("pod-a", 15)]["points"]
+    # 趋势明细只保留主趋势一份，避免 570 指标场景被趋势数组重复放大。
+    assert all("points" not in trend for trend in metric["trends"])
+    assert trends[("pod-a", 15)]["point_count"] == 3
+    assert trends[("pod-b", 30)]["point_count"] == 2
+    assert len(metric["trend_points"]) == 3
     assert result["measurement_units"][0]["risk_summary"]["trend_worsened_count"] == 0
+
+
+def test_primary_trend_points_are_sampled_for_storage(tmp_path: Path) -> None:
+    """主趋势只保留图表采样点，避免 570 指标规则结果继续膨胀。"""
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    rows = "".join(
+        f"pod-a,2026-09-02 {minute // 60:02d}:{minute % 60:02d}:00,"
+        f"2026-09-02 {(minute + 1) // 60:02d}:{(minute + 1) % 60:02d}:00,15,{minute}\n"
+        for minute in range(220)
+    )
+    path.write_text(HEADER + rows, encoding="utf-8")
+
+    result = inspect_measurement_files("task-trend-sample", [(path.name, path)])
+    metric = result["measurement_units"][0]["metrics"][0]
+
+    assert metric["trends"][0]["point_count"] == 220
+    assert len(metric["trend_points"]) == 200
+    assert metric["trend_points"][0]["value"] == 0
+    assert metric["trend_points"][-1]["value"] == 219

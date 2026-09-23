@@ -130,28 +130,11 @@ function TrendTable({ trends }: { trends: MeasurementTrend[] }) {
         },
         { title: "说明", dataIndex: "reason", key: "reason", render: (value) => value || "-" },
         {
-          title: "完整趋势",
-          key: "points",
-          render: (_: unknown, trend: MeasurementTrend) => (
-            <Table
-              rowKey={(point) => `${point.time}-${point.object_key ?? ""}`}
-              size="small"
-              columns={[
-                { title: "时间", dataIndex: "time", key: "time" },
-                { title: "值", dataIndex: "value", key: "value" },
-                {
-                  title: "来源",
-                  key: "source",
-                  render: (_: unknown, point: MeasurementTrendPoint) => {
-                    const row = point.source_rows?.[0];
-                    return row ? `${row.source_file}:${row.line_number}` : "-";
-                  },
-                },
-              ]}
-              dataSource={trend.points}
-              pagination={false}
-            />
-          ),
+          title: "趋势点数",
+          dataIndex: "point_count",
+          key: "point_count",
+          width: 110,
+          render: (value: number | undefined) => value ?? 0,
         },
       ]}
       dataSource={trends}

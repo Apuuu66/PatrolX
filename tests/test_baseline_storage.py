@@ -4,8 +4,21 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.models.schemas import InspectionTask, TaskMode, TaskStats, TaskStatus, TaskTrigger
-from app.services.store import save_task_meta
+from app.models.schemas import (
+    InspectionTask,
+    Priority,
+    RuleCategory,
+    RuleResult,
+    RuleStatus,
+    Severity,
+    SystemInspection,
+    SystemStatus,
+    TaskMode,
+    TaskStats,
+    TaskStatus,
+    TaskTrigger,
+)
+from app.services.store import save_system, save_task_meta
 from tests.baseline_helpers import SAMPLE, Env, load_rule, load_task, setup_env
 
 
@@ -191,3 +204,65 @@ def test_failed_json_write_cleans_temp_file(tmp_path: Path) -> None:
 
     assert json.loads(path.read_text(encoding="utf-8")) == {"task_id": "old"}
     assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_system_and_task_storage_do_not_duplicate_rule_metadata(tmp_path: Path) -> None:
+    """大明细保留在规则 JSON；system/task 只存摘要，避免三份复制。"""
+    now = datetime.now(UTC)
+    result = RuleResult(
+        code="kpi.measurement_units",
+        name="KPI 测量单元",
+        category=RuleCategory.KPI,
+        priority=Priority.P1,
+        execution_order=0,
+        status=RuleStatus.PASS,
+        severity=Severity.MEDIUM,
+        metadata={"measurement_units": [{"metrics": [{"trends": [{"points": [{"value": 1}]}]}]}]},
+    )
+    system = SystemInspection(
+        package_file="sample.zip",
+        status=SystemStatus.COMPLETED,
+        summary={"total": 1, "pass": 1, "warn": 0, "fail": 0, "error": 0, "skip": 0},
+        rules=[result],
+    )
+    task = InspectionTask(
+        task_id="task-large",
+        name="大结果",
+        mode=TaskMode.LOCAL,
+        status=TaskStatus.COMPLETED,
+        trigger=TaskTrigger.CLI,
+        created_at=now,
+        completed_at=now,
+        stats={"total": 1, "pass": 1, "warn": 0, "fail": 0, "error": 0, "skip": 0, "systems": 1},
+        system=system,
+    )
+
+    save_system(tmp_path, task.task_id, system)
+    save_task_meta(tmp_path, task)
+
+    stored = json.loads((tmp_path / task.task_id / "system.json").read_text(encoding="utf-8"))
+    task_json = json.loads((tmp_path / task.task_id / "task.json").read_text(encoding="utf-8"))
+    assert stored["rules"][0]["metadata"] == {}
+    assert task_json["system"]["rules"][0]["metadata"] == {}
+
+
+def test_single_rule_rerun_keeps_task_system_summary_only(tmp_path: Path, monkeypatch) -> None:
+    """单规则重跑重建 task.json 时也不能把规则大明细复制回来。"""
+    from app.cli import run_single_rule, run_task
+
+    env: Env = setup_env(tmp_path, monkeypatch)
+    task_id = "task-single-summary"
+    run_task(SAMPLE, task_id=task_id)
+    task_path = env.task_dir(task_id) / "task.json"
+
+    def metadata_size(payload: dict) -> int:
+        rule = next(item for item in payload["system"]["rules"] if item["code"] == "kpi.measurement_units")
+        return len(json.dumps(rule.get("metadata", {}), ensure_ascii=False))
+
+    before = json.loads(task_path.read_text(encoding="utf-8"))
+    assert metadata_size(before) <= 2
+
+    run_single_rule("log.error_density", package=SAMPLE, task_id=task_id)
+
+    after = json.loads(task_path.read_text(encoding="utf-8"))
+    assert metadata_size(after) <= 2

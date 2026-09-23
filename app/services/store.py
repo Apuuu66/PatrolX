@@ -62,12 +62,31 @@ def compute_summary(results: list[RuleResult]) -> Summary:
     )
 
 
+def summary_result(result: RuleResult) -> RuleResult:
+    """生成任务/系统索引用的规则摘要；大明细只保留在 rules/<code>.json。"""
+    return result.model_copy(update={"metadata": {}})
+
+
+def summary_system(system: SystemInspection) -> SystemInspection:
+    """生成不含规则大明细的系统摘要。"""
+    return system.model_copy(update={"rules": [summary_result(result) for result in system.rules]})
+
+
+def summary_task(task: InspectionTask) -> InspectionTask:
+    """生成不含规则大明细的任务摘要。"""
+    return task.model_copy(update={"system": summary_system(task.system) if task.system is not None else None})
+
+
 def save_system(output: Path, task_id: str, system: SystemInspection) -> None:
-    write_json_atomic(task_dir(output, task_id) / "system.json", system.model_dump(by_alias=True, mode="json"))
+    write_json_atomic(
+        task_dir(output, task_id) / "system.json",
+        summary_system(system).model_dump(by_alias=True, mode="json"),
+    )
 
 
 def save_task_meta(output: Path, task: InspectionTask) -> None:
-    write_json_atomic(task_dir(output, task.task_id) / "task.json", task.model_dump(by_alias=True, mode="json"))
+    payload = summary_task(task)
+    write_json_atomic(task_dir(output, task.task_id) / "task.json", payload.model_dump(by_alias=True, mode="json"))
 
 
 def load_task_meta(output: Path, task_id: str) -> InspectionTask | None:

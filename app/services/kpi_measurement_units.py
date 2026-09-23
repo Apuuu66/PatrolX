@@ -1226,6 +1226,21 @@ def _deduplicate_series(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(result, key=lambda item: (item["time"], item["period_minutes"] is None, item["period_minutes"] or 0))
 
 
+KPI_TREND_SAMPLE_MAX_POINTS = 200
+
+
+def _sample_trend_points(
+    points: list[dict[str, Any]], limit: int = KPI_TREND_SAMPLE_MAX_POINTS
+) -> list[dict[str, Any]]:
+    """按等距采样保留趋势形态，避免每个指标保存全量明细。"""
+    if len(points) <= limit:
+        return points
+    if limit < 2:
+        return points[:limit]
+    indexes = sorted({round(index * (len(points) - 1) / (limit - 1)) for index in range(limit)})
+    return [points[index] for index in indexes]
+
+
 def _classify_trend(points: list[dict[str, Any]], direction: str | None) -> dict[str, Any]:
     """按规则生成单对象、单周期的趋势标签和方向信号。"""
     if len(points) < 2:
@@ -1666,10 +1681,18 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                     )
                 ]
                 for trend in trends:
-                    first_point = trend["points"][0] if trend["points"] else {}
+                    points = trend.get("points", [])
+                    first_point = points[0] if points else {}
                     trend["object_key"] = first_point.get("object_key")
                     trend["period_minutes"] = first_point.get("period_minutes")
-                primary_trend = max(trends, key=lambda item: len(item["points"])) if trends else None
+                for trend in trends:
+                    trend["point_count"] = len(trend.get("points", []))
+                primary_trend = max(trends, key=lambda item: item["point_count"]) if trends else None
+                primary_points = (
+                    _sample_trend_points(primary_trend.pop("points", [])) if primary_trend is not None else []
+                )
+                for trend in trends:
+                    trend.pop("points", None)
                 finalized_metrics.append(
                     {
                         "metric_resource_id": metric_result["metric_resource_id"],
@@ -1700,7 +1723,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         "trend_label": primary_trend["label"] if primary_trend else "cannot_determine",
                         "trend_signal": primary_trend["signal"] if primary_trend else "none",
                         "trend_reason": primary_trend["reason"] if primary_trend else "no_time_series",
-                        "trend_points": primary_trend["points"] if primary_trend else [],
+                        "trend_points": primary_points,
                         "trends": trends,
                         "observations": observations,
                         "source_files": metric_result["source_files"],

@@ -47,7 +47,11 @@ def test_cli_and_online_catalog_source_paths_match(tmp_path: Path, monkeypatch) 
     assert system_response.status_code == 200
 
     assert local_task.task_id == task_id
-    online_rules = {rule["code"]: rule for rule in system_response.json()["rules"]}
+    # system.json 现在只保存规则摘要；大明细从规则结果接口做一致性校验。
+    online_rules = {
+        rule["code"]: client.get(f"/api/v2/tasks/{task_id}/rules/{rule['code']}").json()
+        for rule in system_response.json()["rules"]
+    }
     for local_path in local_env.rules_dir(task_id).glob("*.json"):
         local_rule = json.loads(local_path.read_text(encoding="utf-8"))
         if local_rule["code"].startswith("pkg.extract."):
