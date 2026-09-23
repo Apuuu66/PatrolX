@@ -209,6 +209,14 @@ function HistoryTrendPanel({
       });
   }, [metric.metric_resource_id, reloadNonce, ruleCode, selection.objectKey, selection.periodKey, taskId, unitId]);
 
+  useEffect(() => {
+    if (!options.objectOptions.length || !options.periodOptions.length) return;
+    const objectAvailable = options.objectOptions.some((option) => option.value === selection.objectKey);
+    const periodAvailable = options.periodOptions.some((option) => option.value === selection.periodKey);
+    if (objectAvailable && periodAvailable) return;
+    setSelection(defaultTrendSelection(metric.trends));
+  }, [metric.trends, options.objectOptions, options.periodOptions, selection.objectKey, selection.periodKey]);
+
   const matchAlert = history ? historyMatchAlert(history.match) : null;
   const canRequest = Boolean(taskId && ruleCode && unitId);
 
@@ -286,9 +294,30 @@ export function MetricTrendCell({
   unitId?: string;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [detailMetric, setDetailMetric] = useState<MeasurementMetadataMetric | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const allPoints = metric.trend_points ?? [];
   const metricName = MetricDisplayName(metric);
   const comparison = analyzeTrendComparison(allPoints);
+
+  useEffect(() => {
+    if (!isModalOpen || detailMetric || detailError) return;
+    if (!taskId || !ruleCode || !unitId) return;
+    let cancelled = false;
+    api
+      .getMeasurementMetricDetail(taskId, ruleCode, unitId, metric.metric_resource_id)
+      .then((detail) => {
+        if (!cancelled) setDetailMetric(detail.metric as unknown as MeasurementMetadataMetric);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setDetailError(cause instanceof Error ? cause.message : "指标明细加载失败");
+      })
+    return () => {
+      cancelled = true;
+    };
+  }, [detailError, detailMetric, isModalOpen, metric.metric_resource_id, ruleCode, taskId, unitId]);
+
+  const displayMetric = detailMetric ?? metric;
 
   if (allPoints.length < 2) {
     return <span style={{ color: "rgba(0, 0, 0, 0.45)" }}>趋势点不足</span>;
@@ -334,7 +363,7 @@ export function MetricTrendCell({
               label: "历史对比",
               children: (
                 <HistoryTrendPanel
-                  metric={metric}
+                  metric={displayMetric}
                   taskId={taskId}
                   ruleCode={ruleCode}
                   unitId={unitId}
