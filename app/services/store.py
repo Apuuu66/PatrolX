@@ -28,19 +28,21 @@ def append_log(output: Path, task_id: str, level: str, message: str, **detail) -
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def _atomic_write_json(path: Path, data: object) -> None:
-    """原子写 JSON，避免并发读者看到截断内容。"""
+def write_json_atomic(path: Path, data: object) -> None:
+    """流式原子写 JSON，避免大结果序列化整串造成的内存放大。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    tmp.replace(path)
+    try:
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def save_rule_result(output: Path, task_id: str, result: RuleResult) -> None:
-    _atomic_write_json(
+    write_json_atomic(
         rule_path(output, task_id, result.code),
         result.model_dump(by_alias=True, mode="json"),
     )
@@ -61,11 +63,11 @@ def compute_summary(results: list[RuleResult]) -> Summary:
 
 
 def save_system(output: Path, task_id: str, system: SystemInspection) -> None:
-    _atomic_write_json(task_dir(output, task_id) / "system.json", system.model_dump(by_alias=True, mode="json"))
+    write_json_atomic(task_dir(output, task_id) / "system.json", system.model_dump(by_alias=True, mode="json"))
 
 
 def save_task_meta(output: Path, task: InspectionTask) -> None:
-    _atomic_write_json(task_dir(output, task.task_id) / "task.json", task.model_dump(by_alias=True, mode="json"))
+    write_json_atomic(task_dir(output, task.task_id) / "task.json", task.model_dump(by_alias=True, mode="json"))
 
 
 def load_task_meta(output: Path, task_id: str) -> InspectionTask | None:

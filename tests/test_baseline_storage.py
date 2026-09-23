@@ -157,3 +157,37 @@ def test_default_sqlite_path_is_outside_output_root(monkeypatch) -> None:
 
     assert settings.sqlite_path == Path("data") / "patrolx.db"
     assert settings.output not in settings.resolved(settings.sqlite_path).parents
+
+
+def test_large_json_write_does_not_build_full_text(tmp_path: Path, monkeypatch) -> None:
+    """大结果 JSON 应流式写入，避免 dumps 后再 write_text 造成内存放大。"""
+    from app.services.store import write_json_atomic
+
+    def fail_write_text(self: Path, *args: object, **kwargs: object) -> int:
+        raise MemoryError("JSON 落盘不应整串 write_text")
+
+    monkeypatch.setattr(Path, "write_text", fail_write_text)
+    path = tmp_path / "large.json"
+    write_json_atomic(path, {"points": [{"value": index} for index in range(64)]})
+
+    assert json.loads(path.read_text(encoding="utf-8"))["points"][0] == {"value": 0}
+
+
+def test_failed_json_write_cleans_temp_file(tmp_path: Path) -> None:
+    """序列化失败时应清理临时文件并保留原文件。"""
+    from app.services.store import write_json_atomic
+
+    path = tmp_path / "task.json"
+    path.write_text('{"task_id": "old"}', encoding="utf-8")
+    data: dict[str, object] = {}
+    data["self"] = data
+
+    try:
+        write_json_atomic(path, data)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("循环引用应触发序列化失败")
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {"task_id": "old"}
+    assert not list(tmp_path.glob(".*.tmp"))

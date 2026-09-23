@@ -375,9 +375,7 @@ def run_single_rule(
         }
         old["system"] = system.model_dump(by_alias=True, mode="json")
         task_path = settings.output / task_id / "task.json"
-        task_tmp = task_path.with_name(f".task.json.{os.getpid()}.tmp")
-        task_tmp.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
-        task_tmp.replace(task_path)
+        store.write_json_atomic(task_path, old)
     report = render_report(settings.output, task_id, system, completed_at=store.now_utc())
     result = executor.collected[code]
     print(
