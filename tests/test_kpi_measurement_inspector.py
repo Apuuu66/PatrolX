@@ -105,7 +105,7 @@ def test_all_readings_pass(tmp_path: Path) -> None:
     assert set(unit["objects"]) == {"pod-a", "pod-b"}
 
 
-def test_missing_confirmed_column_fails(tmp_path: Path) -> None:
+def test_missing_confirmed_column_is_ignored(tmp_path: Path) -> None:
     _prepare_resources()
     good = tmp_path / "ne333_Call_Statistics_15_1_202609020000.csv"
     good.write_text(HEADER + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1\n", encoding="utf-8")
@@ -118,7 +118,12 @@ def test_missing_confirmed_column_fails(tmp_path: Path) -> None:
     )
     files.append(("ne333_Call_Statistics_15_0_202609020000.csv", missing))
     result = inspect_measurement_files("task-1", files)
-    assert result["measurement_units"][0]["status"] == "fail"
+    unit = result["measurement_units"][0]
+    assert unit["status"] == "pass"
+    assert unit["metric_coverage"] == "2/2"
+    call_metric = next(item for item in unit["metrics"] if item["raw_source_name"] == "呼叫请求次数(次)")
+    assert call_metric["source_files"] == [good.name]
+    assert call_metric["observations"][0]["avg_value"] == 1.0
 
 
 def test_duplicate_column_diagnostic_is_isolated(tmp_path: Path) -> None:

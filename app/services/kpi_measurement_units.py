@@ -1574,26 +1574,8 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             confirmed_bindings = by_unit[unit_id]
             for binding in confirmed_bindings:
                 series_points: list[dict[str, Any]] = []
+                # CSV 中实际存在的列才参与巡检；历史确认但本次未导出的列直接忽略。
                 if binding.raw_source_name not in column_index:
-                    metric_key = (binding.metric_resource_id, binding.raw_source_name)
-                    metric_result = result["metric_results"].get(metric_key)
-                    if metric_result is None:
-                        result["metric_results"][metric_key] = {
-                            "metric_resource_id": binding.metric_resource_id,
-                            "metric_resource_name_zh": resource_names.get(binding.metric_resource_id or ""),
-                            "raw_source_name": binding.raw_source_name,
-                            "base_source_name": binding.base_source_name,
-                            "display_unit": binding.display_unit,
-                            "observations": {},
-                            "time_series": [],
-                            "source_files": [file_result["source_file"]],
-                            "errors": [{"reason": "column_missing"}],
-                        }
-                    else:
-                        metric_result.setdefault("errors", []).append({"reason": "column_missing"})
-                        metric_result["source_files"].append(file_result["source_file"])
-                    result["status"] = "fail"
-                    result["reason"] = "已确认指标列缺失"
                     continue
                 observations: dict[str, dict[str, Any]] = {}
                 for line_number, data_row in enumerate(rows[header_index + 1 :], start=header_index + 2):
@@ -1752,11 +1734,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         "base_source_name": metric_result["base_source_name"],
                         "display_unit": metric_result["display_unit"],
                         "read_status": (
-                            "missing"
-                            if any(error.get("reason") == "column_missing" for error in metric_result.get("errors", []))
-                            else "parse_error"
-                            if any(item["read_status"] != "ok" for item in observations)
-                            else "ok"
+                            "parse_error" if any(item["read_status"] != "ok" for item in observations) else "ok"
                         ),
                         "business_status": business_status,
                         "direction": direction or "neutral",

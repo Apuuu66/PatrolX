@@ -151,7 +151,7 @@ def test_all_zero_periods_are_pass_with_business_not_triggered(tmp_path: Path) -
     assert unit["objects"]["pod-a"]["zero_count"] == 2
 
 
-def test_missing_metric_in_one_period_fails_without_losing_readings(tmp_path: Path) -> None:
+def test_missing_metric_in_one_period_is_ignored_without_losing_readings(tmp_path: Path) -> None:
     _import_resources()
     first = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
     second = tmp_path / "ne333_Call_Statistics_15_1_202609020000.csv"
@@ -168,10 +168,10 @@ def test_missing_metric_in_one_period_fails_without_losing_readings(tmp_path: Pa
     _confirm()
     result = inspect_measurement_files("task-missing", files)
     unit = result["measurement_units"][0]
-    assert unit["status"] == "fail"
-    assert unit["metrics"][0]["read_status"] == "missing"
+    assert unit["status"] == "pass"
+    assert unit["metrics"][0]["read_status"] == "ok"
     assert unit["metrics"][0]["observations"][0]["avg_value"] == 3.0
-    assert len(unit["metrics"][0]["source_files"]) == 2
+    assert unit["metrics"][0]["source_files"] == [first.name]
 
 
 def test_measurement_rule_end_to_end_with_task_and_single_rerun(tmp_path: Path, monkeypatch) -> None:
