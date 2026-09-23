@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
+from app.models.db import KpiMeasurementResource, session_factory
 from app.services.kpi_history import get_version_candidates, get_version_compare, write_history_index
 from app.services.store import save_task_meta
 from tests.baseline_helpers import setup_env
@@ -65,6 +66,7 @@ def _prepare_pair(env, *, baseline_version: str | None = "V1") -> None:
         [
             _record("task-version-baseline", value=100, measured_at="2026-09-01T08:00:00+00:00"),
             _record("task-version-baseline", value=110, measured_at="2026-09-01T09:00:00+00:00"),
+            _record("task-version-baseline", value=120, measured_at="2026-09-01T10:00:00+00:00"),
         ],
         output=env.output,
     )
@@ -120,9 +122,9 @@ def test_version_compare_matches_same_dimension_and_builds_mean_summary(tmp_path
     assert result.current_points[0].task_id == "task-version-current"
     assert result.baseline_points[0].task_id == "task-version-baseline"
     assert result.summary.current_value == 130
-    assert result.summary.baseline_value == 105
-    assert result.summary.absolute_change == 25
-    assert result.summary.change_ratio == 25 / 105
+    assert result.summary.baseline_value == 110
+    assert result.summary.change_ratio == 20 / 110
+    assert result.summary.absolute_change == 20
     assert result.summary.direction == "up"
     assert "上涨" in result.summary.message
 
@@ -264,3 +266,100 @@ def test_version_compare_reports_not_completed_and_device_mismatch(tmp_path, mon
     )
     assert mismatch.match.status == "degraded"
     assert mismatch.match.reason_code == "baseline_device_mismatch"
+
+
+def _set_metric_direction(resource_id: str, direction: str) -> None:
+    now = datetime.now(UTC)
+    with session_factory() as session:
+        session.merge(
+            KpiMeasurementResource(
+                resource_id=resource_id,
+                kind="me",
+                name_zh="测试指标",
+                name_en="Test Metric",
+                enabled=True,
+                direction=direction,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+
+
+def test_version_compare_explains_lower_better_metric(tmp_path, monkeypatch) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+    _prepare_pair(env)
+    _set_metric_direction("ME_CALL", "lower_better")
+    write_history_index(
+        "task-version-current",
+        [
+            _record("task-version-current", value=80, measured_at="2026-09-10T08:00:00+00:00"),
+            _record("task-version-current", value=90, measured_at="2026-09-10T09:00:00+00:00"),
+            _record("task-version-current", value=100, measured_at="2026-09-10T10:00:00+00:00"),
+        ],
+        output=env.output,
+    )
+    write_history_index(
+        "task-version-baseline",
+        [
+            _record("task-version-baseline", value=100, measured_at="2026-09-01T08:00:00+00:00"),
+            _record("task-version-baseline", value=110, measured_at="2026-09-01T09:00:00+00:00"),
+            _record("task-version-baseline", value=120, measured_at="2026-09-01T10:00:00+00:00"),
+        ],
+        output=env.output,
+    )
+
+    result = get_version_compare(
+        "task-version-current",
+        rule_code="kpi.measurement_units",
+        measurement_unit_id="MU_CALL",
+        metric_resource_id="ME_CALL",
+        object_key="pod-a",
+        period_minutes=15,
+        baseline_task_id="task-version-baseline",
+        output=env.output,
+    )
+
+    assert result.match.status == "matched"
+    assert result.summary.direction == "down"
+    assert "下降" in result.summary.message
+    assert "越低越好" in result.summary.message
+    assert "改善" in result.summary.message
+
+
+def test_version_compare_reports_insufficient_baseline_samples(tmp_path, monkeypatch) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+    _prepare_pair(env)
+    write_history_index(
+        "task-version-current",
+        [
+            _record("task-version-current", value=120, measured_at="2026-09-10T08:00:00+00:00"),
+            _record("task-version-current", value=130, measured_at="2026-09-10T09:00:00+00:00"),
+            _record("task-version-current", value=140, measured_at="2026-09-10T10:00:00+00:00"),
+        ],
+        output=env.output,
+    )
+    write_history_index(
+        "task-version-baseline",
+        [
+            _record("task-version-baseline", value=100, measured_at="2026-09-01T08:00:00+00:00"),
+            _record("task-version-baseline", value=110, measured_at="2026-09-01T09:00:00+00:00"),
+        ],
+        output=env.output,
+    )
+
+    result = get_version_compare(
+        "task-version-current",
+        rule_code="kpi.measurement_units",
+        measurement_unit_id="MU_CALL",
+        metric_resource_id="ME_CALL",
+        object_key="pod-a",
+        period_minutes=15,
+        baseline_task_id="task-version-baseline",
+        output=env.output,
+    )
+
+    assert result.match.status == "matched"
+    assert result.summary.direction == "unknown"
+    assert "基线样本不足 3 个" in result.summary.message
+    assert "暂不输出" in result.summary.message

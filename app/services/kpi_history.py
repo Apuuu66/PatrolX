@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.core.config import settings
+from app.models.db import KpiMeasurementResource, session_factory
 from app.models.schemas import (
     MeasurementBaselineSignificance,
     MeasurementHistoryBaselinePoint,
@@ -648,12 +649,20 @@ def get_version_candidates(
     )
 
 
+def _metric_direction(metric_resource_id: str) -> str | None:
+    """读取指标目录中的业务方向；目录缺失时按中性方向解释。"""
+    with session_factory() as session:
+        row = session.get(KpiMeasurementResource, metric_resource_id)
+        return row.direction if row is not None else None
+
+
 def _version_summary(
     current_records: list[IndexRecord],
     baseline_records: list[IndexRecord],
     *,
     current_version: str | None,
     baseline_version: str | None,
+    metric_direction: str | None = None,
 ) -> MeasurementVersionComparisonSummary:
     """使用第一版均值口径输出版本涨跌摘要。"""
     current_value = statistics.mean(record["value"] for record in current_records) if current_records else None
@@ -666,18 +675,24 @@ def _version_summary(
         if absolute_change is not None and baseline_value is not None and baseline_value != 0
         else None
     )
+    direction = MeasurementVersionDirection.UNKNOWN
     if absolute_change is None:
-        direction = MeasurementVersionDirection.UNKNOWN
         message = "缺少当前或基线有效数据，无法计算版本对比摘要。"
+    elif len(baseline_records) < MIN_BASELINE_SAMPLES:
+        message = f"基线样本不足 {MIN_BASELINE_SAMPLES} 个，暂不输出版本涨跌结论。"
     elif abs(absolute_change) <= 1e-9:
         direction = MeasurementVersionDirection.FLAT
         message = f"当前版本均值与基线版本均值基本持平，均为 {baseline_value:.4g}。"
     elif absolute_change > 0:
         direction = MeasurementVersionDirection.UP
         message = f"当前版本均值较基线版本均值上涨 {absolute_change:.4g}（{change_ratio * 100:.2f}%）。"
+        if metric_direction == "lower_better":
+            message += "指标越低越好，属于恶化。"
     else:
         direction = MeasurementVersionDirection.DOWN
         message = f"当前版本均值较基线版本均值下降 {abs(absolute_change):.4g}（{abs(change_ratio) * 100:.2f}%）。"
+        if metric_direction == "lower_better":
+            message += "指标越低越好，属于改善。"
 
     unknown_parts = []
     if current_version is None:
@@ -836,6 +851,7 @@ def get_version_compare(
         baseline_records,
         current_version=current_version,
         baseline_version=baseline_version,
+        metric_direction=_metric_direction(metric_resource_id),
     )
     if current_version is None or baseline_version is None:
         message = "当前或基线任务版本未知，以下为同设备任务级对比。"

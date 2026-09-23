@@ -101,5 +101,6 @@
 ## 实施记录
 
 - 展示效果验证通过：E2E 通过种子任务选择基线版本 `V1`，确认当前版本 `V2`、基线任务、完成时间、均值上涨摘要和趋势图渲染。
-- 后端：契约一致，lint 通过，pytest 499 passed。
+- 规格审计补充：`lower_better` 指标输出改善/恶化解释；基线样本不足 3 个时摘要方向为 `unknown`，显示样本不足且不输出涨跌结论。
+- 后端：契约一致，lint 通过，pytest 501 passed。
 - 前端：Vitest 44 passed，production build 通过，指定 E2E 1 passed。
