@@ -76,6 +76,7 @@ export function historyMatchAlert(match: MeasurementHistoryTrend["match"]): Hist
     current_measurement_time_missing: "当前任务缺少有效测量时间，无法生成 7 天窗口",
     history_index_missing: "历史索引缺失，请先重跑当前任务生成历史索引",
     metric_dimension_missing: "当前任务没有该指标、对象和周期的有效趋势点",
+    history_time_outside_window: "同设备历史数据不在当前 7 天对比窗口内",
     period_mismatch: "历史任务周期与当前任务不一致",
     metric_not_supported: "该指标不支持历史对比",
   };
@@ -84,7 +85,8 @@ export function historyMatchAlert(match: MeasurementHistoryTrend["match"]): Hist
     return {
       type: "warning",
       title: "暂无历史",
-      description: match.message || "当前设备还没有可对比的历史任务",
+      description:
+        match.message || descriptions[match.reason_code ?? ""] || "当前设备还没有可对比的历史任务",
     };
   }
   if (match.status === "degraded") {

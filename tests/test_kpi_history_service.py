@@ -113,6 +113,23 @@ def test_history_window_and_latest_completion_conflict(tmp_path, monkeypatch) ->
     assert result.history_series[0].points[0].value == 2
 
 
+def test_no_history_reports_history_time_outside_window(tmp_path, monkeypatch) -> None:
+    from tests.baseline_helpers import setup_env
+
+    env = setup_env(tmp_path, monkeypatch)
+    _task(env, "current", datetime(2026, 9, 10, 12, tzinfo=UTC), "device-a")
+    _write(env, "current", datetime(2026, 9, 10, 10, tzinfo=UTC), 10)
+    _task(env, "old", datetime(2026, 9, 9, 12, tzinfo=UTC), "device-a")
+    _write(env, "old", datetime(2026, 9, 1, 10, tzinfo=UTC), 11)
+
+    result = _query(env, "current")
+
+    assert result.match.status == "no_history"
+    assert result.match.reason_code == "history_time_outside_window"
+    assert "2026-09-01" in result.match.message
+    assert "2026-09-04" in result.match.message
+
+
 def test_baseline_median_mad_and_insufficient(tmp_path, monkeypatch) -> None:
     from tests.baseline_helpers import setup_env
 

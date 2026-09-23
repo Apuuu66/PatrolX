@@ -47,6 +47,14 @@ test("defaultTrendSelection 优先选择 15 分钟周期", () => {
 
 test("historyMatchAlert 映射降级原因", () => {
   assert.equal(historyMatchAlert({ status: "no_history", reason_code: null, message: "" }).description, "当前设备还没有可对比的历史任务");
+  assert.equal(
+    historyMatchAlert({
+      status: "no_history",
+      reason_code: "history_time_outside_window",
+      message: "同设备有 1 个历史任务，但数据时间不在当前 7 天窗口（2026-09-04 ~ 2026-09-10）；最近为 2026-09-01。",
+    }).description,
+    "同设备有 1 个历史任务，但数据时间不在当前 7 天窗口（2026-09-04 ~ 2026-09-10）；最近为 2026-09-01。",
+  );
   assert.equal(historyMatchAlert({ status: "degraded", reason_code: "device_id_missing", message: "" }).description, "当前任务未填写设备 ID，无法匹配历史任务");
   assert.equal(historyMatchAlert({ status: "degraded", reason_code: "history_index_missing", message: "" }).description, "历史索引缺失，请先重跑当前任务生成历史索引");
   assert.equal(historyMatchAlert({ status: "degraded", reason_code: "unknown", message: "后端说明" }).description, "后端说明");

@@ -329,6 +329,8 @@ def get_history_trend(
     history_records: list[IndexRecord] = []
     source_tasks: list[str] = []
     history_task_count = 0
+    outside_window_dates: list[date] = []
+    outside_window_task_count = 0
     if current_index_available and device_id and current_records:
         current_completed_at = _task_completed_at(task_id, output)
         seen_task_ids = {task_id}
@@ -351,14 +353,16 @@ def get_history_trend(
             if candidate_device_id != device_id:
                 continue
             try:
-                matched = [
+                dimension_records = [
                     record
                     for record in iter_history_index(candidate_id, output=output)
                     if record["measurement_unit_id"] == measurement_unit_id
                     and record["metric_resource_id"] == metric_resource_id
                     and record["object_key"] == object_key
                     and record["period_minutes"] == period_minutes
-                    and start_date <= record["measured_at"].date() <= end_date
+                ]
+                matched = [
+                    record for record in dimension_records if start_date <= record["measured_at"].date() <= end_date
                 ]
             except FileNotFoundError:
                 continue
@@ -367,6 +371,9 @@ def get_history_trend(
                 source_tasks.append(candidate_id)
                 history_task_count += 1
                 seen_task_ids.add(candidate_id)
+            elif dimension_records:
+                outside_window_task_count += 1
+                outside_window_dates.extend(record["measured_at"].date() for record in dimension_records)
 
     # 跨任务同时间点保留完成时间最新的任务；完成时间相同按 task_id 倒序。
     completed_by_task: dict[str, datetime] = {}
@@ -420,8 +427,17 @@ def get_history_trend(
     message = None
     if match_status == MeasurementHistoryMatchStatus.MATCHED and not history_task_count:
         match_status = MeasurementHistoryMatchStatus.NO_HISTORY
-        reason_code = None
-        message = "未找到可对比的历史任务"
+        if outside_window_task_count:
+            reason_code = "history_time_outside_window"
+            latest_outside_date = max(outside_window_dates).isoformat()
+            message = (
+                f"同设备有 {outside_window_task_count} 个历史任务，但数据时间不在当前 "
+                f"{HISTORY_WINDOW_DAYS} 天窗口（{start_date.isoformat()} ~ {end_date.isoformat()}）；"
+                f"最近为 {latest_outside_date}。"
+            )
+        else:
+            reason_code = None
+            message = "未找到可对比的历史任务"
 
     match = MeasurementHistoryMatch(
         status=match_status,
