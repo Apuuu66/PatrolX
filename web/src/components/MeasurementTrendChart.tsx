@@ -246,7 +246,7 @@ function HistoryTrendPanel({
         <Alert type="info" showIcon message="历史对比不可用" description="缺少任务或规则上下文，无法请求历史趋势。" />
       ) : loading ? (
         <div style={{ padding: 48, textAlign: "center" }}>
-          <Spin tip="正在加载历史趋势" />
+          <Spin />
         </div>
       ) : error ? (
         <Alert
@@ -335,7 +335,7 @@ export function MetricTrendCell({
         <MiniTrend points={allPoints} />
       </Button>
       <Modal
-        destroyOnClose
+        destroyOnHidden
         footer={null}
         open={isModalOpen}
         title={metricName}
