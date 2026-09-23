@@ -535,6 +535,15 @@ paths:
         schema:
           type: string
           title: Rule Code
+      - name: exclude_records
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: 是否移除 KPI 明细记录，只保留首屏摘要。
+          default: false
+          title: Exclude Records
+        description: 是否移除 KPI 明细记录，只保留首屏摘要。
       responses:
         '200':
           description: Successful Response
@@ -542,6 +551,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RuleResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}:
+    get:
+      summary: Get Measurement Metric Detail V2
+      description: 按需返回单个 KPI 指标的完整明细。
+      operationId: getMeasurementMetricDetailV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementMetricDetail'
         '422':
           description: Validation Error
           content:
@@ -2179,6 +2231,29 @@ components:
       - username
       - role
       title: LoginResponseV1
+    MeasurementMetricDetail:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric:
+          additionalProperties: true
+          type: object
+          title: Metric
+      type: object
+      required:
+      - task_id
+      - rule_code
+      - measurement_unit_id
+      - metric
+      title: MeasurementMetricDetail
+      description: KPI 单指标完整明细。
     Metric:
       properties:
         key:

@@ -263,6 +263,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Measurement Metric Detail V2
+         * @description 按需返回单个 KPI 指标的完整明细。
+         */
+        get: operations["getMeasurementMetricDetailV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/inspectors": {
         parameters: {
             query?: never;
@@ -1030,6 +1050,22 @@ export interface components {
             username: string;
             /** Role */
             role: string;
+        };
+        /**
+         * MeasurementMetricDetail
+         * @description KPI 单指标完整明细。
+         */
+        MeasurementMetricDetail: {
+            /** Task Id */
+            task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric */
+            metric: {
+                [key: string]: unknown;
+            };
         };
         /** Metric */
         Metric: {
@@ -1979,7 +2015,10 @@ export interface operations {
     };
     getRuleResultV2: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 是否移除 KPI 明细记录，只保留首屏摘要。 */
+                exclude_records?: boolean;
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -1996,6 +2035,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMeasurementMetricDetailV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementMetricDetail"];
                 };
             };
             /** @description Validation Error */

@@ -1567,7 +1567,9 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         },
                     )
                     observation["row_count"] += 1
-                    raw_value = data_row[column_index[binding.raw_source_name]]
+                    value_index = column_index[binding.raw_source_name]
+                    # 兼容真实包中表头列数和部分数据行列数不一致的情况；缺列按解析异常统计。
+                    raw_value = data_row[value_index] if len(data_row) > value_index else ""
                     valid, number = _parse_number(raw_value)
                     if not valid and number is None:
                         if raw_value.strip():

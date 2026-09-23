@@ -1,14 +1,16 @@
-import { Card, Descriptions, Empty, Progress, Space, Statistic, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Empty, Progress, Space, Spin, Statistic, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ResourceNameCell } from "./ResourceNameCell";
 import type {
   MeasurementKpiOverview,
   MeasurementMetadataMetric,
   MeasurementMetadataUnit,
+  MeasurementMetricDetail,
   MeasurementTrend,
   MeasurementTrendPoint,
 } from "../api/http";
+import { api } from "../api/http";
 
 const STATUS_COLORS: Record<string, string> = {
   pass: "green",
@@ -174,7 +176,46 @@ function KpiOverviewCard({ overview }: { overview: MeasurementKpiOverview }) {
   );
 }
 
-export function MeasurementInspectionPanel({ metadata }: { metadata?: Record<string, unknown> }) {
+export function MeasurementInspectionPanel({
+  metadata,
+  taskId,
+  ruleCode,
+}: {
+  metadata?: Record<string, unknown>;
+  taskId?: string;
+  ruleCode?: string;
+}) {
+  const [metricDetails, setMetricDetails] = useState<Record<string, MeasurementMetricDetail | undefined>>({});
+  const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({});
+  const [detailErrors, setDetailErrors] = useState<Record<string, string | undefined>>({});
+
+  useEffect(() => {
+    setMetricDetails({});
+    setDetailLoading({});
+    setDetailErrors({});
+  }, [taskId, ruleCode]);
+
+  const loadMetricDetail = useCallback(
+    async (unitId: string, metricId: string) => {
+      if (!taskId || !ruleCode) return;
+      const key = `${unitId}:${metricId}`;
+      setDetailLoading((current) => ({ ...current, [key]: true }));
+      setDetailErrors((current) => ({ ...current, [key]: undefined }));
+      try {
+        const detail = await api.getMeasurementMetricDetail(taskId, ruleCode, unitId, metricId);
+        setMetricDetails((current) => ({ ...current, [key]: detail }));
+      } catch (error) {
+        setDetailErrors((current) => ({
+          ...current,
+          [key]: error instanceof Error ? error.message : "指标明细加载失败",
+        }));
+      } finally {
+        setDetailLoading((current) => ({ ...current, [key]: false }));
+      }
+    },
+    [ruleCode, taskId],
+  );
+
   const overview = useMemo(() => {
     return metadata?.kpi_overview ? (metadata.kpi_overview as MeasurementKpiOverview) : null;
   }, [metadata]);
@@ -324,25 +365,53 @@ export function MeasurementInspectionPanel({ metadata }: { metadata?: Record<str
               dataSource={metrics}
               pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: false }}
               expandable={{
-                expandedRowRender: (metric) => (
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    <Descriptions size="small" column={4}>
-                      <Descriptions.Item label="指标分组">{metric.metric_group || "未分组"}</Descriptions.Item>
-                      <Descriptions.Item label="方向">{DIRECTION_LABELS[metric.direction ?? "neutral"]}</Descriptions.Item>
-                      <Descriptions.Item label="预警阈值">{metric.warning_threshold ?? "-"}</Descriptions.Item>
-                      <Descriptions.Item label="失败阈值">{metric.critical_threshold ?? "-"}</Descriptions.Item>
-                    </Descriptions>
-                    {metric.errors?.length ? (
-                      <Typography.Text type="danger">{JSON.stringify(metric.errors)}</Typography.Text>
-                    ) : null}
-                    {metric.trends?.length ? <TrendTable trends={metric.trends} /> : null}
-                    {metric.observations?.length ? (
-                      <Table rowKey="object_key" size="small" columns={objectColumns} dataSource={metric.observations} pagination={false} />
-                    ) : (
-                      <Typography.Text type="secondary">没有行数据</Typography.Text>
-                    )}
-                  </Space>
-                ),
+                onExpand: (expanded, metric) => {
+                  if (expanded) void loadMetricDetail(unit.measurement_unit_id, metric.metric_resource_id);
+                },
+                expandedRowRender: (metric) => {
+                  const key = `${unit.measurement_unit_id}:${metric.metric_resource_id}`;
+                  const detail = metricDetails[key]?.metric as MeasurementMetadataMetric | undefined;
+                  const isLoading = Boolean(detailLoading[key]);
+                  const detailError = detailErrors[key];
+                  const displayMetric = detail ?? metric;
+
+                  return (
+                    <Space direction="vertical" style={{ width: "100%" }}>
+                      <Descriptions size="small" column={4}>
+                        <Descriptions.Item label="指标分组">{displayMetric.metric_group || "未分组"}</Descriptions.Item>
+                        <Descriptions.Item label="方向">{DIRECTION_LABELS[displayMetric.direction ?? "neutral"]}</Descriptions.Item>
+                        <Descriptions.Item label="预警阈值">{displayMetric.warning_threshold ?? "-"}</Descriptions.Item>
+                        <Descriptions.Item label="失败阈值">{displayMetric.critical_threshold ?? "-"}</Descriptions.Item>
+                      </Descriptions>
+                      {taskId && ruleCode && isLoading ? <Spin size="small" /> : null}
+                      {detailError ? (
+                        <Alert
+                          type="error"
+                          showIcon
+                          message="指标明细加载失败"
+                          description={detailError}
+                          action={
+                            <Button
+                              size="small"
+                              onClick={() => void loadMetricDetail(unit.measurement_unit_id, metric.metric_resource_id)}
+                            >
+                              重试
+                            </Button>
+                          }
+                        />
+                      ) : null}
+                      {displayMetric.errors?.length ? (
+                        <Typography.Text type="danger">{JSON.stringify(displayMetric.errors)}</Typography.Text>
+                      ) : null}
+                      {displayMetric.trends?.length ? <TrendTable trends={displayMetric.trends} /> : null}
+                      {displayMetric.observations?.length ? (
+                        <Table rowKey="object_key" size="small" columns={objectColumns} dataSource={displayMetric.observations} pagination={false} />
+                      ) : (
+                        <Typography.Text type="secondary">没有行数据</Typography.Text>
+                      )}
+                    </Space>
+                  );
+                },
               }}
             />
 

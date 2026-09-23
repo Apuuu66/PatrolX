@@ -45,6 +45,7 @@ from app.models.schemas import (
     LogEntry,
     LoginRequestV1,
     LoginResponseV1,
+    MeasurementMetricDetail,
     OverviewSummary,
     RebuildRequest,
     RerunRequest,
@@ -88,6 +89,7 @@ from app.services.kpi_measurement_units import (
     update_manual_metric,
 )
 from app.services.overview import build_overview
+from app.services.results import find_kpi_metric_detail, summarize_kpi_result
 from app.services.rule_states import RuleStateError, list_rule_states, update_rule_state
 from app.services.store import load_rule_result
 from app.services.tasks import DeleteResult, TaskDeleteError, TaskRebuildError, task_service
@@ -370,6 +372,7 @@ def get_system_v2(
 def get_rule_result_v2(
     task_id: str = PathParam(),
     rule_code: str = PathParam(),
+    exclude_records: bool = Query(default=False, description="是否移除 KPI 明细记录，只保留首屏摘要。"),
 ) -> RuleResult:
     registry.load_all()
     if rule_code not in {rule.code for rule in registry.all()}:
@@ -383,7 +386,46 @@ def get_rule_result_v2(
             rule = None
     if rule is None:
         raise AppError("not_found", "规则结果不存在", 404)
-    return rule
+    return summarize_kpi_result(rule) if exclude_records else rule
+
+
+@router.get(
+    "/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}",
+    response_model=MeasurementMetricDetail,
+    operation_id="getMeasurementMetricDetailV2",
+)
+def get_measurement_metric_detail_v2(
+    task_id: str = PathParam(),
+    rule_code: str = PathParam(),
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+) -> MeasurementMetricDetail:
+    """按需返回单个 KPI 指标的完整明细。"""
+    registry.load_all()
+    if rule_code != "kpi.measurement_units" or rule_code not in {rule.code for rule in registry.all()}:
+        raise AppError("not_found", "规则结果不存在", 404)
+    rule = load_rule_result(settings.output, task_id, rule_code)
+    if rule is None:
+        try:
+            system = _load_system_json(task_id)
+            rule = next((item for item in system.rules if item.code == rule_code), None)
+        except AppError:
+            rule = None
+    if rule is None:
+        raise AppError("not_found", "规则结果不存在", 404)
+    metric = find_kpi_metric_detail(
+        rule,
+        measurement_unit_id=measurement_unit_id,
+        metric_resource_id=metric_resource_id,
+    )
+    if metric is None:
+        raise AppError("not_found", "指标明细不存在", 404)
+    return MeasurementMetricDetail(
+        task_id=task_id,
+        rule_code=rule_code,
+        measurement_unit_id=measurement_unit_id,
+        metric=metric,
+    )
 
 
 @router.get("/inspectors", response_model=list[InspectorInfo], operation_id="listInspectorsV2")

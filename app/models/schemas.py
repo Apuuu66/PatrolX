@@ -155,6 +155,15 @@ class RuleResult(BaseModel):
         return self
 
 
+class MeasurementMetricDetail(BaseModel):
+    """KPI 单指标完整明细。"""
+
+    task_id: str
+    rule_code: str
+    measurement_unit_id: str
+    metric: dict[str, Any]
+
+
 class SystemInspection(BaseModel):
     package_file: str
     package_checksum: str | None = None

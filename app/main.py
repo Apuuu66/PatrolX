@@ -8,6 +8,7 @@ import time
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app import __version__
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(v3_router)
     app.include_router(v4_router)
     app.include_router(v5_router)
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     @app.middleware("http")
     async def access_log(request, call_next):

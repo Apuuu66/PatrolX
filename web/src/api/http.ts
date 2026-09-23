@@ -6,6 +6,7 @@ export type TaskSummary = components["schemas"]["TaskSummary"];
 export type TaskStats = components["schemas"]["TaskStats"];
 export type SystemInspection = components["schemas"]["SystemInspection"];
 export type RuleResult = components["schemas"]["RuleResult"];
+export type MeasurementMetricDetail = components["schemas"]["MeasurementMetricDetail"];
 export type RuleStatus = components["schemas"]["RuleStatus"];
 export type Severity = components["schemas"]["Severity"];
 export type InspectorInfo = components["schemas"]["InspectorInfo"];
@@ -267,6 +268,12 @@ export const api = {
       `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}${query}`,
     );
   },
+
+  getMeasurementMetricDetail: (taskId: string, ruleCode: string, unitId: string, metricId: string) =>
+    request<MeasurementMetricDetail>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}` +
+        `/measurement-units/${encodeURIComponent(unitId)}/metrics/${encodeURIComponent(metricId)}`,
+    ),
 
 
   listInspectors: (category?: string, includeHidden = false) => {

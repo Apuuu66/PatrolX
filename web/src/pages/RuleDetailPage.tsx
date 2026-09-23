@@ -18,7 +18,7 @@ export function RuleDetailPage() {
     void (async () => {
       try {
         const [r, inspectors] = await Promise.all([
-          api.getRuleResult(taskId, ruleCode, true),
+          api.getRuleResult(taskId, ruleCode, ruleCode === "kpi.measurement_units"),
           api.listInspectors(undefined, true),
         ]);
         setResult(r);
@@ -99,7 +99,7 @@ export function RuleDetailPage() {
 
       {hasMeasurementResults && (
         <Card title="KPI 测量单元巡检" style={{ marginBottom: 16 }}>
-          <MeasurementInspectionPanel metadata={result.metadata} />
+          <MeasurementInspectionPanel metadata={result.metadata} taskId={taskId} ruleCode={ruleCode} />
         </Card>
       )}
 

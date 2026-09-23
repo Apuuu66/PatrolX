@@ -1,11 +1,13 @@
 """在线模式 API 集成测试（TestClient + 后台任务队列）。"""
 
+import io
 import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.kpi_measurement_units import import_resource_csv
 
 SAMPLE = Path(__file__).resolve().parent / "fixtures" / "sample" / "sample.zip"
 client = TestClient(app)
@@ -115,3 +117,54 @@ def test_task_preparation_status_is_exposed() -> None:
     assert item["stats"] == stats
 
     assert client.delete(f"/api/v2/tasks/{task_id}").status_code == 204
+
+
+def test_kpi_rule_supports_summary_and_metric_detail() -> None:
+    """KPI 首屏使用摘要；完整趋势与行观察只在指标详情接口返回。"""
+    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Session API Statistics\n"))
+    task_id = _upload("kpi-lazy-api.zip")
+    try:
+        _wait(task_id)
+        summary = client.get(
+            f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units",
+            params={"exclude_records": True},
+        )
+        assert summary.status_code == 200, summary.text
+        payload = summary.json()
+        assert payload["metrics"] == []
+        assert payload["findings"] == []
+        units = payload["metadata"]["measurement_units"]
+        assert units
+        assert all("objects" not in unit for unit in units)
+        for unit in units:
+            assert unit["metrics"]
+            for metric in unit["metrics"]:
+                assert "trends" not in metric
+                assert "observations" not in metric
+                assert len(metric["trend_points"]) <= 30
+                assert metric["trend_point_count"] >= len(metric["trend_points"])
+
+        unit = units[0]
+        metric = unit["metrics"][0]
+        detail = client.get(
+            f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units"
+            f"/measurement-units/{unit['measurement_unit_id']}"
+            f"/metrics/{metric['metric_resource_id']}"
+        )
+        assert detail.status_code == 200, detail.text
+        detail_payload = detail.json()
+        assert detail_payload["task_id"] == task_id
+        assert detail_payload["rule_code"] == "kpi.measurement_units"
+        assert detail_payload["measurement_unit_id"] == unit["measurement_unit_id"]
+        assert detail_payload["metric"]["metric_resource_id"] == metric["metric_resource_id"]
+        assert len(detail_payload["metric"]["trend_points"]) == metric["trend_point_count"]
+        assert "observations" in detail_payload["metric"]
+
+        missing = client.get(
+            f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units"
+            f"/measurement-units/{unit['measurement_unit_id']}/metrics/ME_MISSING"
+        )
+        assert missing.status_code == 404
+        assert missing.json()["code"] == "not_found"
+    finally:
+        client.delete(f"/api/v2/tasks/{task_id}")
