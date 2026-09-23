@@ -575,10 +575,56 @@ def _ensure_metric_for_column(
     return metric, "auto_registered"
 
 
+PREFERRED_PERIOD_MINUTES = (15, 5)
+
+
+def _file_period_minutes(path: Path) -> int | None:
+    """从 CSV 周期列读取文件粒度；解析失败时不参与周期优先级。"""
+    try:
+        rows = _read_csv_rows(path)
+    except (OSError, UnicodeError, csv.Error):
+        return None
+    header = _find_header(rows)
+    if header is None or "周期(分钟)" not in header[1]:
+        return None
+    period_index = header[1].index("周期(分钟)")
+    for row in rows[header[0] + 1 :]:
+        if len(row) > period_index and row[period_index].strip():
+            return _parse_period_minutes(row[period_index])
+    return None
+
+
+def _select_preferred_period_files(file_results: list[dict[str, Any]]) -> None:
+    """按测量单元选择 15/5 分钟周期，避免不同粒度互相污染。"""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for file_result in file_results:
+        if file_result.get("status") != "matched":
+            continue
+        file_result["period_minutes"] = _file_period_minutes(Path(file_result["source_path"]))
+        unit_id = file_result.get("measurement_unit_id")
+        if unit_id:
+            groups.setdefault(unit_id, []).append(file_result)
+
+    for unit_files in groups.values():
+        periods = {item["period_minutes"] for item in unit_files}
+        selected_periods: set[int] | None = None
+        for preferred_period in PREFERRED_PERIOD_MINUTES:
+            if preferred_period in periods:
+                selected_periods = {preferred_period}
+                break
+        if selected_periods is None:
+            continue
+        for file_result in unit_files:
+            period = file_result["period_minutes"]
+            if period is not None and period not in selected_periods:
+                file_result.update({"status": "skipped", "reason": "period_not_preferred"})
+
+
 def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
     """扫描任务 CSV 表头，发现指标候选绑定。"""
     init_db()
     matched_files = match_measurement_files(files)
+    _select_preferred_period_files(matched_files["files"])
     with session_factory() as session:
         for file_result in matched_files["files"]:
             if file_result["status"] != "matched":
@@ -1409,9 +1455,12 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
     discovered = discover_measurement_bindings(task_id, files)
     matched: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     for file_result in discovered["files"]:
         if file_result["status"] == "matched":
             matched.append(file_result)
+        elif file_result.get("reason") == "period_not_preferred":
+            skipped.append(file_result)
         else:
             unmatched.append(file_result)
 
@@ -1853,12 +1902,14 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
     )
     kpi_overview["conflict_count"] = sum(len(item.get("conflict_metrics", [])) for item in discovered["files"])
     kpi_overview["unmatched_file_count"] = len(unmatched)
+    kpi_overview["skipped_file_count"] = len(skipped)
     return {
         "task_id": task_id,
         "kpi_overview": kpi_overview,
         "measurement_units": final_units,
         "files": discovered["files"],
         "unmatched_files": unmatched,
+        "skipped_files": skipped,
     }
 
 

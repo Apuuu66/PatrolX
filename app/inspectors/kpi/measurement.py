@@ -17,13 +17,14 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="3.1.0",
+    rule_version="3.2.0",
     description="自动入库测量单元指标，检查文件归属、数值可读性、业务阈值与任务内趋势",
     recommendation="处理未匹配文件与跨单元冲突，配置阈值，并修复空值、解析失败或趋势恶化的指标",
     source_refs=["kpi_all"],
     outputs_metrics=[
         {"key": "matched_files", "label": "匹配文件数", "unit": "个"},
         {"key": "unmatched_files", "label": "未匹配文件数", "unit": "个"},
+        {"key": "skipped_files", "label": "周期跳过文件数", "unit": "个"},
         {"key": "measurement_units", "label": "测量单元数", "unit": "个"},
     ],
 )
@@ -36,6 +37,7 @@ def _run(ctx: RuleContext) -> object:
     result = inspect_measurement_files(ctx.task_id, files)
     unit_results = result["measurement_units"]
     unmatched_count = len(result["unmatched_files"])
+    skipped_count = len(result.get("skipped_files", []))
     if not files:
         return make_result(
             inspector,
@@ -52,6 +54,7 @@ def _run(ctx: RuleContext) -> object:
             metadata={
                 "files": [item["filename"] for item in result["files"]],
                 "unmatched_files": [item["filename"] for item in result["unmatched_files"]],
+                "skipped_files": [item["filename"] for item in result.get("skipped_files", [])],
             },
         )
     if all(unit["status"] == "skip" for unit in unit_results):
@@ -85,14 +88,21 @@ def _run(ctx: RuleContext) -> object:
     summary = f"{summary}；{'，'.join(diagnostic_parts)}"
 
     metrics = [
-        {"key": "matched_files", "label": "匹配文件数", "value": len(result["files"]) - unmatched_count, "unit": "个"},
+        {
+            "key": "matched_files",
+            "label": "匹配文件数",
+            "value": sum(item["status"] == "matched" for item in result["files"]),
+            "unit": "个",
+        },
         {"key": "unmatched_files", "label": "未匹配文件数", "value": unmatched_count, "unit": "个"},
+        {"key": "skipped_files", "label": "周期跳过文件数", "value": skipped_count, "unit": "个"},
         {"key": "measurement_units", "label": "测量单元数", "value": len(unit_results), "unit": "个"},
     ]
     metadata = {
         "measurement_units": unit_results,
         "files": [],
         "unmatched_files": [],
+        "skipped_files": [],
     }
 
     # 保留展示字段，但结果契约中不携带任务现场绝对路径。
@@ -100,6 +110,8 @@ def _run(ctx: RuleContext) -> object:
         metadata["files"].append(file_result["filename"])
     for file_result in result["unmatched_files"]:
         metadata["unmatched_files"].append(file_result["filename"])
+    for file_result in result.get("skipped_files", []):
+        metadata["skipped_files"].append(file_result["filename"])
 
     return make_result(
         inspector,

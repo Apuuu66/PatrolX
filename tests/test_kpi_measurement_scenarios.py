@@ -196,6 +196,7 @@ def test_measurement_rule_end_to_end_with_task_and_single_rerun(tmp_path: Path, 
     assert [(metric["key"], metric["value"]) for metric in second["metrics"]] == [
         ("matched_files", 1),
         ("unmatched_files", 0),
+        ("skipped_files", 0),
         ("measurement_units", 1),
     ]
     assert second["metadata"]["measurement_units"][0]["objects"]["pod-a"]["avg_value"] == 100.0
@@ -449,3 +450,82 @@ def test_header_beyond_read_window_marks_unit_error(tmp_path: Path) -> None:
     assert bad_file["reason"] == "header_not_found"
     assert result["measurement_units"][0]["status"] == "error"
     assert result["measurement_units"][0]["reason"] == "表头未找到"
+
+
+def test_period_files_prefer_15_then_5_per_measurement_unit(tmp_path: Path) -> None:
+    import_resource_csv(
+        io.StringIO(
+            "资源id,中文描述,英文描述\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
+            "ME_CALL,呼叫请求次数,Call Requests\n"
+            "MU_API,接口统计,Api Statistics\n"
+            "ME_API,接口请求次数,Api Requests\n"
+        )
+    )
+    call_15 = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    call_5 = tmp_path / "ne333_Call_Statistics_5_0_202609020000.csv"
+    api_5 = tmp_path / "ne333_Api_Statistics_5_0_202609020000.csv"
+    call_header = "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数\n"
+    api_header = "container,测量开始时间,测量结束时间,周期(分钟),接口请求次数\n"
+    call_15.write_text(
+        call_header + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,3\n",
+        encoding="utf-8",
+    )
+    call_5.write_text(
+        call_header + "pod-b,2026-09-02 00:00:00,2026-09-02 00:05:00,5,99\n",
+        encoding="utf-8",
+    )
+    api_5.write_text(
+        api_header + "pod-a,2026-09-02 00:00:00,2026-09-02 00:05:00,5,7\n",
+        encoding="utf-8",
+    )
+    files = [(path.name, path) for path in (call_15, call_5, api_5)]
+
+    result = inspect_measurement_files("task-period-priority", files)
+
+    by_name = {item["filename"]: item for item in result["files"]}
+    assert by_name[call_15.name]["status"] == "matched"
+    assert by_name[call_5.name]["status"] == "skipped"
+    assert by_name[call_5.name]["reason"] == "period_not_preferred"
+    assert by_name[api_5.name]["status"] == "matched"
+
+    assert [item["filename"] for item in result["unmatched_files"]] == []
+    assert [item["filename"] for item in result["skipped_files"]] == [call_5.name]
+
+    by_unit = {item["measurement_unit_id"]: item for item in result["measurement_units"]}
+    assert by_unit["MU_CALL"]["source_files"] == [call_15.name]
+    observations = {item["object_key"]: item for item in by_unit["MU_CALL"]["metrics"][0]["observations"]}
+    assert set(observations) == {"pod-a"}
+    assert observations["pod-a"]["avg_value"] == 3.0
+    assert by_unit["MU_CALL"]["metrics"][0]["source_files"] == [call_15.name]
+    assert by_unit["MU_API"]["source_files"] == [api_5.name]
+    assert by_unit["MU_API"]["metrics"][0]["observations"][0]["avg_value"] == 7.0
+
+
+def test_other_periods_are_kept_without_preferred_periods(tmp_path: Path) -> None:
+    import_resource_csv(
+        io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n")
+    )
+    header = "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数\n"
+    period_30 = tmp_path / "ne333_Call_Statistics_30_0_202609020000.csv"
+    period_60 = tmp_path / "ne333_Call_Statistics_60_0_202609020000.csv"
+    period_30.write_text(
+        header + "pod-a,2026-09-02 00:00:00,2026-09-02 00:30:00,30,3\n",
+        encoding="utf-8",
+    )
+    period_60.write_text(
+        header + "pod-b,2026-09-02 01:00:00,2026-09-02 02:00:00,60,5\n",
+        encoding="utf-8",
+    )
+    files = [(path.name, path) for path in (period_30, period_60)]
+
+    result = inspect_measurement_files("task-other-periods", files)
+
+    by_name = {item["filename"]: item for item in result["files"]}
+    assert by_name[period_30.name]["status"] == "matched"
+    assert by_name[period_60.name]["status"] == "matched"
+    assert result["measurement_units"][0]["source_files"] == [period_30.name, period_60.name]
+    assert {item["object_key"] for item in result["measurement_units"][0]["metrics"][0]["observations"]} == {
+        "pod-a",
+        "pod-b",
+    }
