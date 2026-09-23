@@ -1,5 +1,8 @@
 import type { components } from "./client";
 import { clearSession, getToken } from "./auth.ts";
+import { createLogger } from "../utils/logger.ts";
+
+const logger = createLogger("api");
 
 export type TaskStatus = components["schemas"]["TaskStatus"];
 export type TaskSummary = components["schemas"]["TaskSummary"];
@@ -182,35 +185,63 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const resp = await fetch(url, { ...init, headers });
-  if (!resp.ok) {
-    let message = `请求失败（HTTP ${resp.status}）`;
-    let code = "http_error";
-    let detail: unknown;
-    try {
-      const body = (await resp.json()) as { code?: string; message?: string; detail?: unknown };
-      if (body.code) {
-        code = body.code;
-        message = body.message ?? body.code;
-      } else if (typeof body.detail === "string") {
-        message = body.detail;
+  const method = init?.method ?? "GET";
+  const startedAt = performance.now();
+  try {
+    const resp = await fetch(url, { ...init, headers });
+    const durationMs = Math.round(performance.now() - startedAt);
+    if (!resp.ok) {
+      let message = `请求失败（HTTP ${resp.status}）`;
+      let code = "http_error";
+      let detail: unknown;
+      try {
+        const body = (await resp.json()) as { code?: string; message?: string; detail?: unknown };
+        if (body.code) {
+          code = body.code;
+          message = body.message ?? body.code;
+        } else if (typeof body.detail === "string") {
+          message = body.detail;
+        }
+        if (body.detail !== undefined) {
+          detail = body.detail;
+        }
+      } catch {
+        /* 非 JSON 响应 */
       }
-      if (body.detail !== undefined) {
-        detail = body.detail;
+      logger.error("API request failed", {
+        method,
+        url,
+        status: resp.status,
+        duration_ms: durationMs,
+        code,
+      });
+      if (resp.status === 401) {
+        clearSession();
+        if (typeof window !== "undefined") {
+          window.location.reload();
+        }
       }
-    } catch {
-      /* 非 JSON 响应 */
+      throw new ApiError(code, message, resp.status, detail);
     }
-    if (resp.status === 401) {
-      clearSession();
-      if (typeof window !== "undefined") {
-        window.location.reload();
-      }
+    logger.info("API request succeeded", {
+      method,
+      url,
+      status: resp.status,
+      duration_ms: durationMs,
+    });
+    if (resp.status === 204) return undefined as T;
+    return (await resp.json()) as T;
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      logger.error("API request network error", {
+        method,
+        url,
+        duration_ms: Math.round(performance.now() - startedAt),
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-    throw new ApiError(code, message, resp.status, detail);
+    throw error;
   }
-  if (resp.status === 204) return undefined as T;
-  return (await resp.json()) as T;
 }
 
 export interface TaskListQuery {
