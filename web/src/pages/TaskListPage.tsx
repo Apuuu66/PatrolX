@@ -13,6 +13,7 @@ import {
   Popconfirm,
   Select,
   Space,
+  Tag,
   Typography,
   Upload,
 } from "antd";
@@ -21,6 +22,7 @@ import {
   CaretRightOutlined,
   ClearOutlined,
   DeleteOutlined,
+  FileTextOutlined,
   PlusOutlined,
   RedoOutlined,
   ReloadOutlined,
@@ -45,6 +47,7 @@ import {
 import { TaskStatusTag } from "../components/StatusBadge";
 import { RESULT_STATUS_META } from "../components/statusLabels";
 import { usePolling } from "../hooks/usePolling";
+import { formatTaskDuration, getTaskMetadataTags } from "../utils/taskCard";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "排队中" },
@@ -514,7 +517,10 @@ export function TaskListPage() {
         }
       >
         <Flex vertical gap={12}>
-          {items.map((record) => (
+          {items.map((record) => {
+            const duration = formatTaskDuration(record.created_at, record.completed_at);
+            const metadataTags = getTaskMetadataTags(record, dicts);
+            return (
             <Card
               key={record.task_id}
               hoverable
@@ -542,13 +548,27 @@ export function TaskListPage() {
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {dayjs(record.created_at).format("YYYY-MM-DD HH:mm")}
                   </Typography.Text>
+                  {record.completed_at && (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      完成 {dayjs(record.completed_at).format("YYYY-MM-DD HH:mm")}
+                    </Typography.Text>
+                  )}
+                  {duration && (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      耗时 {duration}
+                    </Typography.Text>
+                  )}
                 </Flex>
-                {(record.customer_province || record.customer_operator || record.customer_product || record.customer_version) && (
-                  <Flex gap={4} wrap="wrap" style={{ marginTop: 4 }}>
-                    {codeToName(dicts, "province", record.customer_province) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "province", record.customer_province)}</Typography.Text>}
-                    {codeToName(dicts, "operator", record.customer_operator) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "operator", record.customer_operator)}</Typography.Text>}
-                    {codeToName(dicts, "product", record.customer_product) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "product", record.customer_product)}</Typography.Text>}
-                    {codeToName(dicts, "version", record.customer_version) && <Typography.Text code style={{ fontSize: 12, color: "#1677ff" }}>{codeToName(dicts, "version", record.customer_version)}</Typography.Text>}
+                {metadataTags.length > 0 && (
+                  <Flex gap={4} wrap="wrap" style={{ marginTop: 6 }}>
+                    {metadataTags.map((item) => (
+                      <Tag key={item.key} color="blue" bordered={false} style={{ marginInlineEnd: 0 }}>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {item.label}
+                        </Typography.Text>
+                        <Typography.Text style={{ fontSize: 12 }}>{item.value}</Typography.Text>
+                      </Tag>
+                    ))}
                   </Flex>
                 )}
               </div>
@@ -581,6 +601,17 @@ export function TaskListPage() {
 
               <Flex vertical align="flex-end" gap={8}>
                 <TaskStatusTag status={record.status} />
+                {record.status === "failed" && (
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<FileTextOutlined />}
+                    onClick={() => navigate(`/tasks/${record.task_id}/logs`)}
+                  >
+                    失败日志
+                  </Button>
+                )}
                 <Space size={0} wrap>
                   <Button type="text" size="small" onClick={() => navigate(`/tasks/${record.task_id}`)}>
                     详情
@@ -636,7 +667,8 @@ export function TaskListPage() {
                 />
               )}
             </Card>
-          ))}
+            );
+          })}
 
           {!loading && items.length === 0 && <Empty description="暂无巡检任务" />}
 
@@ -710,14 +742,4 @@ export function TaskListPage() {
 
 function dictOptions(items?: Array<{ code: string; name?: string }>) {
   return (items ?? []).map((d) => ({ value: d.code, label: d.name || d.code }));
-}
-
-function codeToName(
-  dicts: DictsResponse | null,
-  group: "province" | "operator" | "product" | "version",
-  code: string | null | undefined,
-): string | null {
-  if (!code) return null;
-  const item = dicts?.[group]?.find((d) => d.code === code);
-  return item?.name || code;
 }

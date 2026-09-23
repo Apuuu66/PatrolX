@@ -18,4 +18,5 @@ export PATROLX_SQLITE_PATH="$E2E_DIR/patrolx.db"
 
 cd "$ROOT_DIR"
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/web/e2e/seed_kpi_measurement_history.py"
+"$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/web/e2e/seed_home_task.py"
 exec "$ROOT_DIR/.venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8010
