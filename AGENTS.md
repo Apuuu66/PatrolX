@@ -21,6 +21,7 @@ PatrolX 是离线巡检系统：
 | 架构、数据流、规则编排 | [`docs/architecture.md`](docs/architecture.md) |
 | 契约数据模型 | [`docs/data-model.md`](docs/data-model.md) |
 | 设计机制参考 | [`docs/design/mechanisms.md`](docs/design/mechanisms.md) |
+| UI 设计规范 | [`docs/design/DESIGN.md`](docs/design/DESIGN.md) |
 | API 契约 | [`docs/api/openapi.yaml`](docs/api/openapi.yaml) |
 | 真实样例包结构 | [`docs/example/real-package-structure.md`](docs/example/real-package-structure.md) |
 | 分类规则配置 | [`deploy/config/classify_rules.yaml`](deploy/config/classify_rules.yaml) |
