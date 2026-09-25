@@ -19,6 +19,7 @@ import { PlusOutlined, RedoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api, type User } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
+import { LoadErrorState } from "../components/PageState";
 
 const ROLE_OPTIONS = [
   { value: "admin", label: "管理员" },
@@ -52,6 +53,7 @@ export function UsersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [passwordTarget, setPasswordTarget] = useState<User | null>(null);
   const [roleTarget, setRoleTarget] = useState<User | null>(null);
@@ -62,12 +64,15 @@ export function UsersPage() {
   const load = useCallback(
     async (nextPage = page, nextPageSize = pageSize) => {
       setLoading(true);
+      setLoadError(null);
       try {
         const data = await api.listUsers({ page: nextPage, page_size: nextPageSize });
         setItems(data.items);
         setTotal(data.total);
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "用户加载失败");
+        const text = err instanceof Error ? err.message : "用户加载失败";
+        setLoadError(text);
+        message.error(text);
       } finally {
         setLoading(false);
       }
@@ -204,8 +209,11 @@ export function UsersPage() {
           </Space>
         }
       >
-        <Table
-          rowKey="username"
+        {loadError ? (
+          <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
+        ) : (
+          <Table
+            rowKey="username"
           size="small"
           loading={loading}
           dataSource={items}
@@ -215,13 +223,14 @@ export function UsersPage() {
             pageSize,
             total,
             showSizeChanger: true,
-            onChange: (nextPage, nextPageSize) => {
+              onChange: (nextPage, nextPageSize) => {
               setPage(nextPage);
               setPageSize(nextPageSize);
               void load(nextPage, nextPageSize);
             },
           }}
-        />
+          />
+        )}
       </Card>
 
       <Modal

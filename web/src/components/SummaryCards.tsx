@@ -66,9 +66,11 @@ export function SummaryCards({
                   clickable
                     ? {
                         cursor: "pointer",
-                        border: isActive ? `2px solid ${item.color}` : undefined,
-                        boxShadow: isActive ? `0 0 8px ${item.color}40` : undefined,
-                        transition: "box-shadow 0.2s, border-color 0.2s",
+                        border: isActive ? `2px solid ${item.color}` : "1px solid #f0f0f0",
+                        background: isActive ? `${item.color}12` : undefined,
+                        boxShadow: isActive ? `0 6px 16px ${item.color}26` : undefined,
+                        transform: isActive ? "translateY(-1px)" : undefined,
+                        transition: "box-shadow 0.2s, border-color 0.2s, transform 0.2s",
                       }
                     : undefined
                 }

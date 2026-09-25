@@ -52,7 +52,20 @@ const router = createBrowserRouter([
 
 export default function App() {
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        token: {
+          colorPrimary: "#1677ff",
+          borderRadius: 8,
+          colorBgLayout: "#f5f5f5",
+          colorText: "rgba(0, 0, 0, 0.88)",
+          colorTextSecondary: "rgba(0, 0, 0, 0.65)",
+          colorTextDescription: "rgba(0, 0, 0, 0.65)",
+          colorTextTertiary: "rgba(0, 0, 0, 0.45)",
+        },
+      }}
+    >
       <AuthProvider>
         <AntApp>
           <Suspense fallback={PageFallback}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { App, Card, Descriptions, Empty, Spin, Typography } from "antd";
+import { App, Card, Descriptions, Typography } from "antd";
 import { api, type DictsResponse } from "../api/http";
+import { LoadErrorState, PageSkeleton } from "../components/PageState";
 
 const DICT_LABELS: Record<string, string> = {
   province: "省份",
@@ -13,13 +14,18 @@ export function DictsPage() {
   const { message } = App.useApp();
   const [dicts, setDicts] = useState<DictsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
+      setLoading(true);
+      setLoadError(null);
       try {
         setDicts(await api.listDicts());
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "加载失败");
+        const text = err instanceof Error ? err.message : "加载失败";
+        setLoadError(text);
+        message.error(text);
       } finally {
         setLoading(false);
       }
@@ -27,14 +33,30 @@ export function DictsPage() {
   }, [message]);
 
   if (loading) {
-    return (
-      <div style={{ textAlign: "center", padding: 80 }}>
-        <Spin />
-      </div>
-    );
+    return <PageSkeleton rows={3} />;
   }
   if (!dicts) {
-    return <Empty description="字典加载失败" />;
+    return (
+      <LoadErrorState
+        description={loadError ?? "字典加载失败"}
+        onRetry={() => {
+          void (async () => {
+            setLoading(true);
+            setLoadError(null);
+            try {
+              setDicts(await api.listDicts());
+            } catch (err) {
+              const text = err instanceof Error ? err.message : "加载失败";
+              setLoadError(text);
+              message.error(text);
+            } finally {
+              setLoading(false);
+            }
+          })();
+        }}
+        retrying={loading}
+      />
+    );
   }
 
   return (

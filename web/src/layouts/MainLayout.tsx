@@ -4,6 +4,7 @@ import {
   BarChartOutlined,
   DatabaseOutlined,
   FileSearchOutlined,
+  FundOutlined,
   LogoutOutlined,
   SafetyCertificateOutlined,
   UserOutlined,
@@ -90,7 +91,7 @@ export function MainLayout() {
 
   const menuItems = [
     { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
-    { key: "/measurement-units", icon: <DatabaseOutlined />, label: "基础指标" },
+    { key: "/measurement-units", icon: <FundOutlined />, label: "基础指标" },
     { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
     { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },
     ...(user?.role === "admin" ? [{ key: "/users", icon: <UserOutlined />, label: "用户管理" }] : []),

@@ -7,6 +7,7 @@ import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { api, type MeasurementBinding, type MeasurementBindingBatchConfirmResponse, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
 import { ResourceNameCell } from "../components/ResourceNameCell";
 import { useAuth } from "../auth/AuthContext";
+import { LoadErrorState } from "../components/PageState";
 
 const STATUS_COLORS: Record<string, string> = {
   candidate: "gold", confirmed: "green", conflict: "red", ignored: "default",
@@ -73,16 +74,20 @@ function MeasurementUnitTab() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<MeasurementUnitImportResult | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(
     async (nextPage = page, nextPageSize = pageSize, nextSearch = search) => {
       setLoading(true);
+      setLoadError(null);
       try {
         const data = await api.listMeasurementUnits({ page: nextPage, page_size: nextPageSize, search: nextSearch || undefined });
         setItems(data.items);
         setTotal(data.total);
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "测量单元加载失败");
+        const text = err instanceof Error ? err.message : "测量单元加载失败";
+        setLoadError(text);
+        message.error(text);
       } finally {
         setLoading(false);
       }
@@ -201,8 +206,12 @@ function MeasurementUnitTab() {
         <Input.Search allowClear placeholder="搜索中英文描述" style={{ width: 280 }} onSearch={(value) => { setSearch(value); setPage(1); void load(1, pageSize, value); }} />
         <Typography.Text type="secondary">共 {total} 个测量单元</Typography.Text>
       </Space>
-      <Table rowKey="resource_id" loading={loading} columns={columns} dataSource={items}
-        pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }} />
+      {loadError ? (
+        <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
+      ) : (
+        <Table rowKey="resource_id" loading={loading} columns={columns} dataSource={items}
+          pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }} />
+      )}
       <Modal
         open={importResult !== null}
         title="资源导入结果明细"
@@ -283,6 +292,7 @@ function MeasurementBindingTab() {
   const [editForm] = Form.useForm<MetricEditFormValues>();
   const [editingMetric, setEditingMetric] = useState<MeasurementResource | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadResourceGovernance = useCallback(async (bindings: MeasurementBinding[]) => {
     const boundIds = [...new Set(bindings.flatMap((item) => item.metric_resource_id ? [item.metric_resource_id] : []))];
@@ -308,6 +318,7 @@ function MeasurementBindingTab() {
   const load = useCallback(
     async (nextPage = page, nextPageSize = pageSize) => {
       setLoading(true);
+      setLoadError(null);
       try {
         const data = await api.listMeasurementBindings({
           page: nextPage,
@@ -319,7 +330,9 @@ function MeasurementBindingTab() {
         setTotal(data.total);
         await loadResourceGovernance(data.items);
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "绑定关系加载失败");
+        const text = err instanceof Error ? err.message : "绑定关系加载失败";
+        setLoadError(text);
+        message.error(text);
       } finally {
         setLoading(false);
       }
@@ -575,8 +588,12 @@ function MeasurementBindingTab() {
           onClose={() => setBatchResult(null)}
         />
       ) : null}
-      <Table rowKey="id" loading={loading} columns={columns} dataSource={items} rowSelection={isAdmin ? rowSelection : undefined}
-        pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); setSelectedBindingIds([]); void load(nextPage, nextPageSize); } }} />
+      {loadError ? (
+        <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
+      ) : (
+        <Table rowKey="id" loading={loading} columns={columns} dataSource={items} rowSelection={isAdmin ? rowSelection : undefined}
+          pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); setSelectedBindingIds([]); void load(nextPage, nextPageSize); } }} />
+      )}
 
       <Modal
         open={registerTarget !== null}

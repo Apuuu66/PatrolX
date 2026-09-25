@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Alert, App, Breadcrumb, Button, Card, Descriptions, Empty, List, Spin, Space, Tag, Typography } from "antd";
+import { Alert, App, Breadcrumb, Button, Card, Descriptions, List, Space, Tag, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult } from "../api/http";
 import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
 import { MetricPanel } from "../components/MetricPanel";
 import { RuleStatusTag, SeverityTag } from "../components/StatusBadge";
+import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 
 export function RuleDetailPage() {
   const { taskId = "", ruleCode = "" } = useParams();
@@ -13,9 +14,12 @@ export function RuleDetailPage() {
   const [result, setResult] = useState<RuleResult | null>(null);
   const [meta, setMeta] = useState<InspectorInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
+      setLoading(true);
+      setLoadError(null);
       try {
         const [r, inspectors] = await Promise.all([
           api.getRuleResult(taskId, ruleCode, ruleCode === "kpi.measurement_units"),
@@ -24,22 +28,44 @@ export function RuleDetailPage() {
         setResult(r);
         setMeta(inspectors.find((i) => i.code === ruleCode) ?? null);
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "加载失败");
+        const text = err instanceof Error ? err.message : "加载失败";
+        setLoadError(text);
+        message.error(text);
       } finally {
         setLoading(false);
       }
     })();
   }, [taskId, ruleCode, message]);
 
-  if (loading) {
-    return (
-      <div style={{ textAlign: "center", padding: 80 }}>
-        <Spin />
-      </div>
-    );
+  const retry = () => {
+    void (async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const [r, inspectors] = await Promise.all([
+          api.getRuleResult(taskId, ruleCode, ruleCode === "kpi.measurement_units"),
+          api.listInspectors(undefined, true),
+        ]);
+        setResult(r);
+        setMeta(inspectors.find((i) => i.code === ruleCode) ?? null);
+      } catch (err) {
+        const text = err instanceof Error ? err.message : "加载失败";
+        setLoadError(text);
+        message.error(text);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  };
+
+  if (loading && !result) {
+    return <PageSkeleton rows={5} />;
   }
   if (!result) {
-    return <Empty description="规则结果不存在" />;
+    if (loadError) {
+      return <LoadErrorState description={loadError} onRetry={retry} retrying={loading} />;
+    }
+    return <EmptyState description="规则结果不存在" />;
   }
 
   const conclusion = result.summary || meta?.description || "已完成规则执行";

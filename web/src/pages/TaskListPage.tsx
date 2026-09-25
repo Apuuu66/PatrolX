@@ -4,16 +4,15 @@ import {
   App,
   Button,
   Card,
-  Empty,
   Flex,
   Form,
   Input,
+  Dropdown,
   Modal,
   Pagination,
-  Popconfirm,
+  Segmented,
   Select,
   Space,
-  Tag,
   Typography,
   Upload,
 } from "antd";
@@ -23,6 +22,7 @@ import {
   ClearOutlined,
   DeleteOutlined,
   FileTextOutlined,
+  MoreOutlined,
   PlusOutlined,
   RedoOutlined,
   ReloadOutlined,
@@ -48,8 +48,11 @@ import { TaskStatusTag } from "../components/StatusBadge";
 import { RESULT_STATUS_META } from "../components/statusLabels";
 import { usePolling } from "../hooks/usePolling";
 import { formatTaskDuration, getTaskMetadataTags } from "../utils/taskCard";
+import { getStatusStatEmphasis } from "../utils/taskDisplay";
+import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 
-const STATUS_OPTIONS = [
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "全部" },
   { value: "pending", label: "排队中" },
   { value: "running", label: "执行中" },
   { value: "completed", label: "已完成" },
@@ -266,8 +269,9 @@ export function TaskListPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [status, setStatus] = useState<TaskStatus | undefined>();
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<TaskStatus | "">("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [dicts, setDicts] = useState<DictsResponse | null>(null);
@@ -278,24 +282,30 @@ export function TaskListPage() {
   const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
   const [deleteCollapsed, setDeleteCollapsed] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
-  const [rebuilding, setRebuilding] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [data, overviewData] = await Promise.all([
-        api.listTasks({ page, page_size: pageSize, status }),
+        api.listTasks({ page, page_size: pageSize, status: status === "" ? undefined : status }),
         api.getOverview(),
       ]);
       setItems(data.items);
       setTotal(data.total);
       setOverview(overviewData);
     } catch (err) {
-      message.error(err instanceof Error ? err.message : "加载失败");
+      const text = err instanceof Error ? err.message : "加载失败";
+      setLoadError(text);
+      message.error(text);
     } finally {
       setLoading(false);
     }
   }, [page, pageSize, status, message]);
+
+  const retryLoad = useCallback(() => {
+    void load();
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -359,15 +369,12 @@ export function TaskListPage() {
 
   const rebuildFull = useCallback(
     async (taskId: string) => {
-      setRebuilding(taskId);
       try {
         await api.rebuildTask(taskId, { mode: "full", confirmed: true, trigger_source: "ui" });
         message.success("已受理全量重建");
         await load();
       } catch (err) {
         message.error(err instanceof Error ? err.message : "全量重建失败");
-      } finally {
-        setRebuilding(null);
       }
     },
     [load, message],
@@ -488,14 +495,12 @@ export function TaskListPage() {
         }
         extra={
           <Space wrap>
-            <Select
-              allowClear
-              placeholder="状态筛选"
-              style={{ width: 130 }}
-              options={STATUS_OPTIONS}
+            <Segmented
+              aria-label="任务状态快捷筛选"
+              options={STATUS_FILTER_OPTIONS}
               value={status}
-              onChange={(v) => {
-                setStatus(v);
+              onChange={(value) => {
+                setStatus(value as TaskStatus | "");
                 setPage(1);
               }}
             />
@@ -517,6 +522,10 @@ export function TaskListPage() {
         }
       >
         <Flex vertical gap={12}>
+          {loading && items.length === 0 && !loadError && <PageSkeleton rows={3} />}
+          {loadError && items.length === 0 && (
+            <LoadErrorState description={loadError} onRetry={retryLoad} retrying={loading} />
+          )}
           {items.map((record) => {
             const duration = formatTaskDuration(record.created_at, record.completed_at);
             const metadataTags = getTaskMetadataTags(record, dicts);
@@ -539,7 +548,7 @@ export function TaskListPage() {
                   {record.name}
                 </Typography.Link>
                 <Flex gap={8} align="center" wrap="wrap" style={{ marginTop: 6 }}>
-                  <Typography.Text code style={{ fontSize: 12 }}>
+                  <Typography.Text code type="secondary" style={{ fontSize: 12 }}>
                     {record.task_id}
                   </Typography.Text>
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -561,13 +570,18 @@ export function TaskListPage() {
                 </Flex>
                 {metadataTags.length > 0 && (
                   <Flex gap={4} wrap="wrap" style={{ marginTop: 6 }}>
-                    {metadataTags.map((item) => (
-                      <Tag key={item.key} color="blue" bordered={false} style={{ marginInlineEnd: 0 }}>
+                    {metadataTags.map((item, index) => (
+                      <Flex key={item.key} gap={4} align="center">
+                        {index > 0 && (
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            ·
+                          </Typography.Text>
+                        )}
                         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                           {item.label}
                         </Typography.Text>
                         <Typography.Text style={{ fontSize: 12 }}>{item.value}</Typography.Text>
-                      </Tag>
+                      </Flex>
                     ))}
                   </Flex>
                 )}
@@ -576,26 +590,37 @@ export function TaskListPage() {
               <Flex gap={8} wrap="wrap">
                 {RESULT_STATUS_META.map((item) => {
                   const value = record.stats[item.key];
-                  return (
-                    <div
-                      key={item.key}
-                      style={{
-                        flex: "1 1 52px",
-                        minWidth: 56,
-                        padding: "7px 6px",
-                        borderRadius: 10,
-                        textAlign: "center",
-                        background: `${item.color}14`,
-                      }}
-                    >
-                      <Typography.Text strong style={{ display: "block", color: item.color, fontSize: 18 }}>
-                        {value}
-                      </Typography.Text>
-                      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                        {item.label}
-                      </Typography.Text>
-                    </div>
-                  );
+                  return (() => {
+                      const emphasis = getStatusStatEmphasis(item.key, value);
+                      return (
+                        <div
+                          key={item.key}
+                          style={{
+                            flex: emphasis === "quiet" ? "0 1 auto" : "1 1 56px",
+                            minWidth: emphasis === "quiet" ? 44 : 56,
+                            padding: emphasis === "quiet" ? "5px 4px" : "7px 6px",
+                            borderRadius: 10,
+                            textAlign: "center",
+                            background: emphasis === "attention" ? `${item.color}14` : undefined,
+                            opacity: emphasis === "quiet" ? 0.55 : 1,
+                          }}
+                        >
+                          <Typography.Text
+                            strong={emphasis !== "quiet"}
+                            style={{
+                              display: "block",
+                              color: emphasis === "quiet" ? undefined : item.color,
+                              fontSize: emphasis === "quiet" ? 14 : emphasis === "attention" ? 18 : 16,
+                            }}
+                          >
+                            {value}
+                          </Typography.Text>
+                          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                            {item.label}
+                          </Typography.Text>
+                        </div>
+                      );
+                  })();
                 })}
               </Flex>
 
@@ -619,28 +644,35 @@ export function TaskListPage() {
                   <Button type="text" size="small" onClick={() => navigate(`/tasks/${record.task_id}/report`)}>
                     报告
                   </Button>
-                  <Popconfirm title="重跑该任务全部规则？" onConfirm={() => rerun(record.task_id)}>
-                    <Button type="text" size="small" icon={<RedoOutlined />}>
-                      重跑
-                    </Button>
-                  </Popconfirm>
-                  {(record.status === "completed" || record.status === "failed") && (
-                    <Button
-                      type="text"
-                      size="small"
-                      danger
-                      icon={<ClearOutlined />}
-                      loading={rebuilding === record.task_id}
-                      onClick={() => confirmRebuildFull(record.task_id)}
-                    >
-                      重建
-                    </Button>
-                  )}
-                  <Popconfirm title="删除任务（含现场数据）？" onConfirm={() => remove(record.task_id)}>
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />}>
-                      删除
-                    </Button>
-                  </Popconfirm>
+                  <Dropdown
+                    menu={{
+                      items: [
+                        { key: "rerun", label: "重跑", icon: <RedoOutlined /> },
+                        ...(record.status === "completed" || record.status === "failed"
+                          ? [{ key: "rebuild", label: "重建", danger: true, icon: <ClearOutlined /> }]
+                          : []),
+                        { type: "divider" },
+                        { key: "delete", label: "删除", danger: true, icon: <DeleteOutlined /> },
+                      ],
+                      onClick: ({ key }) => {
+                        if (key === "rerun") void rerun(record.task_id);
+                        if (key === "rebuild") confirmRebuildFull(record.task_id);
+                        if (key === "delete") {
+                          modal.confirm({
+                            title: "删除任务（含现场数据）？",
+                            content: "删除后无法恢复。",
+                            okText: "删除",
+                            okButtonProps: { danger: true },
+                            cancelText: "取消",
+                            onOk: () => remove(record.task_id),
+                          });
+                        }
+                      },
+                    }}
+                    trigger={["click"]}
+                  >
+                    <Button aria-label="更多操作" type="text" size="small" icon={<MoreOutlined />} />
+                  </Dropdown>
                 </Space>
               </Flex>
               </div>
@@ -670,7 +702,7 @@ export function TaskListPage() {
             );
           })}
 
-          {!loading && items.length === 0 && <Empty description="暂无巡检任务" />}
+          {!loading && items.length === 0 && !loadError && <EmptyState description="暂无巡检任务" />}
 
           <Flex justify="flex-end">
             <Pagination

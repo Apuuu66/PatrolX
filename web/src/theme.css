@@ -1,0 +1,7 @@
+.ant-table-tbody > tr.rule-row-focus > td {
+  background: #f0f7ff !important;
+}
+
+.ant-table-tbody > tr.rule-row-focus:hover > td {
+  background: #e6f4ff !important;
+}

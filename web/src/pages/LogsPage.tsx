@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { App, Breadcrumb, Card, Empty, List, Space, Spin, Tag, Typography } from "antd";
+import { App, Breadcrumb, Card, List, Space, Tag, Typography } from "antd";
 import dayjs from "dayjs";
 import { Link, useParams } from "react-router-dom";
 import { api, type LogEntry } from "../api/http";
+import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 
 const LEVEL_COLOR: Record<string, string> = {
   info: "blue",
@@ -16,14 +17,19 @@ export function LogsPage() {
   const { message } = App.useApp();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
+      setLoading(true);
+      setLoadError(null);
       try {
         const data = await api.getTaskLogs(taskId);
         setEntries(data.entries);
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "加载失败");
+        const text = err instanceof Error ? err.message : "加载失败";
+        setLoadError(text);
+        message.error(text);
       } finally {
         setLoading(false);
       }
@@ -42,11 +48,25 @@ export function LogsPage() {
       />
       <Card title="执行日志">
         {loading ? (
-          <div style={{ textAlign: "center", padding: 40 }}>
-            <Spin />
-          </div>
+          <PageSkeleton rows={4} />
+        ) : loadError ? (
+          <LoadErrorState description={loadError} onRetry={() => {
+            void (async () => {
+              setLoading(true);
+              setLoadError(null);
+              try {
+                setEntries((await api.getTaskLogs(taskId)).entries);
+              } catch (err) {
+                const text = err instanceof Error ? err.message : "加载失败";
+                setLoadError(text);
+                message.error(text);
+              } finally {
+                setLoading(false);
+              }
+            })();
+          }} />
         ) : entries.length === 0 ? (
-          <Empty description="暂无日志" />
+          <EmptyState description="暂无日志" />
         ) : (
           <List
             size="small"

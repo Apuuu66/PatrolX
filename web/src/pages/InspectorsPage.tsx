@@ -3,6 +3,7 @@ import { App, Card, Input, Select, Space, Switch, Table, Tag, Typography } from 
 import type { ColumnsType } from "antd/es/table";
 import { api, type InspectorState } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
+import { LoadErrorState } from "../components/PageState";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -29,15 +30,19 @@ export function InspectorsPage() {
   const [category, setCategory] = useState<string | undefined>();
   const [enabled, setEnabled] = useState<boolean | undefined>();
   const [search, setSearch] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const result = await api.listInspectorStates({ page, page_size: pageSize, category, enabled, search });
       setItems(result.items ?? []);
       setTotal(result.total);
     } catch (err) {
-      message.error(err instanceof Error ? err.message : "加载失败");
+      const text = err instanceof Error ? err.message : "加载失败";
+      setLoadError(text);
+      message.error(text);
     } finally {
       setLoading(false);
     }
@@ -133,8 +138,11 @@ export function InspectorsPage() {
         </Space>
       }
     >
-      <Table
-        rowKey="code"
+      {loadError ? (
+        <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
+      ) : (
+        <Table
+          rowKey="code"
         size="small"
         loading={loading}
         dataSource={items}
@@ -150,7 +158,8 @@ export function InspectorsPage() {
             setPageSize(nextPageSize);
           },
         }}
-      />
+        />
+      )}
     </Card>
   );
 }
