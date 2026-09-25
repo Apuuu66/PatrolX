@@ -90,3 +90,14 @@
   height: calc(100vh - 280px);
   border: 0;
 }
+
+.report-task-card {
+  margin-bottom: 16px;
+}
+
+.report-page-frame {
+  width: 100%;
+  height: min(62vh, 720px);
+  min-height: 420px;
+  border: 0;
+}
