@@ -90,3 +90,33 @@ export function getRuleCategoryCounts(rules: RuleResult[]): RuleCategoryCount[] 
   }
   return Array.from(counts, ([value, count]) => ({ value, count }));
 }
+
+const ATTENTION_STATUS_WEIGHT: Record<RuleResult["status"], number> = {
+  fail: 0,
+  warn: 1,
+  error: 2,
+  pass: 9,
+  skip: 9,
+};
+
+export interface AttentionDisplayRules {
+  rules: RuleResult[];
+  hiddenCount: number;
+}
+
+export function getAttentionDisplayRules(
+  rules: RuleResult[],
+  limit = 5,
+): AttentionDisplayRules {
+  const attentionRules = rules
+    .filter((rule) => rule.status === "fail" || rule.status === "warn" || rule.status === "error")
+    .sort(
+      (left, right) =>
+        ATTENTION_STATUS_WEIGHT[left.status] - ATTENTION_STATUS_WEIGHT[right.status],
+    );
+
+  return {
+    rules: attentionRules.slice(0, limit),
+    hiddenCount: Math.max(0, attentionRules.length - limit),
+  };
+}

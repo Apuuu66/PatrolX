@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { RuleResult, RuleStatus } from "../api/http";
 import {
   filterRuleResults,
+  getAttentionDisplayRules,
   getRuleCategoryCounts,
   getRuleCategoryOptions,
   sortRuleResults,
@@ -108,5 +109,33 @@ describe("sortRuleResultsByFocus", () => {
   it("聚焦分类内部仍支持严重度优先排序", () => {
     const result = sortRuleResultsByFocus(rules, "log", "severity");
     assert.deepEqual(result.map((rule) => rule.code), ["log.a", "log.b", "kpi.a", "config.a"]);
+  });
+});
+
+describe("getAttentionDisplayRules", () => {
+  it("只保留需要关注的规则并按严重程度排序", () => {
+    const rules = [
+      { code: "warn.a", status: "warn", severity: "medium" },
+      { code: "pass.a", status: "pass", severity: "low" },
+      { code: "fail.b", status: "fail", severity: "high" },
+      { code: "error.a", status: "error", severity: "low" },
+    ] as any;
+
+    assert.deepEqual(
+      getAttentionDisplayRules(rules, 5).rules.map((rule) => rule.code),
+      ["fail.b", "warn.a", "error.a"],
+    );
+  });
+
+  it("超过展示上限时给出剩余数量", () => {
+    const rules = Array.from({ length: 7 }, (_, index) => ({
+      code: `fail.${index}`,
+      status: "fail",
+      severity: "high",
+    })) as any;
+
+    const result = getAttentionDisplayRules(rules, 5);
+    assert.equal(result.rules.length, 5);
+    assert.equal(result.hiddenCount, 2);
   });
 });

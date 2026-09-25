@@ -1,7 +1,92 @@
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius-round: 999px;
+  --border-color: #d9d9d9;
+  --primary-soft: #f0f7ff;
+  --primary-soft-hover: #e6f4ff;
+}
+
 .ant-table-tbody > tr.rule-row-focus > td {
-  background: #f0f7ff !important;
+  background: var(--primary-soft) !important;
 }
 
 .ant-table-tbody > tr.rule-row-focus:hover > td {
-  background: #e6f4ff !important;
+  background: var(--primary-soft-hover) !important;
+}
+
+.task-detail-breadcrumb {
+  margin-bottom: var(--space-4);
+}
+
+.task-detail-panel {
+  margin-bottom: var(--space-4);
+}
+
+.task-detail-alert {
+  margin-bottom: var(--space-4);
+}
+
+.task-detail-section-title.ant-typography {
+  margin: var(--space-4) 0 10px;
+}
+
+.task-category-filter {
+  margin-bottom: var(--space-3);
+}
+
+.task-health-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  margin-top: var(--space-4);
+  overflow: hidden;
+  border-radius: var(--radius-round);
+  background: #f0f0f0;
+}
+
+.health-bar-segment {
+  flex: 0 0 auto;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.rule-category-chip {
+  padding: var(--space-1) 10px;
+  border: 1px solid var(--border-color);
+}
+
+.rule-code-text {
+  display: block;
+  font-size: 12px;
+}
+
+.task-detail-search {
+  width: 200px;
+}
+
+.task-detail-sort {
+  width: 136px;
+}
+
+.task-log-item {
+  width: 100%;
+}
+
+.task-log-message {
+  margin-top: 2px;
+}
+
+.task-rebuild-select {
+  width: 100%;
+}
+
+.task-report-frame {
+  width: 100%;
+  height: calc(100vh - 280px);
+  border: 0;
 }
