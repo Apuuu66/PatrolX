@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PatrolX · 任务详情维护性设计</title>
+  <style>
+    :root {
+      --page: #f5f5f5;
+      --surface: #ffffff;
+      --border: #e8e8e8;
+      --text: rgba(0, 0, 0, .88);
+      --text-2: rgba(0, 0, 0, .65);
+      --text-3: rgba(0, 0, 0, .45);
+      --primary: #1677ff;
+      --primary-soft: #f0f7ff;
+      --pass: #52c41a;
+      --warn: #faad14;
+      --fail: #ff4d4f;
+      --error: #8c8c8c;
+      --skip: #1677ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .page { max-width: 1600px; margin: 0 auto; padding: 28px 32px 48px; }
+    .artifact-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    h1 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
+    h2 { font-size: 15px; font-weight: 650; margin: 0 0 12px; }
+    h3 { font-size: 14px; font-weight: 650; margin: 18px 0 8px; }
+    p { margin: 0 0 10px; color: var(--text-2); }
+    .badge {
+      display: inline-flex; align-items: center; height: 22px; padding: 0 9px;
+      border: 1px solid var(--border); border-radius: 999px; background: #fff;
+      color: var(--text-2); font-size: 12px; white-space: nowrap;
+    }
+    .meta { color: var(--text-3); font-size: 12px; }
+    .layout {
+      display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(340px, .75fr);
+      gap: 20px; align-items: start;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.03);
+    }
+    .artifact-card { padding: 0; overflow: hidden; }
+    .artifact-card + .artifact-card { margin-top: 20px; }
+    .card-head {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    }
+    .card-body { padding: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .stat {
+      border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: #fff;
+    }
+    .stat strong { display: block; font-size: 20px; }
+    .stat span { font-size: 12px; color: var(--text-2); }
+    .health {
+      display: flex; gap: 2px; height: 8px; border-radius: 999px; overflow: hidden;
+      background: #f0f0f0; margin-top: 12px;
+    }
+    .health i { display: block; }
+    .wire {
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fafafa;
+    }
+    .wire-head {
+      background: #fff; border-bottom: 1px solid var(--border); padding: 12px 16px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .wire-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .tag {
+      display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 4px;
+      font-size: 12px; font-weight: 600;
+    }
+    .tag.pass { color: var(--pass); background: #f6ffed; border: 1px solid #b7eb8f; }
+    .tag.fail { color: var(--fail); background: #fff2f0; border: 1px solid #ffccc7; }
+    .tag.warn { color: #d48806; background: #fffbe6; border: 1px solid #ffe58f; }
+    .tag.skip { color: var(--skip); background: #e6f4ff; border: 1px solid #91caff; }
+    .tag.error { color: #595959; background: #f5f5f5; border: 1px solid #d9d9d9; }
+    .primary-btn {
+      display: inline-flex; align-items: center; height: 30px; padding: 0 13px;
+      border-radius: 6px; background: var(--primary); color: #fff; font-size: 13px; font-weight: 600;
+    }
+    .ghost-btn {
+      display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+      border: 1px solid var(--border); border-radius: 6px; color: var(--text-2);
+    }
+    .summary-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 16px; }
+    .attention {
+      margin: 0 16px 16px; padding: 12px 14px; border-radius: 8px;
+      background: #fffbe6; border: 1px solid #ffe58f; color: rgba(0,0,0,.88);
+    }
+    .attention b { display: block; margin-bottom: 2px; }
+    .metadata {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px;
+      padding: 0 16px 16px;
+    }
+    .field span { display: block; font-size: 12px; color: var(--text-3); }
+    .field b { font-size: 13px; font-weight: 550; }
+    .tabbar {
+      display: flex; gap: 20px; padding: 0 16px; background: #fff; border-bottom: 1px solid var(--border);
+      color: var(--text-2); font-size: 13px;
+    }
+    .tab { padding: 10px 2px; border-bottom: 2px solid transparent; }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+    .panel { padding: 16px; display: grid; gap: 14px; }
+    .toolbar {
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+    }
+    .input {
+      height: 30px; min-width: 180px; border: 1px solid var(--border); border-radius: 6px;
+      background: #fff; padding: 0 10px; color: var(--text-3); font-size: 13px;
+    }
+    .select {
+      height: 30px; min-width: 108px; border: 1px solid var(--border); border-radius: 6px;
+      background: #fff; padding: 0 10px; color: var(--text-2); font-size: 13px;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .chip {
+      border: 1px solid var(--border); background: #fff; color: var(--text-2);
+      border-radius: 999px; padding: 4px 10px; font-size: 12px;
+    }
+    .chip.active {
+      background: var(--primary-soft); border-color: #91caff; color: var(--primary); font-weight: 600;
+    }
+    .chip.zero { color: var(--text-3); }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+    th, td {
+      border-bottom: 1px solid #f0f0f0; padding: 10px 12px; text-align: left;
+      font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    th { color: var(--text-2); font-weight: 600; background: #fafafa; }
+    td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text-2); }
+    tr.focus td { background: var(--primary-soft); }
+    .rule-name { color: var(--primary); font-weight: 550; }
+    .small { font-size: 12px; color: var(--text-2); }
+    .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+    ol, ul { margin: 0; padding-left: 20px; color: var(--text-2); }
+    li + li { margin-top: 6px; }
+    .callout {
+      background: var(--primary-soft); border: 1px solid #d6e9ff; border-radius: 8px;
+      padding: 12px 14px; color: rgba(0,0,0,.88);
+    }
+    .state-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .state {
+      border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+      background: #fff; font-size: 13px;
+    }
+    .state b { display: block; margin-bottom: 4px; }
+    .state span { color: var(--text-2); }
+    .matrix { width: 100%; table-layout: auto; }
+    .matrix th, .matrix td { white-space: normal; }
+    .pill {
+      display: inline-flex; padding: 2px 7px; border-radius: 999px; font-size: 11px;
+      background: #f5f5f5; color: var(--text-2); border: 1px solid var(--border);
+    }
+    .footer {
+      margin-top: 20px; padding: 12px 16px; border: 1px dashed var(--border); border-radius: 8px;
+      background: #fafafa; color: var(--text-2); font-size: 12px;
+    }
+    @media (max-width: 1200px) {
+      .layout { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: repeat(2, 1fr); }
+      .metadata { grid-template-columns: repeat(2, 1fr); }
+      .duo, .state-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="artifact-header">
+      <div>
+        <h1>任务详情 · 可维护性设计</h1>
+        <p>目标：让页面继续增长时仍然容易理解、测试和修改；让用户能快速判断健康度并进入证据。</p>
+      </div>
+      <div class="badge">OpenDesign artifact · Task Detail · v1</div>
+    </header>
+
+    <section class="layout">
+      <section>
+        <article class="card artifact-card">
+          <div class="card-head">
+            <div>
+              <h2>目标布局</h2>
+              <p class="meta">从“信息堆叠页”拆成“健康诊断 + 规则浏览 + 过程证据”三层。</p>
+            </div>
+            <span class="badge">Desktop 1440</span>
+          </div>
+          <div class="card-body">
+            <div class="wire">
+              <div class="wire-head">
+                <div class="wire-title">
+                  kpi-history-demo-day2.zip
+                  <span class="tag pass">已完成</span>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <span class="primary-btn">查看报告</span>
+                  <span class="ghost-btn">⋯</span>
+                </div>
+              </div>
+
+              <div class="summary-row">
+                <div class="stat"><span>通过</span><strong style="color:var(--pass)">6</strong></div>
+                <div class="stat"><span>告警</span><strong style="color:var(--warn)">2</strong></div>
+                <div class="stat" style="border-color:#ffccc7; box-shadow:0 0 0 2px rgba(255,77,79,.08) inset;"><span>失败</span><strong style="color:var(--fail)">4</strong></div>
+                <div class="stat"><span>异常</span><strong style="color:var(--error)">0</strong></div>
+                <div class="stat"><span>跳过</span><strong style="color:var(--skip)">1</strong></div>
+              </div>
+              <div class="health" style="margin:0 16px 16px;">
+                <i style="width:40%; background:var(--pass);"></i>
+                <i style="width:13%; background:var(--warn);"></i>
+                <i style="width:27%; background:var(--fail);"></i>
+                <i style="width:20%; background:var(--skip);"></i>
+              </div>
+
+              <div class="attention">
+                <b>重点关注 6 条规则</b>
+                <span class="small">失败 4 · 告警 2 · 异常 0 · 前 5 条优先展示，其余折叠到“查看全部”。</span>
+              </div>
+
+              <div class="metadata">
+                <div class="field"><span>数据包</span><b class="mono">kpi-history-demo-day2.zip</b></div>
+                <div class="field"><span>版本 / 模式</span><b>— · 本地</b></div>
+                <div class="field"><span>设备 ID</span><b class="mono">demo-device-001</b></div>
+                <div class="field"><span>耗时</span><b>0:00 / 2026-09-24 00:17</b></div>
+              </div>
+
+              <div class="tabbar">
+                <div class="tab active">规则结果</div>
+                <div class="tab">执行日志</div>
+                <div class="tab">报告预览</div>
+              </div>
+
+              <div class="panel">
+                <div class="toolbar">
+                  <div class="chips">
+                    <span class="chip active">全部 13</span>
+                    <span class="chip">日志 8</span>
+                    <span class="chip">告警 1</span>
+                    <span class="chip zero">配置 0</span>
+                    <span class="chip">KPI 1</span>
+                    <span class="chip">资源 1</span>
+                    <span class="chip">话统 1</span>
+                  </div>
+                  <div style="display:flex; gap:8px;">
+                    <span class="input">搜索名称 / 编码</span>
+                    <span class="select">严重度优先</span>
+                  </div>
+                </div>
+                <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+                  <table>
+                    <colgroup><col style="width:30%"><col style="width:10%"><col style="width:10%"><col style="width:34%"><col style="width:16%"></colgroup>
+                    <thead><tr><th>规则</th><th>状态</th><th>严重度</th><th>结果摘要</th><th>操作</th></tr></thead>
+                    <tbody>
+                      <tr class="focus">
+                        <td><div class="rule-name">日志故障模式识别</div><div class="mono">log.fault_pattern</div></td>
+                        <td><span class="tag fail">FAIL</span></td>
+                        <td><span class="tag fail">high</span></td>
+                        <td>命中 5 类故障模式，影响 2 个服务</td>
+                        <td><span class="small">详情 · 重跑</span></td>
+                      </tr>
+                      <tr>
+                        <td><div class="rule-name">服务日志错误集中度</div><div class="mono">log.service_errors</div></td>
+                        <td><span class="tag warn">WARN</span></td>
+                        <td><span class="tag warn">medium</span></td>
+                        <td>服务错误集中：UMFAcc 5 条</td>
+                        <td><span class="small">详情 · 重跑</span></td>
+                      </tr>
+                      <tr>
+                        <td><div class="rule-name">基础配置一致性</div><div class="mono">config.base</div></td>
+                        <td><span class="tag pass">PASS</span></td>
+                        <td><span class="pill">low</span></td>
+                        <td>未发现配置漂移</td>
+                        <td><span class="small">详情 · 重跑</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="callout small">
+                  分类是“聚焦”，不是“过滤”：选中的分类置顶高亮，其他分类继续保留；状态和搜索仍是过滤。
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card artifact-card">
+          <div class="card-head">
+            <div><h2>状态覆盖矩阵</h2><p class="meta">每个区块都应该有显式状态，而不是把失败渲染成空态。</p></div>
+          </div>
+          <div class="card-body">
+            <table class="matrix">
+              <thead><tr><th style="width:18%">区域</th><th style="width:22%">Loading</th><th style="width:20%">Empty</th><th style="width:20%">Error</th><th>Busy / Disabled</th></tr></thead>
+              <tbody>
+                <tr><td><b>任务摘要</b></td><td>页面骨架</td><td>任务不存在</td><td>加载失败 + 重试</td><td>运行中 polling + 状态标签</td></tr>
+                <tr><td><b>规则结果</b></td><td>表格骨架</td><td>暂无规则结果</td><td>规则结果加载失败 + 重试</td><td>重跑中行级 loading</td></tr>
+                <tr><td><b>分类筛选</b></td><td>骨架 chips</td><td>保留全部 chip</td><td>沿用规则错误态</td><td>过滤状态可回退</td></tr>
+                <tr><td><b>执行日志</b></td><td>列表骨架</td><td>暂无日志</td><td>日志加载失败 + 重试</td><td>轮询期间静默更新</td></tr>
+                <tr><td><b>报告预览</b></td><td>iframe loading</td><td>报告未生成 + 去查看任务</td><td>报告加载失败 + 原报告入口</td><td>生成/重建时禁用预览</td></tr>
+                <tr><td><b>增量重建</b></td><td>规则选择 loading</td><td>无可重建规则</td><td>提交失败保留选择</td><td>提交中关闭受限</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <aside>
+        <article class="card">
+          <h2>核心建议</h2>
+          <ol>
+            <li><b>按职责拆页</b>：647 行的 <code>TaskDetailPage</code> 拆成 Header、Health、Meta、RuleBrowser、Logs、Report、Modal。</li>
+            <li><b>数据逻辑下沉</b>：新增 <code>useTaskDetailData</code> 和 <code>useTaskActions</code>，页面只做组合。</li>
+            <li><b>显式数据状态</b>：区分 <code>loading / ready / empty / error</code>，尤其不要把 system 或 logs 的失败隐藏成空态。</li>
+            <li><b>筛选语义固定</b>：状态、搜索 = 过滤；分类 = 聚焦置顶。URL 继续作为单一事实源。</li>
+            <li><b>重点信息限流</b>：重点关注只显示前 5 条，超过折叠，避免重复渲染大表。</li>
+            <li><b>样式 token 化</b>：状态色、间距、圆角走统一 token，减少散落的 inline style。</li>
+          </ol>
+        </article>
+
+        <article class="card">
+          <h2>组件边界</h2>
+          <div class="duo">
+            <div class="state">
+              <b>TaskDetailHeader</b>
+              <span>面包屑、任务名、状态、主操作、更多操作。不读列表数据，只接收 task 和 action 回调。</span>
+            </div>
+            <div class="state">
+              <b>TaskHealthPanel</b>
+              <span>状态卡、健康度条、重点关注摘要。筛选事件向上抛出，不直接改 URL。</span>
+            </div>
+            <div class="state">
+              <b>TaskMetaPanel</b>
+              <span>基础信息、客户环境、时间。字段映射独立成 utils，便于测试。</span>
+            </div>
+            <div class="state">
+              <b>RuleBrowser</b>
+              <span>chips、搜索、排序、表格、空态。复用 <code>RuleResultTable</code> 渲染重点和全量。</span>
+            </div>
+            <div class="state">
+              <b>TaskLogsPanel</b>
+              <span>日志 loading / empty / error / list。避免“加载失败”被显示成“暂无日志”。</span>
+            </div>
+            <div class="state">
+              <b>ActionModal</b>
+              <span>增量重建、设备 ID 编辑各自独立组件，状态不泄漏到页面根。</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>数据与测试契约</h2>
+          <ul>
+            <li><code>useTaskDetailData</code>：输入 taskId，输出 task / system / rules / logs / status；失败状态必须可区分。</li>
+            <li><code>useTaskDetailFilters</code>：只负责 URL 与筛选状态互转，不做 API 请求。</li>
+            <li><code>RuleResultTable</code>：props 明确 <code>rules / variant / busyRuleCode / onOpen / onRerun</code>。</li>
+            <li>测试拆三层：utils 单测、组件状态测试、入口到关键结果的 E2E。</li>
+            <li>E2E 固定覆盖：默认平铺、分类聚焦不隐藏其他分类、组合筛选不丢入口、行级重跑、日志错误态。</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>推荐迭代顺序</h2>
+          <ol>
+            <li>先抽 <code>RuleResultTable</code> + 分类 chips，消除重复表结构。</li>
+            <li>抽数据 hook，显式区分 system/logs 失败与空态。</li>
+            <li>拆 Header / Health / Meta / RuleBrowser。</li>
+            <li>补组件状态测试和 E2E。</li>
+            <li>最后统一 inline style 到 token，不动交互语义。</li>
+          </ol>
+        </article>
+      </aside>
+    </section>
+
+    <div class="footer">
+      设计说明：本稿使用 PatrolX Design System 的状态色与桌面优先布局。状态、搜索、分类、排序继续保存在 URL；分类点击只改变排序和高亮，不删除其他分类。
+    </div>
+  </main>
+</body>
+</html>
