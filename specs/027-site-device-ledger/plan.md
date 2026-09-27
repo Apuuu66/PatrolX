@@ -1,6 +1,6 @@
 # 实现计划：局点设备台账
 
-**分支**：`027-site-device-ledger` | **日期**：2026-09-27 | **规格**：[spec.md](spec.md)
+**分支**：`feature/027-site-device-ledger` | **日期**：2026-09-27 | **规格**：[spec.md](spec.md)
 
 **输入**：来自 `specs/027-site-device-ledger/spec.md` 的功能规格
 
