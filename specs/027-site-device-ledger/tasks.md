@@ -18,19 +18,19 @@ description: "局点设备台账实现任务列表"
 
 ## 阶段 1：设置（共享基础设施）
 
-- [ ] T001 建立台账 fixture 目录和包构造工具骨架：`tests/fixtures/inventory/`
-- [ ] T002 在 `deploy/config/classify_rules.yaml` 增加 `^LST ME\.txt$` 精确分类规则，并补充分类单测
+- [x] T001 建立台账 fixture 目录和包构造工具骨架：`tests/fixtures/inventory/`
+- [x] T002 在 `deploy/config/classify_rules.yaml` 增加 `^LST ME\.txt$` 精确分类规则，并补充分类单测
 
 ## 阶段 2：基础层（阻塞前置条件）
 
 **⚠️ 关键**：本阶段完成前不得开始用户故事实现。
 
-- [ ] T003 在 `app/models/db.py` 增加 `TaskRecord.package_kind` 增量迁移和默认 `inspection`
-- [ ] T004 在 `app/models/db.py` 按数据模型创建 `inventory_devices`、`inventory_observations`、`inventory_parse_results`、`inventory_change_audits`
-- [ ] T005 在 `app/models/schemas.py` 定义 `PackageKind`、台账解析状态、字段状态、版本方向、质量问题和响应模型
-- [ ] T006 创建 `app/services/inventory/` 包及确定性 ID、规范化、UTC 时间和 JSON 原子写入公共工具
-- [ ] T007 在 `docs/api/openapi.yaml` 前置新增 `POST /api/v3/tasks`、`/api/v2/inventory/*` 和任务详情增量 Schema
-- [ ] T008 运行 `python build.py contract` 校验 OpenAPI，并运行 `python build.py gen-web-api` 更新前端客户端
+- [x] T003 在 `app/models/db.py` 增加 `TaskRecord.package_kind` 增量迁移和默认 `inspection`
+- [x] T004 在 `app/models/db.py` 按数据模型创建 `inventory_devices`、`inventory_observations`、`inventory_parse_results`、`inventory_change_audits`
+- [x] T005 在 `app/models/schemas.py` 定义 `PackageKind`、台账解析状态、字段状态、版本方向、质量问题和响应模型
+- [x] T006 创建 `app/services/inventory/` 包及确定性 ID、规范化、UTC 时间和 JSON 原子写入公共工具
+- [x] T007 在 `docs/api/openapi.yaml` 前置新增 `POST /api/v3/tasks`、`/api/v2/inventory/*` 和任务详情增量 Schema
+- [x] T008 运行 `python build.py contract` 校验 OpenAPI，并运行 `python build.py gen-web-api` 更新前端客户端
 
 **检查点**：契约、模型和基础工具就绪；台账资产写入逻辑可开始。
 
@@ -42,21 +42,21 @@ description: "局点设备台账实现任务列表"
 
 ### US1 测试
 
-- [ ] T009 [P] [US1] 在 `tests/test_inventory_parser.py` 覆盖成功解析、别名、空白规范化、UTF-8/GB18030、缺版本、版本冲突、设备冲突、缺文件和解码失败
-- [ ] T010 [P] [US1] 在 `tests/test_inventory_ledger.py` 覆盖任务观测唯一性、覆盖更新、审计、缺局点/缺设备不归档和设备状态重算
-- [ ] T011 [P] [US1] 在 `tests/test_inventory_task_flow.py` 覆盖全量执行、日志补充包、缺 `LST ME.txt` 与任务不失败
-- [ ] T012 [US1] 在 `tests/test_inventory_api.py` 覆盖 v3 巡检包/日志补充包校验和 v2 兼容
+- [x] T009 [P] [US1] 在 `tests/test_inventory_parser.py` 覆盖成功解析、别名、空白规范化、UTF-8/GB18030、缺版本、版本冲突、设备冲突、缺文件和解码失败
+- [x] T010 [P] [US1] 在 `tests/test_inventory_ledger.py` 覆盖任务观测唯一性、覆盖更新、审计、缺局点/缺设备不归档和设备状态重算
+- [x] T011 [P] [US1] 在 `tests/test_inventory_task_flow.py` 覆盖全量执行、日志补充包、缺 `LST ME.txt` 与任务不失败
+- [x] T012 [US1] 在 `tests/test_inventory_api.py` 覆盖 v3 巡检包/日志补充包校验和 v2 兼容
 
 ### US1 实现
 
-- [ ] T013 [US1] 实现 `app/services/inventory/parser.py`：固定来源匹配、统一解码、字段别名、原始值/行号和冲突收集
-- [ ] T014 [US1] 实现 `app/services/inventory/ledger.py`：写入 `inventory.json`、事务归档观测、状态重算和变更审计
-- [ ] T015 [US1] 在 `app/services/tasks.py` 的全量执行和全量重建完成后接入台账归档；解析异常不使任务失败
-- [ ] T016 [US1] 实现 v3 创建服务校验：巡检包必填省份/运营商，日志补充包不要求且拒绝非空局点元数据
-- [ ] T017 [US1] 在 `app/api/router.py` 实现 `createTaskV3`，响应 `202 + Location`
-- [ ] T018 [US1] 在 `app/models/schemas.py` 和任务详情服务中增量返回 `package_kind`、`inventory`
-- [ ] T019 [US1] 在 `app/cli.py` 为 `run` 增加 `--package-kind`、`--province`、`--operator`、`--product`，并复用共享归档入口
-- [ ] T020 [US1] 补充 CLI/API 同一样例一致性测试，确保本地和在线 `inventory.json` 语义一致
+- [x] T013 [US1] 实现 `app/services/inventory/parser.py`：固定来源匹配、统一解码、字段别名、原始值/行号和冲突收集
+- [x] T014 [US1] 实现 `app/services/inventory/ledger.py`：写入 `inventory.json`、事务归档观测、状态重算和变更审计
+- [x] T015 [US1] 在 `app/services/tasks.py` 的全量执行和全量重建完成后接入台账归档；解析异常不使任务失败
+- [x] T016 [US1] 实现 v3 创建服务校验：巡检包必填省份/运营商，日志补充包不要求且拒绝非空局点元数据
+- [x] T017 [US1] 在 `app/api/router.py` 实现 `createTaskV3`，响应 `202 + Location`
+- [x] T018 [US1] 在 `app/models/schemas.py` 和任务详情服务中增量返回 `package_kind`、`inventory`
+- [x] T019 [US1] 在 `app/cli.py` 为 `run` 增加 `--package-kind`、`--province`、`--operator`、`--product`，并复用共享归档入口
+- [x] T020 [US1] 补充 CLI/API 同一样例一致性测试，确保本地和在线 `inventory.json` 语义一致
 
 **检查点**：P1 后端路径完整；任务详情可展示台账证据；日志补充包不生成观测。
 
@@ -68,16 +68,16 @@ description: "局点设备台账实现任务列表"
 
 ### US2 测试
 
-- [ ] T021 [P] [US2] 在 `tests/test_inventory_api.py` 增加设备列表分页、当前局点过滤、设备详情和历史观测测试
-- [ ] T022 [P] [US2] 在 `web/e2e/inventory.spec.ts` 增加上传巡检包 → 任务详情 → 局点列表 → 设备详情 E2E
+- [x] T021 [P] [US2] 在 `tests/test_inventory_api.py` 增加设备列表分页、当前局点过滤、设备详情和历史观测测试
+- [x] T022 [P] [US2] 在 `web/e2e/inventory.spec.ts` 增加上传巡检包 → 任务详情 → 局点列表 → 设备详情 E2E
 
 ### US2 实现
 
-- [ ] T023 [US2] 实现 `app/services/inventory/queries.py`：设备分页查询、当前局点过滤、设备详情、观测历史和质量标记
-- [ ] T024 [US2] 在 `app/api/router.py` 实现 `GET /api/v2/inventory/devices`、`GET /api/v2/inventory/devices/{device_id}`、`GET .../observations`
-- [ ] T025 [US2] 创建 `web/src/pages/InventoryPage.tsx`：省份/运营商选择、设备表、观测次数、当前版本、质量提示和分页
-- [ ] T026 [US2] 创建 `web/src/pages/InventoryDevicePage.tsx`：设备状态、当前版本、观测历史和局点归属提示
-- [ ] T027 [US2] 在 `web/src/App.tsx` 注册 `/inventory` 和 `/inventory/devices/:deviceId`
+- [x] T023 [US2] 实现 `app/services/inventory/queries.py`：设备分页查询、当前局点过滤、设备详情、观测历史和质量标记
+- [x] T024 [US2] 在 `app/api/router.py` 实现 `GET /api/v2/inventory/devices`、`GET /api/v2/inventory/devices/{device_id}`、`GET .../observations`
+- [x] T025 [US2] 创建 `web/src/pages/InventoryPage.tsx`：省份/运营商选择、设备表、观测次数、当前版本、质量提示和分页
+- [x] T026 [US2] 创建 `web/src/pages/InventoryDevicePage.tsx`：设备状态、当前版本、观测历史和局点归属提示
+- [x] T027 [US2] 在 `web/src/App.tsx` 注册 `/inventory` 和 `/inventory/devices/:deviceId`
 
 **检查点**：用户可在 3 次点击内从局点设备列表进入设备详情。
 
@@ -89,14 +89,14 @@ description: "局点设备台账实现任务列表"
 
 ### US3 测试
 
-- [ ] T028 [P] [US3] 在 `tests/test_inventory_api.py` 增加版本历史分页、方向、缺口、冲突和当前版本来源断言
-- [ ] T029 [P] [US3] 在 `web/src/pages/InventoryDevicePage.test.tsx` 覆盖版本方向、缺口和当前版本来源展示
+- [x] T028 [P] [US3] 在 `tests/test_inventory_api.py` 增加版本历史分页、方向、缺口、冲突和当前版本来源断言
+- [x] T029 [P] [US3] 在 `web/src/pages/InventoryDevicePage.test.tsx` 覆盖版本方向、缺口和当前版本来源展示
 
 ### US3 实现
 
-- [ ] T030 [US3] 扩展 `app/services/inventory/queries.py`：版本历史投影、字典序方向、缺口标记和分页
-- [ ] T031 [US3] 在 `app/api/router.py` 实现 `GET /api/v2/inventory/devices/{device_id}/version-history`
-- [ ] T032 [US3] 扩展 `web/src/pages/InventoryDevicePage.tsx`：版本时间线、方向标签、观测缺口和来源任务
+- [x] T030 [US3] 扩展 `app/services/inventory/queries.py`：版本历史投影、字典序方向、缺口标记和分页
+- [x] T031 [US3] 在 `app/api/router.py` 实现 `GET /api/v2/inventory/devices/{device_id}/version-history`
+- [x] T032 [US3] 扩展 `web/src/pages/InventoryDevicePage.tsx`：版本时间线、方向标签、观测缺口和来源任务
 
 **检查点**：设备详情可解释当前版本来源和历史版本路径。
 
@@ -108,14 +108,14 @@ description: "局点设备台账实现任务列表"
 
 ### US4 测试
 
-- [ ] T033 [P] [US4] 在 `tests/test_inventory_api.py` 覆盖五类质量问题、过滤、分页、任务/设备追溯和日志补充包排除
-- [ ] T034 [P] [US4] 在 `web/src/pages/InventoryPage.test.tsx` 覆盖质量过滤和跳转入口
+- [x] T033 [P] [US4] 在 `tests/test_inventory_api.py` 覆盖五类质量问题、过滤、分页、任务/设备追溯和日志补充包排除
+- [x] T034 [P] [US4] 在 `web/src/pages/InventoryPage.test.tsx` 覆盖质量过滤和跳转入口
 
 ### US4 实现
 
-- [ ] T035 [US4] 扩展 `app/services/inventory/queries.py`：解析结果和观测投影生成质量问题及确定性 `issue_id`
-- [ ] T036 [US4] 在 `app/api/router.py` 实现 `GET /api/v2/inventory/quality-issues`
-- [ ] T037 [US4] 扩展 `web/src/pages/InventoryPage.tsx`：质量问题 Tab、类型/局点过滤和跳转链接
+- [x] T035 [US4] 扩展 `app/services/inventory/queries.py`：解析结果和观测投影生成质量问题及确定性 `issue_id`
+- [x] T036 [US4] 在 `app/api/router.py` 实现 `GET /api/v2/inventory/quality-issues`
+- [x] T037 [US4] 扩展 `web/src/pages/InventoryPage.tsx`：质量问题 Tab、类型/局点过滤和跳转链接
 
 **检查点**：质量问题可见、可过滤、可追溯。
 
@@ -123,13 +123,13 @@ description: "局点设备台账实现任务列表"
 
 **目的**：完成展示闭环、文档一致性和全量验证。
 
-- [ ] T038 在 `web/src/pages/TaskListPage.tsx` 增加包类型选择和条件字段；巡检包移除人工版本/设备 ID，日志补充包隐藏局点字段
-- [ ] T039 在 `web/src/pages/TaskDetailPage.tsx` 和 `web/src/components/task-detail/TaskInventoryPanel.tsx` 展示台账证据、未归档原因和日志补充包不适用
-- [ ] T040 补充 `web/e2e/inventory.spec.ts` 日志补充包完整入口：上传、任务详情、无设备观测
-- [ ] T041 更新 `docs/architecture.md` 和 `docs/data-model.md` 的台账分层、存储、任务生命周期和失败语义
-- [ ] T042 运行 `python build.py lint`、`python build.py test`、`python build.py contract`、`python build.py gen-web-api`
-- [ ] T043 运行 `python build.py verify`、`python build.py web-build`、`python build.py e2e`
-- [ ] T044 按 `quickstart.md` 手动核对成功、缺版本、冲突、缺设备、缺局点、缺文件和日志补充包展示
+- [x] T038 在 `web/src/pages/TaskListPage.tsx` 增加包类型选择和条件字段；巡检包移除人工版本/设备 ID，日志补充包隐藏局点字段
+- [x] T039 在 `web/src/pages/TaskDetailPage.tsx` 和 `web/src/components/task-detail/TaskInventoryPanel.tsx` 展示台账证据、未归档原因和日志补充包不适用
+- [x] T040 补充 `web/e2e/inventory.spec.ts` 日志补充包完整入口：上传、任务详情、无设备观测
+- [x] T041 更新 `docs/architecture.md` 和 `docs/data-model.md` 的台账分层、存储、任务生命周期和失败语义
+- [x] T042 运行 `python build.py lint`、`python build.py test`、`python build.py contract`、`python build.py gen-web-api`
+- [x] T043 运行 `python build.py verify`、`python build.py web-build`、`python build.py e2e`
+- [x] T044 按 `quickstart.md` 手动核对成功、缺版本、冲突、缺设备、缺局点、缺文件和日志补充包展示
 
 ## 依赖与执行顺序
 

@@ -20,6 +20,7 @@ from app.inspectors.registry import registry
 from app.models.db import TaskRecord, init_db, session_factory
 from app.models.schemas import (
     InspectionTask,
+    PackageKind,
     RebuildMode,
     RebuildRequest,
     TaskCreated,
@@ -192,7 +193,7 @@ class TaskService:
                 session.commit()
 
     def _execute(self, task_id: str) -> None:
-        package, customer, version, name, mode, trigger = self._task_info(task_id)
+        package, customer, version, name, mode, trigger, package_kind = self._task_info(task_id)
         if package is None:
             return
         self._update_status(task_id, TaskStatus.RUNNING)
@@ -226,6 +227,7 @@ class TaskService:
                     name=name,
                     mode=mode,
                     trigger=trigger,
+                    package_kind=package_kind,
                 )
             else:
                 executed = run_task(
@@ -236,6 +238,7 @@ class TaskService:
                     task_id=task_id,
                     mode=mode,
                     trigger=trigger,
+                    package_kind=package_kind,
                 )
                 if executed.status == TaskStatus.FAILED:
                     TASKS_DURATION.observe((NOW(UTC) - started).total_seconds())
@@ -263,6 +266,7 @@ class TaskService:
         name: str | None,
         mode: TaskMode,
         trigger: TaskTrigger,
+        package_kind: PackageKind = PackageKind.INSPECTION,
     ) -> None:
         """执行显式重建重跑；预检和输出清理已经通过 TaskService.rebuild 完成。"""
         old_task = load_task_meta(settings.output, task_id)
@@ -289,6 +293,7 @@ class TaskService:
                 mode=mode,
                 trigger=trigger,
                 created_at=old_task.created_at if old_task else None,
+                package_kind=package_kind,
             )
             if executed.status != TaskStatus.FAILED:
                 append_log(settings.output, task_id, "info", "全量重建重跑完成", **log_detail)
@@ -302,7 +307,9 @@ class TaskService:
         )
         append_log(settings.output, task_id, "info", "增量重建重跑完成", **log_detail)
 
-    def _task_info(self, task_id: str) -> tuple[Path | None, dict, str | None, str | None, TaskMode, TaskTrigger]:
+    def _task_info(
+        self, task_id: str
+    ) -> tuple[Path | None, dict, str | None, str | None, TaskMode, TaskTrigger, PackageKind]:
         """获取任务执行信息；本地任务从 output/ 元数据兜底。"""
         with session_factory() as session:
             record = session.get(TaskRecord, task_id)
@@ -314,16 +321,18 @@ class TaskService:
                     record.name,
                     TaskMode(record.mode),
                     TaskTrigger(record.trigger),
+                    PackageKind(getattr(record, "package_kind", "inspection")),
                 )
 
         task = load_task_meta(settings.output, task_id)
         if task is None or task.system is None:
-            return None, {}, None, None, TaskMode.LOCAL, TaskTrigger.CLI
+            return None, {}, None, None, TaskMode.LOCAL, TaskTrigger.CLI, PackageKind.INSPECTION
         package_file = task.system.package_file
         package = settings.uploads / task_id / package_file
         if not package.exists():
             package = settings.uploads / package_file
-        return package, task.system.customer, task.system.version, task.name, task.mode, task.trigger
+        package_kind = task.package_kind or PackageKind.INSPECTION
+        return package, task.system.customer, task.system.version, task.name, task.mode, task.trigger, package_kind
 
     def _rebuild_package(self, task_id: str) -> tuple[InspectionTask, Path]:
         """读取重建请求的既有任务元数据和原始上传包。"""
@@ -355,6 +364,7 @@ class TaskService:
         version: str | None,
         product: str | None = None,
         device_id: str | None = None,
+        package_kind: PackageKind = PackageKind.INSPECTION,
     ) -> TaskCreated:
         task_id = generate_task_id(package_file)
         customer: dict[str, str] = {}
@@ -379,6 +389,7 @@ class TaskService:
                     customer=customer,
                     version=version,
                     stats={},
+                    package_kind=package_kind.value,
                     created_at=NOW(UTC),
                 )
             )

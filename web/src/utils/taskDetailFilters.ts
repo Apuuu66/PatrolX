@@ -2,7 +2,7 @@ import type { RuleStatus } from "../api/http";
 import { STATUS_KEYS, type StatusFilter } from "./taskFilter.ts";
 import type { RuleSortMode } from "./ruleResults.ts";
 
-export type TaskDetailTab = "rules" | "logs" | "report";
+export type TaskDetailTab = "rules" | "inventory" | "logs" | "report";
 
 export interface TaskDetailFilterState {
   tab: TaskDetailTab;
@@ -20,7 +20,7 @@ export interface TaskDetailFilterChanges {
   sort?: RuleSortMode;
 }
 
-const TABS: TaskDetailTab[] = ["rules", "logs", "report"];
+const TABS: TaskDetailTab[] = ["rules", "inventory", "logs", "report"];
 
 export function parseTaskDetailFilters(
   searchParams: URLSearchParams,

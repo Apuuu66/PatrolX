@@ -126,6 +126,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/inventory/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Inventory Devices */
+        get: operations["listInventoryDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inventory/devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Inventory Device */
+        get: operations["getInventoryDevice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inventory/devices/{device_id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Inventory Observations */
+        get: operations["listInventoryObservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inventory/devices/{device_id}/version-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Inventory Version History */
+        get: operations["getInventoryVersionHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inventory/quality-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Inventory Quality Issues */
+        get: operations["listInventoryQualityIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/overview": {
         parameters: {
             query?: never;
@@ -135,6 +220,83 @@ export interface paths {
         };
         /** Get Overview V2 */
         get: operations["getOverviewV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/device-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Task Device Id V2 */
+        patch: operations["updateTaskDeviceIdV2"];
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Measurement Version Candidates V2
+         * @description 按设备返回系统版本候选；不读取历史点位。
+         */
+        get: operations["getMeasurementVersionCandidatesV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Measurement Version Compare V2
+         * @description 按需返回同设备不同版本的单指标任务对比。
+         */
+        get: operations["getMeasurementVersionCompareV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/history-trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Measurement History Trend V2
+         * @description 按需返回单指标跨任务历史趋势；历史索引缺失时明确降级。
+         */
+        get: operations["getMeasurementHistoryTrendV2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -283,83 +445,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/tasks/{task_id}/device-id": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Task Device Id V2 */
-        patch: operations["updateTaskDeviceIdV2"];
-        trace?: never;
-    };
-    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/history-trend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Measurement History Trend V2
-         * @description 按设备、测量单元、指标、行对象和周期返回 7 天历史对比趋势。
-         */
-        get: operations["getMeasurementHistoryTrendV2"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-candidates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Measurement Version Candidates V2
-         * @description 返回同设备、已完成任务的系统版本候选；版本缺失时显示版本未知。
-         */
-        get: operations["getMeasurementVersionCandidatesV2"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-compare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Measurement Version Compare V2
-         * @description 按任务、版本和当前维度返回两条独立曲线与均值摘要。
-         */
-        get: operations["getMeasurementVersionCompareV2"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/inspectors": {
         parameters: {
             query?: never;
@@ -445,6 +530,26 @@ export interface paths {
         /** Update Dict V2 */
         put: operations["updateDictV2"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v3/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Task V3
+         * @description 创建 v3 任务；版本和设备身份不允许人工输入。
+         */
+        post: operations["createTaskV3"];
         delete?: never;
         options?: never;
         head?: never;
@@ -676,6 +781,20 @@ export interface components {
             /** Device Id */
             device_id?: string | null;
         };
+        /** Body_createTaskV3 */
+        Body_createTaskV3: {
+            /** Package File */
+            package_file: string;
+            package_kind: components["schemas"]["PackageKind"];
+            /** Name */
+            name?: string | null;
+            /** Province */
+            province?: string | null;
+            /** Operator */
+            operator?: string | null;
+            /** Product */
+            product?: string | null;
+        };
         /** Body_importKpiMeasurementUnitsV5 */
         Body_importKpiMeasurementUnitsV5: {
             /** File */
@@ -764,6 +883,8 @@ export interface components {
             stats: components["schemas"]["TaskStats"];
             preparation?: components["schemas"]["DataPreparation"] | null;
             system?: components["schemas"]["SystemInspection"] | null;
+            package_kind?: components["schemas"]["PackageKind"] | null;
+            inventory?: components["schemas"]["TaskInventory"] | null;
         };
         /** InspectorInfo */
         InspectorInfo: {
@@ -828,6 +949,189 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+        };
+        /** InventoryDevice */
+        InventoryDevice: {
+            /** Device Id */
+            device_id: string;
+            /** Province */
+            province: string;
+            /** Device Name */
+            device_name: string;
+            /** Site Key */
+            site_key: string;
+            /** Operator */
+            operator: string;
+            /** Current Version */
+            current_version?: string | null;
+            /** Current Version Observed At */
+            current_version_observed_at?: string | null;
+            /** Current Version Task Id */
+            current_version_task_id?: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Observation Count */
+            observation_count: number;
+            /** Site Change Count */
+            site_change_count: number;
+            /** Has Site Conflict */
+            has_site_conflict: boolean;
+            /** Quality Issue Types */
+            quality_issue_types?: components["schemas"]["InventoryQualityIssueType"][];
+        };
+        /** InventoryDeviceList */
+        InventoryDeviceList: {
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Items */
+            items: components["schemas"]["InventoryDevice"][];
+        };
+        /**
+         * InventoryFieldStatus
+         * @enum {string}
+         */
+        InventoryFieldStatus: "ok" | "missing" | "conflict" | "error" | "not_applicable";
+        /** InventoryObservation */
+        InventoryObservation: {
+            /** Observation Id */
+            observation_id: string;
+            /** Task Id */
+            task_id: string;
+            /**
+             * Task Status
+             * @constant
+             */
+            task_status: "completed";
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Province */
+            province: string;
+            /** Operator */
+            operator: string;
+            /** Site Key */
+            site_key: string;
+            /** Device Name */
+            device_name: string;
+            /**
+             * Identity Status
+             * @constant
+             */
+            identity_status: "ok";
+            version_status: components["schemas"]["InventoryFieldStatus"];
+            /** Raw Version */
+            raw_version?: string | null;
+            /** Version Source Files */
+            version_source_files?: string[];
+            /** Conflicts */
+            conflicts?: {
+                [key: string]: unknown;
+            }[];
+            /** Snapshot */
+            snapshot?: {
+                [key: string]: unknown;
+            };
+        };
+        /** InventoryObservationList */
+        InventoryObservationList: {
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Items */
+            items: components["schemas"]["InventoryObservation"][];
+        };
+        /**
+         * InventoryParseStatus
+         * @enum {string}
+         */
+        InventoryParseStatus: "archived" | "not_archived" | "not_applicable" | "failed";
+        /** InventoryQualityIssue */
+        InventoryQualityIssue: {
+            /** Issue Id */
+            issue_id: string;
+            issue_type: components["schemas"]["InventoryQualityIssueType"];
+            /** Message */
+            message: string;
+            /** Task Id */
+            task_id?: string | null;
+            /** Device Id */
+            device_id?: string | null;
+            /** Province */
+            province?: string | null;
+            /** Operator */
+            operator?: string | null;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /** Detail */
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        /** InventoryQualityIssueList */
+        InventoryQualityIssueList: {
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Items */
+            items: components["schemas"]["InventoryQualityIssue"][];
+        };
+        /**
+         * InventoryQualityIssueType
+         * @enum {string}
+         */
+        InventoryQualityIssueType: "missing_site" | "missing_device_identity" | "missing_version" | "version_conflict" | "device_identity_conflict" | "site_ownership_change";
+        /** InventoryVersionHistory */
+        InventoryVersionHistory: {
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Items */
+            items: components["schemas"]["InventoryVersionPoint"][];
+        };
+        /** InventoryVersionPoint */
+        InventoryVersionPoint: {
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Task Id */
+            task_id: string;
+            version_status: components["schemas"]["InventoryFieldStatus"];
+            /** Raw Version */
+            raw_version?: string | null;
+            direction?: components["schemas"]["VersionDirection"] | null;
+            /**
+             * Has Gap
+             * @default false
+             */
+            has_gap: boolean;
         };
         /** KpiMeasurementBinding */
         KpiMeasurementBinding: {
@@ -1131,6 +1435,129 @@ export interface components {
             role: string;
         };
         /**
+         * MeasurementBaselineSignificance
+         * @enum {string}
+         */
+        MeasurementBaselineSignificance: "insufficient" | "normal" | "higher" | "lower";
+        /** MeasurementHistoryBaselinePoint */
+        MeasurementHistoryBaselinePoint: {
+            /** Time Label */
+            time_label: string;
+            /** Baseline Value */
+            baseline_value: number | null;
+            /** Current Value */
+            current_value: number | null;
+            /** Deviation */
+            deviation: number | null;
+            /** Deviation Ratio */
+            deviation_ratio: number | null;
+            /** Sample Count */
+            sample_count: number;
+            /** Date Count */
+            date_count: number;
+            significance: components["schemas"]["MeasurementBaselineSignificance"];
+        };
+        /** MeasurementHistoryCoverage */
+        MeasurementHistoryCoverage: {
+            /** History Task Count */
+            history_task_count: number;
+            /** History Date Count */
+            history_date_count: number;
+            /** History Point Count */
+            history_point_count: number;
+            /** Current Point Count */
+            current_point_count: number;
+            /** Latest History Date */
+            latest_history_date?: string | null;
+        };
+        /** MeasurementHistoryDateSeries */
+        MeasurementHistoryDateSeries: {
+            /** Date */
+            date: string;
+            /** Source Task Ids */
+            source_task_ids: string[];
+            /** Points */
+            points: components["schemas"]["MeasurementHistoryPoint"][];
+        };
+        /** MeasurementHistoryMatch */
+        MeasurementHistoryMatch: {
+            status: components["schemas"]["MeasurementHistoryMatchStatus"];
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Message */
+            message: string;
+        };
+        /**
+         * MeasurementHistoryMatchStatus
+         * @enum {string}
+         */
+        MeasurementHistoryMatchStatus: "matched" | "degraded" | "no_history";
+        /** MeasurementHistoryPoint */
+        MeasurementHistoryPoint: {
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /** Date */
+            date: string;
+            /** Time Label */
+            time_label: string;
+            /** Value */
+            value: number;
+            /** Task Id */
+            task_id: string;
+            /** Source File */
+            source_file: string;
+            /** Line Number */
+            line_number?: number | null;
+        };
+        /**
+         * MeasurementHistoryTrend
+         * @description KPI 单指标跨任务历史趋势响应。
+         */
+        MeasurementHistoryTrend: {
+            /** Task Id */
+            task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Device Id */
+            device_id?: string | null;
+            /** Object Key */
+            object_key: string;
+            /** Period Minutes */
+            period_minutes?: number | null;
+            window: components["schemas"]["MeasurementHistoryWindow"];
+            match: components["schemas"]["MeasurementHistoryMatch"];
+            coverage: components["schemas"]["MeasurementHistoryCoverage"];
+            /** Current Points */
+            current_points: components["schemas"]["MeasurementHistoryPoint"][];
+            /** History Series */
+            history_series: components["schemas"]["MeasurementHistoryDateSeries"][];
+            /** Baseline Points */
+            baseline_points: components["schemas"]["MeasurementHistoryBaselinePoint"][];
+            /** Source Tasks */
+            source_tasks: string[];
+        };
+        /** MeasurementHistoryWindow */
+        MeasurementHistoryWindow: {
+            /** End Date */
+            end_date: string;
+            /** Start Date */
+            start_date: string;
+            /** Days */
+            days: number;
+            /**
+             * Anchor Measured At
+             * Format: date-time
+             */
+            anchor_measured_at: string;
+        };
+        /**
          * MeasurementMetricDetail
          * @description KPI 单指标完整明细。
          */
@@ -1146,6 +1573,131 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * MeasurementVersionCandidate
+         * @description 同设备历史任务的版本分组。
+         */
+        MeasurementVersionCandidate: {
+            /** Version */
+            version: string | null;
+            /** Version Known */
+            version_known: boolean;
+            /** Latest Task Id */
+            latest_task_id: string;
+            /**
+             * Latest Completed At
+             * Format: date-time
+             */
+            latest_completed_at: string;
+            /** Task Count */
+            task_count: number;
+            /** Tasks */
+            tasks: components["schemas"]["MeasurementVersionCandidateTask"][];
+        };
+        /**
+         * MeasurementVersionCandidateList
+         * @description 同设备版本候选响应。
+         */
+        MeasurementVersionCandidateList: {
+            /** Task Id */
+            task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Device Id */
+            device_id?: string | null;
+            /** Current Version */
+            current_version: string | null;
+            /** Items */
+            items: components["schemas"]["MeasurementVersionCandidate"][];
+        };
+        /**
+         * MeasurementVersionCandidateTask
+         * @description 同设备候选版本中的任务。
+         */
+        MeasurementVersionCandidateTask: {
+            /** Task Id */
+            task_id: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Version */
+            version?: string | null;
+            /** Version Known */
+            version_known: boolean;
+        };
+        /**
+         * MeasurementVersionComparison
+         * @description 同设备不同系统版本的单指标对比响应。
+         */
+        MeasurementVersionComparison: {
+            /** Task Id */
+            task_id: string;
+            /** Baseline Task Id */
+            baseline_task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Device Id */
+            device_id?: string | null;
+            /** Object Key */
+            object_key: string;
+            /** Period Minutes */
+            period_minutes?: number | null;
+            /** Current Version */
+            current_version: string | null;
+            /** Baseline Version */
+            baseline_version: string | null;
+            current_task: components["schemas"]["MeasurementVersionComparisonTask"];
+            baseline_task?: components["schemas"]["MeasurementVersionComparisonTask"] | null;
+            /** Current Points */
+            current_points: components["schemas"]["MeasurementHistoryPoint"][];
+            /** Baseline Points */
+            baseline_points: components["schemas"]["MeasurementHistoryPoint"][];
+            summary: components["schemas"]["MeasurementVersionComparisonSummary"];
+            match: components["schemas"]["MeasurementHistoryMatch"];
+        };
+        /** MeasurementVersionComparisonSummary */
+        MeasurementVersionComparisonSummary: {
+            /** Current Value */
+            current_value: number | null;
+            /** Baseline Value */
+            baseline_value: number | null;
+            /** Absolute Change */
+            absolute_change: number | null;
+            /** Change Ratio */
+            change_ratio: number | null;
+            /** @default unknown */
+            direction: components["schemas"]["MeasurementVersionDirection"];
+            /** Sample Count */
+            sample_count: number;
+            /** Message */
+            message: string;
+        };
+        /**
+         * MeasurementVersionComparisonTask
+         * @description 参与版本对比的单个任务来源。
+         */
+        MeasurementVersionComparisonTask: {
+            /** Task Id */
+            task_id: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Version */
+            version: string | null;
+            /** Version Known */
+            version_known: boolean;
+        };
+        /**
+         * MeasurementVersionDirection
+         * @enum {string}
+         */
+        MeasurementVersionDirection: "up" | "down" | "flat" | "unknown";
         /** Metric */
         Metric: {
             /** Key */
@@ -1179,6 +1731,12 @@ export interface components {
             finding_count: number;
             status_counts: components["schemas"]["Summary"];
         };
+        /**
+         * PackageKind
+         * @description 上传任务包类型；日志补充包显式声明且不参与设备台账。
+         * @enum {string}
+         */
+        PackageKind: "inspection" | "log_supplement";
         /** PreparationIssue */
         PreparationIssue: {
             type: components["schemas"]["PreparationIssueType"];
@@ -1347,6 +1905,94 @@ export interface components {
             /** Task Id */
             task_id: string;
         };
+        /**
+         * TaskDeviceIdUpdateRequest
+         * @description 任务设备 ID 修改请求。
+         */
+        TaskDeviceIdUpdateRequest: {
+            /** Device Id */
+            device_id: string;
+        };
+        /** TaskInventory */
+        TaskInventory: {
+            package_kind: components["schemas"]["PackageKind"];
+            status: components["schemas"]["InventoryParseStatus"];
+            /** Parser Id */
+            parser_id: string;
+            /** Parser Version */
+            parser_version: string;
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Not Applicable Reason */
+            not_applicable_reason?: string | null;
+            /** Not Archived Reason */
+            not_archived_reason?: string | null;
+            site?: components["schemas"]["TaskInventorySite"] | null;
+            device?: components["schemas"]["TaskInventoryDevice"] | null;
+            version?: components["schemas"]["TaskInventoryVersion"] | null;
+            /** Source Files */
+            source_files: string[];
+            /** Conflicts */
+            conflicts: {
+                [key: string]: unknown;
+            }[];
+            /** Errors */
+            errors: {
+                [key: string]: unknown;
+            }[];
+            archived: components["schemas"]["TaskInventoryArchive"];
+        };
+        /** TaskInventoryArchive */
+        TaskInventoryArchive: {
+            /** Archived */
+            archived: boolean;
+            /** Device Id */
+            device_id?: string | null;
+            /** Observation Id */
+            observation_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** TaskInventoryDevice */
+        TaskInventoryDevice: {
+            status: components["schemas"]["InventoryFieldStatus"];
+            /** Raw Names */
+            raw_names?: string[];
+            /** Normalized Name */
+            normalized_name?: string | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Source Lines */
+            source_lines?: number[];
+        };
+        /** TaskInventorySite */
+        TaskInventorySite: {
+            status: components["schemas"]["InventoryFieldStatus"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "upload_metadata" | "none";
+            /** Province */
+            province?: string | null;
+            /** Operator */
+            operator?: string | null;
+            /** Site Key */
+            site_key?: string | null;
+        };
+        /** TaskInventoryVersion */
+        TaskInventoryVersion: {
+            status: components["schemas"]["InventoryFieldStatus"];
+            /** Raw Version */
+            raw_version?: string | null;
+            /** Candidates */
+            candidates?: string[];
+            /** Source Lines */
+            source_lines?: number[];
+        };
         /** TaskListResponse */
         TaskListResponse: {
             /** Items */
@@ -1414,6 +2060,10 @@ export interface components {
             stats: components["schemas"]["TaskStats"];
             preparation?: components["schemas"]["DataPreparation"] | null;
             system?: components["schemas"]["SystemInspection"] | null;
+            package_kind?: components["schemas"]["PackageKind"] | null;
+            inventory?: components["schemas"]["TaskInventory"] | null;
+            /** Device Id */
+            device_id?: string | null;
             /** Customer Province */
             customer_province?: string | null;
             /** Customer Operator */
@@ -1422,8 +2072,6 @@ export interface components {
             customer_product?: string | null;
             /** Customer Version */
             customer_version?: string | null;
-            /** Device Id */
-            device_id?: string | null;
         };
         /**
          * TaskTrigger
@@ -1490,246 +2138,6 @@ export interface components {
              */
             updated_at: string;
         };
-        /** TaskDeviceIdUpdateRequest */
-        TaskDeviceIdUpdateRequest: {
-            /** Device Id */
-            device_id: string;
-        };
-        /** MeasurementHistoryWindow */
-        MeasurementHistoryWindow: {
-            /** End Date */
-            end_date: string;
-            /** Start Date */
-            start_date: string;
-            /** Days */
-            days: number;
-            /**
-             * Anchor Measured At
-             * Format: date-time
-             */
-            anchor_measured_at: string;
-        };
-        /** MeasurementHistoryMatch */
-        MeasurementHistoryMatch: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "matched" | "degraded" | "no_history";
-            /** Reason Code */
-            reason_code: string | null;
-            /** Message */
-            message: string;
-        };
-        /** MeasurementHistoryCoverage */
-        MeasurementHistoryCoverage: {
-            /** History Task Count */
-            history_task_count: number;
-            /** History Date Count */
-            history_date_count: number;
-            /** History Point Count */
-            history_point_count: number;
-            /** Current Point Count */
-            current_point_count: number;
-            /** Latest History Date */
-            latest_history_date: string | null;
-        };
-        /** MeasurementHistoryPoint */
-        MeasurementHistoryPoint: {
-            /**
-             * Measured At
-             * Format: date-time
-             */
-            measured_at: string;
-            /** Date */
-            date: string;
-            /** Time Label */
-            time_label: string;
-            /** Value */
-            value: number;
-            /** Task Id */
-            task_id: string;
-            /** Source File */
-            source_file: string;
-            /** Line Number */
-            line_number: number | null;
-        };
-        /** MeasurementHistoryDateSeries */
-        MeasurementHistoryDateSeries: {
-            /** Date */
-            date: string;
-            /** Source Task Ids */
-            source_task_ids: string[];
-            /** Points */
-            points: components["schemas"]["MeasurementHistoryPoint"][];
-        };
-        /** MeasurementHistoryBaselinePoint */
-        MeasurementHistoryBaselinePoint: {
-            /** Time Label */
-            time_label: string;
-            /** Baseline Value */
-            baseline_value: number | null;
-            /** Current Value */
-            current_value: number | null;
-            /** Deviation */
-            deviation: number | null;
-            /** Deviation Ratio */
-            deviation_ratio: number | null;
-            /** Sample Count */
-            sample_count: number;
-            /** Date Count */
-            date_count: number;
-            /**
-             * Significance
-             * @enum {string}
-             */
-            significance: "insufficient" | "normal" | "higher" | "lower";
-        };
-        /** MeasurementVersionDirection */
-        MeasurementVersionDirection: {
-            /**
-             * Direction
-             * @enum {string}
-             */
-            direction?: "up" | "down" | "flat" | "unknown";
-        };
-        /** MeasurementVersionComparisonTask */
-        MeasurementVersionComparisonTask: {
-            /** Task Id */
-            task_id: string;
-            /** Completed At */
-            completed_at: string | null;
-            /** Version */
-            version: string | null;
-            /** Version Known */
-            version_known: boolean;
-        };
-        /** MeasurementVersionCandidateTask */
-        MeasurementVersionCandidateTask: {
-            /** Task Id */
-            task_id: string;
-            /** Completed At */
-            completed_at: string | null;
-            /** Version */
-            version: string | null;
-            /** Version Known */
-            version_known: boolean;
-        };
-        /** MeasurementVersionCandidate */
-        MeasurementVersionCandidate: {
-            /** Version */
-            version: string | null;
-            /** Version Known */
-            version_known: boolean;
-            /** Latest Task Id */
-            latest_task_id: string;
-            /**
-             * Latest Completed At
-             * Format: date-time
-             */
-            latest_completed_at: string;
-            /** Task Count */
-            task_count: number;
-            /** Tasks */
-            tasks: components["schemas"]["MeasurementVersionCandidateTask"][];
-        };
-        /** MeasurementVersionCandidateList */
-        MeasurementVersionCandidateList: {
-            /** Task Id */
-            task_id: string;
-            /** Rule Code */
-            rule_code: string;
-            /** Measurement Unit Id */
-            measurement_unit_id: string;
-            /** Metric Resource Id */
-            metric_resource_id: string;
-            /** Device Id */
-            device_id: string | null;
-            /** Current Version */
-            current_version: string | null;
-            /** Items */
-            items: components["schemas"]["MeasurementVersionCandidate"][];
-        };
-        /** MeasurementVersionComparisonSummary */
-        MeasurementVersionComparisonSummary: {
-            /** Current Value */
-            current_value: number | null;
-            /** Baseline Value */
-            baseline_value: number | null;
-            /** Absolute Change */
-            absolute_change: number | null;
-            /** Change Ratio */
-            change_ratio: number | null;
-            /**
-             * Direction
-             * @enum {string}
-             */
-            direction: "up" | "down" | "flat" | "unknown";
-            /** Sample Count */
-            sample_count: number;
-            /** Message */
-            message: string;
-        };
-        /** MeasurementVersionComparison */
-        MeasurementVersionComparison: {
-            /** Task Id */
-            task_id: string;
-            /** Baseline Task Id */
-            baseline_task_id: string;
-            /** Rule Code */
-            rule_code: string;
-            /** Measurement Unit Id */
-            measurement_unit_id: string;
-            /** Metric Resource Id */
-            metric_resource_id: string;
-            /** Device Id */
-            device_id: string | null;
-            /** Object Key */
-            object_key: string;
-            /** Period Minutes */
-            period_minutes: number | null;
-            /** Current Version */
-            current_version: string | null;
-            /** Baseline Version */
-            baseline_version: string | null;
-            current_task: components["schemas"]["MeasurementVersionComparisonTask"];
-            /** Baseline Task */
-            baseline_task: components["schemas"]["MeasurementVersionComparisonTask"] | null;
-            /** Current Points */
-            current_points: components["schemas"]["MeasurementHistoryPoint"][];
-            /** Baseline Points */
-            baseline_points: components["schemas"]["MeasurementHistoryPoint"][];
-            summary: components["schemas"]["MeasurementVersionComparisonSummary"];
-            match: components["schemas"]["MeasurementHistoryMatch"];
-        };
-        /** MeasurementHistoryTrend */
-        MeasurementHistoryTrend: {
-            /** Task Id */
-            task_id: string;
-            /** Rule Code */
-            rule_code: string;
-            /** Measurement Unit Id */
-            measurement_unit_id: string;
-            /** Metric Resource Id */
-            metric_resource_id: string;
-            /** Device Id */
-            device_id: string | null;
-            /** Object Key */
-            object_key: string;
-            /** Period Minutes */
-            period_minutes: number | null;
-            window: components["schemas"]["MeasurementHistoryWindow"];
-            match: components["schemas"]["MeasurementHistoryMatch"];
-            coverage: components["schemas"]["MeasurementHistoryCoverage"];
-            /** Current Points */
-            current_points: components["schemas"]["MeasurementHistoryPoint"][];
-            /** History Series */
-            history_series: components["schemas"]["MeasurementHistoryDateSeries"][];
-            /** Baseline Points */
-            baseline_points: components["schemas"]["MeasurementHistoryBaselinePoint"][];
-            /** Source Tasks */
-            source_tasks: string[];
-        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1743,6 +2151,11 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /**
+         * VersionDirection
+         * @enum {string}
+         */
+        VersionDirection: "upgrade" | "downgrade" | "unchanged";
     };
     responses: never;
     parameters: never;
@@ -2089,6 +2502,179 @@ export interface operations {
             };
         };
     };
+    listInventoryDevices: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                province?: string | null;
+                operator?: string | null;
+                quality_status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryDeviceList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getInventoryDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryDevice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listInventoryObservations: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                order?: string;
+                site_key?: string | null;
+            };
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryObservationList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getInventoryVersionHistory: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVersionHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listInventoryQualityIssues: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                issue_type?: components["schemas"]["InventoryQualityIssueType"] | null;
+                province?: string | null;
+                operator?: string | null;
+                task_id?: string | null;
+                device_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryQualityIssueList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     getOverviewV2: {
         parameters: {
             query?: never;
@@ -2105,6 +2691,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OverviewSummary"];
+                };
+            };
+        };
+    };
+    updateTaskDeviceIdV2: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskDeviceIdUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMeasurementVersionCandidatesV2: {
+        parameters: {
+            query: {
+                period_minutes: number | null;
+                object_key: string;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementVersionCandidateList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMeasurementVersionCompareV2: {
+        parameters: {
+            query: {
+                period_minutes: number | null;
+                baseline_task_id: string;
+                object_key: string;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementVersionComparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMeasurementHistoryTrendV2: {
+        parameters: {
+            query: {
+                period_minutes: number | null;
+                object_key: string;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementHistoryTrend"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2403,153 +3138,6 @@ export interface operations {
             };
         };
     };
-    updateTaskDeviceIdV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TaskDeviceIdUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    getMeasurementHistoryTrendV2: {
-        parameters: {
-            query: {
-                object_key: string;
-                period_minutes: number | null;
-            };
-            header?: never;
-            path: {
-                task_id: string;
-                rule_code: string;
-                measurement_unit_id: string;
-                metric_resource_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeasurementHistoryTrend"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    getMeasurementVersionCandidatesV2: {
-        parameters: {
-            query: {
-                object_key: string;
-                period_minutes: number | null;
-            };
-            header?: never;
-            path: {
-                task_id: string;
-                rule_code: string;
-                measurement_unit_id: string;
-                metric_resource_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeasurementVersionCandidateList"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    getMeasurementVersionCompareV2: {
-        parameters: {
-            query: {
-                baseline_task_id: string;
-                object_key: string;
-                period_minutes: number | null;
-            };
-            header?: never;
-            path: {
-                task_id: string;
-                rule_code: string;
-                measurement_unit_id: string;
-                metric_resource_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeasurementVersionComparison"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     listInspectorsV2: {
         parameters: {
             query?: {
@@ -2698,6 +3286,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DictItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createTaskV3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_createTaskV3"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreated"];
                 };
             };
             /** @description Validation Error */

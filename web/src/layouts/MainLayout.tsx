@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Layout, Menu, Typography, Modal, Form, Input, Button, Tag, Space } from "antd";
 import {
+  ApartmentOutlined,
   BarChartOutlined,
   DatabaseOutlined,
   FileSearchOutlined,
@@ -79,8 +80,10 @@ export function MainLayout() {
   const { user, logout } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
   const selected =
-    location.pathname.startsWith("/tasks") || location.pathname === "/"
+    location.pathname === "/" || location.pathname.startsWith("/tasks")
       ? "/tasks"
+      : location.pathname.startsWith("/inventory")
+        ? "/inventory"
       : location.pathname.startsWith("/measurement-units")
         ? "/measurement-units"
       : location.pathname.startsWith("/inspectors")
@@ -91,6 +94,7 @@ export function MainLayout() {
 
   const menuItems = [
     { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
+    { key: "/inventory", icon: <ApartmentOutlined />, label: "局点台账" },
     { key: "/measurement-units", icon: <FundOutlined />, label: "基础指标" },
     { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
     { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },

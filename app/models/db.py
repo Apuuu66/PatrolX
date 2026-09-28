@@ -3,7 +3,20 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import JSON, DateTime, Engine, Float, String, UniqueConstraint, create_engine, inspect, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Engine,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    create_engine,
+    inspect,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.core.config import settings
@@ -23,6 +36,7 @@ class TaskRecord(Base):
     trigger: Mapped[str] = mapped_column(String(16))
     package_file: Mapped[str] = mapped_column(String(512))
     customer: Mapped[dict] = mapped_column(JSON, default=dict)
+    package_kind: Mapped[str] = mapped_column(String(32), default="inspection", index=True)
     version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     stats: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -49,10 +63,15 @@ def _rebuild_legacy_tasks(engine: Engine) -> None:
     Base.metadata.create_all(engine)
 
     columns = sorted(set(TaskRecord.__table__.columns.keys()) & legacy_columns)
+    if "package_kind" not in columns:
+        columns.append("package_kind")
     with engine.begin() as connection:
         if columns:
             names = ", ".join(columns)
-            connection.execute(text(f"INSERT INTO tasks ({names}) SELECT {names} FROM tasks_legacy"))
+            select_names = ", ".join(
+                "'inspection' AS package_kind" if name == "package_kind" else name for name in columns
+            )
+            connection.execute(text(f"INSERT INTO tasks ({names}) SELECT {select_names} FROM tasks_legacy"))
         connection.execute(text("DROP TABLE tasks_legacy"))
 
 
@@ -66,7 +85,23 @@ def init_db() -> None:
         _rebuild_legacy_tasks(engine)
     else:
         Base.metadata.create_all(engine)
+    _ensure_task_columns(engine)
     _ensure_kpi_measurement_columns(engine)
+
+
+def _ensure_task_columns(engine: Engine) -> None:
+    """为旧任务表补充台账包类型字段，旧任务统一视为巡检包。"""
+    if not inspect(engine).has_table(TaskRecord.__tablename__):
+        return
+    existing = {column["name"] for column in inspect(engine).get_columns(TaskRecord.__tablename__)}
+    if "package_kind" not in existing:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    f"ALTER TABLE {TaskRecord.__tablename__} "
+                    "ADD COLUMN package_kind VARCHAR(32) NOT NULL DEFAULT 'inspection'"
+                )
+            )
 
 
 def _ensure_kpi_measurement_columns(engine: Engine) -> None:
@@ -90,6 +125,99 @@ def _ensure_kpi_measurement_columns(engine: Engine) -> None:
         for name, ddl in wanted.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+class InventoryDevice(Base):
+    """局点设备台账当前状态；设备身份由省份和规范化设备名确定。"""
+
+    __tablename__ = "inventory_devices"
+    __table_args__ = (UniqueConstraint("province", "device_key", name="uq_inventory_device_province_key"),)
+
+    device_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    device_key: Mapped[str] = mapped_column(String(64), index=True)
+    province: Mapped[str] = mapped_column(String(64), index=True)
+    current_device_name: Mapped[str] = mapped_column(String(256))
+    current_site_key: Mapped[str] = mapped_column(String(160), index=True)
+    current_operator: Mapped[str] = mapped_column(String(64))
+    current_version_raw: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    current_version_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_version_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    current_observation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    latest_task_id: Mapped[str] = mapped_column(String(64))
+    latest_status: Mapped[str] = mapped_column(String(32), default="archived")
+    observation_count: Mapped[int] = mapped_column(Integer, default=0)
+    site_change_count: Mapped[int] = mapped_column(Integer, default=0)
+    has_site_conflict: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class InventoryObservation(Base):
+    """一次任务对一台设备的当前生效观测；重跑覆盖并保留审计。"""
+
+    __tablename__ = "inventory_observations"
+
+    observation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("inventory_devices.device_id"), index=True)
+    province: Mapped[str] = mapped_column(String(64), index=True)
+    operator: Mapped[str] = mapped_column(String(64), index=True)
+    site_key: Mapped[str] = mapped_column(String(160), index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    task_status: Mapped[str] = mapped_column(String(32), default="completed")
+    device_name: Mapped[str] = mapped_column(String(256))
+    identity_status: Mapped[str] = mapped_column(String(32), default="ok")
+    version_status: Mapped[str] = mapped_column(String(32), index=True)
+    raw_version: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    version_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    version_source_files: Mapped[list] = mapped_column(JSON, default=list)
+    device_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class InventoryParseResult(Base):
+    """任务级台账解析证据；与可重建的 inventory.json 互为快照。"""
+
+    __tablename__ = "inventory_parse_results"
+
+    task_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    package_kind: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    parser_id: Mapped[str] = mapped_column(String(64))
+    parser_version: Mapped[str] = mapped_column(String(32))
+    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    site_status: Mapped[str] = mapped_column(String(32))
+    site_source: Mapped[str] = mapped_column(String(32))
+    site_key: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    province: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    operator: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    device_status: Mapped[str] = mapped_column(String(32), index=True)
+    version_status: Mapped[str] = mapped_column(String(32), index=True)
+    source_files: Mapped[list] = mapped_column(JSON, default=list)
+    conflicts: Mapped[list] = mapped_column(JSON, default=list)
+    errors: Mapped[list] = mapped_column(JSON, default=list)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class InventoryChangeAudit(Base):
+    """台账观测新增、覆盖或退役的追加审计。"""
+
+    __tablename__ = "inventory_change_audits"
+
+    audit_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    device_id: Mapped[str] = mapped_column(String(64), index=True)
+    observation_id: Mapped[str] = mapped_column(String(64))
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    before_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    after_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class KpiMeasurementResource(Base):

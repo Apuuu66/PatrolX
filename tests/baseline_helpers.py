@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.models.db import init_db
+from app.services.tasks import task_service
 
 SAMPLE = Path(__file__).resolve().parent / "fixtures" / "sample" / "sample.zip"
 VOLATILE_KEYS = {"executed_at", "duration_ms"}
@@ -60,6 +61,10 @@ def wait_for_task(client: TestClient, task_id: str, timeout: float = 180.0) -> d
         if response.status_code == 200:
             task = response.json()
             if task["status"] in ("completed", "failed"):
+                # 后台 worker 在任务状态落为终态后马上释放 active 标记；
+                # 等待释放可避免下一个测试立即重建时读到 task_busy。
+                while task_service._active_task is not None and time.time() < deadline:
+                    time.sleep(0.01)
                 return task
         time.sleep(0.05)
     raise TimeoutError(f"任务 {task_id} 未在 {timeout}s 内完成")

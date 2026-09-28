@@ -13,6 +13,7 @@ import { TaskMetaPanel } from "../components/task-detail/TaskMetaPanel";
 import { RuleBrowser } from "../components/task-detail/RuleBrowser";
 import { TaskLogsPanel } from "../components/task-detail/TaskLogsPanel";
 import { TaskReportPanel } from "../components/task-detail/TaskReportPanel";
+import { TaskInventoryPanel } from "../components/task-detail/TaskInventoryPanel";
 import { DeviceModal, RebuildModal } from "../components/task-detail/TaskActionModals";
 import { latestTaskFailure } from "../utils/taskFailure";
 import {
@@ -171,6 +172,11 @@ export function TaskDetailPage() {
                 onRerunRule={(ruleCode) => void actions.rerunOne(ruleCode)}
               />
             ),
+          },
+          {
+            key: "inventory",
+            label: "设备台账",
+            children: <TaskInventoryPanel task={task} />,
           },
           {
             key: "logs",

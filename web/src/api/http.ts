@@ -159,6 +159,16 @@ export type UserPasswordPayload = components["schemas"]["UserPasswordRequestV1"]
 export type TaskDeleteError = TaskDeleteErrorDetail;
 export type RebuildMode = components["schemas"]["RebuildMode"];
 export type RebuildTriggerSource = components["schemas"]["RebuildRequest"]["trigger_source"];
+export type PackageKind = components["schemas"]["PackageKind"];
+export type InventoryDevice = components["schemas"]["InventoryDevice"];
+export type InventoryDeviceList = components["schemas"]["InventoryDeviceList"];
+export type InventoryObservation = components["schemas"]["InventoryObservation"];
+export type InventoryObservationList = components["schemas"]["InventoryObservationList"];
+export type InventoryVersionPoint = components["schemas"]["InventoryVersionPoint"];
+export type InventoryVersionHistory = components["schemas"]["InventoryVersionHistory"];
+export type InventoryQualityIssue = components["schemas"]["InventoryQualityIssue"];
+export type InventoryQualityIssueList = components["schemas"]["InventoryQualityIssueList"];
+export type InventoryQualityIssueType = components["schemas"]["InventoryQualityIssueType"];
 export type RebuildRequestPayload = Omit<components["schemas"]["RebuildRequest"], "confirmed"> & {
   confirmed: true;
 };
@@ -304,6 +314,61 @@ export const api = {
     return request<RuleResult>(
       `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}${query}`,
     );
+  },
+
+  createTaskV3: (form: FormData) =>
+    request<{ task_id: string }>("/api/v3/tasks", {
+      method: "POST",
+      body: form,
+    }),
+
+  listInventoryDevices: (query: { page?: number; page_size?: number; province?: string; operator?: string; quality_status?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (query.page) params.set("page", String(query.page));
+    if (query.page_size) params.set("page_size", String(query.page_size));
+    if (query.province) params.set("province", query.province);
+    if (query.operator) params.set("operator", query.operator);
+    if (query.quality_status && query.quality_status !== "all") params.set("quality_status", query.quality_status);
+    const qs = params.toString();
+    return request<InventoryDeviceList>(`/api/v2/inventory/devices${qs ? `?${qs}` : ""}`);
+  },
+
+  getInventoryDevice: (deviceId: string) =>
+    request<InventoryDevice>(`/api/v2/inventory/devices/${encodeURIComponent(deviceId)}`),
+
+  listInventoryObservations: (deviceId: string, query: { page?: number; page_size?: number; order?: "asc" | "desc"; site_key?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (query.page) params.set("page", String(query.page));
+    if (query.page_size) params.set("page_size", String(query.page_size));
+    if (query.order) params.set("order", query.order);
+    if (query.site_key) params.set("site_key", query.site_key);
+    const qs = params.toString();
+    return request<InventoryObservationList>(
+      `/api/v2/inventory/devices/${encodeURIComponent(deviceId)}/observations${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  getInventoryVersionHistory: (deviceId: string, query: { page?: number; page_size?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (query.page) params.set("page", String(query.page));
+    if (query.page_size) params.set("page_size", String(query.page_size));
+    const qs = params.toString();
+    return request<InventoryVersionHistory>(
+      `/api/v2/inventory/devices/${encodeURIComponent(deviceId)}/version-history${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  listInventoryQualityIssues: (query: { page?: number; page_size?: number; issue_type?: InventoryQualityIssueType; province?: string; operator?: string; task_id?: string; device_id?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (query.page) params.set("page", String(query.page));
+    if (query.page_size) params.set("page_size", String(query.page_size));
+    if (query.issue_type) params.set("issue_type", query.issue_type);
+    if (query.province) params.set("province", query.province);
+    if (query.operator) params.set("operator", query.operator);
+    if (query.task_id) params.set("task_id", query.task_id);
+    if (query.device_id) params.set("device_id", query.device_id);
+    const qs = params.toString();
+    return request<InventoryQualityIssueList>(`/api/v2/inventory/quality-issues${qs ? `?${qs}` : ""}`);
   },
 
   updateTaskDeviceId: (taskId: string, deviceId: string) =>

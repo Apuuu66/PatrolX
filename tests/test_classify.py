@@ -4,6 +4,11 @@ from app.core.classify import classify_member, classify_name
 from app.models.schemas import RuleCategory
 
 
+def test_classify_lst_me_to_config() -> None:
+    assert classify_name("LST ME.txt") == RuleCategory.CONFIG
+    assert classify_name("lst me.TXT") == RuleCategory.CONFIG
+
+
 def test_classify_by_pattern() -> None:
     assert classify_name("AAAService.zip") == RuleCategory.LOG
     assert classify_name("ServiceLog.zip") == RuleCategory.LOG
@@ -25,3 +30,11 @@ def test_archive_member_lock_overrides_member_name() -> None:
     assert classify_member("PerfResult_202609010101137101.zip") == RuleCategory.KPI
     assert classify_member("unknown.zip") is None
     assert classify_member("*invalid-[.zip") is None
+
+
+def test_lst_me_not_matched_by_config_rule_group() -> None:
+    import re
+
+    pattern = "^config/(?!.*LST ME\\.txt$).*$"
+    assert re.fullmatch(pattern, "config/app.ini")
+    assert re.fullmatch(pattern, "config/LST ME.txt") is None

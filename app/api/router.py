@@ -20,6 +20,7 @@ from app.core.checksum import sha256_file
 from app.core.config import settings
 from app.core.dicts import load_dicts
 from app.inspectors.registry import registry
+from app.models.db import session_factory
 from app.models.schemas import (
     DictItem,
     DictsResponse,
@@ -28,6 +29,12 @@ from app.models.schemas import (
     InspectorInfo,
     InspectorState,
     InspectorStateListResponse,
+    InventoryDevice,
+    InventoryDeviceList,
+    InventoryObservationList,
+    InventoryQualityIssueList,
+    InventoryQualityIssueType,
+    InventoryVersionHistory,
     KpiMeasurementBinding,
     KpiMeasurementBindingBatchConfirmRequest,
     KpiMeasurementBindingBatchConfirmResponse,
@@ -51,6 +58,7 @@ from app.models.schemas import (
     MeasurementVersionCandidateList,
     MeasurementVersionComparison,
     OverviewSummary,
+    PackageKind,
     RebuildRequest,
     RerunRequest,
     RuleResult,
@@ -81,6 +89,7 @@ from app.services.auth import (
     reset_user_password,
     update_user_role,
 )
+from app.services.inventory import queries as inventory_queries
 from app.services.kpi_history import get_history_trend, get_version_candidates, get_version_compare
 from app.services.kpi_measurement_units import (
     KpiMeasurementError,
@@ -225,6 +234,171 @@ async def create_task_v2(
     finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
+
+
+@v3_router.post("/tasks", response_model=TaskCreated, status_code=202, operation_id="createTaskV3")
+async def create_task_v3(
+    response: Response,
+    package_file: UploadFile = File(...),
+    package_kind: PackageKind = Form(...),
+    name: str | None = Form(None),
+    province: str | None = Form(None),
+    operator: str | None = Form(None),
+    product: str | None = Form(None),
+) -> TaskCreated:
+    """创建 v3 任务；版本和设备身份不允许人工输入。"""
+    filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
+    if len(filename.encode("utf-8")) > 255:
+        raise AppError("invalid_filename", "数据包文件名过长，请限制在 255 字节内", 400)
+    if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
+        raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
+    province_value = province.strip() if province else ""
+    operator_value = operator.strip() if operator else ""
+    product_value = product.strip() if product else ""
+    if package_kind == PackageKind.INSPECTION:
+        if not province_value:
+            raise AppError("missing_province", "巡检包必须选择省份", 400)
+        if not operator_value:
+            raise AppError("missing_operator", "巡检包必须选择运营商", 400)
+    elif province_value or operator_value or product_value:
+        raise AppError("metadata_not_applicable", "日志补充包不允许携带局点或产品元数据", 400)
+
+    task_id = generate_task_id(filename)
+    temp_path: Path | None = None
+    created: TaskCreated | None = None
+    try:
+        checksum, size, temp_path = await _receive_upload(package_file)
+        if size == 0:
+            raise AppError("invalid_package", "数据包不能为空", 400)
+        if size > settings.max_upload_mb * 1024 * 1024:
+            raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
+        if task_service.exists(task_id):
+            existing = settings.uploads / task_id / filename
+            existing_checksum = sha256_file(existing) if existing.exists() else None
+            if existing_checksum != checksum:
+                raise AppError("package_checksum_conflict", "同名任务已存在，但数据包 checksum 不同", 409)
+            response.headers["Location"] = f"/api/v3/tasks/{task_id}"
+            return TaskCreated(task_id=task_id)
+        created = task_service.reserve(
+            filename,
+            name,
+            province_value or None,
+            operator_value or None,
+            None,
+            product=product_value or None,
+            package_kind=package_kind,
+        )
+        task_dir = settings.uploads / created.task_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(temp_path, task_dir / filename)
+        response.headers["Location"] = f"/api/v3/tasks/{created.task_id}"
+        task_service.submit(created.task_id)
+        return created
+    except Exception:
+        if created is not None:
+            task_service.discard(created.task_id)
+            shutil.rmtree(settings.uploads / created.task_id, ignore_errors=True)
+            shutil.rmtree(settings.output / created.task_id, ignore_errors=True)
+        raise
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+@router.get("/inventory/devices", response_model=InventoryDeviceList, operation_id="listInventoryDevices")
+def list_inventory_devices(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    province: str | None = None,
+    operator: str | None = None,
+    quality_status: str = Query("all", pattern="^(all|issue)$"),
+) -> InventoryDeviceList:
+    with session_factory() as session:
+        items, total = inventory_queries.list_devices(
+            session,
+            page=page,
+            page_size=page_size,
+            province=province,
+            operator=operator,
+            quality_status=quality_status,
+        )
+    return InventoryDeviceList(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/inventory/devices/{device_id}", response_model=InventoryDevice, operation_id="getInventoryDevice")
+def get_inventory_device(device_id: str = PathParam()) -> InventoryDevice:
+    with session_factory() as session:
+        device = inventory_queries.get_device(session, device_id)
+    if device is None:
+        raise AppError("not_found", "设备不存在", 404)
+    return device
+
+
+@router.get(
+    "/inventory/devices/{device_id}/observations",
+    response_model=InventoryObservationList,
+    operation_id="listInventoryObservations",
+)
+def list_inventory_observations(
+    device_id: str = PathParam(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+    site_key: str | None = None,
+) -> InventoryObservationList:
+    with session_factory() as session:
+        items, total = inventory_queries.list_observations(
+            session,
+            device_id,
+            page=page,
+            page_size=page_size,
+            order=order,
+            site_key=site_key,
+        )
+    return InventoryObservationList(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get(
+    "/inventory/devices/{device_id}/version-history",
+    response_model=InventoryVersionHistory,
+    operation_id="getInventoryVersionHistory",
+)
+def get_inventory_version_history(
+    device_id: str = PathParam(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+) -> InventoryVersionHistory:
+    with session_factory() as session:
+        items, total = inventory_queries.get_version_history(session, device_id, page=page, page_size=page_size)
+    return InventoryVersionHistory(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get(
+    "/inventory/quality-issues",
+    response_model=InventoryQualityIssueList,
+    operation_id="listInventoryQualityIssues",
+)
+def list_inventory_quality_issues(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    issue_type: InventoryQualityIssueType | None = None,
+    province: str | None = None,
+    operator: str | None = None,
+    task_id: str | None = None,
+    device_id: str | None = None,
+) -> InventoryQualityIssueList:
+    with session_factory() as session:
+        items, total = inventory_queries.list_quality_issues(
+            session,
+            page=page,
+            page_size=page_size,
+            issue_type=issue_type,
+            province=province,
+            operator=operator,
+            task_id=task_id,
+            device_id=device_id,
+        )
+    return InventoryQualityIssueList(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/overview", response_model=OverviewSummary, operation_id="getOverviewV2")

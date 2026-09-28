@@ -229,6 +229,8 @@ class InspectionTask(BaseModel):
     stats: TaskStats
     preparation: DataPreparation | None = None
     system: SystemInspection | None = None
+    package_kind: "PackageKind | None" = None
+    inventory: "TaskInventory | None" = None
 
     @model_validator(mode="after")
     def validate_summary(self) -> "InspectionTask":
@@ -717,3 +719,172 @@ class UserPasswordRequestV1(BaseModel):
 
 class UserRoleRequestV1(BaseModel):
     role: Literal["admin", "viewer"]
+
+
+class PackageKind(StrEnum):
+    """上传任务包类型；日志补充包显式声明且不参与设备台账。"""
+
+    INSPECTION = "inspection"
+    LOG_SUPPLEMENT = "log_supplement"
+
+
+class InventoryParseStatus(StrEnum):
+    ARCHIVED = "archived"
+    NOT_ARCHIVED = "not_archived"
+    NOT_APPLICABLE = "not_applicable"
+    FAILED = "failed"
+
+
+class InventoryFieldStatus(StrEnum):
+    OK = "ok"
+    MISSING = "missing"
+    CONFLICT = "conflict"
+    ERROR = "error"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class InventoryObservationStatus(StrEnum):
+    ACTIVE = "active"
+    RETIRED = "retired"
+
+
+class VersionDirection(StrEnum):
+    UPGRADE = "upgrade"
+    DOWNGRADE = "downgrade"
+    UNCHANGED = "unchanged"
+
+
+class InventoryQualityIssueType(StrEnum):
+    MISSING_SITE = "missing_site"
+    MISSING_DEVICE_IDENTITY = "missing_device_identity"
+    MISSING_VERSION = "missing_version"
+    VERSION_CONFLICT = "version_conflict"
+    DEVICE_IDENTITY_CONFLICT = "device_identity_conflict"
+    SITE_OWNERSHIP_CHANGE = "site_ownership_change"
+
+
+class TaskInventorySite(BaseModel):
+    status: InventoryFieldStatus
+    source: Literal["upload_metadata", "none"]
+    province: str | None = None
+    operator: str | None = None
+    site_key: str | None = None
+
+
+class TaskInventoryDevice(BaseModel):
+    status: InventoryFieldStatus
+    raw_names: list[str] = Field(default_factory=list)
+    normalized_name: str | None = None
+    reason_code: str | None = None
+    source_lines: list[int] = Field(default_factory=list)
+
+
+class TaskInventoryVersion(BaseModel):
+    status: InventoryFieldStatus
+    raw_version: str | None = None
+    candidates: list[str] = Field(default_factory=list)
+    source_lines: list[int] = Field(default_factory=list)
+
+
+class TaskInventoryArchive(BaseModel):
+    archived: bool
+    device_id: str | None = None
+    observation_id: str | None = None
+    reason: str | None = None
+
+
+class TaskInventory(BaseModel):
+    package_kind: PackageKind
+    status: InventoryParseStatus
+    parser_id: str
+    parser_version: str
+    schema_version: int = 1
+    not_applicable_reason: str | None = None
+    not_archived_reason: str | None = None
+    site: TaskInventorySite | None = None
+    device: TaskInventoryDevice | None = None
+    version: TaskInventoryVersion | None = None
+    source_files: list[str] = Field(default_factory=list)
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+    archived: TaskInventoryArchive
+
+
+class InventoryDevice(BaseModel):
+    device_id: str
+    province: str
+    device_name: str
+    site_key: str
+    operator: str
+    current_version: str | None = None
+    current_version_observed_at: datetime | None = None
+    current_version_task_id: str | None = None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    observation_count: int = Field(ge=0)
+    site_change_count: int = Field(ge=0)
+    has_site_conflict: bool
+    quality_issue_types: list[InventoryQualityIssueType] = Field(default_factory=list)
+
+
+class PagedMeta(BaseModel):
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
+
+
+class InventoryDeviceList(PagedMeta):
+    items: list[InventoryDevice]
+
+
+class InventoryObservation(BaseModel):
+    observation_id: str
+    task_id: str
+    task_status: Literal["completed"]
+    observed_at: datetime
+    province: str
+    operator: str
+    site_key: str
+    device_name: str
+    identity_status: Literal["ok"]
+    version_status: InventoryFieldStatus
+    raw_version: str | None = None
+    version_source_files: list[str] = Field(default_factory=list)
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+    snapshot: dict[str, Any] = Field(default_factory=dict)
+
+
+class InventoryObservationList(PagedMeta):
+    items: list[InventoryObservation]
+
+
+class InventoryVersionPoint(BaseModel):
+    observed_at: datetime
+    task_id: str
+    version_status: InventoryFieldStatus
+    raw_version: str | None = None
+    direction: VersionDirection | None = None
+    has_gap: bool = False
+
+
+class InventoryVersionHistory(PagedMeta):
+    items: list[InventoryVersionPoint]
+
+
+class InventoryQualityIssue(BaseModel):
+    issue_id: str
+    issue_type: InventoryQualityIssueType
+    message: str
+    task_id: str | None = None
+    device_id: str | None = None
+    province: str | None = None
+    operator: str | None = None
+    detected_at: datetime
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class InventoryQualityIssueList(PagedMeta):
+    items: list[InventoryQualityIssue]
+
+
+InspectionTask.model_rebuild()

@@ -33,6 +33,7 @@ category:
       - .alarm
   config:
     patterns:
+      - "^LST ME\\.txt$"
       - "*config*"
       - "*配置*"
       - "*param*"

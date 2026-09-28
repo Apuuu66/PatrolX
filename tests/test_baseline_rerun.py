@@ -102,7 +102,7 @@ def test_single_rule_rerun_reports_skip_for_unmatched_sources(tmp_path: Path, mo
 
     target = load_rule(env, task_id, "config.check")
     assert target["status"] == "skip"
-    assert target["skip_reason"] == "source_patterns 未匹配到文件: ^config/.*$"
+    assert target["skip_reason"] == ("source_patterns 未匹配到文件: ^config/(?!.*LST ME[.]txt$).*$")
 
 
 def test_kpi_measurement_rerun_without_prepare_and_deterministically(tmp_path: Path, monkeypatch) -> None:

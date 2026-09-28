@@ -24,6 +24,14 @@ const MeasurementUnitsPage = lazy(() =>
   import("./pages/MeasurementUnitsPage").then(({ MeasurementUnitsPage }) => ({ default: MeasurementUnitsPage })),
 );
 const UsersPage = lazy(() => import("./pages/UsersPage").then(({ UsersPage }) => ({ default: UsersPage })));
+const InventoryPage = lazy(() =>
+  import("./pages/InventoryPage").then(({ InventoryPage }) => ({ default: InventoryPage })),
+);
+const InventoryDevicePage = lazy(() =>
+  import("./pages/InventoryDevicePage").then(({ InventoryDevicePage }) => ({
+    default: InventoryDevicePage,
+  })),
+);
 
 const PageFallback = (
   <div style={{ display: "grid", placeItems: "center", minHeight: 320 }}>
@@ -42,6 +50,8 @@ const router = createBrowserRouter([
       { path: "tasks/:taskId/rules/:ruleCode", element: <RuleDetailPage /> },
       { path: "tasks/:taskId/report", element: <ReportPage /> },
       { path: "tasks/:taskId/logs", element: <LogsPage /> },
+      { path: "inventory", element: <InventoryPage /> },
+      { path: "inventory/devices/:deviceId", element: <InventoryDevicePage /> },
       { path: "inspectors", element: <InspectorsPage /> },
       { path: "measurement-units", element: <MeasurementUnitsPage /> },
       { path: "dicts", element: <DictsPage /> },

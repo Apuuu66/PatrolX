@@ -21,10 +21,12 @@ from app.inspectors.registry import registry
 from app.models.db import init_db
 from app.models.schemas import (
     InspectionTask,
+    PackageKind,
     RuleCategory,
     RuleStatus,
     SystemInspection,
     SystemStatus,
+    TaskInventory,
     TaskMode,
     TaskStats,
     TaskStatus,
@@ -34,6 +36,8 @@ from app.services import extraction, store
 from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext
 from app.services.extraction import WORK_CATEGORIES
+from app.services.inventory.ledger import archive_inventory
+from app.services.inventory.parser import parse_inventory
 from app.services.report import render_report
 from app.services.rule_states import assert_rule_enabled, get_enabled_rule_codes
 
@@ -140,6 +144,7 @@ def run_task(
     mode: TaskMode = TaskMode.LOCAL,
     trigger: TaskTrigger = TaskTrigger.CLI,
     created_at: datetime | None = None,
+    package_kind: PackageKind = PackageKind.INSPECTION,
 ) -> InspectionTask:
     registry.load_all()
     enabled_rules = get_enabled_rule_codes()
@@ -180,6 +185,7 @@ def run_task(
             completed_at=_now(),
             stats=stats,
             system=system,
+            package_kind=package_kind,
         )
         store.save_system(settings.output, task_id, system)
         store.save_task_meta(settings.output, task)
@@ -230,8 +236,30 @@ def run_task(
         completed_at=_now(),
         stats=stats,
         system=system,
+        package_kind=package_kind,
     )
     store.save_task_meta(settings.output, task)
+    try:
+        customer_values = customer or {}
+        province = customer_values.get("province")
+        operator = customer_values.get("operator")
+        evidence = parse_inventory(
+            settings.output / task_id,
+            task_id=task_id,
+            province=province,
+            operator=operator,
+            package_kind=package_kind,
+        )
+        archive_inventory(
+            evidence,
+            task_id=task_id,
+            package_kind=package_kind,
+            completed_at=task.completed_at or _now(),
+        )
+        task = task.model_copy(update={"inventory": TaskInventory.model_validate(evidence)})
+        store.save_task_meta(settings.output, task)
+    except Exception:  # noqa: BLE001 - 台账失败不能影响巡检任务
+        store.append_log(settings.output, task_id, "error", "设备台账归档失败，任务结果不受影响")
     report = render_report(settings.output, task_id, system, completed_at=task.completed_at)
     TASKS_TOTAL.labels(result="completed", mode=mode.value).inc()
     store.append_log(

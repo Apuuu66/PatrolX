@@ -277,6 +277,8 @@ export function TaskListPage() {
   const [dicts, setDicts] = useState<DictsResponse | null>(null);
   const [overview, setOverview] = useState<OverviewSummary | null>(null);
   const [form] = Form.useForm();
+  const packageKind = Form.useWatch("package_kind", form);
+  const isInspection = packageKind !== "log_supplement";
   const [file, setFile] = useState<File | null>(null);
   const [preparationExpanded, setPreparationExpanded] = useState<Record<string, boolean>>({});
   const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
@@ -332,15 +334,17 @@ export function TaskListPage() {
     setSubmitting(true);
     try {
       const values = form.getFieldsValue();
+      const packageKind = values.package_kind === "log_supplement" ? "log_supplement" : "inspection";
       const fd = new FormData();
       fd.append("package_file", file);
+      fd.append("package_kind", packageKind);
       if (values.name) fd.append("name", values.name);
-      if (values.province) fd.append("province", values.province);
-      if (values.operator) fd.append("operator", values.operator);
-      if (values.product) fd.append("product", values.product);
-      if (values.version) fd.append("version", values.version);
-      if (values.device_id) fd.append("device_id", String(values.device_id).trim());
-      const created = await api.createTask(fd);
+      if (packageKind === "inspection") {
+        if (values.province) fd.append("province", values.province);
+        if (values.operator) fd.append("operator", values.operator);
+        if (values.product) fd.append("product", values.product);
+      }
+      const created = await api.createTaskV3(fd);
       message.success("任务已创建，开始执行");
       setOpen(false);
       setFile(null);
@@ -730,7 +734,7 @@ export function TaskListPage() {
           setFile(null);
           form.resetFields();
         }}
-        okText="提交巡检"
+        okText={isInspection ? "提交巡检" : "提交日志包"}
         cancelText="取消"
       >
         <Form form={form} layout="vertical">
@@ -751,21 +755,34 @@ export function TaskListPage() {
           <Form.Item label="任务名称" name="name">
             <Input placeholder="可选，默认取压缩包名" />
           </Form.Item>
-          <Form.Item label="设备 ID" name="device_id">
-            <Input allowClear placeholder="可选，用于跨任务历史对比" maxLength={128} />
+          <Form.Item label="包类型" name="package_kind" initialValue="inspection">
+            <Select
+              options={[
+                { value: "inspection", label: "巡检包" },
+                { value: "log_supplement", label: "日志补充包" },
+              ]}
+            />
           </Form.Item>
-          <Form.Item label="省份" name="province">
-            <Select allowClear placeholder="选择省份" options={dictOptions(dicts?.province)} />
-          </Form.Item>
-          <Form.Item label="运营商" name="operator">
-            <Select allowClear placeholder="选择运营商" options={dictOptions(dicts?.operator)} />
-          </Form.Item>
-          <Form.Item label="产品形态" name="product">
-            <Select allowClear placeholder="选择产品形态" options={dictOptions(dicts?.product)} />
-          </Form.Item>
-          <Form.Item label="版本" name="version">
-            <Select allowClear placeholder="选择版本" options={dictOptions(dicts?.version)} />
-          </Form.Item>
+          {isInspection ? (
+            <>
+              <Form.Item label="省份" name="province" rules={[{ required: true, message: "请选择省份" }]}>
+                <Select allowClear placeholder="选择省份" options={dictOptions(dicts?.province)} />
+              </Form.Item>
+              <Form.Item label="运营商" name="operator" rules={[{ required: true, message: "请选择运营商" }]}>
+                <Select allowClear placeholder="选择运营商" options={dictOptions(dicts?.operator)} />
+              </Form.Item>
+              <Form.Item label="产品形态" name="product">
+                <Select allowClear placeholder="选择产品形态" options={dictOptions(dicts?.product)} />
+              </Form.Item>
+            </>
+          ) : (
+            <Alert
+              type="info"
+              showIcon
+              message="日志补充包不采集设备信息"
+              description="不需要省份、运营商和产品形态；版本只从巡检包的 LST ME.txt 获取。"
+            />
+          )}
         </Form>
       </Modal>
     </Flex>

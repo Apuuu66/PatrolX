@@ -9,7 +9,7 @@ groups:
   config_all:
     description: 基础配置目录全量文件
     source_patterns:
-      - '^config/.*$'
+      - '^config/(?!.*LST ME[.]txt$).*$'
   resource_all:
     description: 资源目录全量文件；兼容 PerfResult 归组到 kpi 的容器资源
     source_patterns:

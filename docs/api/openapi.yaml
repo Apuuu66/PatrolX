@@ -323,6 +323,262 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/inventory/devices:
+    get:
+      summary: List Inventory Devices
+      operationId: listInventoryDevices
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Page Size
+      - name: province
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+      - name: operator
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator
+      - name: quality_status
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(all|issue)$
+          default: all
+          title: Quality Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryDeviceList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/inventory/devices/{device_id}:
+    get:
+      summary: Get Inventory Device
+      operationId: getInventoryDevice
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryDevice'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/inventory/devices/{device_id}/observations:
+    get:
+      summary: List Inventory Observations
+      operationId: listInventoryObservations
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Page Size
+      - name: order
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(asc|desc)$
+          default: desc
+          title: Order
+      - name: site_key
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryObservationList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/inventory/devices/{device_id}/version-history:
+    get:
+      summary: Get Inventory Version History
+      operationId: getInventoryVersionHistory
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryVersionHistory'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/inventory/quality-issues:
+    get:
+      summary: List Inventory Quality Issues
+      operationId: listInventoryQualityIssues
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Page Size
+      - name: issue_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/InventoryQualityIssueType'
+          - type: 'null'
+          title: Issue Type
+      - name: province
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+      - name: operator
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator
+      - name: task_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+      - name: device_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryQualityIssueList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/overview:
     get:
       summary: Get Overview V2
@@ -334,6 +590,221 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OverviewSummary'
+  /api/v2/tasks/{task_id}/device-id:
+    patch:
+      summary: Update Task Device Id V2
+      operationId: updateTaskDeviceIdV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskDeviceIdUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskSummary'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  ? /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-candidates
+  : get:
+      summary: Get Measurement Version Candidates V2
+      description: 按设备返回系统版本候选；不读取历史点位。
+      operationId: getMeasurementVersionCandidatesV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: period_minutes
+        in: query
+        required: true
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+      - name: object_key
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Object Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementVersionCandidateList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  ? /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-compare
+  : get:
+      summary: Get Measurement Version Compare V2
+      description: 按需返回同设备不同版本的单指标任务对比。
+      operationId: getMeasurementVersionCompareV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: period_minutes
+        in: query
+        required: true
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+      - name: baseline_task_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Baseline Task Id
+      - name: object_key
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Object Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementVersionComparison'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  ? /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/history-trend
+  : get:
+      summary: Get Measurement History Trend V2
+      description: 按需返回单指标跨任务历史趋势；历史索引缺失时明确降级。
+      operationId: getMeasurementHistoryTrendV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: period_minutes
+        in: query
+        required: true
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+      - name: object_key
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Object Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementHistoryTrend'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks/{task_id}:
     get:
       summary: Get Task V2
@@ -600,213 +1071,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v2/tasks/{task_id}/device-id:
-    patch:
-      summary: Update Task Device Id V2
-      operationId: updateTaskDeviceIdV2
-      parameters:
-      - name: task_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Task Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TaskDeviceIdUpdateRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskSummary'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/history-trend:
-    get:
-      summary: Get Measurement History Trend V2
-      description: 按设备、测量单元、指标、行对象和周期返回 7 天历史对比趋势。
-      operationId: getMeasurementHistoryTrendV2
-      parameters:
-      - name: task_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Task Id
-      - name: rule_code
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Rule Code
-      - name: measurement_unit_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Measurement Unit Id
-      - name: metric_resource_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Metric Resource Id
-      - name: object_key
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Object Key
-      - name: period_minutes
-        in: query
-        required: true
-        schema:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Period Minutes
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MeasurementHistoryTrend'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-candidates:
-    get:
-      summary: Get Measurement Version Candidates V2
-      description: 返回同设备、已完成任务的系统版本候选；版本缺失时显示版本未知。
-      operationId: getMeasurementVersionCandidatesV2
-      parameters:
-      - name: task_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Task Id
-      - name: rule_code
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Rule Code
-      - name: measurement_unit_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Measurement Unit Id
-      - name: metric_resource_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Metric Resource Id
-      - name: object_key
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Object Key
-      - name: period_minutes
-        in: query
-        required: true
-        schema:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Period Minutes
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MeasurementVersionCandidateList'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/{measurement_unit_id}/metrics/{metric_resource_id}/version-compare:
-    get:
-      summary: Get Measurement Version Compare V2
-      description: 按任务、版本和当前维度返回两条独立曲线与均值摘要。
-      operationId: getMeasurementVersionCompareV2
-      parameters:
-      - name: task_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Task Id
-      - name: rule_code
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Rule Code
-      - name: measurement_unit_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Measurement Unit Id
-      - name: metric_resource_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Metric Resource Id
-      - name: baseline_task_id
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Baseline Task Id
-      - name: object_key
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Object Key
-      - name: period_minutes
-        in: query
-        required: true
-        schema:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Period Minutes
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MeasurementVersionComparison'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/inspectors:
     get:
       summary: List Inspectors V2
@@ -990,6 +1254,30 @@ paths:
                 items:
                   $ref: '#/components/schemas/DictItem'
                 title: Response Updatedictv2
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v3/tasks:
+    post:
+      summary: Create Task V3
+      description: 创建 v3 任务；版本和设备身份不允许人工输入。
+      operationId: createTaskV3
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_createTaskV3'
+        required: true
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreated'
         '422':
           description: Validation Error
           content:
@@ -1517,6 +1805,39 @@ components:
       required:
       - package_file
       title: Body_createTaskV2
+    Body_createTaskV3:
+      properties:
+        package_file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Package File
+        package_kind:
+          $ref: '#/components/schemas/PackageKind'
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        province:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+        operator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator
+        product:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product
+      type: object
+      required:
+      - package_file
+      - package_kind
+      title: Body_createTaskV3
     Body_importKpiMeasurementUnitsV5:
       properties:
         file:
@@ -1708,6 +2029,14 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SystemInspection'
           - type: 'null'
+        package_kind:
+          anyOf:
+          - $ref: '#/components/schemas/PackageKind'
+          - type: 'null'
+        inventory:
+          anyOf:
+          - $ref: '#/components/schemas/TaskInventory'
+          - type: 'null'
       type: object
       required:
       - task_id
@@ -1830,6 +2159,353 @@ components:
       - page_size
       title: InspectorStateListResponse
       description: 规则启停状态分页契约；默认每页 10 条。
+    InventoryDevice:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        province:
+          type: string
+          title: Province
+        device_name:
+          type: string
+          title: Device Name
+        site_key:
+          type: string
+          title: Site Key
+        operator:
+          type: string
+          title: Operator
+        current_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Version
+        current_version_observed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Current Version Observed At
+        current_version_task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Version Task Id
+        first_seen_at:
+          type: string
+          format: date-time
+          title: First Seen At
+        last_seen_at:
+          type: string
+          format: date-time
+          title: Last Seen At
+        observation_count:
+          type: integer
+          minimum: 0.0
+          title: Observation Count
+        site_change_count:
+          type: integer
+          minimum: 0.0
+          title: Site Change Count
+        has_site_conflict:
+          type: boolean
+          title: Has Site Conflict
+        quality_issue_types:
+          items:
+            $ref: '#/components/schemas/InventoryQualityIssueType'
+          type: array
+          title: Quality Issue Types
+      type: object
+      required:
+      - device_id
+      - province
+      - device_name
+      - site_key
+      - operator
+      - first_seen_at
+      - last_seen_at
+      - observation_count
+      - site_change_count
+      - has_site_conflict
+      title: InventoryDevice
+    InventoryDeviceList:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+        page_size:
+          type: integer
+          maximum: 100.0
+          minimum: 1.0
+          title: Page Size
+        items:
+          items:
+            $ref: '#/components/schemas/InventoryDevice'
+          type: array
+          title: Items
+      type: object
+      required:
+      - total
+      - page
+      - page_size
+      - items
+      title: InventoryDeviceList
+    InventoryFieldStatus:
+      type: string
+      enum:
+      - ok
+      - missing
+      - conflict
+      - error
+      - not_applicable
+      title: InventoryFieldStatus
+    InventoryObservation:
+      properties:
+        observation_id:
+          type: string
+          title: Observation Id
+        task_id:
+          type: string
+          title: Task Id
+        task_status:
+          type: string
+          const: completed
+          title: Task Status
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        province:
+          type: string
+          title: Province
+        operator:
+          type: string
+          title: Operator
+        site_key:
+          type: string
+          title: Site Key
+        device_name:
+          type: string
+          title: Device Name
+        identity_status:
+          type: string
+          const: ok
+          title: Identity Status
+        version_status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+        raw_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Version
+        version_source_files:
+          items:
+            type: string
+          type: array
+          title: Version Source Files
+        conflicts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Conflicts
+        snapshot:
+          additionalProperties: true
+          type: object
+          title: Snapshot
+      type: object
+      required:
+      - observation_id
+      - task_id
+      - task_status
+      - observed_at
+      - province
+      - operator
+      - site_key
+      - device_name
+      - identity_status
+      - version_status
+      title: InventoryObservation
+    InventoryObservationList:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+        page_size:
+          type: integer
+          maximum: 100.0
+          minimum: 1.0
+          title: Page Size
+        items:
+          items:
+            $ref: '#/components/schemas/InventoryObservation'
+          type: array
+          title: Items
+      type: object
+      required:
+      - total
+      - page
+      - page_size
+      - items
+      title: InventoryObservationList
+    InventoryParseStatus:
+      type: string
+      enum:
+      - archived
+      - not_archived
+      - not_applicable
+      - failed
+      title: InventoryParseStatus
+    InventoryQualityIssue:
+      properties:
+        issue_id:
+          type: string
+          title: Issue Id
+        issue_type:
+          $ref: '#/components/schemas/InventoryQualityIssueType'
+        message:
+          type: string
+          title: Message
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        province:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+        operator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator
+        detected_at:
+          type: string
+          format: date-time
+          title: Detected At
+        detail:
+          additionalProperties: true
+          type: object
+          title: Detail
+      type: object
+      required:
+      - issue_id
+      - issue_type
+      - message
+      - detected_at
+      title: InventoryQualityIssue
+    InventoryQualityIssueList:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+        page_size:
+          type: integer
+          maximum: 100.0
+          minimum: 1.0
+          title: Page Size
+        items:
+          items:
+            $ref: '#/components/schemas/InventoryQualityIssue'
+          type: array
+          title: Items
+      type: object
+      required:
+      - total
+      - page
+      - page_size
+      - items
+      title: InventoryQualityIssueList
+    InventoryQualityIssueType:
+      type: string
+      enum:
+      - missing_site
+      - missing_device_identity
+      - missing_version
+      - version_conflict
+      - device_identity_conflict
+      - site_ownership_change
+      title: InventoryQualityIssueType
+    InventoryVersionHistory:
+      properties:
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+        page_size:
+          type: integer
+          maximum: 100.0
+          minimum: 1.0
+          title: Page Size
+        items:
+          items:
+            $ref: '#/components/schemas/InventoryVersionPoint'
+          type: array
+          title: Items
+      type: object
+      required:
+      - total
+      - page
+      - page_size
+      - items
+      title: InventoryVersionHistory
+    InventoryVersionPoint:
+      properties:
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        task_id:
+          type: string
+          title: Task Id
+        version_status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+        raw_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Version
+        direction:
+          anyOf:
+          - $ref: '#/components/schemas/VersionDirection'
+          - type: 'null'
+        has_gap:
+          type: boolean
+          title: Has Gap
+          default: false
+      type: object
+      required:
+      - observed_at
+      - task_id
+      - version_status
+      title: InventoryVersionPoint
     KpiMeasurementBinding:
       properties:
         id:
@@ -2443,6 +3119,262 @@ components:
       - username
       - role
       title: LoginResponseV1
+    MeasurementBaselineSignificance:
+      type: string
+      enum:
+      - insufficient
+      - normal
+      - higher
+      - lower
+      title: MeasurementBaselineSignificance
+    MeasurementHistoryBaselinePoint:
+      properties:
+        time_label:
+          type: string
+          title: Time Label
+        baseline_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Baseline Value
+        current_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Current Value
+        deviation:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Deviation
+        deviation_ratio:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Deviation Ratio
+        sample_count:
+          type: integer
+          minimum: 0.0
+          title: Sample Count
+        date_count:
+          type: integer
+          minimum: 0.0
+          title: Date Count
+        significance:
+          $ref: '#/components/schemas/MeasurementBaselineSignificance'
+      type: object
+      required:
+      - time_label
+      - sample_count
+      - date_count
+      - significance
+      - baseline_value
+      - current_value
+      - deviation
+      - deviation_ratio
+      title: MeasurementHistoryBaselinePoint
+    MeasurementHistoryCoverage:
+      properties:
+        history_task_count:
+          type: integer
+          minimum: 0.0
+          title: History Task Count
+        history_date_count:
+          type: integer
+          minimum: 0.0
+          title: History Date Count
+        history_point_count:
+          type: integer
+          minimum: 0.0
+          title: History Point Count
+        current_point_count:
+          type: integer
+          minimum: 0.0
+          title: Current Point Count
+        latest_history_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Latest History Date
+      type: object
+      required:
+      - history_task_count
+      - history_date_count
+      - history_point_count
+      - current_point_count
+      title: MeasurementHistoryCoverage
+    MeasurementHistoryDateSeries:
+      properties:
+        date:
+          type: string
+          title: Date
+        source_task_ids:
+          items:
+            type: string
+          type: array
+          title: Source Task Ids
+        points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Points
+      type: object
+      required:
+      - date
+      - source_task_ids
+      - points
+      title: MeasurementHistoryDateSeries
+    MeasurementHistoryMatch:
+      properties:
+        status:
+          $ref: '#/components/schemas/MeasurementHistoryMatchStatus'
+        reason_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason Code
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - status
+      - message
+      title: MeasurementHistoryMatch
+    MeasurementHistoryMatchStatus:
+      type: string
+      enum:
+      - matched
+      - degraded
+      - no_history
+      title: MeasurementHistoryMatchStatus
+    MeasurementHistoryPoint:
+      properties:
+        measured_at:
+          type: string
+          format: date-time
+          title: Measured At
+        date:
+          type: string
+          title: Date
+        time_label:
+          type: string
+          title: Time Label
+        value:
+          type: number
+          title: Value
+        task_id:
+          type: string
+          title: Task Id
+        source_file:
+          type: string
+          title: Source File
+        line_number:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Line Number
+      type: object
+      required:
+      - measured_at
+      - date
+      - time_label
+      - value
+      - task_id
+      - source_file
+      title: MeasurementHistoryPoint
+    MeasurementHistoryTrend:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        object_key:
+          type: string
+          title: Object Key
+        period_minutes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+        window:
+          $ref: '#/components/schemas/MeasurementHistoryWindow'
+        match:
+          $ref: '#/components/schemas/MeasurementHistoryMatch'
+        coverage:
+          $ref: '#/components/schemas/MeasurementHistoryCoverage'
+        current_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Current Points
+        history_series:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryDateSeries'
+          type: array
+          title: History Series
+        baseline_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryBaselinePoint'
+          type: array
+          title: Baseline Points
+        source_tasks:
+          items:
+            type: string
+          type: array
+          title: Source Tasks
+      type: object
+      required:
+      - task_id
+      - rule_code
+      - measurement_unit_id
+      - metric_resource_id
+      - object_key
+      - window
+      - match
+      - coverage
+      - current_points
+      - history_series
+      - baseline_points
+      - source_tasks
+      title: MeasurementHistoryTrend
+      description: KPI 单指标跨任务历史趋势响应。
+    MeasurementHistoryWindow:
+      properties:
+        end_date:
+          type: string
+          title: End Date
+        start_date:
+          type: string
+          title: Start Date
+        days:
+          type: integer
+          minimum: 1.0
+          title: Days
+        anchor_measured_at:
+          type: string
+          format: date-time
+          title: Anchor Measured At
+      type: object
+      required:
+      - end_date
+      - start_date
+      - days
+      - anchor_measured_at
+      title: MeasurementHistoryWindow
     MeasurementMetricDetail:
       properties:
         task_id:
@@ -2466,6 +3398,260 @@ components:
       - metric
       title: MeasurementMetricDetail
       description: KPI 单指标完整明细。
+    MeasurementVersionCandidate:
+      properties:
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        version_known:
+          type: boolean
+          title: Version Known
+        latest_task_id:
+          type: string
+          title: Latest Task Id
+        latest_completed_at:
+          type: string
+          format: date-time
+          title: Latest Completed At
+        task_count:
+          type: integer
+          minimum: 1.0
+          title: Task Count
+        tasks:
+          items:
+            $ref: '#/components/schemas/MeasurementVersionCandidateTask'
+          type: array
+          minItems: 1
+          title: Tasks
+      type: object
+      required:
+      - version_known
+      - latest_task_id
+      - latest_completed_at
+      - task_count
+      - tasks
+      - version
+      title: MeasurementVersionCandidate
+      description: 同设备历史任务的版本分组。
+    MeasurementVersionCandidateList:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        current_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Version
+        items:
+          items:
+            $ref: '#/components/schemas/MeasurementVersionCandidate'
+          type: array
+          title: Items
+      type: object
+      required:
+      - task_id
+      - rule_code
+      - measurement_unit_id
+      - metric_resource_id
+      - current_version
+      - items
+      title: MeasurementVersionCandidateList
+      description: 同设备版本候选响应。
+    MeasurementVersionCandidateTask:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        version_known:
+          type: boolean
+          title: Version Known
+      type: object
+      required:
+      - task_id
+      - version_known
+      title: MeasurementVersionCandidateTask
+      description: 同设备候选版本中的任务。
+    MeasurementVersionComparison:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        baseline_task_id:
+          type: string
+          title: Baseline Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        object_key:
+          type: string
+          title: Object Key
+        period_minutes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Period Minutes
+        current_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Version
+        baseline_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Baseline Version
+        current_task:
+          $ref: '#/components/schemas/MeasurementVersionComparisonTask'
+        baseline_task:
+          anyOf:
+          - $ref: '#/components/schemas/MeasurementVersionComparisonTask'
+          - type: 'null'
+        current_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Current Points
+        baseline_points:
+          items:
+            $ref: '#/components/schemas/MeasurementHistoryPoint'
+          type: array
+          title: Baseline Points
+        summary:
+          $ref: '#/components/schemas/MeasurementVersionComparisonSummary'
+        match:
+          $ref: '#/components/schemas/MeasurementHistoryMatch'
+      type: object
+      required:
+      - task_id
+      - baseline_task_id
+      - rule_code
+      - measurement_unit_id
+      - metric_resource_id
+      - object_key
+      - current_task
+      - summary
+      - match
+      - current_points
+      - baseline_points
+      - current_version
+      - baseline_version
+      title: MeasurementVersionComparison
+      description: 同设备不同系统版本的单指标对比响应。
+    MeasurementVersionComparisonSummary:
+      properties:
+        current_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Current Value
+        baseline_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Baseline Value
+        absolute_change:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Absolute Change
+        change_ratio:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Change Ratio
+        direction:
+          $ref: '#/components/schemas/MeasurementVersionDirection'
+          default: unknown
+        sample_count:
+          type: integer
+          minimum: 0.0
+          title: Sample Count
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - sample_count
+      - message
+      - current_value
+      - baseline_value
+      - absolute_change
+      - change_ratio
+      - direction
+      title: MeasurementVersionComparisonSummary
+    MeasurementVersionComparisonTask:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        version_known:
+          type: boolean
+          title: Version Known
+      type: object
+      required:
+      - task_id
+      - version_known
+      - version
+      title: MeasurementVersionComparisonTask
+      description: 参与版本对比的单个任务来源。
+    MeasurementVersionDirection:
+      type: string
+      enum:
+      - up
+      - down
+      - flat
+      - unknown
+      title: MeasurementVersionDirection
     Metric:
       properties:
         key:
@@ -2543,6 +3729,13 @@ components:
       - finding_count
       - status_counts
       title: OverviewSummary
+    PackageKind:
+      type: string
+      enum:
+      - inspection
+      - log_supplement
+      title: PackageKind
+      description: 上传任务包类型；日志补充包显式声明且不参与设备台账。
     PreparationIssue:
       properties:
         type:
@@ -2879,6 +4072,191 @@ components:
       required:
       - task_id
       title: TaskCreated
+    TaskDeviceIdUpdateRequest:
+      properties:
+        device_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Device Id
+      type: object
+      required:
+      - device_id
+      title: TaskDeviceIdUpdateRequest
+      description: 任务设备 ID 修改请求。
+    TaskInventory:
+      properties:
+        package_kind:
+          $ref: '#/components/schemas/PackageKind'
+        status:
+          $ref: '#/components/schemas/InventoryParseStatus'
+        parser_id:
+          type: string
+          title: Parser Id
+        parser_version:
+          type: string
+          title: Parser Version
+        schema_version:
+          type: integer
+          title: Schema Version
+          default: 1
+        not_applicable_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Not Applicable Reason
+        not_archived_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Not Archived Reason
+        site:
+          anyOf:
+          - $ref: '#/components/schemas/TaskInventorySite'
+          - type: 'null'
+        device:
+          anyOf:
+          - $ref: '#/components/schemas/TaskInventoryDevice'
+          - type: 'null'
+        version:
+          anyOf:
+          - $ref: '#/components/schemas/TaskInventoryVersion'
+          - type: 'null'
+        source_files:
+          items:
+            type: string
+          type: array
+          title: Source Files
+        conflicts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Conflicts
+        errors:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Errors
+        archived:
+          $ref: '#/components/schemas/TaskInventoryArchive'
+      type: object
+      required:
+      - package_kind
+      - status
+      - parser_id
+      - parser_version
+      - archived
+      - source_files
+      - conflicts
+      - errors
+      title: TaskInventory
+    TaskInventoryArchive:
+      properties:
+        archived:
+          type: boolean
+          title: Archived
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        observation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Observation Id
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - archived
+      title: TaskInventoryArchive
+    TaskInventoryDevice:
+      properties:
+        status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+        raw_names:
+          items:
+            type: string
+          type: array
+          title: Raw Names
+        normalized_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Normalized Name
+        reason_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason Code
+        source_lines:
+          items:
+            type: integer
+          type: array
+          title: Source Lines
+      type: object
+      required:
+      - status
+      title: TaskInventoryDevice
+    TaskInventorySite:
+      properties:
+        status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+        source:
+          type: string
+          enum:
+          - upload_metadata
+          - none
+          title: Source
+        province:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+        operator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator
+        site_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site Key
+      type: object
+      required:
+      - status
+      - source
+      title: TaskInventorySite
+    TaskInventoryVersion:
+      properties:
+        status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+        raw_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Version
+        candidates:
+          items:
+            type: string
+          type: array
+          title: Candidates
+        source_lines:
+          items:
+            type: integer
+          type: array
+          title: Source Lines
+      type: object
+      required:
+      - status
+      title: TaskInventoryVersion
     TaskListResponse:
       properties:
         items:
@@ -3005,6 +4383,19 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SystemInspection'
           - type: 'null'
+        package_kind:
+          anyOf:
+          - $ref: '#/components/schemas/PackageKind'
+          - type: 'null'
+        inventory:
+          anyOf:
+          - $ref: '#/components/schemas/TaskInventory'
+          - type: 'null'
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
         customer_province:
           anyOf:
           - type: string
@@ -3025,11 +4416,6 @@ components:
           - type: string
           - type: 'null'
           title: Customer Version
-        device_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Device Id
       type: object
       required:
       - task_id
@@ -3156,529 +4542,6 @@ components:
       - created_at
       - updated_at
       title: UserV1
-    TaskDeviceIdUpdateRequest:
-      properties:
-        device_id:
-          type: string
-          title: Device Id
-      type: object
-      required:
-      - device_id
-      title: TaskDeviceIdUpdateRequest
-    MeasurementHistoryWindow:
-      properties:
-        end_date:
-          type: string
-          title: End Date
-        start_date:
-          type: string
-          title: Start Date
-        days:
-          type: integer
-          title: Days
-        anchor_measured_at:
-          type: string
-          format: date-time
-          title: Anchor Measured At
-      type: object
-      required:
-      - end_date
-      - start_date
-      - days
-      - anchor_measured_at
-      title: MeasurementHistoryWindow
-    MeasurementHistoryMatch:
-      properties:
-        status:
-          type: string
-          enum:
-          - matched
-          - degraded
-          - no_history
-          title: Status
-        reason_code:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Reason Code
-        message:
-          type: string
-          title: Message
-      type: object
-      required:
-      - status
-      - reason_code
-      - message
-      title: MeasurementHistoryMatch
-    MeasurementHistoryCoverage:
-      properties:
-        history_task_count:
-          type: integer
-          title: History Task Count
-        history_date_count:
-          type: integer
-          title: History Date Count
-        history_point_count:
-          type: integer
-          title: History Point Count
-        current_point_count:
-          type: integer
-          title: Current Point Count
-        latest_history_date:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Latest History Date
-      type: object
-      required:
-      - history_task_count
-      - history_date_count
-      - history_point_count
-      - current_point_count
-      - latest_history_date
-      title: MeasurementHistoryCoverage
-    MeasurementHistoryPoint:
-      properties:
-        measured_at:
-          type: string
-          format: date-time
-          title: Measured At
-        date:
-          type: string
-          title: Date
-        time_label:
-          type: string
-          title: Time Label
-        value:
-          type: number
-          title: Value
-        task_id:
-          type: string
-          title: Task Id
-        source_file:
-          type: string
-          title: Source File
-        line_number:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Line Number
-      type: object
-      required:
-      - measured_at
-      - date
-      - time_label
-      - value
-      - task_id
-      - source_file
-      - line_number
-      title: MeasurementHistoryPoint
-    MeasurementHistoryDateSeries:
-      properties:
-        date:
-          type: string
-          title: Date
-        source_task_ids:
-          items:
-            type: string
-          type: array
-          title: Source Task Ids
-        points:
-          items:
-            $ref: '#/components/schemas/MeasurementHistoryPoint'
-          type: array
-          title: Points
-      type: object
-      required:
-      - date
-      - source_task_ids
-      - points
-      title: MeasurementHistoryDateSeries
-    MeasurementHistoryBaselinePoint:
-      properties:
-        time_label:
-          type: string
-          title: Time Label
-        baseline_value:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Baseline Value
-        current_value:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Current Value
-        deviation:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Deviation
-        deviation_ratio:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Deviation Ratio
-        sample_count:
-          type: integer
-          title: Sample Count
-        date_count:
-          type: integer
-          title: Date Count
-        significance:
-          type: string
-          enum:
-          - insufficient
-          - normal
-          - higher
-          - lower
-          title: Significance
-      type: object
-      required:
-      - time_label
-      - baseline_value
-      - current_value
-      - deviation
-      - deviation_ratio
-      - sample_count
-      - date_count
-      - significance
-      title: MeasurementHistoryBaselinePoint
-    MeasurementVersionDirection:
-      properties:
-        direction:
-          type: string
-          enum:
-          - up
-          - down
-          - flat
-          - unknown
-          title: Direction
-      type: object
-      title: MeasurementVersionDirection
-    MeasurementVersionComparisonTask:
-      properties:
-        task_id:
-          type: string
-          title: Task Id
-        completed_at:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: Completed At
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-        version_known:
-          type: boolean
-          title: Version Known
-      type: object
-      required:
-      - task_id
-      - completed_at
-      - version
-      - version_known
-      title: MeasurementVersionComparisonTask
-    MeasurementVersionCandidateTask:
-      properties:
-        task_id:
-          type: string
-          title: Task Id
-        completed_at:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: Completed At
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-        version_known:
-          type: boolean
-          title: Version Known
-      type: object
-      required:
-      - task_id
-      - completed_at
-      - version
-      - version_known
-      title: MeasurementVersionCandidateTask
-    MeasurementVersionCandidate:
-      properties:
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-        version_known:
-          type: boolean
-          title: Version Known
-        latest_task_id:
-          type: string
-          title: Latest Task Id
-        latest_completed_at:
-          type: string
-          format: date-time
-          title: Latest Completed At
-        task_count:
-          type: integer
-          minimum: 1
-          title: Task Count
-        tasks:
-          items:
-            $ref: '#/components/schemas/MeasurementVersionCandidateTask'
-          type: array
-          title: Tasks
-      type: object
-      required:
-      - version
-      - version_known
-      - latest_task_id
-      - latest_completed_at
-      - task_count
-      - tasks
-      title: MeasurementVersionCandidate
-    MeasurementVersionCandidateList:
-      properties:
-        task_id:
-          type: string
-          title: Task Id
-        rule_code:
-          type: string
-          title: Rule Code
-        measurement_unit_id:
-          type: string
-          title: Measurement Unit Id
-        metric_resource_id:
-          type: string
-          title: Metric Resource Id
-        device_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Device Id
-        current_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Current Version
-        items:
-          items:
-            $ref: '#/components/schemas/MeasurementVersionCandidate'
-          type: array
-          title: Items
-      type: object
-      required:
-      - task_id
-      - rule_code
-      - measurement_unit_id
-      - metric_resource_id
-      - device_id
-      - current_version
-      - items
-      title: MeasurementVersionCandidateList
-    MeasurementVersionComparisonSummary:
-      properties:
-        current_value:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Current Value
-        baseline_value:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Baseline Value
-        absolute_change:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Absolute Change
-        change_ratio:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Change Ratio
-        direction:
-          type: string
-          enum:
-          - up
-          - down
-          - flat
-          - unknown
-          title: Direction
-        sample_count:
-          type: integer
-          minimum: 0
-          title: Sample Count
-        message:
-          type: string
-          title: Message
-      type: object
-      required:
-      - current_value
-      - baseline_value
-      - absolute_change
-      - change_ratio
-      - direction
-      - sample_count
-      - message
-      title: MeasurementVersionComparisonSummary
-    MeasurementVersionComparison:
-      properties:
-        task_id:
-          type: string
-          title: Task Id
-        baseline_task_id:
-          type: string
-          title: Baseline Task Id
-        rule_code:
-          type: string
-          title: Rule Code
-        measurement_unit_id:
-          type: string
-          title: Measurement Unit Id
-        metric_resource_id:
-          type: string
-          title: Metric Resource Id
-        device_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Device Id
-        object_key:
-          type: string
-          title: Object Key
-        period_minutes:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Period Minutes
-        current_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Current Version
-        baseline_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Baseline Version
-        current_task:
-          $ref: '#/components/schemas/MeasurementVersionComparisonTask'
-        baseline_task:
-          anyOf:
-          - $ref: '#/components/schemas/MeasurementVersionComparisonTask'
-          - type: 'null'
-          title: Baseline Task
-        current_points:
-          items:
-            $ref: '#/components/schemas/MeasurementHistoryPoint'
-          type: array
-          title: Current Points
-        baseline_points:
-          items:
-            $ref: '#/components/schemas/MeasurementHistoryPoint'
-          type: array
-          title: Baseline Points
-        summary:
-          $ref: '#/components/schemas/MeasurementVersionComparisonSummary'
-        match:
-          $ref: '#/components/schemas/MeasurementHistoryMatch'
-      type: object
-      required:
-      - task_id
-      - baseline_task_id
-      - rule_code
-      - measurement_unit_id
-      - metric_resource_id
-      - device_id
-      - object_key
-      - period_minutes
-      - current_version
-      - baseline_version
-      - current_task
-      - baseline_task
-      - current_points
-      - baseline_points
-      - summary
-      - match
-      title: MeasurementVersionComparison
-    MeasurementHistoryTrend:
-      properties:
-        task_id:
-          type: string
-          title: Task Id
-        rule_code:
-          type: string
-          title: Rule Code
-        measurement_unit_id:
-          type: string
-          title: Measurement Unit Id
-        metric_resource_id:
-          type: string
-          title: Metric Resource Id
-        device_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Device Id
-        object_key:
-          type: string
-          title: Object Key
-        period_minutes:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Period Minutes
-        window:
-          $ref: '#/components/schemas/MeasurementHistoryWindow'
-        match:
-          $ref: '#/components/schemas/MeasurementHistoryMatch'
-        coverage:
-          $ref: '#/components/schemas/MeasurementHistoryCoverage'
-        current_points:
-          items:
-            $ref: '#/components/schemas/MeasurementHistoryPoint'
-          type: array
-          title: Current Points
-        history_series:
-          items:
-            $ref: '#/components/schemas/MeasurementHistoryDateSeries'
-          type: array
-          title: History Series
-        baseline_points:
-          items:
-            $ref: '#/components/schemas/MeasurementHistoryBaselinePoint'
-          type: array
-          title: Baseline Points
-        source_tasks:
-          items:
-            type: string
-          type: array
-          title: Source Tasks
-      type: object
-      required:
-      - task_id
-      - rule_code
-      - measurement_unit_id
-      - metric_resource_id
-      - device_id
-      - object_key
-      - period_minutes
-      - window
-      - match
-      - coverage
-      - current_points
-      - history_series
-      - baseline_points
-      - source_tasks
-      title: MeasurementHistoryTrend
     ValidationError:
       properties:
         loc:
@@ -3705,3 +4568,10 @@ components:
       - msg
       - type
       title: ValidationError
+    VersionDirection:
+      type: string
+      enum:
+      - upgrade
+      - downgrade
+      - unchanged
+      title: VersionDirection
