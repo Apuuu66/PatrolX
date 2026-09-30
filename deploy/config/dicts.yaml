@@ -82,10 +82,3 @@ product:
     name: IMS
   - code: mme
     name: MME
-version:
-  - code: v10
-    name: R10
-  - code: v11
-    name: R11
-  - code: v12
-    name: R12

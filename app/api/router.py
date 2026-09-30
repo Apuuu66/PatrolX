@@ -132,7 +132,7 @@ router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
 v4_router = APIRouter(prefix="/api/v4")
 v5_router = APIRouter(prefix="/api/v5")
-DICT_NAMES = ("province", "operator", "product", "version")
+DICT_NAMES = ("province", "operator", "product")
 
 
 class AppError(Exception):

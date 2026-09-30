@@ -16,8 +16,7 @@ def load_dicts() -> DictsResponse:
     raw = yaml.safe_load(_dict_path().read_text(encoding="utf-8")) or {}
     return DictsResponse(
         **{
-            name: [DictItem(**item) for item in items or []]
-            for name, items in raw.items()
-            if name in ("province", "operator", "product", "version")
+            name: [DictItem(**item) for item in raw.get(name, []) or []]
+            for name in ("province", "operator", "product", "version")
         }
     )
