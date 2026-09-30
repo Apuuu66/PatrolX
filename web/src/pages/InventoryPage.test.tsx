@@ -114,6 +114,7 @@ describe("InventoryPage", () => {
   it("opens device detail from the device table", async () => {
     renderPage();
 
+    expect(screen.getByRole("heading", { name: "设备台账" })).toBeTruthy();
     expect(await screen.findByText("GD-GZ-Core-01")).toBeTruthy();
     fireEvent.click(screen.getByText("GD-GZ-Core-01"));
     expect(await screen.findByText("设备详情测试")).toBeTruthy();

@@ -94,7 +94,7 @@ export function MainLayout() {
 
   const menuItems = [
     { key: "/tasks", icon: <FileSearchOutlined />, label: "巡检任务" },
-    { key: "/inventory", icon: <ApartmentOutlined />, label: "局点台账" },
+    { key: "/inventory", icon: <ApartmentOutlined />, label: "设备台账" },
     { key: "/measurement-units", icon: <FundOutlined />, label: "基础指标" },
     { key: "/inspectors", icon: <BarChartOutlined />, label: "规则管理" },
     { key: "/dicts", icon: <DatabaseOutlined />, label: "数据字典" },

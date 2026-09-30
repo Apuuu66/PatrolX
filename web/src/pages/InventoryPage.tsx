@@ -233,7 +233,7 @@ export function InventoryPage() {
       <Flex align="center" justify="space-between">
         <div>
           <Typography.Title level={3} style={{ margin: 0 }}>
-            局点设备台账
+            设备台账
           </Typography.Title>
           <Typography.Text type="secondary">
             按任务观测持续汇总设备资产和版本路径

@@ -8,6 +8,7 @@ async function uploadPackage(page: import("@playwright/test").Page, file: string
   await page.goto("/");
   await page.getByRole("button", { name: /上传/ }).first().click();
   await expect(page.getByText("上传数据包（一个压缩包 = 一个任务）")).toBeVisible();
+  await expect(page.locator(".ant-form-item").filter({ hasText: "任务名称" })).toBeHidden();
   await page.setInputFiles('input[type="file"]', file);
   const selectByLabel = (label: string) =>
     page.locator(".ant-form-item").filter({ hasText: label }).locator(".ant-select");
@@ -38,7 +39,7 @@ async function uploadPackage(page: import("@playwright/test").Page, file: string
   await page.waitForURL(/\/tasks\//);
 }
 
-test("巡检包上传后可在任务详情、局点台账和设备详情间追踪", async ({ page }) => {
+test("巡检包上传后可在任务详情、设备台账和设备详情间追踪", async ({ page }) => {
   await uploadPackage(page, inspectionZip, "inspection");
 
   await expect(page.getByRole("tab", { name: "设备台账" })).toBeVisible();
@@ -57,7 +58,7 @@ test("巡检包上传后可在任务详情、局点台账和设备详情间追�
   await expect(page.getByText("NJ-AGG-001").first()).toBeVisible();
 });
 
-test("日志补充包显示不涉及设备台账且不进入局点台账", async ({ page }) => {
+test("日志补充包显示不涉及设备台账且不进入设备台账", async ({ page }) => {
   await uploadPackage(page, logZip, "log");
 
   await page.getByRole("tab", { name: "设备台账" }).click();

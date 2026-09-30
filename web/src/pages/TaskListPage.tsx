@@ -6,7 +6,6 @@ import {
   Card,
   Flex,
   Form,
-  Input,
   Dropdown,
   Modal,
   Pagination,
@@ -338,7 +337,6 @@ export function TaskListPage() {
       const fd = new FormData();
       fd.append("package_file", file);
       fd.append("package_kind", packageKind);
-      if (values.name) fd.append("name", values.name);
       if (packageKind === "inspection") {
         if (values.province) fd.append("province", values.province);
         if (values.operator) fd.append("operator", values.operator);
@@ -352,7 +350,7 @@ export function TaskListPage() {
       navigate(`/tasks/${created.task_id}`);
     } catch (err) {
       if (err instanceof ApiError && err.code === "package_checksum_conflict") {
-        message.error("同名任务已存在，但数据包 checksum 不同，请修改任务名称或删除旧任务");
+        message.error("同名任务已存在，但数据包 checksum 不同，请修改压缩包文件名或删除旧任务");
       } else {
         message.error(err instanceof Error ? err.message : "创建失败");
       }
@@ -751,9 +749,6 @@ export function TaskListPage() {
               <p>点击或拖拽压缩包到此处</p>
               <p style={{ color: "#999", fontSize: 12 }}>zip / tar.gz，默认上限 2GB</p>
             </Upload.Dragger>
-          </Form.Item>
-          <Form.Item label="任务名称" name="name">
-            <Input placeholder="可选，默认取压缩包名" />
           </Form.Item>
           <Form.Item label="包类型" name="package_kind" initialValue="inspection">
             <Select
