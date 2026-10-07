@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  App,
   Button,
   Card,
   Flex,
   Input,
   Pagination,
+  Popconfirm,
   Space,
   Select,
   Tabs,
@@ -20,6 +22,7 @@ import {
   type InventoryDevice,
   type InventoryQualityIssue,
   type InventoryQualityIssueType } from "../api/http";
+import { useAuth } from "../auth/AuthContext";
 import { EmptyState, PageSkeleton } from "../components/PageState";
 import { Table } from "../components/ResizableTable";
 
@@ -156,6 +159,9 @@ const qualityColumns = [
 
 export function InventoryPage() {
   const navigate = useNavigate();
+  const { message } = App.useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [tab, setTab] = useState<"devices" | "quality">("devices");
   const [province, setProvince] = useState("");
   const [operator, setOperator] = useState("");
@@ -172,6 +178,7 @@ export function InventoryPage() {
   const [issuePage, setIssuePage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -211,6 +218,57 @@ export function InventoryPage() {
     setDevicePage(1);
     setIssuePage(1);
   }, [province, operator, tab]);
+
+  const handleDeleteDevice = async (record: InventoryDevice) => {
+    setDeletingId(record.device_id);
+    try {
+      await api.deleteInventoryDevice(record.device_id);
+      message.success("设备台账已删除");
+      if (devices.length === 1 && devicePage > 1) {
+        setDevicePage(devicePage - 1);
+      } else {
+        await load();
+      }
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "删除设备失败");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const deviceColumnsWithActions = isAdmin
+    ? [
+        ...deviceColumns,
+        {
+          title: "操作",
+          key: "actions",
+          width: 100,
+          fixed: "right" as const,
+          render: (_: unknown, record: InventoryDevice) => (
+            <span onClick={(event) => event.stopPropagation()}>
+              <Popconfirm
+                title="确认删除该设备台账？"
+                description="将物理删除设备、全部观测记录和版本历史。"
+                okText="删除"
+                okButtonProps={{
+                  danger: true,
+                  loading: deletingId === record.device_id } }
+                cancelText="取消"
+                onConfirm={() => void handleDeleteDevice(record)}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  loading={deletingId === record.device_id}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
+            </span>
+          ) },
+      ]
+    : deviceColumns;
 
   return (
     <Flex vertical gap={16}>
@@ -271,11 +329,11 @@ export function InventoryPage() {
                   ) : (
                     <Table
                       rowKey="device_id"
-                      columns={deviceColumns}
+                      columns={deviceColumnsWithActions}
                       dataSource={devices}
                       loading={loading}
                       pagination={false}
-                      scroll={{ x: 1160 }}
+                      scroll={{ x: isAdmin ? 1260 : 1160 }}
                       onRow={(record) => ({
                         onClick: () =>
                           navigate(`/inventory/devices/${record.device_id}`),

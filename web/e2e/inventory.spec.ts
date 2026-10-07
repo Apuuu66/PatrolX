@@ -105,4 +105,14 @@ test("设备台账只支持管理员物理删除", async ({ page }) => {
   await uploadPackage(page, rerunZip, "inspection");
   await page.getByRole("tab", { name: "设备台账" }).click();
   await expect(page.getByText("NJ-AGG-001").first()).toBeVisible();
+
+  // 列表页同样提供危险确认删除入口
+  await page.goto("/inventory");
+  const listRow = page.getByRole("row").filter({ hasText: "NJ-AGG-001" });
+  await expect(listRow).toHaveCount(1);
+  await listRow.getByRole("button", { name: /^删\s*除$/ }).click();
+  const listPopover = page.locator(".ant-popover").filter({ hasText: "确认删除该设备台账？" });
+  await listPopover.getByRole("button", { name: /^删\s*除$/ }).click();
+  await expect(page.getByText("设备台账已删除")).toBeVisible();
+  await expect(page.getByText("NJ-AGG-001")).toHaveCount(0);
 });

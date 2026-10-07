@@ -23,6 +23,7 @@ vi.mock("../api/http", () => ({
   api: {
     listInventoryDevices: vi.fn(),
     listInventoryQualityIssues: vi.fn(),
+    deleteInventoryDevice: vi.fn(),
   },
 }));
 
@@ -130,6 +131,32 @@ describe("InventoryPage", () => {
     expect(await screen.findByText("GD-GZ-Core-01")).toBeTruthy();
     fireEvent.click(screen.getByText("GD-GZ-Core-01"));
     expect(await screen.findByText("设备详情测试")).toBeTruthy();
+  });
+
+  it("管理员可从设备列表直接物理删除台账", async () => {
+    vi.mocked(api.deleteInventoryDevice).mockResolvedValue(undefined);
+    renderPage();
+
+    const row = (await screen.findByText("GD-GZ-Core-01")).closest("tr");
+    expect(row).toBeTruthy();
+    if (!row) throw new Error("device row is missing");
+
+    const reloadCountBefore = vi.mocked(api.listInventoryDevices).mock.calls.length;
+    fireEvent.click(within(row).getByRole("button", { name: /^删\s*除$/ }));
+
+    const confirmText = await screen.findByText("确认删除该设备台账？");
+    const popover = confirmText.closest(".ant-popover");
+    expect(popover).toBeTruthy();
+    if (!popover) throw new Error("delete popover is missing");
+    expect(within(popover as HTMLElement).getByText("将物理删除设备、全部观测记录和版本历史。")).toBeTruthy();
+
+    fireEvent.click(within(popover as HTMLElement).getByRole("button", { name: /^删\s*除$/ }));
+    await waitFor(() => {
+      expect(api.deleteInventoryDevice).toHaveBeenCalledWith("gd-gz-core-01");
+    });
+    await waitFor(() => {
+      expect(vi.mocked(api.listInventoryDevices).mock.calls.length).toBeGreaterThan(reloadCountBefore);
+    });
   });
 
 });
