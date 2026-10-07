@@ -289,7 +289,7 @@ function VersionComparePanel({
 
   const canRequest = Boolean(taskId && ruleCode && unitId);
   const candidateOptions = useMemo(
-    () => (candidates ? candidates.items.map((item) => versionCandidateOption(item, candidates.current_version)) : []),
+    () => (candidates ? candidates.items?.map((item) => versionCandidateOption(item, candidates.current_version ?? null)) : []),
     [candidates],
   );
   const loading = loadingCandidates || loadingComparison;
@@ -341,7 +341,7 @@ function VersionComparePanel({
         <div style={{ padding: 48, textAlign: "center" }}>
           <Spin />
         </div>
-      ) : candidates && !candidates.items.length ? (
+      ) : candidates && !candidates.items?.length ? (
         <Alert
           type={candidates.device_id ? "info" : "warning"}
           showIcon
@@ -365,15 +365,22 @@ function VersionComparePanel({
             style={{ marginBottom: 12 }}
           />
           <Descriptions size="small" column={4} style={{ marginBottom: 12 }}>
-            <Descriptions.Item label="当前版本">{versionCandidateLabel({ version: comparison.current_version, version_known: comparison.current_version !== null })}</Descriptions.Item>
-            <Descriptions.Item label="基线版本">{versionCandidateLabel({ version: comparison.baseline_version, version_known: comparison.baseline_version !== null })}</Descriptions.Item>
+            <Descriptions.Item label="当前版本">{versionCandidateLabel({ version: comparison.current_version ?? null, version_known: comparison.current_version !== null && comparison.current_version !== undefined })}</Descriptions.Item>
+            <Descriptions.Item label="基线版本">{versionCandidateLabel({ version: comparison.baseline_version ?? null, version_known: comparison.baseline_version != null })}</Descriptions.Item>
             <Descriptions.Item label="基线任务">{comparison.baseline_task?.task_id ?? "未选择"}</Descriptions.Item>
             <Descriptions.Item label="完成时间">{formatVersionDateTime(comparison.baseline_task?.completed_at)}</Descriptions.Item>
           </Descriptions>
           {comparison.match.status === "matched" ? (
-            <Typography.Paragraph>{versionSummaryMessage(comparison.summary)}</Typography.Paragraph>
+            <Typography.Paragraph>{versionSummaryMessage({
+              current_value: comparison.summary.current_value ?? null,
+              baseline_value: comparison.summary.baseline_value ?? null,
+              absolute_change: comparison.summary.absolute_change ?? null,
+              change_ratio: comparison.summary.change_ratio ?? null,
+              direction: comparison.summary.direction,
+              message: comparison.summary.message,
+            })}</Typography.Paragraph>
           ) : null}
-          {comparison.current_points.length || comparison.baseline_points.length ? (
+          {comparison.current_points?.length || comparison.baseline_points?.length ? (
             <VersionCompareChart comparison={comparison} unit={unit} />
           ) : null}
         </>
@@ -482,10 +489,10 @@ function HistoryTrendPanel({
       ) : history && matchAlert ? (
         <>
           <Alert type={matchAlert.type} showIcon message={matchAlert.title} description={matchAlert.description} style={{ marginBottom: 12 }} />
-          {history.baseline_points.some((point) => point.significance === "insufficient") ? (
+          {(history.baseline_points ?? []).some((point) => point.significance === "insufficient") ? (
             <Typography.Paragraph type="secondary">部分同时刻历史样本不足 3 个，基线标记为样本不足。</Typography.Paragraph>
           ) : null}
-          {history.history_series.length ? (
+          {(history.history_series ?? []).length ? (
             <HistoryTrendChart history={history} unit={unit} />
           ) : (
             <Empty description="没有历史曲线数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />

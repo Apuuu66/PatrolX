@@ -36,7 +36,7 @@ export interface DisplayField {
 const CUSTOMER_LABELS: Record<string, string> = {
   province: "省份",
   operator: "运营商",
-  product: "产品形态",
+  product: "网元类型",
   version: "版本",
 };
 

@@ -1,7 +1,7 @@
 import type { MeasurementVersionCandidate, MeasurementVersionComparison } from "../api/http";
 
 type VersionOption = {
-  version: string | null;
+  version?: string | null;
   version_known: boolean;
 };
 
@@ -53,14 +53,14 @@ export function buildVersionCompareChartOption(
 ): VersionChartOption | null {
   const timeLabels = [
     ...new Set([
-      ...comparison.current_points.map((point) => point.time_label),
-      ...comparison.baseline_points.map((point) => point.time_label),
+      ...(comparison.current_points ?? []).map((point) => point.time_label),
+      ...(comparison.baseline_points ?? []).map((point) => point.time_label),
     ]),
   ].sort();
   if (!timeLabels.length) return null;
 
   const valueByLabel = (points: MeasurementVersionComparison["current_points"]) => {
-    const grouped = new Map(points.map((point) => [point.time_label, point.value]));
+    const grouped = new Map((points ?? []).map((point) => [point.time_label, point.value]));
     return timeLabels.map((label) => grouped.get(label) ?? null);
   };
 
@@ -73,24 +73,24 @@ export function buildVersionCompareChartOption(
     dataZoom: [{ type: "inside" }, { type: "slider" }],
     series: [
       {
-        name: `当前版本 ${versionCandidateLabel({ version: comparison.current_version, version_known: comparison.current_version !== null })}`,
+        name: `当前版本 ${versionCandidateLabel({ version: comparison.current_version ?? null, version_known: comparison.current_version != null })}`,
         type: "line",
         smooth: true,
         showSymbol: true,
         connectNulls: true,
-        data: valueByLabel(comparison.current_points),
+        data: valueByLabel(comparison.current_points ?? []),
       },
       {
         name: `基线版本 ${versionCandidateLabel({
-          version: comparison.baseline_version,
-          version_known: comparison.baseline_version !== null,
+          version: comparison.baseline_version ?? null,
+          version_known: comparison.baseline_version !== null && comparison.baseline_version !== undefined,
         })}`,
         type: "line",
         smooth: true,
         showSymbol: true,
         connectNulls: true,
         lineStyle: { type: "dashed" },
-        data: valueByLabel(comparison.baseline_points),
+        data: valueByLabel(comparison.baseline_points ?? []),
       },
     ],
   };

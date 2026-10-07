@@ -766,8 +766,8 @@ export function TaskListPage() {
               <Form.Item label="运营商" name="operator" rules={[{ required: true, message: "请选择运营商" }]}>
                 <Select allowClear placeholder="选择运营商" options={dictOptions(dicts?.operator)} />
               </Form.Item>
-              <Form.Item label="产品形态" name="product">
-                <Select allowClear placeholder="选择产品形态" options={dictOptions(dicts?.product)} />
+              <Form.Item label="网元类型" name="product">
+                <Select allowClear placeholder="选择网元类型" options={dictOptions(dicts?.product)} />
               </Form.Item>
             </>
           ) : (
@@ -775,7 +775,7 @@ export function TaskListPage() {
               type="info"
               showIcon
               message="日志补充包不采集设备信息"
-              description="不需要省份、运营商和产品形态；版本只从巡检包的 LST ME.txt 获取。"
+              description="不需要省份、运营商和网元类型；版本只从巡检包的 LST ME.txt 获取。"
             />
           )}
         </Form>

@@ -59,7 +59,7 @@ export function getTaskMetadataTags(
   if (task.customer_product) {
     tags.push({
       key: "product",
-      label: "产品形态",
+      label: "网元类型",
       value: dictName(dicts, "product", task.customer_product),
     });
   }

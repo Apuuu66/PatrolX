@@ -1,8 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { App } from "antd";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type InventoryDevice, type InventoryObservation, type InventoryVersionPoint } from "../api/http";
 import { InventoryDevicePage } from "./InventoryDevicePage";
+
+vi.mock("../auth/AuthContext", () => ({
+  useAuth: () => ({
+    user: { username: "admin", role: "admin" },
+    login: vi.fn(),
+    logout: vi.fn(),
+    canWrite: true,
+  }),
+}));
 
 vi.mock("../api/http", () => ({
   ApiError: class ApiError extends Error {},
@@ -10,6 +20,8 @@ vi.mock("../api/http", () => ({
     getInventoryDevice: vi.fn(),
     getInventoryVersionHistory: vi.fn(),
     listInventoryObservations: vi.fn(),
+    updateInventoryDevice: vi.fn(),
+    deleteInventoryDevice: vi.fn(),
   },
 }));
 
@@ -27,6 +39,7 @@ const device: InventoryDevice = {
   observation_count: 3,
   site_change_count: 1,
   has_site_conflict: true,
+  remark: "旧备注",
   quality_issue_types: ["site_ownership_change"],
 };
 
@@ -78,11 +91,14 @@ const observations: InventoryObservation[] = [
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/inventory/devices/gd-gz-core-01"]}>
-      <Routes>
-        <Route path="/inventory/devices/:deviceId" element={<InventoryDevicePage />} />
-      </Routes>
-    </MemoryRouter>,
+    <App>
+      <MemoryRouter initialEntries={["/inventory/devices/gd-gz-core-01"]}>
+        <Routes>
+          <Route path="/inventory" element={<div>台账列表测试</div>} />
+          <Route path="/inventory/devices/:deviceId" element={<InventoryDevicePage />} />
+        </Routes>
+      </MemoryRouter>
+    </App>,
   );
 }
 
@@ -119,5 +135,37 @@ describe("InventoryDevicePage", () => {
       page_size: 20,
       order: "desc",
     });
+  });
+
+  it("updates device remark", async () => {
+    vi.mocked(api.updateInventoryDevice).mockResolvedValue({ ...device, remark: "新备注" });
+    renderPage();
+
+    await screen.findByText("旧备注");
+    fireEvent.click(screen.getByText("编辑"));
+    fireEvent.change(await screen.findByLabelText("备注"), { target: { value: "新备注" } });
+    fireEvent.click(screen.getByRole("button", { name: "保 存" }));
+
+    await waitFor(() => {
+      expect(api.updateInventoryDevice).toHaveBeenCalledWith("gd-gz-core-01", { remark: "新备注" });
+    });
+    expect(await screen.findByText("备注已更新")).toBeTruthy();
+  });
+
+  it("physically deletes device after explicit confirmation", async () => {
+    vi.mocked(api.deleteInventoryDevice).mockResolvedValue(undefined);
+    renderPage();
+
+    await screen.findByText("旧备注");
+    fireEvent.click(screen.getByRole("button", { name: /^删\s*除$/ }));
+    const popover = (await screen.findByText("确认删除该设备台账？")).closest(".ant-popover");
+    if (!popover) throw new Error("delete popover is missing");
+    fireEvent.click(within(popover).getByRole("button", { name: /^删\s*除$/ }));
+
+    await waitFor(() => {
+      expect(api.deleteInventoryDevice).toHaveBeenCalledWith("gd-gz-core-01");
+    });
+    expect(await screen.findByText("设备台账已删除")).toBeTruthy();
+    expect(await screen.findByText("台账列表测试")).toBeTruthy();
   });
 });

@@ -19,17 +19,40 @@ touch "$E2E_DIR/uploads/$LEGACY_TASK_ID/legacy.zip"
 
 cd "$ROOT_DIR"
 "$VENV_PYTHON" - <<'PYCODE'
-from tests.fixtures.inventory.builder import make_inventory_zip, make_log_supplement_zip
+from tests.fixtures.inventory.builder import (
+    make_inventory_zip,
+    make_log_supplement_zip,
+    multi_device_lst_me_content,
+)
 from pathlib import Path
 base = Path("web/e2e/.tmp")
 base.mkdir(parents=True, exist_ok=True)
-make_inventory_zip(base / "inventory-e2e.zip")
+make_inventory_zip(
+    base / "inventory-e2e.zip",
+    content=multi_device_lst_me_content(
+        [
+            {"device_name": "NJ-AGG-001", "network_element_type": "core", "version": "V900R016C10SPC200"},
+            {"device_name": "NJ-IMS-001", "network_element_type": "ims", "version": "V900R016C10SPC100"},
+        ]
+    ),
+)
+make_inventory_zip(
+    base / "inventory-e2e-rerun.zip",
+    content=multi_device_lst_me_content(
+        [
+            {"device_name": "NJ-AGG-001", "network_element_type": "core", "version": "V900R016C10SPC200"},
+            {"device_name": "NJ-IMS-001", "network_element_type": "ims", "version": "V900R016C10SPC100"},
+        ]
+    ),
+)
 make_log_supplement_zip(base / "log-supplement-e2e.zip")
 PYCODE
 
 export PATROLX_OUTPUT_DIR="$E2E_DIR/output"
 export PATROLX_UPLOADS_DIR="$E2E_DIR/uploads"
 export PATROLX_SQLITE_PATH="$E2E_DIR/patrolx.db"
+
+"$VENV_PYTHON" -m app.cli create-default-admin --username e2e-admin --password e2e-admin-123
 
 cd "$ROOT_DIR"
 "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_kpi_measurement_history.py"

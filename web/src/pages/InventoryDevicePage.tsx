@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Descriptions, Flex, Pagination, Table, Tag, Typography } from "antd";
-import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Alert, App, Button, Card, Descriptions, Flex, Form, Input, Modal, Pagination, Popconfirm, Table, Tag, Typography } from "antd";
+import { ArrowLeftOutlined, EditOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -9,6 +9,7 @@ import {
   type InventoryObservation,
   type InventoryVersionPoint,
 } from "../api/http";
+import { useAuth } from "../auth/AuthContext";
 import { EmptyState, PageSkeleton } from "../components/PageState";
 
 const DIRECTION_META = {
@@ -80,6 +81,13 @@ const observationColumns = [
 export function InventoryDevicePage() {
   const { deviceId = "" } = useParams();
   const navigate = useNavigate();
+  const { message } = App.useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [editForm] = Form.useForm<{ remark?: string }>();
+  const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [observations, setObservations] = useState<InventoryObservation[]>([]);
@@ -115,6 +123,40 @@ export function InventoryDevicePage() {
     void load();
   }, [load]);
 
+  const openEdit = () => {
+    editForm.setFieldsValue({ remark: device?.remark ?? "" });
+    setEditOpen(true);
+  };
+
+  const handleSave = async (values: { remark?: string }) => {
+    setSaving(true);
+    try {
+      const updated = await api.updateInventoryDevice(deviceId, {
+        remark: values.remark || null,
+      });
+      setDevice(updated);
+      message.success("备注已更新");
+      setEditOpen(false);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "更新设备失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteInventoryDevice(deviceId);
+      message.success("设备台账已删除");
+      navigate("/inventory");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "删除设备失败");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Flex vertical gap={16}>
       <Flex align="center" justify="space-between">
@@ -126,9 +168,30 @@ export function InventoryDevicePage() {
             {device?.device_name || "设备详情"}
           </Typography.Title>
         </Flex>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
-          刷新
-        </Button>
+        <Flex gap={8}>
+          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+            刷新
+          </Button>
+          {isAdmin && device && (
+            <>
+              <Button icon={<EditOutlined />} onClick={openEdit}>
+                编辑
+              </Button>
+              <Popconfirm
+                title="确认删除该设备台账？"
+                description="将物理删除设备、全部观测记录和版本历史。"
+                okText="删除"
+                okButtonProps={{ danger: true, loading: deleting }}
+                cancelText="取消"
+                onConfirm={() => void handleDelete()}
+              >
+                <Button danger loading={deleting}>
+                  删除
+                </Button>
+              </Popconfirm>
+            </>
+          )}
+        </Flex>
       </Flex>
 
       {error && <Alert type="error" showIcon message={error} />}
@@ -147,6 +210,7 @@ export function InventoryDevicePage() {
             <Descriptions.Item label="首次观测">{formatTime(device.first_seen_at)}</Descriptions.Item>
             <Descriptions.Item label="最近观测">{formatTime(device.last_seen_at)}</Descriptions.Item>
             <Descriptions.Item label="观测次数">{device.observation_count}</Descriptions.Item>
+            <Descriptions.Item label="备注">{device.remark || "-"}</Descriptions.Item>
           </Descriptions>
           {(device.has_site_conflict || device.current_version === null) && (
             <Alert
@@ -201,6 +265,22 @@ export function InventoryDevicePage() {
           />
         </Flex>
       </Card>
+
+      <Modal
+        title="编辑设备备注"
+        open={editOpen}
+        confirmLoading={saving}
+        okText="保存"
+        cancelText="取消"
+        onCancel={() => setEditOpen(false)}
+        onOk={() => editForm.submit()}
+      >
+        <Form form={editForm} layout="vertical" onFinish={handleSave}>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={4} placeholder="可选" maxLength={500} showCount />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Flex>
   );
 }

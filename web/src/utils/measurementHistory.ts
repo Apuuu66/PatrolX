@@ -111,7 +111,7 @@ export function historyMatchAlert(match: MeasurementHistoryTrend["match"]): Hist
 }
 
 export function insufficientSampleCount(trend: MeasurementHistoryTrend): number {
-  return trend.baseline_points.filter((point) => point.significance === "insufficient").length;
+  return (trend.baseline_points ?? []).filter((point) => point.significance === "insufficient").length;
 }
 
 type MarkPoint = {
@@ -137,23 +137,23 @@ export function buildHistoryTrendChartOption(
   unit?: string | null,
 ): MeasurementDailyTrendChartOption | null {
   const history = new Map<string, Map<string, number>>();
-  addToHistory(history, trend.history_series.flatMap((series) => series.points));
-  const currentDate = trend.current_points[0]?.date ?? trend.window.end_date;
+  addToHistory(history, (trend.history_series ?? []).flatMap((series) => series.points ?? []));
+  const currentDate = (trend.current_points ?? [])[0]?.date ?? trend.window.end_date;
   const current = new Map<string, Map<string, number>>();
-  addToHistory(current, trend.current_points.map((point) => ({ ...point })));
+  addToHistory(current, (trend.current_points ?? []).map((point) => ({ ...point, value: point.value ?? 0 })));
 
   const timeLabels = [
     ...new Set([
-      ...trend.current_points.map((point) => point.time_label),
-      ...trend.history_series.flatMap((series) => series.points.map((point) => point.time_label)),
+      ...(trend.current_points ?? []).map((point) => point.time_label),
+      ...(trend.history_series ?? []).flatMap((series) => (series.points ?? []).map((point) => point.time_label)),
     ]),
   ].sort();
 
   if (!timeLabels.length) return null;
   const dates = [...history.keys()].sort();
   const marksByLabel = new Map<string, MarkPoint>();
-  for (const point of trend.baseline_points) {
-    if ((point.significance === "higher" || point.significance === "lower") && point.current_value !== null) {
+  for (const point of trend.baseline_points ?? []) {
+    if ((point.significance === "higher" || point.significance === "lower") && point.current_value != null) {
       marksByLabel.set(point.time_label, {
         coord: [point.time_label, point.current_value],
         value: point.current_value,
@@ -189,7 +189,7 @@ export function buildHistoryTrendChartOption(
     });
   }
 
-  const baselineByLabel = new Map(trend.baseline_points.map((point) => [point.time_label, point.baseline_value]));
+  const baselineByLabel = new Map(trend.baseline_points?.map((point) => [point.time_label, point.baseline_value]));
   series.push({
     name: "历史基线",
     type: "line",

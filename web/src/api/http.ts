@@ -161,6 +161,8 @@ export type RebuildMode = components["schemas"]["RebuildMode"];
 export type RebuildTriggerSource = components["schemas"]["RebuildRequest"]["trigger_source"];
 export type PackageKind = components["schemas"]["PackageKind"];
 export type InventoryDevice = components["schemas"]["InventoryDevice"];
+export type InventoryDeviceCreatePayload = components["schemas"]["InventoryDeviceCreateRequest"];
+export type InventoryDeviceUpdatePayload = components["schemas"]["InventoryDeviceUpdateRequest"];
 export type InventoryDeviceList = components["schemas"]["InventoryDeviceList"];
 export type InventoryObservation = components["schemas"]["InventoryObservation"];
 export type InventoryObservationList = components["schemas"]["InventoryObservationList"];
@@ -335,6 +337,25 @@ export const api = {
 
   getInventoryDevice: (deviceId: string) =>
     request<InventoryDevice>(`/api/v2/inventory/devices/${encodeURIComponent(deviceId)}`),
+
+  createInventoryDevice: (payload: InventoryDeviceCreatePayload) =>
+    request<InventoryDevice>("/api/v2/inventory/devices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  updateInventoryDevice: (deviceId: string, payload: InventoryDeviceUpdatePayload) =>
+    request<InventoryDevice>(`/api/v2/inventory/devices/${encodeURIComponent(deviceId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  deleteInventoryDevice: (deviceId: string) =>
+    request<void>(`/api/v2/inventory/devices/${encodeURIComponent(deviceId)}`, {
+      method: "DELETE",
+    }),
 
   listInventoryObservations: (deviceId: string, query: { page?: number; page_size?: number; order?: "asc" | "desc"; site_key?: string } = {}) => {
     const params = new URLSearchParams();

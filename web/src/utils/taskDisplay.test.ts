@@ -56,7 +56,7 @@ describe("getCustomerFields", () => {
     assert.deepEqual(fields, [
       { key: "province", label: "省份", value: "js" },
       { key: "operator", label: "运营商", value: "cmcc" },
-      { key: "product", label: "产品形态", value: "router" },
+      { key: "product", label: "网元类型", value: "router" },
     ]);
   });
 

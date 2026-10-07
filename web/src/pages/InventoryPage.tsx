@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  App,
   Button,
   Card,
   Flex,
+  Form,
   Input,
+  Modal,
   Pagination,
   Space,
   Select,
@@ -13,7 +16,7 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import {
@@ -23,6 +26,7 @@ import {
   type InventoryQualityIssue,
   type InventoryQualityIssueType,
 } from "../api/http";
+import { useAuth } from "../auth/AuthContext";
 import { EmptyState, PageSkeleton } from "../components/PageState";
 
 const QUALITY_LABELS: Record<
@@ -170,6 +174,12 @@ const qualityColumns = [
 
 export function InventoryPage() {
   const navigate = useNavigate();
+  const { message } = App.useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [createForm] = Form.useForm<{ province: string; operator: string; device_name: string; remark?: string }>();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<"devices" | "quality">("devices");
   const [province, setProvince] = useState("");
   const [operator, setOperator] = useState("");
@@ -228,6 +238,31 @@ export function InventoryPage() {
     setIssuePage(1);
   }, [province, operator, tab]);
 
+  const handleCreate = async (values: {
+    province: string;
+    operator: string;
+    device_name: string;
+    remark?: string;
+  }) => {
+    setCreating(true);
+    try {
+      await api.createInventoryDevice({
+        province: values.province,
+        operator: values.operator,
+        device_name: values.device_name,
+        remark: values.remark || null,
+      });
+      message.success("设备已创建");
+      setCreateOpen(false);
+      createForm.resetFields();
+      await load();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "创建设备失败");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <Flex vertical gap={16}>
       <Flex align="center" justify="space-between">
@@ -260,24 +295,31 @@ export function InventoryPage() {
               label: "设备台账",
               children: (
                 <Flex vertical gap={16}>
-                  <Space wrap>
-                    <Input
-                      allowClear
-                      placeholder="按省份筛选"
-                      prefix="省份"
-                      style={{ width: 180 }}
-                      value={province}
-                      onChange={(event) => setProvince(event.target.value)}
-                    />
-                    <Input
-                      allowClear
-                      placeholder="按运营商筛选"
-                      prefix="运营商"
-                      style={{ width: 180 }}
-                      value={operator}
-                      onChange={(event) => setOperator(event.target.value)}
-                    />
-                  </Space>
+                  <Flex justify="space-between" wrap="wrap" gap={12}>
+                    <Space wrap>
+                      <Input
+                        allowClear
+                        placeholder="按省份筛选"
+                        prefix="省份"
+                        style={{ width: 180 }}
+                        value={province}
+                        onChange={(event) => setProvince(event.target.value)}
+                      />
+                      <Input
+                        allowClear
+                        placeholder="按运营商筛选"
+                        prefix="运营商"
+                        style={{ width: 180 }}
+                        value={operator}
+                        onChange={(event) => setOperator(event.target.value)}
+                      />
+                    </Space>
+                    {isAdmin && (
+                      <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+                        新增设备
+                      </Button>
+                    )}
+                  </Flex>
                   {loading && devices.length === 0 ? (
                     <PageSkeleton rows={5} />
                   ) : devices.length === 0 && !error ? (
@@ -384,6 +426,34 @@ export function InventoryPage() {
           ]}
         />
       </Card>
+
+      <Modal
+        title="新增设备"
+        open={createOpen}
+        confirmLoading={creating}
+        okText="创建"
+        cancelText="取消"
+        onCancel={() => {
+          setCreateOpen(false);
+          createForm.resetFields();
+        }}
+        onOk={() => createForm.submit()}
+      >
+        <Form form={createForm} layout="vertical" onFinish={handleCreate}>
+          <Form.Item name="province" label="省份" rules={[{ required: true, message: "请输入省份" }]}>
+            <Input placeholder="例如：江苏省" />
+          </Form.Item>
+          <Form.Item name="operator" label="运营商" rules={[{ required: true, message: "请输入运营商" }]}>
+            <Input placeholder="例如：移动" />
+          </Form.Item>
+          <Form.Item name="device_name" label="设备名称" rules={[{ required: true, message: "请输入设备名称" }]}>
+            <Input placeholder="例如：NJ-AGG-001" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={3} placeholder="可选" maxLength={500} showCount />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Flex>
   );
 }

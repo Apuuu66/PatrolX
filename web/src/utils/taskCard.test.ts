@@ -58,7 +58,7 @@ describe("getTaskMetadataTags", () => {
     assert.deepEqual(tags, [
       { key: "province", label: "省份", value: "江苏" },
       { key: "operator", label: "运营商", value: "中国移动" },
-      { key: "product", label: "产品形态", value: "路由器" },
+      { key: "product", label: "网元类型", value: "路由器" },
       { key: "version", label: "版本", value: "V2" },
       { key: "device_id", label: "设备 ID", value: "dev-001" },
     ]);
