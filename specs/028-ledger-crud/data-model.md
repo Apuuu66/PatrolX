@@ -2,14 +2,14 @@
 
 ## `LST ME.txt` 解析证据
 
-任务证据 `inventory.json` 从单设备语义升级为记录级语义，`parser_version=2`。
+任务证据 `inventory.json` 从单设备语义升级为记录级语义；`parser_version=3` 起只保留所选网元类型的记录明细，其它类型仅计入 `unmatched_count`。
 
 ### 核心字段
 
 ```json
 {
   "schema_version": 2,
-  "parser_version": "2",
+  "parser_version": "3",
   "network_element_type_filter": {
     "requested": "UMF2020",
     "normalized": "UMF2020",
@@ -29,18 +29,6 @@
       "name_source_lines": [7],
       "type_source_lines": [8],
       "version_source_lines": [9]
-    },
-    {
-      "raw_name": "NJ-AGG-003",
-      "normalized_name": "NJ-AGG-003",
-      "raw_network_element_type": "UMF2021",
-      "normalized_network_element_type": "UMF2021",
-      "raw_version": "V900R016C10SPC202",
-      "matched": false,
-      "source_file": "config/LST ME.txt",
-      "name_source_lines": [13],
-      "type_source_lines": [14],
-      "version_source_lines": [15]
     }
   ],
   "devices": [

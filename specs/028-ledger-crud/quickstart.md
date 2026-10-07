@@ -29,10 +29,10 @@
 1. 上传表单和字典页的 `product` 中文文案为“网元类型”。
 2. 多设备 `LST ME.txt` 可解析出多台设备，每台保留网元类型、版本、来源文件和行号。
 3. 只有记录网元类型规范化后等于上传 `product` 的设备进入台账。
-4. 网元类型不匹配的记录不出现在 `devices`，不出现在台账观测，但出现在 `records` 摘要中。
+4. 网元类型不匹配的记录不出现在 `devices`、不出现在 `records` 明细、不出现在台账观测，只计入 `unmatched_count`。
 5. 上传 `product` 缺失时任务不失败，台账不归档，原因为 `network_element_type_filter_missing`。
 6. 单条记录异常或缺版本不阻断其他匹配记录归档。
-7. `parser_version` 为 `2`；旧任务详情仍可读取旧证据。
+7. `parser_version` 为 `3`；旧任务详情仍可读取旧证据。
 8. 非 admin 删除返回 403。
 9. 删除设备后，设备、观测和版本历史接口返回不存在或空。
 13. 删除不修改 `inventory.json` 文件内容和 checksum。
