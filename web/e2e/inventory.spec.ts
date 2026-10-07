@@ -32,7 +32,7 @@ async function uploadPackage(page: import("@playwright/test").Page, file: string
       .click();
     await selectByLabel("网元类型").click();
     await page
-      .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option[title="核心网"]')
+      .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option[title="UMF"]')
       .click();
   } else {
     await expect(page.getByText("日志补充包不采集设备信息")).toBeVisible();

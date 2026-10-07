@@ -19,7 +19,7 @@ const system = {
   customer: {
     province: "江苏",
     operator: "移动",
-    product: "核心网",
+    product: "UMF",
     device_id: "report-device-001",
   },
   rules: [],

@@ -31,8 +31,8 @@ make_inventory_zip(
     base / "inventory-e2e.zip",
     content=multi_device_lst_me_content(
         [
-            {"device_name": "NJ-AGG-001", "network_element_type": "core", "version": "V900R016C10SPC200"},
-            {"device_name": "NJ-IMS-001", "network_element_type": "ims", "version": "V900R016C10SPC100"},
+            {"device_name": "NJ-AGG-001", "network_element_type": "umf", "version": "V900R016C10SPC200"},
+            {"device_name": "NJ-CSP-001", "network_element_type": "csp", "version": "V900R016C10SPC100"},
         ]
     ),
 )
@@ -40,8 +40,8 @@ make_inventory_zip(
     base / "inventory-e2e-rerun.zip",
     content=multi_device_lst_me_content(
         [
-            {"device_name": "NJ-AGG-001", "network_element_type": "core", "version": "V900R016C10SPC200"},
-            {"device_name": "NJ-IMS-001", "network_element_type": "ims", "version": "V900R016C10SPC100"},
+            {"device_name": "NJ-AGG-001", "network_element_type": "umf", "version": "V900R016C10SPC200"},
+            {"device_name": "NJ-CSP-001", "network_element_type": "csp", "version": "V900R016C10SPC100"},
         ]
     ),
 )
