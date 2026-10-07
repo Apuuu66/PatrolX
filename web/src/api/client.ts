@@ -1941,7 +1941,10 @@ export interface components {
             site?: components["schemas"]["TaskInventorySite"] | null;
             device?: components["schemas"]["TaskInventoryDevice"] | null;
             version?: components["schemas"]["TaskInventoryVersion"] | null;
-            /** Records */
+            /**
+             * Records
+             * @description 只包含与所选网元类型匹配的记录明细；其它类型的记录仅计入 unmatched_count。
+             */
             records?: components["schemas"]["TaskInventoryRecord"][];
             /** Devices */
             devices?: components["schemas"]["TaskInventoryMatchedDevice"][];
@@ -2022,7 +2025,10 @@ export interface components {
             status: "ok" | "missing" | "no_match";
             /** Matched Count */
             matched_count: number;
-            /** Unmatched Count */
+            /**
+             * Unmatched Count
+             * @description 未匹配所选网元类型的记录数量；不保留记录明细。
+             */
             unmatched_count: number;
         };
         /** TaskInventoryRecord */

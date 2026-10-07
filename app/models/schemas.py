@@ -776,8 +776,8 @@ class TaskInventoryNetworkElementTypeFilter(BaseModel):
     requested: str | None = None
     normalized: str | None = None
     status: Literal["ok", "missing", "no_match"]
-    matched_count: int = Field(ge=0)
-    unmatched_count: int = Field(ge=0)
+    matched_count: int = Field(ge=0, description="与所选网元类型匹配的记录数量。")
+    unmatched_count: int = Field(ge=0, description="未匹配所选网元类型的记录数量；不保留记录明细。")
 
 
 class TaskInventoryRecord(BaseModel):
@@ -848,7 +848,10 @@ class TaskInventory(BaseModel):
     site: TaskInventorySite | None = None
     device: TaskInventoryDevice | None = None
     version: TaskInventoryVersion | None = None
-    records: list[TaskInventoryRecord] = Field(default_factory=list)
+    records: list[TaskInventoryRecord] = Field(
+        default_factory=list,
+        description="只包含与所选网元类型匹配的记录明细；其它类型的记录仅计入 unmatched_count。",
+    )
     devices: list[TaskInventoryMatchedDevice] = Field(default_factory=list)
     source_files: list[str] = Field(default_factory=list)
     conflicts: list[dict[str, Any]] = Field(default_factory=list)

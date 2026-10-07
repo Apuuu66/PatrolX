@@ -178,7 +178,7 @@ def test_parse_multiple_devices_filters_by_network_element_type(tmp_path: Path) 
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / LST_ME_FILENAME).write_bytes(_multi_content())
     evidence = parse_inventory(tmp_path, task_id="task-multi", province="江苏", operator="移动", product=" UMF2020 ")
-    assert evidence["parser_version"] == "2"
+    assert evidence["parser_version"] == "3"
     assert evidence["schema_version"] == 2
     assert evidence["status"] == "archived"
     assert evidence["network_element_type_filter"] == {
@@ -189,7 +189,9 @@ def test_parse_multiple_devices_filters_by_network_element_type(tmp_path: Path) 
         "unmatched_count": 1,
     }
     assert [item["normalized_name"] for item in evidence["devices"]] == ["NJ-AGG-001", "NJ-AGG-002"]
-    assert [item["matched"] for item in evidence["records"]] == [True, True, False]
+    # 只识别所选网元类型：不匹配的记录不进入任务证据明细，仅保留数量。
+    assert [item["normalized_name"] for item in evidence["records"]] == ["NJ-AGG-001", "NJ-AGG-002"]
+    assert [item["matched"] for item in evidence["records"]] == [True, True]
     assert len(evidence["archived"]["devices"]) == 2
     assert evidence["archived"]["device_id"] is None
 
@@ -201,6 +203,7 @@ def test_parse_missing_network_element_type_filter_does_not_archive(tmp_path: Pa
     assert evidence["status"] == "not_archived"
     assert evidence["not_archived_reason"] == "network_element_type_filter_missing"
     assert evidence["devices"] == []
+    assert evidence["records"] == []
     assert evidence["network_element_type_filter"]["status"] == "missing"
 
 
@@ -211,7 +214,9 @@ def test_parse_no_matching_network_element_type_does_not_archive(tmp_path: Path)
     assert evidence["status"] == "not_archived"
     assert evidence["not_archived_reason"] == "network_element_type_no_match"
     assert evidence["devices"] == []
+    assert evidence["records"] == []
     assert evidence["network_element_type_filter"]["status"] == "no_match"
+    assert evidence["network_element_type_filter"]["unmatched_count"] == 3
 
 
 def test_parse_duplicate_same_device_with_same_version_is_deduplicated(tmp_path: Path) -> None:

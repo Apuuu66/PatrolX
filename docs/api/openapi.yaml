@@ -4154,6 +4154,7 @@ components:
             $ref: '#/components/schemas/TaskInventoryRecord'
           type: array
           title: Records
+          description: 只包含与所选网元类型匹配的记录明细；其它类型的记录仅计入 unmatched_count。
         devices:
           items:
             $ref: '#/components/schemas/TaskInventoryMatchedDevice'
@@ -4327,6 +4328,7 @@ components:
           type: integer
           minimum: 0.0
           title: Unmatched Count
+          description: 未匹配所选网元类型的记录数量；不保留记录明细。
       type: object
       required:
       - status

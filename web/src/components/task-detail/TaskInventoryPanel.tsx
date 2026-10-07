@@ -142,13 +142,6 @@ export function TaskInventoryPanel({ task }: { task: components["schemas"]["Task
       render: (value?: string | null, record?: InventoryRecord) => value || fieldTag(record?.version_status),
     },
     {
-      title: "筛选结果",
-      dataIndex: "matched",
-      key: "matched",
-      width: 110,
-      render: (value: boolean) => (value ? <Tag color="green">匹配</Tag> : <Tag>不匹配</Tag>),
-    },
-    {
       title: "来源",
       key: "source",
       ellipsis: true,
@@ -234,7 +227,7 @@ export function TaskInventoryPanel({ task }: { task: components["schemas"]["Task
       {records.length > 0 && (
         <div>
           <Typography.Title level={5} style={{ marginBottom: 8 }}>
-            记录明细
+            匹配记录明细
           </Typography.Title>
           <Table
             rowKey={(record, index) =>

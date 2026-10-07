@@ -16,7 +16,7 @@ from app.core.encoding import decode_text_with_fallback
 from app.models.schemas import PackageKind
 
 PARSER_ID = "site_device_lst_me"
-PARSER_VERSION = "2"
+PARSER_VERSION = "3"
 SCHEMA_VERSION = 2
 SOURCE_PATTERN = re.compile(r"^config/(?:.*/)?LST ME\.txt$", re.IGNORECASE)
 DEVICE_ALIASES = {"ne name", "me name", "网元名称", "设备名称"}
@@ -298,7 +298,10 @@ def parse_inventory(
         raw_records.extend(parsed_records)
         errors.extend(parsed_errors)
 
-    records = [_record_output(record, normalized_product=normalized_product) for record in raw_records]
+    all_records = [_record_output(record, normalized_product=normalized_product) for record in raw_records]
+    # 只识别所选网元类型：其它类型的记录仅保留数量，不进入任务证据明细。
+    unmatched_count = sum(1 for record in all_records if not record["matched"])
+    records = [record for record in all_records if record["matched"]]
     for record in records:
         if record["version_status"] == "conflict":
             source_file = str(record["source_file"])
@@ -306,22 +309,21 @@ def parse_inventory(
                 _upsert_conflict(conflicts, "version", record["raw_version"], source_file, line)
 
     fatal_errors = [error for error in errors if not error.get("recoverable")]
-    matched_records = [record for record in records if record["matched"]]
     if requested_product:
-        filter_status = "ok" if matched_records else "no_match"
+        filter_status = "ok" if records else "no_match"
     else:
         filter_status = "missing"
     evidence["network_element_type_filter"] = {
         "requested": requested_product,
         "normalized": normalized_product,
         "status": filter_status,
-        "matched_count": len(matched_records),
-        "unmatched_count": len(records) - len(matched_records),
+        "matched_count": len(records),
+        "unmatched_count": unmatched_count,
     }
 
     # 匹配设备按规范化设备名去重；同名记录版本一致时合并，版本冲突时保留冲突观测。
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for record in matched_records:
+    for record in records:
         grouped.setdefault(str(record["normalized_name"]), []).append(record)
 
     devices: list[dict[str, Any]] = []

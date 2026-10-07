@@ -61,6 +61,8 @@ test("巡检包上传后可在任务详情、设备台账和设备详情间追�
   await expect(page.getByText("已归档")).toBeVisible();
   await expect(page.getByText("NJ-AGG-001").first()).toBeVisible();
   await expect(page.getByText("1 匹配 / 1 不匹配")).toBeVisible();
+  // 只识别所选网元类型：其它类型的记录不进入任务证据明细。
+  await expect(page.getByText("NJ-CSP-001")).toHaveCount(0);
   await expect(page.getByText("V900R016C10SPC200").first()).toBeVisible();
   await page.getByRole("link", { name: /查看设备台账：NJ-AGG-001/ }).first().click();
   await expect(page).toHaveURL(/\/inventory\/devices\//);

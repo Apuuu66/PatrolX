@@ -154,6 +154,7 @@ def test_real_package_lst_me_feeds_device_ledger(tmp_path: Path) -> None:
     csp = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="csp")
     assert csp["status"] == "archived"
     assert [device["normalized_name"] for device in csp["devices"]] == ["CSP-SZ-01", "CSP-SZ-02"]
+    assert [record["normalized_name"] for record in csp["records"]] == ["CSP-SZ-01", "CSP-SZ-02"]
     assert [device["version"]["status"] for device in csp["devices"]] == ["ok", "missing"]
     assert csp["network_element_type_filter"]["matched_count"] == 2
     assert csp["network_element_type_filter"]["unmatched_count"] == 1
@@ -161,6 +162,7 @@ def test_real_package_lst_me_feeds_device_ledger(tmp_path: Path) -> None:
     umf = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="umf")
     assert umf["status"] == "archived"
     assert [device["normalized_name"] for device in umf["devices"]] == ["UMF-SZ-01"]
+    assert [record["normalized_name"] for record in umf["records"]] == ["UMF-SZ-01"]
 
     mme = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="mme")
     assert mme["status"] == "not_archived"
