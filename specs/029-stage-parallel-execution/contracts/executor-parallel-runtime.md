@@ -33,8 +33,9 @@
 
 - 单个 prepare 失败：只把该 owner 的 inspect 置为 `skip`（原因“预处理未就绪”），其他单元继续。
 - 单个规则异常：该规则记 `error` 并携带错误摘要，其他单元继续。
-- worker 非正常退出（`BrokenProcessPool`）：该单元记 `error`（说明 worker 异常退出），已提交未完成的剩余单元在父进程降级串行执行；池不重建、不自动重试。
-- 降级必须在 `execution.log` 留下 `parallel_degraded` 事件，包含原因与受影响单元数。
+- worker 非正常退出（`BrokenProcessPool`）：该单元记 `error`（说明 worker 异常退出），已提交未完成的剩余单元**降级为单进程顺序补跑**（独立 `max_workers=1` 的 spawn 池内逐个执行，规则代码不在父进程内重跑）；不再使用并行池、不自动重试。
+- 补跑仍崩溃的单元记 `error` 且不再重试；其余单元结果必须与无故障基线一致。
+- 降级必须在 `execution.log` 留下 `parallel_degraded` 事件，包含原因（`broker_broken`）、受影响单元数与最终仍失败的单元数。
 
 ## C6 日志完整性
 
