@@ -15,12 +15,32 @@ def lst_me_content(
     *,
     device_key: str = "NE name",
     version_key: str = "Software version",
+    network_element_type: str = "UMF2020",
+    type_key: str = "ME type",
     encoding: str = "utf-8",
 ) -> bytes:
     """生成键值风格的 LST ME.txt 内容。"""
-    lines = [f"{device_key}: {device_name}"]
+    lines = [f"{device_key}: {device_name}", f"{type_key}: {network_element_type}"]
     if version is not None:
         lines.append(f"{version_key}: {version}")
+    return ("\n".join(lines) + "\n").encode(encoding)
+
+
+def multi_device_lst_me_content(
+    records: list[dict[str, str | None]],
+    *,
+    encoding: str = "utf-8",
+) -> bytes:
+    """生成包含多台设备的 LST ME.txt；None 字段表示该行缺失。"""
+    lines: list[str] = []
+    for record in records:
+        if record.get("device_name") is not None:
+            lines.append(f"NE name: {record['device_name']}")
+        if record.get("network_element_type") is not None:
+            lines.append(f"ME type: {record['network_element_type']}")
+        if record.get("version") is not None:
+            lines.append(f"Software version: {record['version']}")
+        lines.append("")
     return ("\n".join(lines) + "\n").encode(encoding)
 
 

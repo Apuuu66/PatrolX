@@ -248,6 +248,7 @@ def run_task(
             task_id=task_id,
             province=province,
             operator=operator,
+            product=customer_values.get("product"),
             package_kind=package_kind,
         )
         archive_inventory(

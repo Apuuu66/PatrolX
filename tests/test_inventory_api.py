@@ -65,6 +65,7 @@ def test_v3_inspection_and_inventory_endpoints(tmp_path: Path) -> None:
         name="台账 API",
         province="江苏",
         operator="移动",
+        product="UMF2020",
     )
     task = _wait(task_id)
     assert task["status"] == "completed"
@@ -111,7 +112,7 @@ def test_cli_and_api_inventory_semantics_are_consistent(tmp_path: Path) -> None:
     cli_task = run_task(
         cli_package,
         name="CLI 台账一致性",
-        customer={"province": "江苏", "operator": "移动"},
+        customer={"province": "江苏", "operator": "移动", "product": "UMF2020"},
         mode=TaskMode.LOCAL,
         trigger=TaskTrigger.CLI,
     )
@@ -126,6 +127,7 @@ def test_cli_and_api_inventory_semantics_are_consistent(tmp_path: Path) -> None:
         name="API 台账一致性",
         province="江苏",
         operator="移动",
+        product="UMF2020",
     )
     api_task = _wait(task_id)
     cli_inventory = cli_task.inventory
@@ -145,12 +147,24 @@ def test_cli_and_api_inventory_semantics_are_consistent(tmp_path: Path) -> None:
 def test_version_history_and_quality_issues(tmp_path: Path) -> None:
     package = tmp_path / "history.zip"
     make_inventory_zip(package)
-    first = _create_v3(package, package_kind="inspection", province="江苏", operator="移动")
+    first = _create_v3(
+        package,
+        package_kind="inspection",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+    )
     _wait(first)
 
     second_package = tmp_path / "history-2.zip"
     make_inventory_zip(second_package, content=lst_me_content(version="V900R016C10SPC199"))
-    second = _create_v3(second_package, package_kind="inspection", province="江苏", operator="移动")
+    second = _create_v3(
+        second_package,
+        package_kind="inspection",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+    )
     _wait(second)
     assert client.get("/api/v2/inventory/devices").json()["total"] == 1
     history = client.get("/api/v2/inventory/devices").json()["items"][0]["device_id"]
@@ -159,7 +173,13 @@ def test_version_history_and_quality_issues(tmp_path: Path) -> None:
 
     missing_package = tmp_path / "missing-version.zip"
     make_inventory_zip(missing_package, content=lst_me_content(version=None))
-    missing = _create_v3(missing_package, package_kind="inspection", province="江苏", operator="移动")
+    missing = _create_v3(
+        missing_package,
+        package_kind="inspection",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+    )
     _wait(missing)
     quality = client.get("/api/v2/inventory/quality-issues", params={"issue_type": "missing_version"}).json()
     assert quality["total"] == 1

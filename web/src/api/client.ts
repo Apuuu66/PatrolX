@@ -136,7 +136,8 @@ export interface paths {
         /** List Inventory Devices */
         get: operations["listInventoryDevices"];
         put?: never;
-        post?: never;
+        /** Create Inventory Device */
+        post: operations["createInventoryDevice"];
         delete?: never;
         options?: never;
         head?: never;
@@ -154,10 +155,12 @@ export interface paths {
         get: operations["getInventoryDevice"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Inventory Device */
+        delete: operations["deleteInventoryDevice"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Inventory Device */
+        patch: operations["updateInventoryDevice"];
         trace?: never;
     };
     "/api/v2/inventory/devices/{device_id}/observations": {
@@ -986,6 +989,25 @@ export interface components {
             has_site_conflict: boolean;
             /** Quality Issue Types */
             quality_issue_types?: components["schemas"]["InventoryQualityIssueType"][];
+            /** Remark */
+            remark?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Updated By */
+            updated_by?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** InventoryDeviceCreateRequest */
+        InventoryDeviceCreateRequest: {
+            /** Province */
+            province: string;
+            /** Operator */
+            operator: string;
+            /** Device Name */
+            device_name: string;
+            /** Remark */
+            remark?: string | null;
         };
         /** InventoryDeviceList */
         InventoryDeviceList: {
@@ -998,11 +1020,16 @@ export interface components {
             /** Items */
             items: components["schemas"]["InventoryDevice"][];
         };
+        /** InventoryDeviceUpdateRequest */
+        InventoryDeviceUpdateRequest: {
+            /** Remark */
+            remark?: string | null;
+        };
         /**
          * InventoryFieldStatus
          * @enum {string}
          */
-        InventoryFieldStatus: "ok" | "missing" | "conflict" | "error" | "not_applicable";
+        InventoryFieldStatus: "ok" | "missing" | "conflict" | "error" | "not_applicable" | "matched_multiple";
         /** InventoryObservation */
         InventoryObservation: {
             /** Observation Id */
@@ -1444,13 +1471,13 @@ export interface components {
             /** Time Label */
             time_label: string;
             /** Baseline Value */
-            baseline_value: number | null;
+            baseline_value?: number | null;
             /** Current Value */
-            current_value: number | null;
+            current_value?: number | null;
             /** Deviation */
-            deviation: number | null;
+            deviation?: number | null;
             /** Deviation Ratio */
-            deviation_ratio: number | null;
+            deviation_ratio?: number | null;
             /** Sample Count */
             sample_count: number;
             /** Date Count */
@@ -1535,13 +1562,13 @@ export interface components {
             match: components["schemas"]["MeasurementHistoryMatch"];
             coverage: components["schemas"]["MeasurementHistoryCoverage"];
             /** Current Points */
-            current_points: components["schemas"]["MeasurementHistoryPoint"][];
+            current_points?: components["schemas"]["MeasurementHistoryPoint"][];
             /** History Series */
-            history_series: components["schemas"]["MeasurementHistoryDateSeries"][];
+            history_series?: components["schemas"]["MeasurementHistoryDateSeries"][];
             /** Baseline Points */
-            baseline_points: components["schemas"]["MeasurementHistoryBaselinePoint"][];
+            baseline_points?: components["schemas"]["MeasurementHistoryBaselinePoint"][];
             /** Source Tasks */
-            source_tasks: string[];
+            source_tasks?: string[];
         };
         /** MeasurementHistoryWindow */
         MeasurementHistoryWindow: {
@@ -1579,7 +1606,7 @@ export interface components {
          */
         MeasurementVersionCandidate: {
             /** Version */
-            version: string | null;
+            version?: string | null;
             /** Version Known */
             version_known: boolean;
             /** Latest Task Id */
@@ -1610,9 +1637,9 @@ export interface components {
             /** Device Id */
             device_id?: string | null;
             /** Current Version */
-            current_version: string | null;
+            current_version?: string | null;
             /** Items */
-            items: components["schemas"]["MeasurementVersionCandidate"][];
+            items?: components["schemas"]["MeasurementVersionCandidate"][];
         };
         /**
          * MeasurementVersionCandidateTask
@@ -1650,28 +1677,28 @@ export interface components {
             /** Period Minutes */
             period_minutes?: number | null;
             /** Current Version */
-            current_version: string | null;
+            current_version?: string | null;
             /** Baseline Version */
-            baseline_version: string | null;
+            baseline_version?: string | null;
             current_task: components["schemas"]["MeasurementVersionComparisonTask"];
             baseline_task?: components["schemas"]["MeasurementVersionComparisonTask"] | null;
             /** Current Points */
-            current_points: components["schemas"]["MeasurementHistoryPoint"][];
+            current_points?: components["schemas"]["MeasurementHistoryPoint"][];
             /** Baseline Points */
-            baseline_points: components["schemas"]["MeasurementHistoryPoint"][];
+            baseline_points?: components["schemas"]["MeasurementHistoryPoint"][];
             summary: components["schemas"]["MeasurementVersionComparisonSummary"];
             match: components["schemas"]["MeasurementHistoryMatch"];
         };
         /** MeasurementVersionComparisonSummary */
         MeasurementVersionComparisonSummary: {
             /** Current Value */
-            current_value: number | null;
+            current_value?: number | null;
             /** Baseline Value */
-            baseline_value: number | null;
+            baseline_value?: number | null;
             /** Absolute Change */
-            absolute_change: number | null;
+            absolute_change?: number | null;
             /** Change Ratio */
-            change_ratio: number | null;
+            change_ratio?: number | null;
             /** @default unknown */
             direction: components["schemas"]["MeasurementVersionDirection"];
             /** Sample Count */
@@ -1689,7 +1716,7 @@ export interface components {
             /** Completed At */
             completed_at?: string | null;
             /** Version */
-            version: string | null;
+            version?: string | null;
             /** Version Known */
             version_known: boolean;
         };
@@ -1930,17 +1957,22 @@ export interface components {
             not_applicable_reason?: string | null;
             /** Not Archived Reason */
             not_archived_reason?: string | null;
+            network_element_type_filter?: components["schemas"]["TaskInventoryNetworkElementTypeFilter"] | null;
             site?: components["schemas"]["TaskInventorySite"] | null;
             device?: components["schemas"]["TaskInventoryDevice"] | null;
             version?: components["schemas"]["TaskInventoryVersion"] | null;
+            /** Records */
+            records?: components["schemas"]["TaskInventoryRecord"][];
+            /** Devices */
+            devices?: components["schemas"]["TaskInventoryMatchedDevice"][];
             /** Source Files */
-            source_files: string[];
+            source_files?: string[];
             /** Conflicts */
-            conflicts: {
+            conflicts?: {
                 [key: string]: unknown;
             }[];
             /** Errors */
-            errors: {
+            errors?: {
                 [key: string]: unknown;
             }[];
             archived: components["schemas"]["TaskInventoryArchive"];
@@ -1955,6 +1987,19 @@ export interface components {
             observation_id?: string | null;
             /** Reason */
             reason?: string | null;
+            /** Devices */
+            devices?: components["schemas"]["TaskInventoryArchivedDevice"][];
+        };
+        /** TaskInventoryArchivedDevice */
+        TaskInventoryArchivedDevice: {
+            /** Device Id */
+            device_id: string;
+            /** Observation Id */
+            observation_id: string;
+            /** Normalized Name */
+            normalized_name: string;
+            /** Network Element Type */
+            network_element_type?: string | null;
         };
         /** TaskInventoryDevice */
         TaskInventoryDevice: {
@@ -1967,6 +2012,67 @@ export interface components {
             reason_code?: string | null;
             /** Source Lines */
             source_lines?: number[];
+        };
+        /** TaskInventoryMatchedDevice */
+        TaskInventoryMatchedDevice: {
+            /** @default ok */
+            status: components["schemas"]["InventoryFieldStatus"];
+            /** Raw Name */
+            raw_name?: string | null;
+            /** Normalized Name */
+            normalized_name: string;
+            /** Network Element Type */
+            network_element_type?: string | null;
+            version: components["schemas"]["TaskInventoryVersion"];
+            /** Source File */
+            source_file?: string | null;
+            /** Source Files */
+            source_files?: string[];
+        };
+        /** TaskInventoryNetworkElementTypeFilter */
+        TaskInventoryNetworkElementTypeFilter: {
+            /** Requested */
+            requested?: string | null;
+            /** Normalized */
+            normalized?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "missing" | "no_match";
+            /** Matched Count */
+            matched_count: number;
+            /** Unmatched Count */
+            unmatched_count: number;
+        };
+        /** TaskInventoryRecord */
+        TaskInventoryRecord: {
+            /** Raw Name */
+            raw_name?: string | null;
+            /** Normalized Name */
+            normalized_name?: string | null;
+            /** Raw Network Element Type */
+            raw_network_element_type?: string | null;
+            /** Normalized Network Element Type */
+            normalized_network_element_type?: string | null;
+            /** @default missing */
+            network_element_type_status: components["schemas"]["InventoryFieldStatus"];
+            /** Raw Version */
+            raw_version?: string | null;
+            /** @default missing */
+            version_status: components["schemas"]["InventoryFieldStatus"];
+            /** Version Candidates */
+            version_candidates?: string[];
+            /** Matched */
+            matched: boolean;
+            /** Source File */
+            source_file?: string | null;
+            /** Name Source Lines */
+            name_source_lines?: number[];
+            /** Type Source Lines */
+            type_source_lines?: number[];
+            /** Version Source Lines */
+            version_source_lines?: number[];
         };
         /** TaskInventorySite */
         TaskInventorySite: {
@@ -2537,6 +2643,41 @@ export interface operations {
             };
         };
     };
+    createInventoryDevice: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryDeviceCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryDevice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     getInventoryDevice: {
         parameters: {
             query?: never;
@@ -2547,6 +2688,74 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryDevice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteInventoryDevice: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateInventoryDevice: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryDeviceUpdateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

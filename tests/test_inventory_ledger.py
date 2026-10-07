@@ -33,8 +33,8 @@ def _write_source(task_dir: Path, content: str) -> None:
 
 
 def test_archive_creates_unique_observation_and_device(task_dir: Path) -> None:
-    _write_source(task_dir, "NE name: Device-A\nSoftware version: V2\n")
-    evidence = parse_inventory(task_dir, task_id="task-1", province="江苏", operator="移动")
+    _write_source(task_dir, "NE name: Device-A\nME type: UMF2020\nSoftware version: V2\n")
+    evidence = parse_inventory(task_dir, task_id="task-1", province="江苏", operator="移动", product="UMF2020")
     completed_at = datetime.now(UTC)
     archived = archive_inventory(evidence, task_id="task-1", package_kind="inspection", completed_at=completed_at)
     assert archived["status"] == "archived"
@@ -49,13 +49,13 @@ def test_archive_creates_unique_observation_and_device(task_dir: Path) -> None:
 
 def test_archive_rerun_overwrites_and_audits_once(task_dir: Path) -> None:
     first_time = datetime.now(UTC)
-    _write_source(task_dir, "NE name: Device-A\nSoftware version: V2\n")
-    evidence = parse_inventory(task_dir, task_id="task-1", province="江苏", operator="移动")
+    _write_source(task_dir, "NE name: Device-A\nME type: UMF2020\nSoftware version: V2\n")
+    evidence = parse_inventory(task_dir, task_id="task-1", province="江苏", operator="移动", product="UMF2020")
     archive_inventory(evidence, task_id="task-1", package_kind="inspection", completed_at=first_time)
 
     second_time = first_time + timedelta(hours=1)
-    _write_source(task_dir, "NE name: Device-A\nSoftware version: V3\n")
-    evidence = parse_inventory(task_dir, task_id="task-1", province="江苏", operator="移动")
+    _write_source(task_dir, "NE name: Device-A\nME type: UMF2020\nSoftware version: V3\n")
+    evidence = parse_inventory(task_dir, task_id="task-1", province="江苏", operator="移动", product="UMF2020")
     first = archive_inventory(evidence, task_id="task-1", package_kind="inspection", completed_at=second_time)
     assert first["status"] == "archived"
     assert first["audits"] == ["update"]
@@ -69,8 +69,8 @@ def test_archive_rerun_overwrites_and_audits_once(task_dir: Path) -> None:
 
 
 def test_archive_missing_site_does_not_archive(task_dir: Path) -> None:
-    _write_source(task_dir, "NE name: Device-A\n")
-    evidence = parse_inventory(task_dir, task_id="task-2", province=None, operator=None)
+    _write_source(task_dir, "NE name: Device-A\nME type: UMF2020\n")
+    evidence = parse_inventory(task_dir, task_id="task-2", province=None, operator=None, product="UMF2020")
     result = archive_inventory(evidence, task_id="task-2", package_kind="inspection", completed_at=datetime.now(UTC))
     assert result["status"] == "not_archived"
     assert result["archived"] is False
@@ -78,20 +78,23 @@ def test_archive_missing_site_does_not_archive(task_dir: Path) -> None:
         assert session.query(InventoryObservation).count() == 0
 
 
-def test_archive_device_conflict_retires_existing_observation(task_dir: Path) -> None:
+def test_archive_rerun_with_multiple_devices_archives_each_device(task_dir: Path) -> None:
     base_time = datetime.now(UTC)
-    _write_source(task_dir, "NE name: Device-A\nSoftware version: V1\n")
-    evidence = parse_inventory(task_dir, task_id="task-3", province="江苏", operator="移动")
+    _write_source(task_dir, "NE name: Device-A\nME type: UMF2020\nSoftware version: V1\n")
+    evidence = parse_inventory(task_dir, task_id="task-3", province="江苏", operator="移动", product="UMF2020")
     archive_inventory(evidence, task_id="task-3", package_kind="inspection", completed_at=base_time)
 
-    _write_source(task_dir, "NE name: Device-A\nNE name: Device-B\n")
-    evidence = parse_inventory(task_dir, task_id="task-3", province="江苏", operator="移动")
+    _write_source(
+        task_dir,
+        "NE name: Device-A\nME type: UMF2020\nSoftware version: V1\n"
+        "NE name: Device-B\nME type: UMF2020\nSoftware version: V1\n",
+    )
+    evidence = parse_inventory(task_dir, task_id="task-3", province="江苏", operator="移动", product="UMF2020")
     result = archive_inventory(evidence, task_id="task-3", package_kind="inspection", completed_at=base_time)
-    assert result["status"] == "not_archived"
-    assert result["audits"] == ["retire"]
+    assert result["status"] == "archived"
     with session_factory() as session:
-        observation = session.query(InventoryObservation).one()
-        assert observation.status == "retired"
+        observations = session.query(InventoryObservation).all()
+        assert {item.device_name for item in observations} == {"Device-A", "Device-B"}
 
 
 def test_log_supplement_does_not_touch_ledger(task_dir: Path) -> None:
@@ -109,5 +112,45 @@ def test_log_supplement_does_not_touch_ledger(task_dir: Path) -> None:
         completed_at=datetime.now(UTC),
     )
     assert result["status"] == "not_applicable"
+    with session_factory() as session:
+        assert session.query(InventoryObservation).count() == 0
+
+
+def test_archive_multiple_matching_devices(task_dir: Path) -> None:
+    content = (
+        b"NE name: Device-A\nME type: UMF2020\nSoftware version: V1\n"
+        b"NE name: Device-B\nME type: UMF2020\nSoftware version: V2\n"
+        b"NE name: Device-C\nME type: UMF2021\nSoftware version: V3\n"
+    )
+    _write_source(task_dir, content.decode())
+    evidence = parse_inventory(task_dir, task_id="task-multi", province="江苏", operator="移动", product="UMF2020")
+    result = archive_inventory(
+        evidence,
+        task_id="task-multi",
+        package_kind="inspection",
+        completed_at=datetime.now(UTC),
+    )
+    assert result["status"] == "archived"
+    with session_factory() as session:
+        observations = session.query(InventoryObservation).all()
+        devices = session.query(InventoryDevice).all()
+        assert {item.device_name for item in observations} == {"Device-A", "Device-B"}
+        assert {item.current_device_name for item in devices} == {"Device-A", "Device-B"}
+        assert {item.device_id for item in session.query(InventoryChangeAudit).all()} == {
+            item.device_id for item in observations
+        }
+
+
+def test_archive_no_matching_filter_writes_evidence_but_not_ledger(task_dir: Path) -> None:
+    _write_source(task_dir, "NE name: Device-A\nME type: UMF2021\nSoftware version: V1\n")
+    evidence = parse_inventory(task_dir, task_id="task-filter", province="江苏", operator="移动", product="UMF2020")
+    result = archive_inventory(
+        evidence,
+        task_id="task-filter",
+        package_kind="inspection",
+        completed_at=datetime.now(UTC),
+    )
+    assert result["status"] == "not_archived"
+    assert result["archived"] is False
     with session_factory() as session:
         assert session.query(InventoryObservation).count() == 0

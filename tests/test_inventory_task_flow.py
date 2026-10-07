@@ -29,7 +29,7 @@ def test_full_run_archives_inventory(tmp_path: Path) -> None:
     task = run_task(
         package,
         name="台账任务",
-        customer={"province": "江苏", "operator": "移动"},
+        customer={"province": "江苏", "operator": "移动", "product": "UMF2020"},
         task_id="task-flow-ok",
         mode=TaskMode.LOCAL,
         trigger=TaskTrigger.CLI,

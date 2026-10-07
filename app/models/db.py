@@ -83,10 +83,71 @@ def init_db() -> None:
         column["name"] for column in inspect(engine).get_columns("tasks")
     }:
         _rebuild_legacy_tasks(engine)
+        _rebuild_legacy_inventory_tables(engine)
     else:
+        _rebuild_legacy_inventory_tables(engine)
         Base.metadata.create_all(engine)
     _ensure_task_columns(engine)
     _ensure_kpi_measurement_columns(engine)
+    _ensure_inventory_device_columns(engine)
+
+
+def _rebuild_legacy_inventory_tables(engine: Engine) -> None:
+    """重建旧台账表，解决观测 task_id 唯一约束和审计可空字段迁移。"""
+    inspector = inspect(engine)
+    observation_table = InventoryObservation.__tablename__
+    audit_table = InventoryChangeAudit.__tablename__
+    rebuild_observation = False
+    if inspector.has_table(observation_table):
+        indexes = inspector.get_indexes(observation_table)
+        rebuild_observation = any(index.get("unique") and index.get("column_names") == ["task_id"] for index in indexes)
+
+    rebuild_audit = False
+    if inspector.has_table(audit_table):
+        columns = {column["name"]: column for column in inspector.get_columns(audit_table)}
+        rebuild_audit = any(not columns.get(name, {}).get("nullable", True) for name in ("task_id", "observation_id"))
+
+    if rebuild_observation:
+        _rebuild_table(engine, InventoryObservation)
+        inspector = inspect(engine)
+    if rebuild_audit:
+        _rebuild_table(engine, InventoryChangeAudit)
+
+
+def _rebuild_table(engine: Engine, model: type[Base]) -> None:  # type: ignore[type-arg]
+    """按当前模型重建一张 SQLite 表并复制交集字段。"""
+    table_name = model.__tablename__
+    with engine.begin() as connection:
+        connection.execute(text(f"ALTER TABLE {table_name} RENAME TO {table_name}_legacy"))
+        for index in inspect(connection).get_indexes(f"{table_name}_legacy"):
+            name = str(index["name"])
+            if not name.startswith("sqlite_autoindex_"):
+                connection.execute(text(f"DROP INDEX IF EXISTS {name}"))
+
+    model.__table__.create(engine)
+    legacy_columns = {column["name"] for column in inspect(engine).get_columns(f"{table_name}_legacy")}
+    columns = [name for name in model.__table__.columns.keys() if name in legacy_columns]
+    names = ", ".join(columns)
+    with engine.begin() as connection:
+        connection.execute(text(f"INSERT INTO {table_name} ({names}) SELECT {names} FROM {table_name}_legacy"))
+        connection.execute(text(f"DROP TABLE {table_name}_legacy"))
+
+
+def _ensure_inventory_device_columns(engine: Engine) -> None:
+    """为旧设备表补充台账维护字段。"""
+    table = InventoryDevice.__tablename__
+    if not inspect(engine).has_table(table):
+        return
+    existing = {column["name"] for column in inspect(engine).get_columns(table)}
+    wanted = {
+        "remark": "TEXT",
+        "created_by": "VARCHAR(64)",
+        "updated_by": "VARCHAR(64)",
+    }
+    with engine.begin() as connection:
+        for name, ddl in wanted.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
 
 def _ensure_task_columns(engine: Engine) -> None:
@@ -150,6 +211,9 @@ class InventoryDevice(Base):
     observation_count: Mapped[int] = mapped_column(Integer, default=0)
     site_change_count: Mapped[int] = mapped_column(Integer, default=0)
     has_site_conflict: Mapped[bool] = mapped_column(Boolean, default=False)
+    remark: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -160,7 +224,7 @@ class InventoryObservation(Base):
     __tablename__ = "inventory_observations"
 
     observation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    task_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
     device_id: Mapped[str] = mapped_column(ForeignKey("inventory_devices.device_id"), index=True)
     province: Mapped[str] = mapped_column(String(64), index=True)
     operator: Mapped[str] = mapped_column(String(64), index=True)
@@ -211,9 +275,9 @@ class InventoryChangeAudit(Base):
     __tablename__ = "inventory_change_audits"
 
     audit_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    task_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     device_id: Mapped[str] = mapped_column(String(64), index=True)
-    observation_id: Mapped[str] = mapped_column(String(64))
+    observation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     action: Mapped[str] = mapped_column(String(32), index=True)
     before_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     after_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)

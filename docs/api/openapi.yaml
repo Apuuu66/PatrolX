@@ -382,6 +382,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Create Inventory Device
+      operationId: createInventoryDevice
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryDeviceCreateRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryDevice'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/inventory/devices/{device_id}:
     get:
       summary: Get Inventory Device
@@ -400,6 +431,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InventoryDevice'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      summary: Update Inventory Device
+      operationId: updateInventoryDevice
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryDeviceUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryDevice'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Inventory Device
+      operationId: deleteInventoryDevice
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
         '422':
           description: Validation Error
           content:
@@ -2216,6 +2311,27 @@ components:
             $ref: '#/components/schemas/InventoryQualityIssueType'
           type: array
           title: Quality Issue Types
+        remark:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Remark
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created By
+        updated_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated By
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
       type: object
       required:
       - device_id
@@ -2229,6 +2345,35 @@ components:
       - site_change_count
       - has_site_conflict
       title: InventoryDevice
+    InventoryDeviceCreateRequest:
+      properties:
+        province:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Province
+        operator:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operator
+        device_name:
+          type: string
+          maxLength: 256
+          minLength: 1
+          title: Device Name
+        remark:
+          anyOf:
+          - type: string
+            maxLength: 512
+          - type: 'null'
+          title: Remark
+      type: object
+      required:
+      - province
+      - operator
+      - device_name
+      title: InventoryDeviceCreateRequest
     InventoryDeviceList:
       properties:
         total:
@@ -2256,6 +2401,16 @@ components:
       - page_size
       - items
       title: InventoryDeviceList
+    InventoryDeviceUpdateRequest:
+      properties:
+        remark:
+          anyOf:
+          - type: string
+            maxLength: 512
+          - type: 'null'
+          title: Remark
+      type: object
+      title: InventoryDeviceUpdateRequest
     InventoryFieldStatus:
       type: string
       enum:
@@ -2264,6 +2419,7 @@ components:
       - conflict
       - error
       - not_applicable
+      - matched_multiple
       title: InventoryFieldStatus
     InventoryObservation:
       properties:
@@ -3168,10 +3324,6 @@ components:
       - sample_count
       - date_count
       - significance
-      - baseline_value
-      - current_value
-      - deviation
-      - deviation_ratio
       title: MeasurementHistoryBaselinePoint
     MeasurementHistoryCoverage:
       properties:
@@ -3346,10 +3498,6 @@ components:
       - window
       - match
       - coverage
-      - current_points
-      - history_series
-      - baseline_points
-      - source_tasks
       title: MeasurementHistoryTrend
       description: KPI 单指标跨任务历史趋势响应。
     MeasurementHistoryWindow:
@@ -3432,7 +3580,6 @@ components:
       - latest_completed_at
       - task_count
       - tasks
-      - version
       title: MeasurementVersionCandidate
       description: 同设备历史任务的版本分组。
     MeasurementVersionCandidateList:
@@ -3470,8 +3617,6 @@ components:
       - rule_code
       - measurement_unit_id
       - metric_resource_id
-      - current_version
-      - items
       title: MeasurementVersionCandidateList
       description: 同设备版本候选响应。
     MeasurementVersionCandidateTask:
@@ -3570,10 +3715,6 @@ components:
       - current_task
       - summary
       - match
-      - current_points
-      - baseline_points
-      - current_version
-      - baseline_version
       title: MeasurementVersionComparison
       description: 同设备不同系统版本的单指标对比响应。
     MeasurementVersionComparisonSummary:
@@ -3612,11 +3753,6 @@ components:
       required:
       - sample_count
       - message
-      - current_value
-      - baseline_value
-      - absolute_change
-      - change_ratio
-      - direction
       title: MeasurementVersionComparisonSummary
     MeasurementVersionComparisonTask:
       properties:
@@ -3641,7 +3777,6 @@ components:
       required:
       - task_id
       - version_known
-      - version
       title: MeasurementVersionComparisonTask
       description: 参与版本对比的单个任务来源。
     MeasurementVersionDirection:
@@ -4110,6 +4245,10 @@ components:
           - type: string
           - type: 'null'
           title: Not Archived Reason
+        network_element_type_filter:
+          anyOf:
+          - $ref: '#/components/schemas/TaskInventoryNetworkElementTypeFilter'
+          - type: 'null'
         site:
           anyOf:
           - $ref: '#/components/schemas/TaskInventorySite'
@@ -4122,6 +4261,16 @@ components:
           anyOf:
           - $ref: '#/components/schemas/TaskInventoryVersion'
           - type: 'null'
+        records:
+          items:
+            $ref: '#/components/schemas/TaskInventoryRecord'
+          type: array
+          title: Records
+        devices:
+          items:
+            $ref: '#/components/schemas/TaskInventoryMatchedDevice'
+          type: array
+          title: Devices
         source_files:
           items:
             type: string
@@ -4148,9 +4297,6 @@ components:
       - parser_id
       - parser_version
       - archived
-      - source_files
-      - conflicts
-      - errors
       title: TaskInventory
     TaskInventoryArchive:
       properties:
@@ -4172,10 +4318,37 @@ components:
           - type: string
           - type: 'null'
           title: Reason
+        devices:
+          items:
+            $ref: '#/components/schemas/TaskInventoryArchivedDevice'
+          type: array
+          title: Devices
       type: object
       required:
       - archived
       title: TaskInventoryArchive
+    TaskInventoryArchivedDevice:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        observation_id:
+          type: string
+          title: Observation Id
+        normalized_name:
+          type: string
+          title: Normalized Name
+        network_element_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Network Element Type
+      type: object
+      required:
+      - device_id
+      - observation_id
+      - normalized_name
+      title: TaskInventoryArchivedDevice
     TaskInventoryDevice:
       properties:
         status:
@@ -4204,6 +4377,139 @@ components:
       required:
       - status
       title: TaskInventoryDevice
+    TaskInventoryMatchedDevice:
+      properties:
+        status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+          default: ok
+        raw_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Name
+        normalized_name:
+          type: string
+          title: Normalized Name
+        network_element_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Network Element Type
+        version:
+          $ref: '#/components/schemas/TaskInventoryVersion'
+        source_file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source File
+        source_files:
+          items:
+            type: string
+          type: array
+          title: Source Files
+      type: object
+      required:
+      - normalized_name
+      - version
+      title: TaskInventoryMatchedDevice
+    TaskInventoryNetworkElementTypeFilter:
+      properties:
+        requested:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Requested
+        normalized:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Normalized
+        status:
+          type: string
+          enum:
+          - ok
+          - missing
+          - no_match
+          title: Status
+        matched_count:
+          type: integer
+          minimum: 0.0
+          title: Matched Count
+        unmatched_count:
+          type: integer
+          minimum: 0.0
+          title: Unmatched Count
+      type: object
+      required:
+      - status
+      - matched_count
+      - unmatched_count
+      title: TaskInventoryNetworkElementTypeFilter
+    TaskInventoryRecord:
+      properties:
+        raw_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Name
+        normalized_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Normalized Name
+        raw_network_element_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Network Element Type
+        normalized_network_element_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Normalized Network Element Type
+        network_element_type_status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+          default: missing
+        raw_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Version
+        version_status:
+          $ref: '#/components/schemas/InventoryFieldStatus'
+          default: missing
+        version_candidates:
+          items:
+            type: string
+          type: array
+          title: Version Candidates
+        matched:
+          type: boolean
+          title: Matched
+        source_file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source File
+        name_source_lines:
+          items:
+            type: integer
+          type: array
+          title: Name Source Lines
+        type_source_lines:
+          items:
+            type: integer
+          type: array
+          title: Type Source Lines
+        version_source_lines:
+          items:
+            type: integer
+          type: array
+          title: Version Source Lines
+      type: object
+      required:
+      - matched
+      title: TaskInventoryRecord
     TaskInventorySite:
       properties:
         status:

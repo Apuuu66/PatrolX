@@ -741,6 +741,7 @@ class InventoryFieldStatus(StrEnum):
     CONFLICT = "conflict"
     ERROR = "error"
     NOT_APPLICABLE = "not_applicable"
+    MATCHED_MULTIPLE = "matched_multiple"
 
 
 class InventoryObservationStatus(StrEnum):
@@ -771,12 +772,28 @@ class TaskInventorySite(BaseModel):
     site_key: str | None = None
 
 
-class TaskInventoryDevice(BaseModel):
-    status: InventoryFieldStatus
-    raw_names: list[str] = Field(default_factory=list)
+class TaskInventoryNetworkElementTypeFilter(BaseModel):
+    requested: str | None = None
+    normalized: str | None = None
+    status: Literal["ok", "missing", "no_match"]
+    matched_count: int = Field(ge=0)
+    unmatched_count: int = Field(ge=0)
+
+
+class TaskInventoryRecord(BaseModel):
+    raw_name: str | None = None
     normalized_name: str | None = None
-    reason_code: str | None = None
-    source_lines: list[int] = Field(default_factory=list)
+    raw_network_element_type: str | None = None
+    normalized_network_element_type: str | None = None
+    network_element_type_status: InventoryFieldStatus = InventoryFieldStatus.MISSING
+    raw_version: str | None = None
+    version_status: InventoryFieldStatus = InventoryFieldStatus.MISSING
+    version_candidates: list[str] = Field(default_factory=list)
+    matched: bool
+    source_file: str | None = None
+    name_source_lines: list[int] = Field(default_factory=list)
+    type_source_lines: list[int] = Field(default_factory=list)
+    version_source_lines: list[int] = Field(default_factory=list)
 
 
 class TaskInventoryVersion(BaseModel):
@@ -786,11 +803,37 @@ class TaskInventoryVersion(BaseModel):
     source_lines: list[int] = Field(default_factory=list)
 
 
+class TaskInventoryMatchedDevice(BaseModel):
+    status: InventoryFieldStatus = InventoryFieldStatus.OK
+    raw_name: str | None = None
+    normalized_name: str
+    network_element_type: str | None = None
+    version: TaskInventoryVersion
+    source_file: str | None = None
+    source_files: list[str] = Field(default_factory=list)
+
+
+class TaskInventoryArchivedDevice(BaseModel):
+    device_id: str
+    observation_id: str
+    normalized_name: str
+    network_element_type: str | None = None
+
+
+class TaskInventoryDevice(BaseModel):
+    status: InventoryFieldStatus
+    raw_names: list[str] = Field(default_factory=list)
+    normalized_name: str | None = None
+    reason_code: str | None = None
+    source_lines: list[int] = Field(default_factory=list)
+
+
 class TaskInventoryArchive(BaseModel):
     archived: bool
     device_id: str | None = None
     observation_id: str | None = None
     reason: str | None = None
+    devices: list[TaskInventoryArchivedDevice] = Field(default_factory=list)
 
 
 class TaskInventory(BaseModel):
@@ -801,9 +844,12 @@ class TaskInventory(BaseModel):
     schema_version: int = 1
     not_applicable_reason: str | None = None
     not_archived_reason: str | None = None
+    network_element_type_filter: TaskInventoryNetworkElementTypeFilter | None = None
     site: TaskInventorySite | None = None
     device: TaskInventoryDevice | None = None
     version: TaskInventoryVersion | None = None
+    records: list[TaskInventoryRecord] = Field(default_factory=list)
+    devices: list[TaskInventoryMatchedDevice] = Field(default_factory=list)
     source_files: list[str] = Field(default_factory=list)
     conflicts: list[dict[str, Any]] = Field(default_factory=list)
     errors: list[dict[str, Any]] = Field(default_factory=list)
@@ -825,6 +871,21 @@ class InventoryDevice(BaseModel):
     site_change_count: int = Field(ge=0)
     has_site_conflict: bool
     quality_issue_types: list[InventoryQualityIssueType] = Field(default_factory=list)
+    remark: str | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
+    updated_at: datetime | None = None
+
+
+class InventoryDeviceCreateRequest(BaseModel):
+    province: str = Field(min_length=1, max_length=64)
+    operator: str = Field(min_length=1, max_length=64)
+    device_name: str = Field(min_length=1, max_length=256)
+    remark: str | None = Field(default=None, max_length=512)
+
+
+class InventoryDeviceUpdateRequest(BaseModel):
+    remark: str | None = Field(default=None, max_length=512)
 
 
 class PagedMeta(BaseModel):

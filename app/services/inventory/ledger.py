@@ -60,7 +60,7 @@ def _ensure_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def _audit_id(task_id: str, observation_id_value: str, action: str, before: object, after: object) -> str:
+def _audit_id(task_id: str | None, observation_id_value: str | None, action: str, before: object, after: object) -> str:
     payload = json.dumps(
         {
             "task_id": task_id,
@@ -145,6 +145,44 @@ def _recalculate_device(session, device: InventoryDevice, now: datetime) -> None
     device.has_site_conflict = len({item.operator for item in observations}) > 1
 
 
+def _observation_values(
+    *,
+    device_info: dict[str, object],
+    site: dict[str, object],
+    source_files: list[str],
+    conflicts: list[object],
+    errors: list[object],
+    completed_at: datetime,
+    now: datetime,
+) -> dict[str, object]:
+    """从匹配设备证据构造一条台账观测。"""
+    version = device_info.get("version") if isinstance(device_info.get("version"), dict) else {}
+    raw_version = version.get("raw_version")
+    version_source_files = device_info.get("source_files") or source_files
+    return {
+        "province": str(site["province"]),
+        "operator": str(site["operator"]),
+        "site_key": str(site["site_key"]),
+        "observed_at": completed_at,
+        "task_status": "completed",
+        "device_name": str(device_info["normalized_name"]),
+        "identity_status": "ok",
+        "version_status": str(version.get("status") or "missing"),
+        "raw_version": str(raw_version) if raw_version is not None else None,
+        "version_key": str(raw_version) if raw_version is not None else None,
+        "version_source_files": [str(item) for item in version_source_files],
+        "device_snapshot": {
+            "device": device_info,
+            "version": version,
+            "site": site,
+            "conflicts": conflicts,
+            "errors": errors,
+        },
+        "status": "active",
+        "updated_at": now,
+    }
+
+
 def archive_inventory(
     evidence: dict[str, object],
     *,
@@ -152,7 +190,7 @@ def archive_inventory(
     package_kind: PackageKind | str,
     completed_at: datetime,
 ) -> dict[str, object]:
-    """写入可重建证据并按任务覆盖台账观测；台账数据本身持久保留。"""
+    """写入可重建证据并按任务、按设备覆盖台账观测；台账数据本身持久保留。"""
     kind = PackageKind(package_kind)
     now = utc_now()
     path = evidence_path(task_id)
@@ -164,15 +202,39 @@ def archive_inventory(
         return {"status": InventoryParseStatus.NOT_APPLICABLE.value, "archived": False, "audits": actions}
 
     with session_factory() as session:
-        device_info = evidence.get("device") or {}
-        archived = evidence.get("archived") or {}
-        device_status = str(device_info.get("status"))
-        existing_observation = (
-            session.query(InventoryObservation).filter(InventoryObservation.task_id == task_id).first()
-        )
-        can_archive = evidence.get("status") == "archived" and bool(archived.get("device_id"))
+        legacy_device = evidence.get("device") if isinstance(evidence.get("device"), dict) else {}
+        archived = evidence.get("archived") if isinstance(evidence.get("archived"), dict) else {}
+        archived_devices = archived.get("devices") if isinstance(archived.get("devices"), list) else []
+        if evidence.get("status") == "archived" and archived.get("device_id") and not archived_devices:
+            # 兼容 027 旧证据：旧版本仅写入单设备归档字段，也允许重跑恢复。
+            archived_devices = [
+                {
+                    "device_id": archived.get("device_id"),
+                    "observation_id": archived.get("observation_id"),
+                    "normalized_name": legacy_device.get("normalized_name"),
+                }
+            ]
+        device_infos = {
+            str(item.get("normalized_name")): item
+            for item in evidence.get("devices", [])
+            if isinstance(item, dict) and item.get("normalized_name")
+        }
+        if not device_infos and legacy_device.get("normalized_name"):
+            device_infos[str(legacy_device["normalized_name"])] = legacy_device
 
-        if existing_observation and not can_archive:
+        existing_observations = (
+            session.query(InventoryObservation).filter(InventoryObservation.task_id == task_id).all()
+        )
+        target_observation_ids = {
+            str(item.get("observation_id")) for item in archived_devices if item.get("observation_id")
+        }
+        can_archive = evidence.get("status") == "archived" and bool(archived_devices)
+        if not can_archive:
+            target_observation_ids = set()
+
+        for existing_observation in existing_observations:
+            if existing_observation.observation_id in target_observation_ids:
+                continue
             before = _observation_snapshot(existing_observation)
             existing_observation.status = "retired"
             existing_observation.updated_at = now
@@ -194,109 +256,104 @@ def archive_inventory(
                 actions.append("retire")
 
         if can_archive:
-            device_id = str(archived["device_id"])
-            obs_id = str(archived["observation_id"])
-            site = evidence["site"]
-            version = evidence["version"]
-            values = {
-                "province": str(site["province"]),
-                "operator": str(site["operator"]),
-                "site_key": str(site["site_key"]),
-                "observed_at": completed_at,
-                "task_status": "completed",
-                "device_name": str(device_info["normalized_name"]),
-                "identity_status": "ok",
-                "version_status": str(version["status"]),
-                "raw_version": version.get("raw_version"),
-                "version_key": version.get("raw_version"),
-                "version_source_files": [str(item) for item in evidence.get("source_files", [])],
-                "device_snapshot": {
-                    "device": device_info,
-                    "version": version,
-                    "site": site,
-                    "conflicts": evidence.get("conflicts", []),
-                    "errors": evidence.get("errors", []),
-                },
-                "status": "active",
-                "updated_at": now,
-            }
-            device = session.get(InventoryDevice, device_id)
-            if device is None:
-                device = InventoryDevice(
-                    device_id=device_id,
-                    device_key=values["device_name"],
-                    province=values["province"],
-                    current_device_name=values["device_name"],
-                    current_site_key=values["site_key"],
-                    current_operator=values["operator"],
-                    first_seen_at=completed_at,
-                    last_seen_at=completed_at,
-                    latest_task_id=task_id,
-                    latest_status="archived",
-                    observation_count=0,
-                    site_change_count=0,
-                    has_site_conflict=False,
-                    created_at=now,
-                    updated_at=now,
+            site = evidence.get("site") or {}
+            source_files = [str(item) for item in evidence.get("source_files", [])]
+            conflicts = list(evidence.get("conflicts", []))
+            errors = list(evidence.get("errors", []))
+            for archived_device in archived_devices:
+                device_id = str(archived_device["device_id"])
+                obs_id = str(archived_device["observation_id"])
+                normalized_name = str(archived_device.get("normalized_name") or "")
+                device_info = device_infos.get(normalized_name, legacy_device)
+                values = _observation_values(
+                    device_info=device_info,
+                    site=site,
+                    source_files=source_files,
+                    conflicts=conflicts,
+                    errors=errors,
+                    completed_at=completed_at,
+                    now=now,
                 )
-                session.add(device)
-                session.flush()
-            if existing_observation is None:
-                observation = InventoryObservation(
-                    observation_id=obs_id,
-                    task_id=task_id,
-                    device_id=device_id,
-                    created_at=now,
-                    **values,
-                )
-                session.add(observation)
-                session.flush()
-                actions.append("create")
-                after = _observation_snapshot(observation)
-                audit_id = _audit_id(task_id, obs_id, "create", None, after)
-                session.merge(
-                    InventoryChangeAudit(
-                        audit_id=audit_id,
+                device = session.get(InventoryDevice, device_id)
+                if device is None:
+                    device = InventoryDevice(
+                        device_id=device_id,
+                        device_key=values["device_name"],
+                        province=values["province"],
+                        current_device_name=values["device_name"],
+                        current_site_key=values["site_key"],
+                        current_operator=values["operator"],
+                        first_seen_at=completed_at,
+                        last_seen_at=completed_at,
+                        latest_task_id=task_id,
+                        latest_status="archived",
+                        observation_count=0,
+                        site_change_count=0,
+                        has_site_conflict=False,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(device)
+                    session.flush()
+                existing_observation = session.get(InventoryObservation, obs_id)
+                if existing_observation is None:
+                    observation = InventoryObservation(
+                        observation_id=obs_id,
                         task_id=task_id,
                         device_id=device_id,
-                        observation_id=obs_id,
-                        action="create",
-                        before_snapshot=None,
-                        after_snapshot=after,
-                        changed_at=now,
+                        created_at=now,
+                        **values,
                     )
-                )
-            else:
-                before = _observation_snapshot(existing_observation)
-                for key, value in values.items():
-                    setattr(existing_observation, key, value)
-                after = _observation_snapshot(existing_observation)
-                if _strip_dynamic(before) != _strip_dynamic(after):
-                    audit_id = _audit_id(task_id, obs_id, "update", _strip_dynamic(before), _strip_dynamic(after))
-                    if not session.get(InventoryChangeAudit, audit_id):
-                        session.add(
-                            InventoryChangeAudit(
-                                audit_id=audit_id,
-                                task_id=task_id,
-                                device_id=device_id,
-                                observation_id=obs_id,
-                                action="update",
-                                before_snapshot=_strip_dynamic(before),
-                                after_snapshot=_strip_dynamic(after),
-                                changed_at=now,
-                            )
+                    session.add(observation)
+                    session.flush()
+                    actions.append("create")
+                    after = _observation_snapshot(observation)
+                    audit_id = _audit_id(task_id, obs_id, "create", None, after)
+                    session.merge(
+                        InventoryChangeAudit(
+                            audit_id=audit_id,
+                            task_id=task_id,
+                            device_id=device_id,
+                            observation_id=obs_id,
+                            action="create",
+                            before_snapshot=None,
+                            after_snapshot=after,
+                            changed_at=now,
                         )
-                        actions.append("update")
-            _recalculate_device(session, device, now)
-        elif existing_observation:
-            device = session.get(InventoryDevice, existing_observation.device_id)
-            if device is not None:
+                    )
+                else:
+                    before = _observation_snapshot(existing_observation)
+                    for key, value in values.items():
+                        setattr(existing_observation, key, value)
+                    after = _observation_snapshot(existing_observation)
+                    if _strip_dynamic(before) != _strip_dynamic(after):
+                        audit_id = _audit_id(task_id, obs_id, "update", _strip_dynamic(before), _strip_dynamic(after))
+                        if not session.get(InventoryChangeAudit, audit_id):
+                            session.add(
+                                InventoryChangeAudit(
+                                    audit_id=audit_id,
+                                    task_id=task_id,
+                                    device_id=device_id,
+                                    observation_id=obs_id,
+                                    action="update",
+                                    before_snapshot=_strip_dynamic(before),
+                                    after_snapshot=_strip_dynamic(after),
+                                    changed_at=now,
+                                )
+                            )
+                            actions.append("update")
                 _recalculate_device(session, device, now)
+        else:
+            touched_device_ids = {item.device_id for item in existing_observations}
+            for device_id_value in touched_device_ids:
+                device = session.get(InventoryDevice, device_id_value)
+                if device is not None:
+                    _recalculate_device(session, device, now)
         session.commit()
 
     return {
         "status": str(evidence["status"]),
-        "archived": bool(can_archive if "can_archive" in locals() else False),
+        "archived": bool(can_archive),
         "audits": actions,
     }
 
