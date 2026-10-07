@@ -213,7 +213,7 @@ python build.py gen-web-api
 - `chore/*`
 - `docs/*`
 
-提交信息：
+提交信息的 subject 和正文必须使用中文；Conventional Commits 的 `type(scope)` 前缀保持英文：
 
 ```text
 <type>(<scope>): <subject>
