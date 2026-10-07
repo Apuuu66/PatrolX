@@ -1,4 +1,5 @@
-import { Button, Empty, Popconfirm, Space, Table, Typography } from "antd";
+import { Button, Empty, Popconfirm, Space, Typography } from "antd";
+import { Table } from "./ResizableTable";
 import { RedoOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import type { RuleResult } from "../api/http";

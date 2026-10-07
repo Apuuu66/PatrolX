@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import echarts from "../lib/echarts";
-import { Card, Col, Row, Table, Typography } from "antd";
+import { Card, Col, Row, Typography } from "antd";
+import { Table } from "./ResizableTable";
 import type { components } from "../api/client";
 
 type Metric = components["schemas"]["Metric"];

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { App, Card, Input, Select, Space, Switch, Table, Tag, Typography } from "antd";
+import { App, Card, Input, Select, Space, Switch, Tag, Typography } from "antd";
+import { Table } from "../components/ResizableTable";
 import type { ColumnsType } from "antd/es/table";
 import { api, type InspectorState } from "../api/http";
 import { useAuth } from "../auth/AuthContext";

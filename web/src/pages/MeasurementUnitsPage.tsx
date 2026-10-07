@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type Key } from "react";
 import {
-  Alert, App, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table, Tabs, Tag, Typography, Upload,
+  Alert, App, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Tabs, Tag, Typography, Upload,
 } from "antd";
+import { Table } from "../components/ResizableTable";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { api, type MeasurementBinding, type MeasurementBindingBatchConfirmResponse, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";

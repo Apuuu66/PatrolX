@@ -38,10 +38,37 @@ function toErrorState(error: unknown): { status: "error"; message: string } {
   };
 }
 
+export type TaskDetailLoadScope = "full" | "refresh";
+
+export type TaskDetailLoadOptions = {
+  scope?: TaskDetailLoadScope;
+  previous?: TaskDetailData | null;
+};
+
 export async function loadTaskDetailData(
   taskId: string,
   dependencies: TaskDetailDataDependencies = defaultDependencies,
+  options: TaskDetailLoadOptions = {},
 ): Promise<TaskDetailData> {
+  const scope = options.scope ?? "full";
+  const previous = options.previous;
+  if (scope === "refresh") {
+    const [taskResult, logsResult] = await Promise.allSettled([
+      dependencies.getTask(taskId),
+      dependencies.getLogs(taskId),
+    ]);
+    return {
+      task: taskResult.status === "fulfilled"
+        ? { status: "ready" as const, data: taskResult.value }
+        : previous?.task ?? toErrorState(taskResult.reason),
+      system: previous?.system ?? { status: "error" as const, message: "加载失败" },
+      logs: logsResult.status === "fulfilled"
+        ? { status: "ready" as const, data: logsResult.value?.entries ?? [] }
+        : previous?.logs ?? toErrorState(logsResult.reason),
+      hiddenRuleCodes: previous?.hiddenRuleCodes ?? new Set<string>(),
+    };
+  }
+
   const [taskResult, systemResult, inspectorsResult, logsResult] = await Promise.allSettled([
     dependencies.getTask(taskId),
     dependencies.getSystem(taskId),

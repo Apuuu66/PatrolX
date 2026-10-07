@@ -1,8 +1,9 @@
-import { Alert, Descriptions, Flex, List, Space, Table, Tag, Typography } from "antd";
+import { Alert, Descriptions, Flex, List, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { Link } from "react-router-dom";
 import type { components } from "../../api/client";
+import { Table } from "../ResizableTable";
 type MatchedDevice = components["schemas"]["TaskInventoryMatchedDevice"];
 type InventoryRecord = components["schemas"]["TaskInventoryRecord"];
 

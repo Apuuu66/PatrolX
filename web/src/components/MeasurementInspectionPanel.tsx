@@ -1,4 +1,5 @@
-import { Alert, Button, Card, Descriptions, Empty, Progress, Space, Spin, Statistic, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Empty, Progress, Space, Spin, Statistic, Tag, Typography } from "antd";
+import { Table } from "../components/ResizableTable";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ResourceNameCell } from "./ResourceNameCell";
