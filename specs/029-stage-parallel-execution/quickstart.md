@@ -20,7 +20,7 @@ python build.py verify
 - `tests/test_executor_parallel_faults.py`
 - `tests/test_executor_parallel_policy.py`
 
-## 场景 2：基准包串行 vs 并行提速（SC-001、SC-004）
+## 场景 2：基准包串行 vs 并行提速与结果等价（SC-001、SC-002、SC-004）
 
 ```bash
 python bench/parallel_bench.py --files 16 --rows 40000 --out /tmp/patrolx-bench
@@ -32,18 +32,22 @@ python bench/parallel_bench.py --files 16 --rows 40000 --out /tmp/patrolx-bench
 - `speedup`：`serial.rule_wall_s / parallel.rule_wall_s`，要求 `≥ 2.0`。
 - `peak_rss_ratio`：基准脚本用后台采样线程 + `ps rss` 采集的**进程树真实并发峰值**之比，要求 `≤ 4 × 1.1`。
 - `stages[]`：逐阶段 `mode` / `reason` / `workers` / `pending_units` / `matched_bytes` / `wall_ms` / `slowest_unit_ms`。
+- `equivalence` / `sc002_pass`：真实规则在 88MB 基准包上的串并逐字段比对（剔除 `executed_at`、`duration_ms`），
+  `mismatches[]` 为空即通过 SC-002；每次运行的结果快照留在 `runs/<mode>/<task_id>/rules.normalized.json`。
 
-判定：`parallel.rule_wall_s ≤ serial.rule_wall_s × 0.5` 记为通过 SC-001。
+判定：`parallel.rule_wall_s ≤ serial.rule_wall_s × 0.5` 记为通过 SC-001；`equivalence.mismatches == []` 记为通过 SC-002；
+`--check` 时两项任一未达标返回退出码 1。
 
 **实测（2026-10-08 / M1 Pro / Python 3.12.14，`--files 16 --rows 40000`）**：
 
 | 指标 | 串行基线 | 4 并行 |
 | --- | --- | --- |
-| 规则阶段墙钟 | 8.937s | 3.465s |
-| INSPECT 阶段墙钟（8 单元，匹配 370MB） | 8180ms | 2726ms（`workers=4`、最慢单元 2144ms） |
-| PREPARE 阶段（1 单元，匹配 46MB） | 757ms | 739ms（`units<3` 直通串行） |
+| 规则阶段墙钟 | 8.875s | 3.430s |
+| INSPECT 阶段墙钟（8 单元，匹配 370MB） | 8126ms | 2681ms（`workers=4`、最慢单元 2118ms） |
+| PREPARE 阶段（1 单元，匹配 46MB） | 749ms | 749ms（`units<3` 直通串行） |
+| 规则结果逐字段比对（23 个单元） | — | `mismatches = []`，两模式 `rules.normalized.json` 逐字节一致 |
 
-`speedup = 2.58`，`sc001_pass = true`；进程树并发峰值 436.8MB → 1830.3MB、`peak_rss_ratio = 4.16`，在 SC-004 的 4 × 1.1 误差边界内。
+`speedup = 2.59`、`sc001_pass = true`、`sc002_pass = true`；进程树并发峰值 435MiB → 1869MiB、`peak_rss_ratio = 4.30`，在 SC-004 的 4 × 1.1 误差边界内。三次独立复现区间：`speedup` 2.55~2.59、`peak_rss_ratio` 4.16~4.30。
 
 两种内存口径必须区分：`stage_parallel_done.children_peak_rss_bytes` 是**各 worker 自身峰值之和**（本轮 3.42GB，会重复计入不同时活跃的 worker，用于单机排障），`peak_rss_ratio` 是基准脚本采样的**同时活跃进程树峰值**（SC-004 的判定口径）。
 
