@@ -54,6 +54,44 @@ export function getCustomerFields(
     }));
 }
 
+export interface DeviceIdDisplay {
+  /** 页面展示文本，缺失时为 "-"。 */
+  value: string;
+  /** 取值来源：手工设备 ID、台账解析的网元名称，或缺失。 */
+  source: "manual" | "ledger" | null;
+}
+
+export interface DeviceIdSource {
+  device_id?: string | null;
+  inventory?: {
+    devices?: readonly { normalized_name?: string | null }[] | null;
+  } | null;
+}
+
+/**
+ * 设备 ID 展示规则：优先展示手工填写的设备 ID；未填写时回退到台账解析出的网元名称。
+ * 手工设备 ID 用于跨任务历史匹配，台账解析结果只作为展示证据。
+ */
+export function getDeviceIdDisplay(
+  task: DeviceIdSource,
+  customer?: Record<string, string> | null,
+): DeviceIdDisplay {
+  const manual = (task.device_id ?? customer?.device_id ?? "").trim();
+  if (manual) {
+    return { value: manual, source: "manual" };
+  }
+
+  const names = (task.inventory?.devices ?? [])
+    .map((device) => device.normalized_name?.trim() ?? "")
+    .filter((name) => name.length > 0);
+  const uniqueNames = [...new Set(names)];
+  if (uniqueNames.length > 0) {
+    return { value: uniqueNames.join("、"), source: "ledger" };
+  }
+
+  return { value: "-", source: null };
+}
+
 export interface HealthBarSegment {
   key: RuleStatus;
   label: string;

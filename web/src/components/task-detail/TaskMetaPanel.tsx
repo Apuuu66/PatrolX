@@ -1,7 +1,7 @@
 import { Button, Descriptions, Space, Typography } from "antd";
 import dayjs from "dayjs";
 import type { SystemInspection, TaskSummary } from "../../api/http";
-import { getCustomerFields } from "../../utils/taskDisplay";
+import { getCustomerFields, getDeviceIdDisplay } from "../../utils/taskDisplay";
 
 type TaskMetaPanelProps = {
   task: TaskSummary;
@@ -13,7 +13,8 @@ type TaskMetaPanelProps = {
 export function TaskMetaPanel({ task, system, deviceEditable, onEditDevice }: TaskMetaPanelProps) {
   const customerFields = getCustomerFields(system?.customer);
   const customerText = customerFields.length ? customerFields.map((field) => `${field.label} ${field.value}`).join(" · ") : "-";
-  const deviceId = task.device_id ?? system?.customer?.device_id ?? "-";
+  const device = getDeviceIdDisplay(task, system?.customer);
+  const manualDeviceId = (task.device_id ?? system?.customer?.device_id ?? "").trim();
 
   return (
     <>
@@ -39,10 +40,13 @@ export function TaskMetaPanel({ task, system, deviceEditable, onEditDevice }: Ta
             key: "device_id",
             label: "设备 ID",
             children: (
-              <Space size={4}>
-                <Typography.Text>{deviceId}</Typography.Text>
+              <Space size={4} wrap>
+                <Typography.Text>{device.value}</Typography.Text>
+                {device.source === "ledger" && (
+                  <Typography.Text type="secondary">（台账解析）</Typography.Text>
+                )}
                 {deviceEditable && onEditDevice && (
-                  <Button size="small" type="text" onClick={() => onEditDevice(deviceId)}>
+                  <Button size="small" type="text" onClick={() => onEditDevice(manualDeviceId)}>
                     编辑
                   </Button>
                 )}

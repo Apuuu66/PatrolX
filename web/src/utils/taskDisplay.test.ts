@@ -5,6 +5,7 @@ import type { TaskStats } from "../api/http";
 import {
   getAttentionSummary,
   getCustomerFields,
+  getDeviceIdDisplay,
   getHealthBarSegments,
   getStatusStatEmphasis,
 } from "./taskDisplay.ts";
@@ -68,6 +69,46 @@ describe("getCustomerFields", () => {
   it("无有效字段时返回空列表", () => {
     assert.deepEqual(getCustomerFields(undefined), []);
     assert.deepEqual(getCustomerFields({ device_id: "dev-001" }), []);
+  });
+});
+
+describe("getDeviceIdDisplay", () => {
+  it("优先展示手工填写的设备 ID", () => {
+    const display = getDeviceIdDisplay({
+      device_id: "manual-001",
+      inventory: { devices: [{ normalized_name: "CSP-SZ-01" }] },
+    });
+
+    assert.deepEqual(display, { value: "manual-001", source: "manual" });
+  });
+
+  it("未填写时回退到上传元数据中的设备 ID", () => {
+    const display = getDeviceIdDisplay({}, { device_id: " home-device-001 " });
+
+    assert.deepEqual(display, { value: "home-device-001", source: "manual" });
+  });
+
+  it("没有手工设备 ID 时展示台账解析出的网元名称", () => {
+    const display = getDeviceIdDisplay({
+      inventory: {
+        devices: [{ normalized_name: "CSP-SZ-01" }, { normalized_name: "UMF-SZ-01" }],
+      },
+    });
+
+    assert.deepEqual(display, { value: "CSP-SZ-01、UMF-SZ-01", source: "ledger" });
+  });
+
+  it("台账名称去重并忽略空值", () => {
+    const display = getDeviceIdDisplay({
+      inventory: { devices: [{ normalized_name: " " }, { normalized_name: "CSP-SZ-01" }, { normalized_name: "CSP-SZ-01" }] },
+    });
+
+    assert.deepEqual(display, { value: "CSP-SZ-01", source: "ledger" });
+  });
+
+  it("没有任何来源时展示占位符", () => {
+    assert.deepEqual(getDeviceIdDisplay({ inventory: { devices: [] } }), { value: "-", source: null });
+    assert.deepEqual(getDeviceIdDisplay({}), { value: "-", source: null });
   });
 });
 
