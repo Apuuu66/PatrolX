@@ -136,6 +136,10 @@ cd web && npm run dev
 执行编排：
 
 - 固定顺序为 `EXTRACT → PREPARE → INSPECT`；主包解压失败时任务失败。
+- 阶段内并行：`EXTRACT` 与收尾串行，`PREPARE` / `INSPECT` 阶段内最多 4 个进程并行（固定并行度，无配置入口）；阶段屏障不得打破。
+- 父进程是 `execution.log`、规则 JSON、任务摘要与报告的唯一写入者；worker 只回传结果与待写日志，prepare 的业务输出仍写入自己的 `prepared/<owner_code>/`。
+- 并行不改变任何规则判定逻辑与 `rule_version`；单规则重跑（`verify-one`）保持串行，只改动目标规则产物。
+- worker 非正常退出时该单元记 `error`，其余未完成单元降级为单进程顺序补跑并写 `parallel_degraded` 事件，不再并行、不自动重试。
 - 解压是隐藏的 `pkg.extract.*` 内部前置规则，必须安全、幂等且只解压一次。
 - prepare 是隐藏的规则私有基础设施单元，按 owner priority 和规则代码排序，不进入普通规则结果。
 - P1 基础检查。

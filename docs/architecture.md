@@ -104,7 +104,7 @@ python build.py lint
 - 用户由管理员在 Web「用户管理」维护，不支持在线注册；首次部署可通过
   `scripts/create_default_admin.py` 初始化默认管理员，目标管理员已存在时可重置密码。
 - 一次上传一个包，创建一个任务。
-- 首版任务为单线程顺序执行。
+- 任务之间串行消费；任务内按 `EXTRACT → PREPARE → INSPECT → 收尾` 固定屏障执行，`PREPARE` / `INSPECT` 阶段内最多 4 个进程并行（固定并行度，无配置入口）。
 - SQLite 只保存轻量任务/系统元数据；巡检结果和运行现场以文件为主。
 - 前端通过 `/api/v2` 访问后端，API 客户端由 OpenAPI 生成。
 
@@ -345,6 +345,16 @@ outputs.metrics[]  声明的指标契约
 
 执行器维护 `EXTRACT → PREPARE → INSPECT` 阶段屏障，但不维护普通规则依赖图。普通规则只能读取自己的匹配文件或自己的 prepared 数据；`pkg.extract.*` 是隐藏解压基础设施，prepare 是隐藏规则私有准备单元，都不作为普通规则展示。
 
+执行编排细节：
+
+- `EXTRACT` 与收尾（结果落盘、摘要、报告）永不并行；主包 `pkg.extract.main` 失败时任务失败，不进入 PREPARE。
+- 父进程先规划（匹配文件、prepare 缓存命中判定、skip 判定），只把真正需要执行的单元交给固定 4 进程的 `spawn` 进程池；阶段内待执行单元 < 3 或匹配文件总字节 < 8MB 时整体串行直通，不建池。
+- 进程池按阶段惰性创建、在 PREPARE 与 INSPECT 之间复用，任务结束（含异常与主包失败路径）在 `finally` 中回收，不残留子进程。
+- 父进程是 `execution.log`、`rules/*.json`、任务摘要与报告的唯一写入者；worker 只回传结果与日志条目，单元日志按计划序写入，保证每行完整 JSON 且不交错。
+- 单个 prepare 失败只把 owner 规则置为 `skip`（原因“预处理未就绪”）；单条规则异常或 worker 非正常退出只把该单元记为 `error`，其余单元继续。
+- 每个阶段写 `stage_parallel_start` / `stage_parallel_done`，记录 `mode`、直通原因、`workers`、`pending_units`、`matched_bytes`、`wall_ms`、父子峰值 RSS 与最慢单元耗时（统一为字节）。
+- 单规则重跑（`verify-one`）保持串行、不建池，只改动目标规则 JSON、任务摘要与报告。
+
 ### 7.3 Rule Contract
 
 注册规则必须声明：
@@ -378,7 +388,7 @@ outputs.metrics[]  声明的指标契约
 - marker 不存在或不一致时重建；一致时复用；prepare 失败不写 marker。
 - 不做输入 checksum、输出 manifest 或单个 prepared 文件缺失检查。
 - prepare 执行顺序为 `owner priority → owner code → prepare code`。
-- 第一版顺序执行 prepare；prepare 之间保持无依赖。
+- PREPARE 阶段内最多 4 个进程并行（固定并行度）；prepare 之间保持无依赖。
 
 ### 7.5 状态语义
 

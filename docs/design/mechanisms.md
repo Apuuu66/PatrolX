@@ -395,3 +395,26 @@ SQLite 单文件数据库（`data/patrolx.db`）在程序空闲时可直接复�
 ### 差异
 
 当前无已知差异。
+
+## 14. 阶段内并行执行机制
+
+### 目标设计
+
+- 单包任务内按 `EXTRACT → PREPARE → INSPECT → 收尾` 的固定阶段屏障执行，阶段内最多 4 个进程并行。
+- 并行只做执行层优化：规则判定逻辑、`rule_version`、结果契约、任务目录布局与 prepare 私有语义全部不变。
+- 父进程唯一写盘；worker 不写 `execution.log`、`rules/*.json`、任务摘要与报告。
+- 小任务不为并行付固定开销：待执行单元 < 3 或匹配文件总字节 < 8MB 时整体串行直通。
+
+### 当前实现
+
+- `app/services/unit_runtime.py`：`UnitRequest` / `UnitOutcome` / `RuleContext` 与 `execute_unit()`；串行与并行共用同一份单元执行实现，规则异常与 prepare 失败都在单元内收敛为结果。
+- `app/services/parallel.py`：`ParallelPolicy`（`max_workers=4`、`min_units=3`、`min_matched_bytes=8MB`，无 CLI/环境变量/API 入口）与阶段运行时 `StageRunner`（`spawn` 上下文、惰性建池、跨阶段复用、`finally` 回收）。
+- `app/services/executor.py`：父进程规划（源文件匹配、缓存命中、skip 判定）后把需要执行的单元交给阶段运行时；`EXTRACT`、`run_rule_with_deps()` 与收尾保持串行。
+- 单写者：单元日志先缓冲、父进程按计划序 flush 到 `execution.log`；`RULES_TOTAL` 只由父进程自增；prepare 成功后由父进程写 `.prepare.sha256` marker，失败不写。
+- 降级：worker 非正常退出写 `parallel_degraded`（`broker_broken` + 受影响单元数 + 仍失败单元数），未完成单元在独立单进程池内逐个补跑，只在该单元仍崩溃时记 `error`，不重试，后续阶段不再并行。
+- 可观测：`stage_parallel_start` / `stage_parallel_done` 记录 `mode`、直通原因、`workers`、`pending_units`、`matched_bytes`、`wall_ms`、`slowest_unit_ms` 与父子峰值 RSS（统一换算为字节）。
+
+### 差异
+
+- 并行度固定 4，本版不提供配置项；放开 prepare 跨规则共享消费属于后续独立版本，需先修订宪法与相关契约。
+- 解压阶段、收尾阶段与单条规则内的 chunk 级并行不在本版范围。
