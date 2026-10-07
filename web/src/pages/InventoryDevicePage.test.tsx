@@ -20,7 +20,6 @@ vi.mock("../api/http", () => ({
     getInventoryDevice: vi.fn(),
     getInventoryVersionHistory: vi.fn(),
     listInventoryObservations: vi.fn(),
-    updateInventoryDevice: vi.fn(),
     deleteInventoryDevice: vi.fn(),
   },
 }));
@@ -39,7 +38,6 @@ const device: InventoryDevice = {
   observation_count: 3,
   site_change_count: 1,
   has_site_conflict: true,
-  remark: "旧备注",
   quality_issue_types: ["site_ownership_change"],
 };
 
@@ -137,26 +135,11 @@ describe("InventoryDevicePage", () => {
     });
   });
 
-  it("updates device remark", async () => {
-    vi.mocked(api.updateInventoryDevice).mockResolvedValue({ ...device, remark: "新备注" });
-    renderPage();
-
-    await screen.findByText("旧备注");
-    fireEvent.click(screen.getByText("编辑"));
-    fireEvent.change(await screen.findByLabelText("备注"), { target: { value: "新备注" } });
-    fireEvent.click(screen.getByRole("button", { name: "保 存" }));
-
-    await waitFor(() => {
-      expect(api.updateInventoryDevice).toHaveBeenCalledWith("gd-gz-core-01", { remark: "新备注" });
-    });
-    expect(await screen.findByText("备注已更新")).toBeTruthy();
-  });
-
   it("physically deletes device after explicit confirmation", async () => {
     vi.mocked(api.deleteInventoryDevice).mockResolvedValue(undefined);
     renderPage();
 
-    await screen.findByText("旧备注");
+    await screen.findByRole("heading", { name: "GD-GZ-Core-01" });
     fireEvent.click(screen.getByRole("button", { name: /^删\s*除$/ }));
     const popover = (await screen.findByText("确认删除该设备台账？")).closest(".ant-popover");
     if (!popover) throw new Error("delete popover is missing");

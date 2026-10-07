@@ -871,21 +871,9 @@ class InventoryDevice(BaseModel):
     site_change_count: int = Field(ge=0)
     has_site_conflict: bool
     quality_issue_types: list[InventoryQualityIssueType] = Field(default_factory=list)
-    remark: str | None = None
     created_by: str | None = None
     updated_by: str | None = None
     updated_at: datetime | None = None
-
-
-class InventoryDeviceCreateRequest(BaseModel):
-    province: str = Field(min_length=1, max_length=64)
-    operator: str = Field(min_length=1, max_length=64)
-    device_name: str = Field(min_length=1, max_length=256)
-    remark: str | None = Field(default=None, max_length=512)
-
-
-class InventoryDeviceUpdateRequest(BaseModel):
-    remark: str | None = Field(default=None, max_length=512)
 
 
 class PagedMeta(BaseModel):

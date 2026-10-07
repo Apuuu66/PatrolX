@@ -82,32 +82,15 @@ test("日志补充包显示不涉及设备台账且不进入设备台账", async
   await expect(page.getByText("该类型不解析设备信息，也不产生台账观测或质量问题。")).toBeVisible();
 });
 
-test("设备台账支持管理员新增、编辑备注和物理删除", async ({ page }) => {
+test("设备台账只支持管理员物理删除", async ({ page }) => {
   await loginAdmin(page);
+  await uploadPackage(page, inspectionZip, "inspection");
+
   await page.goto("/inventory");
-
-  await page.getByRole("button", { name: /新增设备/ }).click();
-  await page.getByLabel("省份").fill("江苏省");
-  await page.getByLabel("运营商").fill("移动");
-  await page.getByLabel("设备名称").fill("JS-CRUD-001");
-  await page.getByLabel("备注").fill("初始化备注");
-  await page.getByRole("button", { name: /^创\s*建$/ }).click();
-  await expect(page.getByText("设备已创建")).toBeVisible();
-  await page.reload();
-  await expect(page.getByText("JS-CRUD-001").first()).toBeVisible();
-
-  await page.getByText("JS-CRUD-001").first().click();
+  await expect(page.getByRole("button", { name: /新增设备/ })).toHaveCount(0);
+  await page.getByText("NJ-AGG-001").first().click();
   await expect(page).toHaveURL(/\/inventory\/devices\//);
-  await expect(page.getByText("初始化备注")).toBeVisible();
-
-  await page.getByRole("button", { name: "编辑" }).click();
-  const editModal = page.getByRole("dialog", { name: "编辑设备备注" });
-  await editModal.getByLabel("备注").fill("维护升级中");
-  await editModal.getByRole("button", { name: /^保\s*存$/ }).click();
-  await expect(page.getByText("备注已更新")).toBeVisible();
-  await expect(page.locator(".ant-descriptions-item-content").filter({ hasText: "维护升级中" })).toBeVisible();
-  await page.reload();
-  await expect(page.locator(".ant-descriptions-item-content").filter({ hasText: "维护升级中" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "编辑" })).toHaveCount(0);
 
   await page.getByRole("button", { name: /^删\s*除$/ }).click();
   await expect(page.getByText("将物理删除设备、全部观测记录和版本历史。")).toBeVisible();
@@ -115,7 +98,7 @@ test("设备台账支持管理员新增、编辑备注和物理删除", async ({
   await popover.getByRole("button", { name: /^删\s*除$/ }).click();
   await expect(page.getByText("设备台账已删除")).toBeVisible();
   await expect(page).toHaveURL(/\/inventory$/);
-  await expect(page.getByText("JS-CRUD-001")).toHaveCount(0);
+  await expect(page.getByText("NJ-AGG-001")).toHaveCount(0);
 
   await uploadPackage(page, rerunZip, "inspection");
   await page.getByRole("tab", { name: "设备台账" }).click();

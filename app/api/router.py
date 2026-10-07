@@ -30,9 +30,7 @@ from app.models.schemas import (
     InspectorState,
     InspectorStateListResponse,
     InventoryDevice,
-    InventoryDeviceCreateRequest,
     InventoryDeviceList,
-    InventoryDeviceUpdateRequest,
     InventoryObservationList,
     InventoryQualityIssueList,
     InventoryQualityIssueType,
@@ -336,47 +334,6 @@ def get_inventory_device(device_id: str = PathParam()) -> InventoryDevice:
     if device is None:
         raise AppError("not_found", "设备不存在", 404)
     return device
-
-
-@router.post(
-    "/inventory/devices",
-    response_model=InventoryDevice,
-    status_code=201,
-    operation_id="createInventoryDevice",
-)
-def create_inventory_device(
-    body: InventoryDeviceCreateRequest,
-    response: Response,
-    auth: AuthSession = Depends(require_role("admin")),
-) -> InventoryDevice:
-    try:
-        device = inventory_maintenance.create_device(
-            province=body.province,
-            operator=body.operator,
-            device_name=body.device_name,
-            remark=body.remark,
-            operator_name=auth.username,
-        )
-    except InventoryMaintenanceError as exc:
-        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
-    response.headers["Location"] = f"/api/v2/inventory/devices/{device.device_id}"
-    return device
-
-
-@router.patch(
-    "/inventory/devices/{device_id}",
-    response_model=InventoryDevice,
-    operation_id="updateInventoryDevice",
-)
-def update_inventory_device(
-    body: InventoryDeviceUpdateRequest,
-    device_id: str = PathParam(),
-    auth: AuthSession = Depends(require_role("admin")),
-) -> InventoryDevice:
-    try:
-        return inventory_maintenance.update_device(device_id, remark=body.remark, operator_name=auth.username)
-    except InventoryMaintenanceError as exc:
-        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
 
 
 @router.delete(

@@ -23,7 +23,6 @@ vi.mock("../api/http", () => ({
   api: {
     listInventoryDevices: vi.fn(),
     listInventoryQualityIssues: vi.fn(),
-    createInventoryDevice: vi.fn(),
   },
 }));
 
@@ -133,25 +132,4 @@ describe("InventoryPage", () => {
     expect(await screen.findByText("设备详情测试")).toBeTruthy();
   });
 
-  it("creates a manual device from the ledger form", async () => {
-    vi.mocked(api.createInventoryDevice).mockResolvedValue({ ...devices[0], device_id: "manual-001", device_name: "JS-NJ-Manual-01" });
-    renderPage();
-
-    fireEvent.click(await screen.findByRole("button", { name: /新增设备/ }));
-    fireEvent.change(screen.getByLabelText("省份"), { target: { value: "江苏省" } });
-    fireEvent.change(screen.getByLabelText("运营商"), { target: { value: "移动" } });
-    fireEvent.change(screen.getByLabelText("设备名称"), { target: { value: "JS-NJ-Manual-01" } });
-    fireEvent.change(screen.getByLabelText("备注"), { target: { value: "手工登记" } });
-    fireEvent.click(screen.getByRole("button", { name: /^创\s*建$/ }));
-
-    await waitFor(() => {
-      expect(api.createInventoryDevice).toHaveBeenCalledWith({
-        province: "江苏省",
-        operator: "移动",
-        device_name: "JS-NJ-Manual-01",
-        remark: "手工登记",
-      });
-    });
-    expect(await screen.findByText("设备已创建")).toBeTruthy();
-  });
 });

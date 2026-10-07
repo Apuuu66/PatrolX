@@ -1,7 +1,8 @@
-"""设备台账维护 API 集成测试。"""
+"""设备台账删除维护 API 集成测试。"""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -29,56 +30,66 @@ def _clean_inventory() -> None:
         session.commit()
 
 
-def _create_device(**overrides: str) -> dict:
-    payload = {
-        "province": "江苏",
-        "operator": "移动",
-        "device_name": "NJ-MANUAL-001",
-        "remark": "新装机",
-    }
-    payload.update(overrides)
-    response = client.post("/api/v2/inventory/devices", json=payload)
-    assert response.status_code == 201, response.text
-    return response.json()
+def _seed_device(
+    *,
+    device_id: str = "js-nj-agg-001",
+    device_name: str = "NJ-AGG-001",
+    province: str = "江苏",
+    operator: str = "移动",
+) -> None:
+    from app.models.db import InventoryDevice, session_factory
+
+    now = datetime.now(UTC)
+    with session_factory() as session:
+        session.add(
+            InventoryDevice(
+                device_id=device_id,
+                device_key=device_name.lower(),
+                province=province,
+                current_device_name=device_name,
+                current_site_key=f"{province}|{operator}",
+                current_operator=operator,
+                current_version_raw="V900R016C10SPC200",
+                current_version_observed_at=now,
+                current_version_task_id="task-current",
+                first_seen_at=now,
+                last_seen_at=now,
+                latest_task_id="task-current",
+                latest_status="archived",
+                observation_count=1,
+                site_change_count=0,
+                has_site_conflict=False,
+                remark="待复核",
+                created_by="task",
+                updated_by="task",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
 
 
-def test_create_and_get_manual_device() -> None:
-    device = _create_device()
-    assert device["device_name"] == "NJ-MANUAL-001"
-    assert device["operator"] == "移动"
-    assert device["current_version"] is None
-    assert device["remark"] == "新装机"
-    assert device["created_by"] == "integration-admin"
-
-    detail = client.get(f"/api/v2/inventory/devices/{device['device_id']}")
-    assert detail.status_code == 200
-    assert detail.json()["device_id"] == device["device_id"]
-
-
-def test_create_duplicate_device_returns_conflict() -> None:
-    _create_device()
-    response = client.post(
+def test_manual_create_and_update_are_not_supported() -> None:
+    _seed_device()
+    created = client.post(
         "/api/v2/inventory/devices",
-        json={
-            "province": "江苏",
-            "operator": "电信",
-            "device_name": "NJ-MANUAL-001",
-        },
+        json={"province": "江苏", "operator": "移动", "device_name": "NJ-MANUAL-001"},
     )
-    assert response.status_code == 409
-    assert response.json()["code"] == "device_already_exists"
+    updated = client.patch(f"/api/v2/inventory/devices/{'js-nj-agg-001'}", json={"remark": "新备注"})
+
+    assert created.status_code == 405
+    assert updated.status_code == 405
+    assert client.get("/api/v2/inventory/devices").json()["total"] == 1
 
 
-def test_create_requires_admin() -> None:
+def test_delete_requires_admin() -> None:
     from app.models.db import AuthSession
     from app.services.auth import get_current_user
 
+    _seed_device()
     app.dependency_overrides[get_current_user] = lambda: AuthSession(token="viewer", username="viewer", role="viewer")
     try:
-        response = client.post(
-            "/api/v2/inventory/devices",
-            json={"province": "江苏", "operator": "移动", "device_name": "NO-ACCESS"},
-        )
+        response = client.delete("/api/v2/inventory/devices/js-nj-agg-001")
         assert response.status_code == 403
     finally:
         app.dependency_overrides[get_current_user] = lambda: AuthSession(
@@ -86,16 +97,11 @@ def test_create_requires_admin() -> None:
         )
 
 
-def test_update_remark_and_delete_removes_all_ledger_rows(tmp_path: Path) -> None:
-    device = _create_device()
-    updated = client.patch(f"/api/v2/inventory/devices/{device['device_id']}", json={"remark": "待复核"})
-    assert updated.status_code == 200
-    assert updated.json()["remark"] == "待复核"
-    assert updated.json()["updated_by"] == "integration-admin"
-
-    deleted = client.delete(f"/api/v2/inventory/devices/{device['device_id']}")
+def test_delete_removes_all_ledger_rows(tmp_path: Path) -> None:
+    _seed_device()
+    deleted = client.delete("/api/v2/inventory/devices/js-nj-agg-001")
     assert deleted.status_code == 204
-    assert client.get(f"/api/v2/inventory/devices/{device['device_id']}").status_code == 404
+    assert client.get("/api/v2/inventory/devices/js-nj-agg-001").status_code == 404
 
     from app.models.db import InventoryChangeAudit, InventoryDevice, InventoryObservation, session_factory
 
@@ -107,8 +113,8 @@ def test_update_remark_and_delete_removes_all_ledger_rows(tmp_path: Path) -> Non
 
 
 def test_deleted_device_is_recreated_by_task(tmp_path: Path) -> None:
-    device = _create_device()
-    assert client.delete(f"/api/v2/inventory/devices/{device['device_id']}").status_code == 204
+    _seed_device()
+    assert client.delete("/api/v2/inventory/devices/js-nj-agg-001").status_code == 204
 
     package = tmp_path / "deleted-recreate.zip"
     make_inventory_zip(package)

@@ -136,8 +136,7 @@ export interface paths {
         /** List Inventory Devices */
         get: operations["listInventoryDevices"];
         put?: never;
-        /** Create Inventory Device */
-        post: operations["createInventoryDevice"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -159,8 +158,7 @@ export interface paths {
         delete: operations["deleteInventoryDevice"];
         options?: never;
         head?: never;
-        /** Update Inventory Device */
-        patch: operations["updateInventoryDevice"];
+        patch?: never;
         trace?: never;
     };
     "/api/v2/inventory/devices/{device_id}/observations": {
@@ -989,25 +987,12 @@ export interface components {
             has_site_conflict: boolean;
             /** Quality Issue Types */
             quality_issue_types?: components["schemas"]["InventoryQualityIssueType"][];
-            /** Remark */
-            remark?: string | null;
             /** Created By */
             created_by?: string | null;
             /** Updated By */
             updated_by?: string | null;
             /** Updated At */
             updated_at?: string | null;
-        };
-        /** InventoryDeviceCreateRequest */
-        InventoryDeviceCreateRequest: {
-            /** Province */
-            province: string;
-            /** Operator */
-            operator: string;
-            /** Device Name */
-            device_name: string;
-            /** Remark */
-            remark?: string | null;
         };
         /** InventoryDeviceList */
         InventoryDeviceList: {
@@ -1019,11 +1004,6 @@ export interface components {
             page_size: number;
             /** Items */
             items: components["schemas"]["InventoryDevice"][];
-        };
-        /** InventoryDeviceUpdateRequest */
-        InventoryDeviceUpdateRequest: {
-            /** Remark */
-            remark?: string | null;
         };
         /**
          * InventoryFieldStatus
@@ -2643,41 +2623,6 @@ export interface operations {
             };
         };
     };
-    createInventoryDevice: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InventoryDeviceCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InventoryDevice"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     getInventoryDevice: {
         parameters: {
             query?: never;
@@ -2728,43 +2673,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    updateInventoryDevice: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                device_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InventoryDeviceUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InventoryDevice"];
-                };
             };
             /** @description Validation Error */
             422: {

@@ -1,22 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-  App,
   Button,
   Card,
   Flex,
-  Form,
   Input,
-  Modal,
   Pagination,
   Space,
   Select,
-  Table,
   Tabs,
   Tag,
-  Typography,
-} from "antd";
-import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+  Typography } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import {
@@ -24,10 +19,9 @@ import {
   api,
   type InventoryDevice,
   type InventoryQualityIssue,
-  type InventoryQualityIssueType,
-} from "../api/http";
-import { useAuth } from "../auth/AuthContext";
+  type InventoryQualityIssueType } from "../api/http";
 import { EmptyState, PageSkeleton } from "../components/PageState";
+import { Table } from "../components/ResizableTable";
 
 const QUALITY_LABELS: Record<
   InventoryQualityIssueType,
@@ -38,8 +32,7 @@ const QUALITY_LABELS: Record<
   missing_version: { label: "版本缺失", color: "orange" },
   version_conflict: { label: "版本冲突", color: "red" },
   device_identity_conflict: { label: "设备身份冲突", color: "red" },
-  site_ownership_change: { label: "局点归属变化", color: "orange" },
-};
+  site_ownership_change: { label: "局点归属变化", color: "orange" } };
 
 function formatTime(value?: string | null) {
   return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-";
@@ -50,8 +43,7 @@ const deviceColumns = [
     title: "设备名称",
     dataIndex: "device_name",
     key: "device_name",
-    ellipsis: true,
-  },
+    ellipsis: true },
   { title: "省份", dataIndex: "province", key: "province", width: 110 },
   { title: "运营商", dataIndex: "operator", key: "operator", width: 110 },
   {
@@ -59,29 +51,25 @@ const deviceColumns = [
     dataIndex: "site_key",
     key: "site_key",
     width: 220,
-    render: (value: string) => <Tag>{value}</Tag>,
-  },
+    render: (value: string) => <Tag>{value}</Tag> },
   {
     title: "当前版本",
     dataIndex: "current_version",
     key: "current_version",
     width: 170,
-    render: (value: string | null) => value || <Tag color="orange">缺失</Tag>,
-  },
+    render: (value: string | null) => value || <Tag color="orange">缺失</Tag> },
   {
     title: "最近观测",
     dataIndex: "last_seen_at",
     key: "last_seen_at",
     width: 170,
-    render: formatTime,
-  },
+    render: formatTime },
   {
     title: "观测次数",
     dataIndex: "observation_count",
     key: "observation_count",
     width: 100,
-    align: "right" as const,
-  },
+    align: "right" as const },
   {
     title: "质量",
     key: "quality",
@@ -109,8 +97,7 @@ const deviceColumns = [
           ))}
         </Flex>
       );
-    },
-  },
+    } },
 ];
 
 const qualityColumns = [
@@ -123,30 +110,26 @@ const qualityColumns = [
       <Tag color={QUALITY_LABELS[value].color}>
         {QUALITY_LABELS[value].label}
       </Tag>
-    ),
-  },
+    ) },
   { title: "描述", dataIndex: "message", key: "message", ellipsis: true },
   {
     title: "省份",
     dataIndex: "province",
     key: "province",
     width: 100,
-    render: (value?: string | null) => value || "-",
-  },
+    render: (value?: string | null) => value || "-" },
   {
     title: "运营商",
     dataIndex: "operator",
     key: "operator",
     width: 100,
-    render: (value?: string | null) => value || "-",
-  },
+    render: (value?: string | null) => value || "-" },
   {
     title: "发现时间",
     dataIndex: "detected_at",
     key: "detected_at",
     width: 170,
-    render: formatTime,
-  },
+    render: formatTime },
   {
     title: "追溯",
     key: "links",
@@ -168,18 +151,11 @@ const qualityColumns = [
           </Button>
         )}
       </Space>
-    ),
-  },
+    ) },
 ];
 
 export function InventoryPage() {
   const navigate = useNavigate();
-  const { message } = App.useApp();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
-  const [createForm] = Form.useForm<{ province: string; operator: string; device_name: string; remark?: string }>();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<"devices" | "quality">("devices");
   const [province, setProvince] = useState("");
   const [operator, setOperator] = useState("");
@@ -207,8 +183,7 @@ export function InventoryPage() {
           page_size: pageSize,
           province: province || undefined,
           operator: operator || undefined,
-          quality_status: "all",
-        });
+          quality_status: "all" });
         setDevices(data.items);
         setDeviceTotal(data.total);
       } else {
@@ -217,8 +192,7 @@ export function InventoryPage() {
           page_size: pageSize,
           issue_type: issueType || undefined,
           province: province || undefined,
-          operator: operator || undefined,
-        });
+          operator: operator || undefined });
         setIssues(data.items);
         setIssueTotal(data.total);
       }
@@ -237,31 +211,6 @@ export function InventoryPage() {
     setDevicePage(1);
     setIssuePage(1);
   }, [province, operator, tab]);
-
-  const handleCreate = async (values: {
-    province: string;
-    operator: string;
-    device_name: string;
-    remark?: string;
-  }) => {
-    setCreating(true);
-    try {
-      await api.createInventoryDevice({
-        province: values.province,
-        operator: values.operator,
-        device_name: values.device_name,
-        remark: values.remark || null,
-      });
-      message.success("设备已创建");
-      setCreateOpen(false);
-      createForm.resetFields();
-      await load();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "创建设备失败");
-    } finally {
-      setCreating(false);
-    }
-  };
 
   return (
     <Flex vertical gap={16}>
@@ -314,11 +263,6 @@ export function InventoryPage() {
                         onChange={(event) => setOperator(event.target.value)}
                       />
                     </Space>
-                    {isAdmin && (
-                      <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-                        新增设备
-                      </Button>
-                    )}
                   </Flex>
                   {loading && devices.length === 0 ? (
                     <PageSkeleton rows={5} />
@@ -335,8 +279,7 @@ export function InventoryPage() {
                       onRow={(record) => ({
                         onClick: () =>
                           navigate(`/inventory/devices/${record.device_id}`),
-                        style: { cursor: "pointer" },
-                      })}
+                        style: { cursor: "pointer" } })}
                     />
                   )}
                   <Flex justify="flex-end">
@@ -353,8 +296,7 @@ export function InventoryPage() {
                     />
                   </Flex>
                 </Flex>
-              ),
-            },
+              ) },
             {
               key: "quality",
               label: "质量问题",
@@ -372,8 +314,7 @@ export function InventoryPage() {
                         ) as InventoryQualityIssueType[]
                       ).map((item) => ({
                         value: item,
-                        label: QUALITY_LABELS[item].label,
-                      }))}
+                        label: QUALITY_LABELS[item].label }))}
                       onChange={(value) => setIssueType(value ?? "")}
                     />
                     <Input
@@ -421,39 +362,11 @@ export function InventoryPage() {
                     />
                   </Flex>
                 </Flex>
-              ),
-            },
+              ) },
           ]}
         />
       </Card>
 
-      <Modal
-        title="新增设备"
-        open={createOpen}
-        confirmLoading={creating}
-        okText="创建"
-        cancelText="取消"
-        onCancel={() => {
-          setCreateOpen(false);
-          createForm.resetFields();
-        }}
-        onOk={() => createForm.submit()}
-      >
-        <Form form={createForm} layout="vertical" onFinish={handleCreate}>
-          <Form.Item name="province" label="省份" rules={[{ required: true, message: "请输入省份" }]}>
-            <Input placeholder="例如：江苏省" />
-          </Form.Item>
-          <Form.Item name="operator" label="运营商" rules={[{ required: true, message: "请输入运营商" }]}>
-            <Input placeholder="例如：移动" />
-          </Form.Item>
-          <Form.Item name="device_name" label="设备名称" rules={[{ required: true, message: "请输入设备名称" }]}>
-            <Input placeholder="例如：NJ-AGG-001" />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={3} placeholder="可选" maxLength={500} showCount />
-          </Form.Item>
-        </Form>
-      </Modal>
     </Flex>
   );
 }

@@ -1,8 +1,8 @@
 ---
-description: "设备台账维护与网元类型命名实现任务列表"
+description: "设备台账删除与网元类型命名实现任务列表"
 ---
 
-# 任务：设备台账维护与网元类型命名
+# 任务：设备台账删除与网元类型命名
 
 **输入**：来自 `/specs/028-ledger-crud/` 的设计文档
 
@@ -11,15 +11,15 @@ description: "设备台账维护与网元类型命名实现任务列表"
 ## 阶段 1：设置（共享基础设施）
 
 - [x] T001 [P] 扩展 `tests/fixtures/inventory/builder.py`，支持包含 3 条设备记录、不同 `ME type` 和版本的 `LST ME.txt` 样例
-- [x] T002 在 `app/models/db.py` 为 `InventoryDevice` 增加 `remark`、`created_by`、`updated_by`，并在现有 `init_db()` 路径补齐 SQLite 增量迁移，同时将 `InventoryChangeAudit.task_id` 调整为可空
-- [x] T003 在 `docs/api/openapi.yaml` 增加 `/api/v2/inventory/devices` 的 `POST`、`PATCH`、`DELETE`，扩展 `InventoryDevice` 响应，并增加 `TaskInventory` 的 `network_element_type_filter`、`records`、`devices`、`archived.devices` 可选契约
+- [x] T002 兼容保留 `InventoryDevice` 历史维护列，确保 `InventoryChangeAudit.task_id` 可空用于删除审计
+- [x] T003 调整 `docs/api/openapi.yaml`，仅保留 `/api/v2/inventory/devices/{device_id}` 的 `DELETE`，并增加 `TaskInventory` 的 `network_element_type_filter`、`records`、`devices`、`archived.devices` 可选契约
 - [x] T004 执行 `.venv/bin/python build.py contract` 和 `.venv/bin/python build.py gen-web-api`，确保 `web/src/api` 客户端与 OpenAPI 一致
 
 ## 阶段 2：基础层（阻塞前置条件）
 
-- [x] T005 在 `app/models/schemas.py` 增加台账维护请求模型与任务证据 v2 契约模型；`InventoryDeviceCreateRequest` 必填 `province`、`operator`、`device_name`，`InventoryDeviceUpdateRequest` 仅支持 `remark`
-- [x] T006 在 `app/services/inventory/maintenance.py` 建立设备维护服务入口，封装权限上下文、设备身份规范化、维护审计和错误码映射
-- [x] T007 [P] 为 `InventoryDevice` 新增列和 `InventoryChangeAudit.task_id` 可空行为补齐数据库迁移/持久化测试
+- [x] T005 调整 `app/models/schemas.py`，移除台账创建/更新请求模型，并保留任务证据 v2 契约模型
+- [x] T006 将 `app/services/inventory/maintenance.py` 建立为删除专用服务，封装删除审计和错误码映射
+- [x] T007 [P] 为 `InventoryChangeAudit.task_id` 可空行为和台账删除事务补齐持久化测试
 
 **检查点**：契约、客户端、数据模型和统一维护服务基础就绪。
 
@@ -46,39 +46,39 @@ description: "设备台账维护与网元类型命名实现任务列表"
 
 **检查点**：用户故事 1 可通过 API、任务详情和台账独立验证。
 
-## 阶段 4：用户故事 2 - 手动新增设备档案（优先级：P1）
+## 阶段 4：维护能力裁剪（修订）
 
-**目标**：管理员可新增省份、运营商和设备名组成的设备档案，不人工填版本。
+**目标**：移除手动新增和备注编辑能力，只保留设备物理删除。
 
-**独立测试**：管理员提交新设备后列表和详情可见；同省份同名重复提交返回 409；非管理员返回 403。
+**独立测试**：POST/PATCH 返回 405；台账和详情无新增/编辑入口；删除流程保持可用。
 
-### 用户故事 2 的测试
+### 裁剪测试
 
-- [x] T017 [P] [US2] 在 `tests/test_inventory_crud.py` 覆盖创建成功、重复身份、必填校验、非 admin 权限和后续匹配任务合并到同一设备
-- [x] T018 [P] [US2] 在 E2E 中覆盖打开台账 -> 新增设备 -> 刷新可见
+- [x] T017 [P] [US2] 在 `tests/test_inventory_crud.py` 覆盖 POST/PATCH 不可用，仅 DELETE 保留删除语义
+- [x] T018 [P] [US2] 在 E2E 中覆盖台账和详情不出现新增/编辑入口
 
-### 用户故事 2 的实现
+### 裁剪实现
 
-- [x] T019 [US2] 在 `app/services/inventory/maintenance.py` 实现创建逻辑：规范化设备名、派生既有 `device_key` / `device_id`、手动设备使用内部 `latest_task_id=manual`、`latest_status=manual`，并写创建审计
-- [x] T020 [US2] 在 `app/api/router.py` 实现 `POST /api/v2/inventory/devices`，返回 `201 + Location`，错误码为 `device_already_exists` / `invalid_request`
-- [x] T021 [US2] 更新 `web/src/pages/InventoryPage.tsx` 或 `web/src/pages/InventoryDevicePage.tsx`，提供新增弹窗，字段为省份、运营商、设备名和可选备注
+- [x] T019 [US2] 将 `app/services/inventory/maintenance.py` 裁剪为删除专用服务
+- [x] T020 [US2] 从 `app/api/router.py` 和 OpenAPI 移除 `POST` / `PATCH` 台账设备接口
+- [x] T021 [US2] 更新台账列表和详情页面，移除新增弹窗与备注编辑入口
 
-## 阶段 5：用户故事 3 - 更新设备维护信息（优先级：P1）
+## 阶段 5：备注编辑移除验证
 
-**目标**：管理员可更新设备备注，不能修改省份、运营商或设备名身份。
+**目标**：确保设备备注编辑能力不再暴露。
 
-**独立测试**：管理员更新备注后刷新可见；观测与版本历史不变；非 `remark` 字段不接受。
+**独立测试**：接口不可用，界面无入口，历史数据库字段仅兼容保留。
 
-### 用户故事 3 的测试
+### 移除验证
 
-- [x] T022 [P] [US3] 在 `tests/test_inventory_crud.py` 覆盖备注更新、不存在设备、非法字段、权限校验和观测不变
-- [x] T023 [P] [US3] 在 E2E 中覆盖打开设备 -> 编辑备注 -> 刷新可见
+- [x] T022 [P] [US3] 在 `tests/test_inventory_crud.py` 覆盖 PATCH 返回 405
+- [x] T023 [P] [US3] 在 E2E 中确认编辑入口数量为 0
 
-### 用户故事 3 的实现
+### 移除实现
 
-- [x] T024 [US3] 在 `app/services/inventory/maintenance.py` 实现备注更新、`updated_by` / `updated_at` 维护和更新审计
-- [x] T025 [US3] 在 `app/api/router.py` 实现 `PATCH /api/v2/inventory/devices/{device_id}`，返回最新 `InventoryDevice`
-- [x] T026 [US3] 更新设备台账表格和详情页面，提供编辑入口并只提交可维护字段
+- [x] T024 [US3] 从 `app/services/inventory/maintenance.py` 移除备注更新逻辑
+- [x] T025 [US3] 从 `app/api/router.py` 和生成客户端移除 PATCH 调用
+- [x] T026 [US3] 从设备台账表格和详情页面移除编辑入口
 
 ## 阶段 6：用户故事 4 - 物理删除设备台账（优先级：P1）
 
@@ -99,7 +99,7 @@ description: "设备台账维护与网元类型命名实现任务列表"
 
 ## 阶段 7：收尾与横切关注点
 
-- [x] T032 [P] 更新 `docs/architecture.md`、`docs/data-model.md` 或相关权威文档，说明网元类型筛选、多设备归档和台账 CRUD 语义
+- [x] T032 [P] 更新 `docs/architecture.md`、`docs/data-model.md` 或相关权威文档，说明网元类型筛选、多设备归档和台账删除语义
 - [x] T033 [P] 检查 `app/cli.py` 与在线 API 的上传参数和归档入口一致，确保 CLI 传递 `product` 且结果与 API 一致
 - [x] T034 运行 `.venv/bin/python build.py lint`、`.venv/bin/python build.py test`、`.venv/bin/python build.py contract`、`.venv/bin/python build.py gen-web-api`
 - [x] T035 运行 `.venv/bin/python build.py web-build`、`.venv/bin/python build.py e2e` 和 `.venv/bin/python build.py verify`

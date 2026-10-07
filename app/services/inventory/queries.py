@@ -45,7 +45,6 @@ def _device_model(device: InventoryDevice, issue_types: list[InventoryQualityIss
         site_change_count=device.site_change_count,
         has_site_conflict=device.has_site_conflict,
         quality_issue_types=issue_types,
-        remark=device.remark,
         created_by=device.created_by,
         updated_by=device.updated_by,
         updated_at=_ensure_utc(device.updated_at) if device.updated_at else None,

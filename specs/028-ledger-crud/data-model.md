@@ -125,14 +125,14 @@
 | `current_device_name` | VARCHAR(256) | 既有 | 当前设备名 |
 | `current_site_key` | VARCHAR(160) | 既有 | 当前局点 |
 | `current_operator` | VARCHAR(64) | 既有 | 当前运营商 |
-| `remark` | TEXT | 新增 | 管理员维护备注，可空 |
-| `created_by` | VARCHAR(64) | 新增 | 创建来源操作者；任务解析为 `system` |
-| `updated_by` | VARCHAR(64) | 新增 | 最近维护者；巡检重算不改写 |
+| `remark` | TEXT | 兼容保留 | 不通过公共契约或界面暴露 |
+| `created_by` | VARCHAR(64) | 兼容保留 | 不通过公共契约或界面暴露 |
+| `updated_by` | VARCHAR(64) | 兼容保留 | 不通过公共契约或界面暴露 |
 | `latest_task_id` | VARCHAR(64) | 既有 | 手动设备无观测时使用内部 `manual` |
 | `latest_status` | VARCHAR(32) | 既有 | 手动设备无观测时为 `manual` |
 | `updated_at` | DateTime | 既有 | 最近维护或档案变更时间 |
 
-新增列通过 `init_db()` 的 SQLite `ALTER TABLE` 增量迁移补齐。旧记录默认 `created_by='system'`，`remark`、`updated_by` 为空。
+本次裁剪不新增数据库列；已部署库中的历史维护列继续兼容保留，`init_db()` 只负责既有增量迁移。
 
 ## `inventory_observations`
 
@@ -140,11 +140,11 @@
 
 ## `inventory_change_audits`
 
-维护审计继续使用该表，扩展任务上下文：
+删除审计继续使用该表：
 
 - `task_id` 改为可空；维护操作不伪造任务 ID。
 - `observation_id` 对维护操作可为空。
-- `action` 支持 `create`、`update`、`delete`。
+- 维护操作只写入 `action=delete`。
 - `before_snapshot` / `after_snapshot` 保存可审计摘要。
 
 删除流程在同一事务内：
@@ -156,38 +156,8 @@
 
 ## 契约模型
 
-`InventoryDevice` 响应新增可选字段：
+台账读模型只暴露巡检和查询所需字段；不暴露备注维护字段。
 
-```yaml
-remark:
-  type: string
-  nullable: true
-created_by:
-  type: string
-  nullable: true
-updated_by:
-  type: string
-  nullable: true
-updated_at:
-  type: string
-  format: date-time
-  nullable: true
-```
-
-新增请求模型：
-
-```yaml
-InventoryDeviceCreateRequest:
-  required: [province, operator, device_name]
-  properties:
-    province: string
-    operator: string
-    device_name: string
-    remark: string | null
-
-InventoryDeviceUpdateRequest:
-  properties:
-    remark: string | null
-```
+写入请求模型只有删除路径，且没有请求体；不提供 `InventoryDeviceCreateRequest` 或 `InventoryDeviceUpdateRequest`。
 
 响应字段保持 UTC；时间字段使用 `*_at` 命名。

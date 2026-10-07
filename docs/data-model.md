@@ -360,8 +360,7 @@ inventory_change_audits                    # 覆盖、重建和变更审计
 
 ### 台账维护
 
-- `POST /api/v2/inventory/devices`：管理员手工创建设备档案；只登记省份、运营商、设备名和可选备注，版本继续由巡检观测补充。
-- `PATCH /api/v2/inventory/devices/{device_id}`：管理员更新备注等维护字段；设备身份字段不接受修改，已有观测和版本历史保持不变。
+- 设备档案由巡检任务观测写入，不提供手动建档和备注编辑接口。
 - `DELETE /api/v2/inventory/devices/{device_id}`：管理员执行物理删除；同事务删除设备档案、全部观测和版本历史聚合，写入删除审计。任务原始包、任务详情和 `inventory.json` 不被修改；相同设备身份再次巡检时重新建账。
 
 ## 11. 扩展规则

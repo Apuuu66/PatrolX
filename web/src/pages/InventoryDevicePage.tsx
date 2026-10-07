@@ -1,29 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, App, Button, Card, Descriptions, Flex, Form, Input, Modal, Pagination, Popconfirm, Table, Tag, Typography } from "antd";
-import { ArrowLeftOutlined, EditOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Alert, App, Button, Card, Descriptions, Flex, Pagination, Popconfirm, Tag, Typography } from "antd";
+import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
   api,
   type InventoryObservation,
-  type InventoryVersionPoint,
-} from "../api/http";
+  type InventoryVersionPoint } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, PageSkeleton } from "../components/PageState";
+import { Table } from "../components/ResizableTable";
 
 const DIRECTION_META = {
   upgrade: { label: "升级", color: "green" },
   downgrade: { label: "降级", color: "red" },
-  unchanged: { label: "未变化", color: "default" },
-} as const;
+  unchanged: { label: "未变化", color: "default" } } as const;
 
 const VERSION_STATUS_META = {
   missing: { label: "版本缺失", color: "orange" },
   conflict: { label: "版本冲突", color: "red" },
   error: { label: "版本解析失败", color: "red" },
-  not_applicable: { label: "不适用", color: "blue" },
-} as const;
+  not_applicable: { label: "不适用", color: "blue" } } as const;
 
 function formatTime(value?: string | null) {
   return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-";
@@ -38,23 +36,20 @@ const historyColumns = [
     key: "raw_version",
     width: 180,
     render: (value: string | null, record: InventoryVersionPoint) =>
-      value || <Tag color={VERSION_STATUS_META[record.version_status as keyof typeof VERSION_STATUS_META]?.color || "blue"}>{VERSION_STATUS_META[record.version_status as keyof typeof VERSION_STATUS_META]?.label || record.version_status}</Tag>,
-  },
+      value || <Tag color={VERSION_STATUS_META[record.version_status as keyof typeof VERSION_STATUS_META]?.color || "blue"}>{VERSION_STATUS_META[record.version_status as keyof typeof VERSION_STATUS_META]?.label || record.version_status}</Tag> },
   {
     title: "方向",
     dataIndex: "direction",
     key: "direction",
     width: 110,
     render: (value: InventoryVersionPoint["direction"]) =>
-      value ? <Tag color={DIRECTION_META[value].color}>{DIRECTION_META[value].label}</Tag> : "-",
-  },
+      value ? <Tag color={DIRECTION_META[value].color}>{DIRECTION_META[value].label}</Tag> : "-" },
   {
     title: "缺口",
     dataIndex: "has_gap",
     key: "has_gap",
     width: 90,
-    render: (value: boolean) => (value ? <Tag color="orange">有缺口</Tag> : "-"),
-  },
+    render: (value: boolean) => (value ? <Tag color="orange">有缺口</Tag> : "-") },
 ];
 
 const observationColumns = [
@@ -67,15 +62,13 @@ const observationColumns = [
     key: "raw_version",
     width: 170,
     render: (value: string | null, record: InventoryObservation) =>
-      value || <Tag color={record.version_status === "conflict" ? "red" : "orange"}>{record.version_status === "conflict" ? "版本冲突" : "版本缺失"}</Tag>,
-  },
+      value || <Tag color={record.version_status === "conflict" ? "red" : "orange"}>{record.version_status === "conflict" ? "版本冲突" : "版本缺失"}</Tag> },
   {
     title: "版本来源",
     dataIndex: "version_source_files",
     key: "version_source_files",
     ellipsis: true,
-    render: (value: string[]) => value.join("、"),
-  },
+    render: (value: string[]) => value.join("、") },
 ];
 
 export function InventoryDevicePage() {
@@ -84,9 +77,6 @@ export function InventoryDevicePage() {
   const { message } = App.useApp();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const [editForm] = Form.useForm<{ remark?: string }>();
-  const [editOpen, setEditOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,27 +113,6 @@ export function InventoryDevicePage() {
     void load();
   }, [load]);
 
-  const openEdit = () => {
-    editForm.setFieldsValue({ remark: device?.remark ?? "" });
-    setEditOpen(true);
-  };
-
-  const handleSave = async (values: { remark?: string }) => {
-    setSaving(true);
-    try {
-      const updated = await api.updateInventoryDevice(deviceId, {
-        remark: values.remark || null,
-      });
-      setDevice(updated);
-      message.success("备注已更新");
-      setEditOpen(false);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "更新设备失败");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -173,11 +142,7 @@ export function InventoryDevicePage() {
             刷新
           </Button>
           {isAdmin && device && (
-            <>
-              <Button icon={<EditOutlined />} onClick={openEdit}>
-                编辑
-              </Button>
-              <Popconfirm
+            <Popconfirm
                 title="确认删除该设备台账？"
                 description="将物理删除设备、全部观测记录和版本历史。"
                 okText="删除"
@@ -188,8 +153,7 @@ export function InventoryDevicePage() {
                 <Button danger loading={deleting}>
                   删除
                 </Button>
-              </Popconfirm>
-            </>
+            </Popconfirm>
           )}
         </Flex>
       </Flex>
@@ -210,7 +174,6 @@ export function InventoryDevicePage() {
             <Descriptions.Item label="首次观测">{formatTime(device.first_seen_at)}</Descriptions.Item>
             <Descriptions.Item label="最近观测">{formatTime(device.last_seen_at)}</Descriptions.Item>
             <Descriptions.Item label="观测次数">{device.observation_count}</Descriptions.Item>
-            <Descriptions.Item label="备注">{device.remark || "-"}</Descriptions.Item>
           </Descriptions>
           {(device.has_site_conflict || device.current_version === null) && (
             <Alert
@@ -266,21 +229,6 @@ export function InventoryDevicePage() {
         </Flex>
       </Card>
 
-      <Modal
-        title="编辑设备备注"
-        open={editOpen}
-        confirmLoading={saving}
-        okText="保存"
-        cancelText="取消"
-        onCancel={() => setEditOpen(false)}
-        onOk={() => editForm.submit()}
-      >
-        <Form form={editForm} layout="vertical" onFinish={handleSave}>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={4} placeholder="可选" maxLength={500} showCount />
-          </Form.Item>
-        </Form>
-      </Modal>
     </Flex>
   );
 }

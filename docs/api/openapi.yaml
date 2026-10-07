@@ -382,37 +382,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-    post:
-      summary: Create Inventory Device
-      operationId: createInventoryDevice
-      parameters:
-      - name: authorization
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Authorization
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InventoryDeviceCreateRequest'
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InventoryDevice'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/inventory/devices/{device_id}:
     get:
       summary: Get Inventory Device
@@ -424,43 +393,6 @@ paths:
         schema:
           type: string
           title: Device Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InventoryDevice'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    patch:
-      summary: Update Inventory Device
-      operationId: updateInventoryDevice
-      parameters:
-      - name: device_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Device Id
-      - name: authorization
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Authorization
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InventoryDeviceUpdateRequest'
       responses:
         '200':
           description: Successful Response
@@ -2311,11 +2243,6 @@ components:
             $ref: '#/components/schemas/InventoryQualityIssueType'
           type: array
           title: Quality Issue Types
-        remark:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Remark
         created_by:
           anyOf:
           - type: string
@@ -2345,35 +2272,6 @@ components:
       - site_change_count
       - has_site_conflict
       title: InventoryDevice
-    InventoryDeviceCreateRequest:
-      properties:
-        province:
-          type: string
-          maxLength: 64
-          minLength: 1
-          title: Province
-        operator:
-          type: string
-          maxLength: 64
-          minLength: 1
-          title: Operator
-        device_name:
-          type: string
-          maxLength: 256
-          minLength: 1
-          title: Device Name
-        remark:
-          anyOf:
-          - type: string
-            maxLength: 512
-          - type: 'null'
-          title: Remark
-      type: object
-      required:
-      - province
-      - operator
-      - device_name
-      title: InventoryDeviceCreateRequest
     InventoryDeviceList:
       properties:
         total:
@@ -2401,16 +2299,6 @@ components:
       - page_size
       - items
       title: InventoryDeviceList
-    InventoryDeviceUpdateRequest:
-      properties:
-        remark:
-          anyOf:
-          - type: string
-            maxLength: 512
-          - type: 'null'
-          title: Remark
-      type: object
-      title: InventoryDeviceUpdateRequest
     InventoryFieldStatus:
       type: string
       enum:
