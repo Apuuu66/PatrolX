@@ -76,9 +76,7 @@ operator:
   - code: ctcc
     name: 电信
 product:
-  - code: core
-    name: 核心网
-  - code: ims
-    name: IMS
-  - code: mme
-    name: MME
+  - code: umf
+    name: UMF
+  - code: csp
+    name: CSP
