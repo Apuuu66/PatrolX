@@ -8,8 +8,11 @@ python bench/parallel_bench.py --generate-only --out /tmp/patrolx-bench
 python bench/parallel_bench.py --files 16 --rows 40000 --out /tmp/patrolx-bench
 ```
 
-输出为 JSON：规则阶段墙钟（PREPARE + INSPECT 阶段之和）、加速比与父子峰值内存；
-`--check` 时按 SC-001（`parallel_wall_s ≤ serial_wall_s × 0.5`）返回退出码。
+输出为 JSON：规则阶段墙钟（PREPARE + INSPECT 阶段之和）、加速比、父子峰值内存，
+以及串行/并行全部规则结果的逐字段比对（SC-002，时间字段除外）。
+
+`--check` 时同时按 SC-001（`parallel_wall_s ≤ serial_wall_s × 0.5`）与
+SC-002（结果逐字段一致）判定退出码。
 """
 
 from __future__ import annotations
@@ -138,6 +141,37 @@ def _stage_entries(log_path: Path) -> list[dict[str, Any]]:
     return entries
 
 
+TIME_FIELDS = ("executed_at", "duration_ms")
+
+
+def normalized_results(results: dict[str, Any]) -> dict[str, Any]:
+    """把规则结果转成可逐字段比对的结构，剔除时间字段（SC-002 口径）。"""
+    normalized: dict[str, Any] = {}
+    for code, result in sorted(results.items()):
+        payload = result.model_dump(mode="json")
+        for field in TIME_FIELDS:
+            payload.pop(field, None)
+        normalized[code] = payload
+    return normalized
+
+
+def compare_results(serial_results: dict[str, Any], parallel_results: dict[str, Any]) -> list[dict[str, Any]]:
+    """返回不一致单元明细（含首个差异字段），全部一致时返回空列表。"""
+    mismatches: list[dict[str, Any]] = []
+    for code in sorted(set(serial_results) | set(parallel_results)):
+        left = serial_results.get(code)
+        right = parallel_results.get(code)
+        if left == right:
+            continue
+        if left is None or right is None:
+            mismatches.append({"code": code, "fields": ["<missing unit>"]})
+            continue
+        fields = sorted({*left, *right})
+        differing = [field for field in fields if left.get(field) != right.get(field)]
+        mismatches.append({"code": code, "fields": differing})
+    return mismatches
+
+
 def run_mode(package: Path, run_root: Path, *, mode: str, task_id: str) -> dict[str, Any]:
     """在独立任务目录内跑一次完整巡检，返回规则阶段墙钟与峰值内存。"""
     from app.inspectors.registry import registry
@@ -160,13 +194,19 @@ def run_mode(package: Path, run_root: Path, *, mode: str, task_id: str) -> dict[
     executor = Executor(registry, None, policy=policy)
     started = time.monotonic()
     with _rss_sampler() as samples:
-        executor.run_all(ctx)
+        results = executor.run_all(ctx)
     total_wall_ms = int((time.monotonic() - started) * 1000)
     aggregate_peak = max(samples, default=0)
     stages = _stage_entries(log_path)
     rule_wall_ms = sum(int(entry["wall_ms"]) for entry in stages if entry.get("stage") in {"PREPARE", "INSPECT"})
+    normalized = normalized_results(results)
+    (task_dir / "rules.normalized.json").write_text(
+        json.dumps(normalized, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     return {
         "mode": mode,
+        "results": normalized,
         "rule_wall_ms": rule_wall_ms,
         "rule_wall_s": round(rule_wall_ms / 1000, 3),
         "total_wall_s": round(total_wall_ms / 1000, 3),
@@ -200,7 +240,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=20261008, help="内容随机种子（默认固定，保证可复现）")
     parser.add_argument("--out", type=Path, default=Path("/tmp/patrolx-bench"), help="基准工作目录")
     parser.add_argument("--generate-only", action="store_true", help="只生成数据包，不执行对比")
-    parser.add_argument("--check", action="store_true", help="按 SC-001 校验，未达标时返回退出码 1")
+    parser.add_argument("--check", action="store_true", help="按 SC-001、SC-002 校验，未达标时返回退出码 1")
     args = parser.parse_args()
 
     out_dir = args.out
@@ -224,6 +264,14 @@ def main() -> int:
     run_root = out_dir / "runs"
     serial = run_mode(package, run_root, mode="serial", task_id=f"task-{package.stem}-serial")
     parallel = run_mode(package, run_root, mode="parallel", task_id=f"task-{package.stem}-parallel")
+    serial_results = serial.pop("results")
+    parallel_results = parallel.pop("results")
+    mismatches = compare_results(serial_results, parallel_results)
+    equivalence = {
+        "units": len(set(serial_results) | set(parallel_results)),
+        "matched": len(set(serial_results) | set(parallel_results)) - len(mismatches),
+        "mismatches": mismatches,
+    }
     speedup = round(serial["rule_wall_s"] / parallel["rule_wall_s"], 2) if parallel["rule_wall_s"] else 0.0
     peak_ratio = (
         round(parallel["aggregate_peak_rss_bytes"] / serial["aggregate_peak_rss_bytes"], 2)
@@ -241,12 +289,19 @@ def main() -> int:
         "speedup": speedup,
         "peak_rss_ratio": peak_ratio,
         "sc001_pass": parallel["rule_wall_s"] <= serial["rule_wall_s"] * 0.5,
+        "equivalence": equivalence,
+        "sc002_pass": not mismatches,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    failed = False
     if args.check and not report["sc001_pass"]:
         print("SC-001 未达标：并行墙钟未达到串行基线的 50%", file=sys.stderr)
-        return 1
-    return 0
+        failed = True
+    if args.check and not report["sc002_pass"]:
+        codes = ", ".join(item["code"] for item in equivalence["mismatches"])
+        print(f"SC-002 未达标：串并结果不一致单元：{codes}", file=sys.stderr)
+        failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ python bench/parallel_bench.py --generate-only --out /tmp/patrolx-bench
 # 生成 16 个日志文件、每个 40000 行（约 88MB），跑串行 + 并行对比
 python bench/parallel_bench.py --files 16 --rows 40000 --out /tmp/patrolx-bench
 
-# 按 SC-001（并行墙钟 ≤ 串行基线 50%）判定退出码
+# 按 SC-001（并行墙钟 ≤ 串行基线 50%）与 SC-002（结果逐字段一致）判定退出码
 python bench/parallel_bench.py --files 16 --rows 40000 --out /tmp/patrolx-bench --check
 ```
 
@@ -27,7 +27,7 @@ python bench/parallel_bench.py --files 16 --rows 40000 --out /tmp/patrolx-bench 
 | `--seed` | 20261008 | 内容随机种子；固定种子保证同一版本可复现 |
 | `--out` | `/tmp/patrolx-bench` | 基准工作目录；生成包、解压现场与任务输出都收敛在这里 |
 | `--generate-only` | 关 | 只生成数据包，不执行对比 |
-| `--check` | 关 | SC-001 未达标时返回退出码 1 |
+| `--check` | 关 | SC-001 或 SC-002 未达标时返回退出码 1 |
 
 ## 结果解读
 
@@ -38,6 +38,8 @@ JSON 关键字段：
 - `speedup`：`serial.rule_wall_s / parallel.rule_wall_s`。
 - `*_peak_rss_bytes`：阶段事件中的父子峰值内存；并行峰值按父进程峰值 + 子进程累计峰值估算。
 - `sc001_pass`：并行墙钟是否 ≤ 串行基线 50%。
+- `equivalence` / `sc002_pass`：串行与并行全部规则结果的逐字段比对（剔除 `executed_at`、`duration_ms`
+  后比对状态、发现、指标、skip 原因、`metadata`、`execution_order`）；`mismatches[]` 列出不一致单元及差异字段。
 - `stages[]`：每个阶段的 `mode` / `reason` / `workers` / `pending_units` / `matched_bytes` /
   `wall_ms` / `slowest_unit_ms`，用于确认直通（`units<3`、`matched_bytes<8MB`）与并行度。
 
@@ -45,6 +47,9 @@ JSON 关键字段：
 
 - 串行规则阶段约 10~20s，4 并行约 4~7s，`speedup ≥ 2.0`。
 - 并行度提高到 10 后墙钟不再下降（最慢单条规则构成下限），峰值内存却明显上升，因此固定 4 为本版产品决策。
+
+每次运行会保留 `runs/<mode>/<task_id>/rules.normalized.json`（可比对结果快照）与
+`execution.log`（阶段事件），便于回归时直接 `diff` 两种模式的产物。
 
 ## 机器前提
 
