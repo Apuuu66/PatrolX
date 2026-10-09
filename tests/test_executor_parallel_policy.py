@@ -165,7 +165,6 @@ def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monke
         SAMPLE,
         name="并行一致性",
         customer={"province": "北京", "operator": "移动"},
-        version="v1",
     )
     local_system = load_system(local_env, local_task.task_id)
     assert local_system["rules"]
@@ -178,7 +177,6 @@ def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monke
         name="并行一致性",
         province="北京",
         operator="移动",
-        version="v1",
     )
     wait_for_task(client, task_id)
 

@@ -51,9 +51,9 @@ def test_upload_windows_path_filename_stays_inside_task_directory(tmp_path: Path
 
     with SAMPLE.open("rb") as package_file:
         response = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": (r"..\..\sample.zip", package_file, "application/zip")},
-            data={"name": "Windows 包上传"},
+            data={"package_kind": "inspection", "name": "Windows 包上传", "province": "北京", "operator": "移动"},
         )
 
     assert response.status_code == 202, response.text
@@ -82,9 +82,9 @@ def test_failed_package_copy_does_not_block_retry(tmp_path: Path, monkeypatch) -
     monkeypatch.setattr("app.api.router.shutil.copyfile", fail_copy)
     with SAMPLE.open("rb") as package_file:
         failed = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("sample.zip", package_file, "application/zip")},
-            data={"name": "落盘失败任务"},
+            data={"package_kind": "inspection", "name": "落盘失败任务", "province": "北京", "operator": "移动"},
         )
 
     assert failed.status_code == 500
@@ -92,9 +92,9 @@ def test_failed_package_copy_does_not_block_retry(tmp_path: Path, monkeypatch) -
 
     with SAMPLE.open("rb") as package_file:
         retried = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("sample.zip", package_file, "application/zip")},
-            data={"name": "落盘失败重试"},
+            data={"package_kind": "inspection", "name": "落盘失败重试", "province": "北京", "operator": "移动"},
         )
 
     assert retried.status_code == 202, retried.text
@@ -135,9 +135,9 @@ def test_upload_accepts_legacy_database_after_rebuild(tmp_path: Path, monkeypatc
     task_id = ""
     with SAMPLE.open("rb") as package_file:
         response = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("sample.zip", package_file, "application/zip")},
-            data={"name": "旧库重建后上传"},
+            data={"package_kind": "inspection", "name": "旧库重建后上传", "province": "北京", "operator": "移动"},
         )
     assert response.status_code == 202, response.text
     task_id = response.json()["task_id"]

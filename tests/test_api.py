@@ -16,9 +16,14 @@ client = TestClient(app)
 def _upload(package_name: str = "sample.zip") -> str:
     with SAMPLE.open("rb") as fh:
         resp = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": (package_name, fh, "application/zip")},
-            data={"name": "API 样例任务"},
+            data={
+                "package_kind": "inspection",
+                "name": "API 样例任务",
+                "province": "北京",
+                "operator": "移动",
+            },
         )
     assert resp.status_code == 202, resp.text
     return resp.json()["task_id"]
@@ -168,3 +173,24 @@ def test_kpi_rule_supports_summary_and_metric_detail() -> None:
         assert missing.json()["code"] == "not_found"
     finally:
         client.delete(f"/api/v2/tasks/{task_id}")
+
+
+def test_v2_create_entry_removed() -> None:
+    """任务创建只允许 /api/v3/tasks；v2 其余接口保持冻结保留。"""
+    removed = client.post(
+        "/api/v2/tasks",
+        files={"package_file": ("sample.zip", io.BytesIO(b"x"), "application/zip")},
+    )
+    assert removed.status_code in (404, 405), removed.text
+
+    v3_still_exists = client.post("/api/v3/tasks")
+    assert v3_still_exists.status_code == 422
+
+    assert client.get("/api/v2/tasks").status_code == 200
+
+
+def test_v4_prefix_not_registered() -> None:
+    """v4 空壳路由必须彻底移除，不得在 API 模块留下注册入口。"""
+    from app.api import router as router_module
+
+    assert not hasattr(router_module, "v4_router")

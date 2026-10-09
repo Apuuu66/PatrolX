@@ -65,9 +65,14 @@ def _setup_task(tmp_path, monkeypatch):
     with client:
         with (env.uploads / "rebuild-sample.zip").open("rb") as package:
             response = client.post(
-                "/api/v2/tasks",
+                "/api/v3/tasks",
                 files={"package_file": ("rebuild-sample.zip", package, "application/zip")},
-                data={"name": "重建任务"},
+                data={
+                    "package_kind": "inspection",
+                    "name": "重建任务",
+                    "province": "北京",
+                    "operator": "移动",
+                },
             )
         assert response.status_code == 202, response.text
         task_id = response.json()["task_id"]

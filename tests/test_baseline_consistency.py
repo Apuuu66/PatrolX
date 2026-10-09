@@ -27,7 +27,6 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
         SAMPLE,
         name="一致性",
         customer={"province": "北京", "operator": "移动"},
-        version="v1",
     )
     local_system = local_task.system.model_dump(by_alias=True, mode="json")
 
@@ -38,7 +37,6 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
         name="一致性",
         province="北京",
         operator="移动",
-        version="v1",
     )
     wait_for_task(client, task_id)
     task_response = client.get(f"/api/v2/tasks/{task_id}")
@@ -95,7 +93,6 @@ def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> 
         name="同一元数据",
         province="北京",
         operator="移动",
-        version="v1",
     )
     second_id = upload_package(
         env,
@@ -104,7 +101,6 @@ def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> 
         name="同一元数据",
         province="北京",
         operator="移动",
-        version="v1",
     )
     assert first_id != second_id
     wait_for_task(client, first_id)

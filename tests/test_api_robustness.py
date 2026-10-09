@@ -12,11 +12,12 @@ client = TestClient(app)
 
 
 def _upload(env, *, filename: str = "sample.zip", content: bytes | None = None, **data: str):
+    payload = {"package_kind": "inspection", "province": "北京", "operator": "移动", **data}
     with io.BytesIO(content) if content is not None else SAMPLE.open("rb") as package:
         return client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": (filename, package, "application/zip")},
-            data=data,
+            data=payload,
         )
 
 
@@ -37,11 +38,17 @@ def test_upload_filename_and_empty_package_boundaries(tmp_path, monkeypatch) -> 
     boundary = "patrolx-empty-filename"
     body = (
         f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="package_kind"\r\n\r\ninspection\r\n'
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="province"\r\n\r\nbeijing\r\n'
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="operator"\r\n\r\nmobile\r\n'
+        f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="package_file"; filename=""\r\n'
         "Content-Type: application/zip\r\n\r\n" + SAMPLE.read_text(encoding="latin-1") + f"\r\n--{boundary}--\r\n"
     ).encode("latin-1")
     empty_name = client.post(
-        "/api/v2/tasks",
+        "/api/v3/tasks",
         content=body,
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
     )

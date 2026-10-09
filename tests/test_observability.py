@@ -16,9 +16,9 @@ client = TestClient(app)
 def _upload_and_wait() -> str:
     with SAMPLE.open("rb") as fh:
         resp = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("observability_sample.zip", fh, "application/zip")},
-            data={"name": "可观测性"},
+            data={"package_kind": "inspection", "name": "可观测性", "province": "北京", "operator": "移动"},
         )
     task_id = resp.json()["task_id"]
     deadline = time.time() + 30

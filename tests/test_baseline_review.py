@@ -46,7 +46,6 @@ def test_review_endpoints_follow_contract(tmp_path: Path, monkeypatch) -> None:
         name="审查任务",
         province="上海",
         operator="电信",
-        version="v2",
     )
     wait_for_task(client, task_id)
 

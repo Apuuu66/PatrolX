@@ -69,9 +69,9 @@ def test_same_name_reuses_site_and_checksum_conflict_is_rejected(tmp_path: Path,
     client = TestClient(app)
     with SAMPLE.open("rb") as fh:
         first = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("sample.zip", fh, "application/zip")},
-            data={"name": "同名校验"},
+            data={"package_kind": "inspection", "name": "同名校验", "province": "北京", "operator": "移动"},
         )
     assert first.status_code == 202, first.text
     task_id = first.json()["task_id"]
@@ -81,9 +81,9 @@ def test_same_name_reuses_site_and_checksum_conflict_is_rejected(tmp_path: Path,
 
     with SAMPLE.open("rb") as fh:
         reuse = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("sample.zip", fh, "application/zip")},
-            data={"name": "同名校验"},
+            data={"package_kind": "inspection", "name": "同名校验", "province": "北京", "operator": "移动"},
         )
     assert reuse.status_code == 202, reuse.text
     assert reuse.json()["task_id"] == task_id
@@ -94,8 +94,9 @@ def test_same_name_reuses_site_and_checksum_conflict_is_rejected(tmp_path: Path,
     conflict_package.write_bytes(b"different package content")
     with conflict_package.open("rb") as fh:
         conflict = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("sample.zip", fh, "application/zip")},
+            data={"package_kind": "inspection", "province": "北京", "operator": "移动"},
         )
     assert conflict.status_code == 409, conflict.text
     assert conflict.json()["code"] == "package_checksum_conflict"

@@ -181,8 +181,9 @@ class TestAuthAPI:
         monkeypatch.setattr(api_router.task_service, "delete", lambda task_id: DeleteResult.DELETED)
 
         upload = client.post(
-            "/api/v2/tasks",
+            "/api/v3/tasks",
             files={"package_file": ("guest.zip", b"guest-package", "application/zip")},
+            data={"package_kind": "inspection", "province": "北京", "operator": "移动"},
         )
         assert upload.status_code == 202
 
