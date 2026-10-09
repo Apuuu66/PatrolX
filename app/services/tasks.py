@@ -184,6 +184,15 @@ class TaskService:
                 TASKS_TOTAL.labels(result="failed", mode="online").inc()
                 self._update_status(task_id, TaskStatus.FAILED)
 
+    def _publish_terminal(self, task: InspectionTask) -> None:
+        """在线任务终态发布：SQLite 记录先收敛，再写 task.json。
+
+        ``task.json`` 是读取方的唯一真相源，数据库记录只做文件缺失时的兜底，
+        因此记录必须先于文件进入终态，兜底列表不得回退为运行中。
+        """
+        self._update_status(task.task_id, task.status, completed_at=task.completed_at)
+        store.save_task_meta(settings.output, task)
+
     def _update_status(self, task_id: str, status: TaskStatus, completed_at: datetime | None = None) -> None:
         with session_factory() as session:
             record = session.get(TaskRecord, task_id)
@@ -216,7 +225,9 @@ class TaskService:
                     completed_task = current.model_copy(
                         update={"status": TaskStatus.COMPLETED, "completed_at": NOW(UTC)}
                     )
-                    store.save_task_meta(settings.output, completed_task)
+                    self._publish_terminal(completed_task)
+                else:
+                    self._update_status(task_id, TaskStatus.COMPLETED, completed_at=NOW(UTC))
             elif rebuild_plan is not None:
                 self._execute_rebuild(
                     task_id,
@@ -239,20 +250,21 @@ class TaskService:
                     mode=mode,
                     trigger=trigger,
                     package_kind=package_kind,
+                    publish=self._publish_terminal,
                 )
                 if executed.status == TaskStatus.FAILED:
                     TASKS_DURATION.observe((NOW(UTC) - started).total_seconds())
-                    self._update_status(task_id, TaskStatus.FAILED, completed_at=NOW(UTC))
                     return
+            # 终态已由 _publish_terminal 落库并发布，此处不再回写，避免终态可见后再改写记录。
             TASKS_DURATION.observe((NOW(UTC) - started).total_seconds())
             TASKS_TOTAL.labels(result="completed", mode="online").inc()
-            self._update_status(task_id, TaskStatus.COMPLETED, completed_at=NOW(UTC))
         except Exception:  # noqa: BLE001
             failed_task = load_task_meta(settings.output, task_id)
+            failed_at = NOW(UTC)
+            self._update_status(task_id, TaskStatus.FAILED, completed_at=failed_at)
             if failed_task:
-                failed = failed_task.model_copy(update={"status": TaskStatus.FAILED, "completed_at": NOW(UTC)})
+                failed = failed_task.model_copy(update={"status": TaskStatus.FAILED, "completed_at": failed_at})
                 store.save_task_meta(settings.output, failed)
-            self._update_status(task_id, TaskStatus.FAILED, completed_at=NOW(UTC))
             raise
 
     def _execute_rebuild(
@@ -294,6 +306,7 @@ class TaskService:
                 trigger=trigger,
                 created_at=old_task.created_at if old_task else None,
                 package_kind=package_kind,
+                publish=self._publish_terminal,
             )
             if executed.status != TaskStatus.FAILED:
                 append_log(settings.output, task_id, "info", "全量重建重跑完成", **log_detail)
@@ -304,6 +317,7 @@ class TaskService:
             rule_codes,
             package=package,
             task_id=task_id,
+            publish=self._publish_terminal,
         )
         append_log(settings.output, task_id, "info", "增量重建重跑完成", **log_detail)
 

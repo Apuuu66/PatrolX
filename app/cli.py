@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -134,6 +135,18 @@ def _load_old_task(task_id: str) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _publish_terminal(task: InspectionTask, publish: Callable[[InspectionTask], None] | None) -> None:
+    """终态发布：默认写 ``output/<task_id>/task.json``。
+
+    在线模式由 ``TaskService`` 注入发布器，先收敛 SQLite 记录再写文件，使「文件显示终态」
+    成为任务现场的最后一次写入；读方看到终态时报告、收尾日志与数据库记录均已就绪。
+    """
+    if publish is not None:
+        publish(task)
+    else:
+        store.save_task_meta(settings.output, task)
+
+
 def run_task(
     package: Path,
     *,
@@ -145,6 +158,7 @@ def run_task(
     trigger: TaskTrigger = TaskTrigger.CLI,
     created_at: datetime | None = None,
     package_kind: PackageKind = PackageKind.INSPECTION,
+    publish: Callable[[InspectionTask], None] | None = None,
 ) -> InspectionTask:
     registry.load_all()
     enabled_rules = get_enabled_rule_codes()
@@ -188,7 +202,7 @@ def run_task(
             package_kind=package_kind,
         )
         store.save_system(settings.output, task_id, system)
-        store.save_task_meta(settings.output, task)
+        _publish_terminal(task, publish)
         return task
         store.append_log(
             settings.output,
@@ -238,7 +252,6 @@ def run_task(
         system=system,
         package_kind=package_kind,
     )
-    store.save_task_meta(settings.output, task)
     try:
         customer_values = customer or {}
         province = customer_values.get("province")
@@ -258,7 +271,6 @@ def run_task(
             completed_at=task.completed_at or _now(),
         )
         task = task.model_copy(update={"inventory": TaskInventory.model_validate(evidence)})
-        store.save_task_meta(settings.output, task)
     except Exception:  # noqa: BLE001 - 台账失败不能影响巡检任务
         store.append_log(settings.output, task_id, "error", "设备台账归档失败，任务结果不受影响")
     report = render_report(settings.output, task_id, system, completed_at=task.completed_at)
@@ -271,12 +283,15 @@ def run_task(
         stats=task.stats.model_dump(by_alias=True, mode="json"),
         report=str(report),
     )
+    completed_summary = store.summary_task(task)
     print(
         f"\n任务 {task_id} 完成：pass={summary.pass_} warn={summary.warn} fail={summary.fail} "
         f"error={summary.error} skip={summary.skip} | 报告: {report} "
         f"| 日志: {settings.output / task_id / 'execution.log'}"
     )
-    return store.summary_task(task)
+    # 终态发布是任务现场的最后一次写入：读方看到 completed 时，报告、收尾日志与台账均已就绪。
+    _publish_terminal(task, publish)
+    return completed_summary
 
 
 def run_incremental_rebuild(
@@ -285,6 +300,7 @@ def run_incremental_rebuild(
     package: Path | None = None,
     task_id: str | None = None,
     package_checksum: str | None = None,
+    publish: Callable[[InspectionTask], None] | None = None,
 ) -> list[str]:
     """强制重建解压现场后只执行指定普通规则及其私有 prepare。"""
     if not rule_codes:
@@ -325,6 +341,7 @@ def run_incremental_rebuild(
     version = (old or {}).get("system", {}).get("version")
     system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
     store.save_system(settings.output, task_id, system)
+    completed: InspectionTask | None = None
     if old is not None:
         current_meta = store.load_task_meta(settings.output, task_id)
         base = current_meta or InspectionTask.model_validate(old)
@@ -344,7 +361,6 @@ def run_incremental_rebuild(
                 "system": system,
             }
         )
-        store.save_task_meta(settings.output, completed)
     report = render_report(settings.output, task_id, system, completed_at=store.now_utc())
     store.append_log(
         settings.output,
@@ -356,6 +372,9 @@ def run_incremental_rebuild(
         rule_codes=rule_codes,
         report=str(report),
     )
+    if completed is not None:
+        # 终态发布是任务现场的最后一次写入。
+        _publish_terminal(completed, publish)
     return rule_codes
 
 
