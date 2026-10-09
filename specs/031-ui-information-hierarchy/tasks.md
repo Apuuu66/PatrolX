@@ -128,14 +128,14 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 
 ## 阶段 7：收尾与横切关注点
 
-- [ ] T041 回写 `docs/design/DESIGN.md`：字号与间距刻度、结论区规范、状态分布 0 值规则、操作分层、行式任务列表模式与四类页面模式（FR-001、R9）
-- [ ] T042 [P] 运行 `python build.py web-build`，修复类型/构建错误（均须在 worktree 内）
-- [ ] T043 [P] 运行 `python build.py lint` 与 `python build.py test`，全绿
-- [ ] T044 运行 `python build.py e2e` 全量通过（自动起 8010/5183，加载种子任务）
-- [ ] T045 归档 1440×900 截图到 `web/e2e/screenshots/`：任务列表 / 任务详情 / 规则详情 / 1 个基线页面（本地证据，不提交；在实现回合报告中列出截图清单与对应 SC，如需长期保留由用户另行决定是否加入 `.gitignore`）（SC-007、quickstart §4）
-- [ ] T046 运行 `python build.py verify` 用真实样例包复现同一界面结论，并核对 `output/<task_id>/` 报告一致性（SC-007、quickstart §4）
-- [ ] T047 逐页走查并记录 SC-001~SC-006 复现结果（首屏可见性、异常置顶、点击次数、无重复表达、基线清单），并在 1280px 与 1920px 视口确认无横向滚动、内容不被无限拉伸（FR-028）
-- [ ] T048 越界与洁净度检查：`git status` 与 `git diff --stat` 确认未改 `docs/api/openapi.yaml`、未改后端、未新增依赖与路由；未暂存 `web/.tmp-show-detail.mjs`、`web/.tmp-show-updates.mjs` 与 `web/e2e/screenshots/`（FR-027、FR-029、AGENTS.md 推送约定）
+- [X] T041 回写 `docs/design/DESIGN.md`：字号与间距刻度、结论区规范、状态分布 0 值规则、操作分层、行式任务列表模式与四类页面模式（FR-001、R9）
+- [X] T042 [P] 运行 `python build.py web-build`，修复类型/构建错误（均须在 worktree 内）
+- [X] T043 [P] 运行 `python build.py lint` 与 `python build.py test`，全绿
+- [X] T044 运行 `python build.py e2e` 全量通过（自动起 8010/5183，加载种子任务）
+- [X] T045 归档 1440×900 截图到 `web/e2e/screenshots/`：任务列表 / 任务详情 / 规则详情 / 1 个基线页面（本地证据，不提交；在实现回合报告中列出截图清单与对应 SC，如需长期保留由用户另行决定是否加入 `.gitignore`）（SC-007、quickstart §4）
+- [X] T046 运行 `python build.py verify` 用真实样例包复现同一界面结论，并核对 `output/<task_id>/` 报告一致性（SC-007、quickstart §4）
+- [X] T047 逐页走查并记录 SC-001~SC-006 复现结果（首屏可见性、异常置顶、点击次数、无重复表达、基线清单），并在 1280px 与 1920px 视口确认无横向滚动、内容不被无限拉伸（FR-028；走查结果见 [verification.md](./verification.md)）
+- [X] T048 越界与洁净度检查：`git status` 与 `git diff --stat` 确认未改 `docs/api/openapi.yaml`、未改后端、未新增依赖与路由；未暂存 `web/.tmp-show-detail.mjs`、`web/.tmp-show-updates.mjs` 与 `web/e2e/screenshots/`（FR-027、FR-029、AGENTS.md 推送约定）
 
 ---
 
