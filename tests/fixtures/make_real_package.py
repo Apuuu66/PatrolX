@@ -63,6 +63,21 @@ ALARM_CSV_002 = (
     "1013,2026-09-01 10:19:55,,QUEUE_BACKLOG,MEDIUM,未处理,pod-umf-3,消息队列积压\n"
 )
 
+# 030 告警闪断样例：未清除反复、已清除反复、操作窗跨界的窗口外再现、观察窗不足与稳定恢复。
+# 行序固定：1050×2（文件行 2–3）、1051×3（行 4–6）、1052×3（行 7–9）、1053×1（行 10）。
+ALARM_CSV_003 = (
+    "alarm_id,created_time,cleared_time,alarm_code,severity,status,object,description\n"
+    "2001,2026-09-02 00:30:00,2026-09-02 00:45:00,1050,MEDIUM,已处理,pod-umf-9,操作窗内出现后窗口外再现\n"
+    "2002,2026-09-02 02:30:00,2026-09-02 02:40:00,1050,MEDIUM,已处理,pod-umf-9,操作窗内出现后窗口外再现\n"
+    "2003,2026-09-02 00:10:00,,1051,CRITICAL,处理中,pod-umf-9,未清除且反复\n"
+    "2004,2026-09-02 00:40:00,,1051,CRITICAL,处理中,pod-umf-9,未清除且反复\n"
+    "2005,2026-09-02 01:00:00,,1051,CRITICAL,处理中,pod-umf-9,未清除且反复\n"
+    "2006,2026-09-02 11:00:00,2026-09-02 11:10:00,1052,HIGH,已处理,pod-umf-9,清除后反复闪断\n"
+    "2007,2026-09-02 11:30:00,2026-09-02 11:40:00,1052,HIGH,已处理,pod-umf-9,清除后反复闪断\n"
+    "2008,2026-09-02 11:50:00,2026-09-02 12:00:00,1052,HIGH,已处理,pod-umf-9,清除后反复闪断\n"
+    "2009,2026-09-02 12:00:00,2026-09-02 12:05:30,1053,MEDIUM,已处理,pod-umf-9,清除后观察窗不足\n"
+)
+
 KPI_HEADER = (
     "服务名,实例,测量开始时间,测量结束时间,周期(分钟),"
     "呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数,呼叫成功率,呼叫失败率,统计峰值,最大并发"
@@ -193,6 +208,7 @@ def build_real_package(directory: Path) -> Path:
     with zipfile.ZipFile(alarm_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         _add_bytes(zf, "alarm_history_202609010101137101_001.csv", ALARM_CSV_001.encode("utf-8"))
         _add_bytes(zf, "alarm_history_202609010101137101_002.csv", ALARM_CSV_002.encode("utf-8"))
+        _add_bytes(zf, "alarm_history_202609010101137101_003.csv", ALARM_CSV_003.encode("utf-8"))
 
     perf_buffer = io.BytesIO()
     with zipfile.ZipFile(perf_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -294,5 +310,8 @@ def build_real_package(directory: Path) -> Path:
 
 
 if __name__ == "__main__":
-    uploads_path = build_real_package(Path.cwd() / "uploads")
+    import sys
+
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd() / "uploads"
+    uploads_path = build_real_package(target)
     print(f"已生成上传样例: {uploads_path} ({uploads_path.stat().st_size} bytes)")

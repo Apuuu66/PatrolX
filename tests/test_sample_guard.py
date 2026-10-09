@@ -3,7 +3,7 @@
 from app.inspectors.registry import registry
 from app.services.executor import Executor
 from app.services.rule_states import get_enabled_rule_codes
-from tests.baseline_helpers import setup_env
+from tests.baseline_helpers import load_rule, setup_env
 from tests.fixtures.make_real_package import build_real_package
 
 CALL_KPI_RULES = {"kpi.measurement_units"}
@@ -32,3 +32,10 @@ def test_real_package_covers_app_scene_rules(tmp_path, monkeypatch) -> None:
     assert set(actual_results) == expected_codes
     assert skipped == EXPECTED_SKIPS, f"实际跳过规则: {sorted(skipped)}"
     assert not (CALL_KPI_RULES - set(actual_results))
+
+    # 闪断规则必须真正跑在真实样例包上，不得静默跳过（宪法 2.9.0 样例包看护）。
+    flapping = actual_results["alarm.flapping"]
+    assert flapping.status.value != "skip", f"alarm.flapping 不应跳过: {flapping.summary}"
+    # 任务/系统索引里的 rules 是摘要（metadata 被剥离），大明细只落在 rules/<code>.json。
+    detail = load_rule(env, task.task_id, "alarm.flapping")
+    assert detail["metadata"]["alarm_flapping"]["totals"]["rows"] == 22

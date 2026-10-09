@@ -70,6 +70,7 @@ def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Pat
     expected = {
         "alarm/alarm_history_202609010101137101_001.csv",
         "alarm/alarm_history_202609010101137101_002.csv",
+        "alarm/alarm_history_202609010101137101_003.csv",
         "config/LST ME.txt",
         "config/system_info.ini",
         "config/version.ini",
@@ -123,16 +124,17 @@ def test_real_container_resource_and_alarm_rule_results(tmp_path: Path) -> None:
         [
             "alarm/alarm_history_202609010101137101_001.csv",
             "alarm/alarm_history_202609010101137101_002.csv",
+            "alarm/alarm_history_202609010101137101_003.csv",
         ],
     )
     alarm_result = registry.get("alarm.stat").run(alarm_ctx)
     assert alarm_result.status == RuleStatus.FAIL
-    assert alarm_result.metrics[0].value == 13
-    assert alarm_result.metrics[1].value == 8
+    assert alarm_result.metrics[0].value == 22
+    assert alarm_result.metrics[1].value == 11
     assert alarm_result.metadata["severity_distribution"] == {
-        "CRITICAL": 3,
-        "HIGH": 5,
-        "MEDIUM": 3,
+        "CRITICAL": 6,
+        "HIGH": 8,
+        "MEDIUM": 6,
         "LOW": 2,
     }
 
@@ -167,3 +169,98 @@ def test_real_package_lst_me_feeds_device_ledger(tmp_path: Path) -> None:
     mme = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="mme")
     assert mme["status"] == "not_archived"
     assert mme["not_archived_reason"] == "network_element_type_no_match"
+
+
+def test_real_alarm_flapping_contract_snapshot(tmp_path: Path) -> None:
+    """真实样例包上的 alarm.flapping 结论必须与契约样例逐字段一致（SC-001/007/008）。"""
+    _extract(tmp_path)
+    registry.load_all()
+    ctx = _ctx_with_task(
+        tmp_path,
+        [
+            "alarm/alarm_history_202609010101137101_001.csv",
+            "alarm/alarm_history_202609010101137101_002.csv",
+            "alarm/alarm_history_202609010101137101_003.csv",
+        ],
+    )
+    result = registry.get("alarm.flapping").run(ctx)
+    assert result.status == RuleStatus.FAIL
+
+    metrics = {metric.key: metric.value for metric in result.metrics}
+    assert metrics == {
+        "alarm_groups": 17,
+        "flapping_groups": 2,
+        "uncleared_repeated_groups": 1,
+        "short_alarm_groups": 1,
+        "stable_groups": 5,
+        "observation_insufficient_groups": 11,
+        "out_of_window_groups": 1,
+        "unrecovered_after_window_groups": 1,
+        "excluded_rows": 0,
+        "duplicate_rows": 0,
+        "failed_files": 0,
+    }
+
+    metadata = result.metadata["alarm_flapping"]
+    assert metadata["schema_version"] == 1
+    assert metadata["policy"] == {
+        "short_alarm_sec": 300,
+        "repeat_window_sec": 3600,
+        "min_repeat_count": 3,
+        "flap_gap_sec": 1800,
+        "stable_observation_sec": 1800,
+        "operation_window": "00:00-02:00",
+        "operation_window_enabled": True,
+        "parameter_source": "inspector_default",
+    }
+    assert metadata["coverage"] == {
+        "start_at": "2026-09-01T10:00:01+08:00",
+        "end_at": "2026-09-02T12:05:30+08:00",
+        "span_sec": 93929,
+    }
+    assert metadata["totals"] == {
+        "rows": 22,
+        "valid_rows": 22,
+        "groups": 17,
+        "excluded_rows": 0,
+        "duplicate_rows": 0,
+        "failed_files": 0,
+        "findings_truncated": False,
+        "groups_truncated": False,
+    }
+    assert metadata["state_counts"] == {
+        "uncleared_repeated": 1,
+        "uncleared_single": 8,
+        "cleared_repeated": 1,
+        "cleared_short": 1,
+        "observation_insufficient": 1,
+        "cleared_stable": 5,
+    }
+
+    groups = {(group["alarm_code"], group["object"]): group for group in metadata["groups"]}
+    assert len(groups) == 17
+    assert groups[("1051", "pod-umf-9")]["state"] == "uncleared_repeated"
+    assert groups[("1051", "pod-umf-9")]["unrecovered_after_window"] is True
+    assert groups[("1052", "pod-umf-9")]["state"] == "cleared_repeated"
+    assert groups[("1052", "pod-umf-9")]["min_repeat_gap_sec"] == 600
+    assert groups[("1052", "pod-umf-9")]["observation_gap_sec"] == 330
+    assert groups[("1053", "pod-umf-9")]["state"] == "observation_insufficient"
+    assert groups[("1053", "pod-umf-9")]["observation_gap_sec"] == 0
+    short = groups[("SCTP_LINK_DOWN", "umf-node-01")]
+    assert short["state"] == "cleared_short"
+    assert short["max_duration_sec"] == 26
+    assert short["observation_gap_sec"] == 93900
+    cross_window = groups[("1050", "pod-umf-9")]
+    assert cross_window["state"] == "cleared_stable"
+    assert cross_window["in_window_occurrences"] == 1
+    assert cross_window["out_of_window_occurrences"] == 1
+    assert cross_window["out_of_window_reappear"] is True
+    assert cross_window["unrecovered_after_window"] is False
+    assert cross_window["min_repeat_gap_sec"] == 6300
+    assert cross_window["observation_gap_sec"] == 33930
+
+    assert [(finding.finding_id, finding.severity.value) for finding in result.findings] == [
+        ("alarm.flapping-uncleared_repeated-1051-pod-umf-9", "critical"),
+        ("alarm.flapping-cleared_repeated-1052-pod-umf-9", "high"),
+        ("alarm.flapping-cleared_short-SCTP_LINK_DOWN-umf-node-01", "medium"),
+    ]
