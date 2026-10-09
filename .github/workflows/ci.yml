@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend（lint / test / contract）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装后端依赖
+        run: python build.py install
+      - name: 静态检查
+        run: python build.py lint
+      - name: 后端测试
+        run: python build.py test
+      - name: 契约一致性
+        run: python build.py contract
+
+  frontend:
+    name: frontend（客户端零漂移 / 构建 / 单测）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 安装前端依赖
+        run: npm ci
+      - name: 生成 API 客户端
+        run: npm run gen-api
+      - name: 校验生成客户端零漂移
+        run: git diff --exit-code -- src/api/client.ts
+      - name: 生产构建
+        run: npm run build
+      - name: 前端单测
+        run: npm test
