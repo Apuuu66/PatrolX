@@ -79,7 +79,12 @@ test("巡检包上传后可在任务详情、设备台账和设备详情间追�
 
   await page.getByRole("button", { name: "返回台账" }).click();
   await expect(page).toHaveURL(/\/inventory$/);
+  await expect(page.getByRole("heading", { name: "设备台账" })).toBeVisible();
   await expect(page.getByText("NJ-AGG-001").first()).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "NJ-AGG-001" }).locator(".ant-tag").first(),
+  ).toBeVisible();
+  await expect(page.locator(".ant-pagination-options").getByText("10 条/页")).toBeVisible();
 });
 
 test("日志补充包显示不涉及设备台账且不进入设备台账", async ({ page }) => {

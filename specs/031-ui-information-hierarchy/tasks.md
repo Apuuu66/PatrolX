@@ -114,13 +114,13 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 
 **独立测试**：`cd web && npx playwright test e2e/inventory.spec.ts e2e/page-states.spec.ts`；逐页对照 `contracts/ui-baseline.md` 走查。
 
-- [ ] T034 [US4] `web/src/pages/InventoryPage.tsx` 与 `web/src/pages/InventoryDevicePage.tsx` 套用 `PageHeader` 与统一卡片/状态标签，并把默认分页 20 → 10（FR-024、宪法"数据分页默认"）
-- [ ] T035 [P] [US4] `web/src/pages/MeasurementUnitsPage.tsx`、`web/src/pages/InspectorsPage.tsx`、`web/src/pages/DictsPage.tsx` 套用基线（页头、操作分层、状态标签），不重排信息架构（FR-024、FR-025）
-- [ ] T036 [P] [US4] `web/src/pages/ReportPage.tsx`、`web/src/pages/LogsPage.tsx` 套用基线，保留报告与日志既有能力（FR-024、FR-025）
-- [ ] T037 [P] [US4] `web/src/pages/UsersPage.tsx` 套用基线，保持分页默认 10（FR-024）
-- [ ] T038 [US4] 统一空 / 加载 / 错误态：复用 `web/src/components/PageState.tsx`，页面级用骨架屏、局部刷新用轻量 loading，错误态提供统一重试入口；列表为空时必须给出下一步动作（FR-024、contracts/ui-baseline §5）
-- [ ] T039 [P] [US4] 补充单测：`web/src/pages/InventoryPage.test.tsx` 与 `web/src/pages/InventoryDevicePage.test.tsx` 断言默认分页 10（T034 完成后）
-- [ ] T040 [P] [US4] 在 `web/e2e/inventory.spec.ts`、`web/e2e/page-states.spec.ts` 增加基线断言（页头结构、状态标签、空 / 加载 / 错误态至少 1 页自动化）（SC-006）
+- [X] T034 [US4] `web/src/pages/InventoryPage.tsx` 与 `web/src/pages/InventoryDevicePage.tsx` 套用 `PageHeader` 与统一卡片/状态标签，并把默认分页 20 → 10（FR-024、宪法"数据分页默认"）
+- [X] T035 [P] [US4] `web/src/pages/MeasurementUnitsPage.tsx`、`web/src/pages/InspectorsPage.tsx`、`web/src/pages/DictsPage.tsx` 套用基线（页头、操作分层、状态标签），不重排信息架构（FR-024、FR-025）
+- [X] T036 [P] [US4] `web/src/pages/ReportPage.tsx`、`web/src/pages/LogsPage.tsx` 套用基线，保留报告与日志既有能力（FR-024、FR-025）
+- [X] T037 [P] [US4] `web/src/pages/UsersPage.tsx` 套用基线，保持分页默认 10（FR-024）
+- [X] T038 [US4] 统一空 / 加载 / 错误态：复用 `web/src/components/PageState.tsx`，页面级用骨架屏、局部刷新用轻量 loading，错误态提供统一重试入口；列表为空时必须给出下一步动作（FR-024、contracts/ui-baseline §5）
+- [X] T039 [P] [US4] 补充单测：`web/src/pages/InventoryPage.test.tsx` 与 `web/src/pages/InventoryDevicePage.test.tsx` 断言默认分页 10（T034 完成后）
+- [X] T040 [P] [US4] 在 `web/e2e/inventory.spec.ts`、`web/e2e/page-states.spec.ts` 增加基线断言（页头结构、状态标签、空 / 加载 / 错误态至少 1 页自动化）（SC-006）
 
 **检查点**：其余 7 个页面逐页走查通过基线清单，至少 1 页有自动化断言。
 

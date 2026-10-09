@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, App, Button, Card, Descriptions, Flex, Pagination, Popconfirm, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Descriptions, Flex, Pagination, Popconfirm, Space, Tag } from "antd";
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -9,8 +9,12 @@ import {
   type InventoryObservation,
   type InventoryVersionPoint } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState, PageSkeleton } from "../components/PageState";
+import { PageHeader } from "../components/PageHeader";
+import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { Table } from "../components/ResizableTable";
+
+/** 数据分页默认 10 条（contracts/ui-baseline §4.4）。 */
+const DEFAULT_PAGE_SIZE = 10;
 
 const DIRECTION_META = {
   upgrade: { label: "升级", color: "green" },
@@ -86,7 +90,7 @@ export function InventoryDevicePage() {
   const [historyTotal, setHistoryTotal] = useState(0);
   const [device, setDevice] = useState<Awaited<ReturnType<typeof api.getInventoryDevice>> | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,21 +132,29 @@ export function InventoryDevicePage() {
 
   return (
     <Flex vertical gap={16}>
-      <Flex align="center" justify="space-between">
-        <Flex align="center" gap={12}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/inventory")}>
+      <PageHeader
+        breadcrumb={
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate("/inventory")}
+          >
             返回台账
           </Button>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {device?.device_name || "设备详情"}
-          </Typography.Title>
-        </Flex>
-        <Flex gap={8}>
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
-            刷新
-          </Button>
-          {isAdmin && device && (
-            <Popconfirm
+        }
+        title={device?.device_name || "设备详情"}
+        description={
+          device ? `${device.province} · ${device.operator}` : "设备台账与版本路径详情"
+        }
+        status={device ? <Tag>{device.site_key}</Tag> : undefined}
+        actions={
+          <Space size={8}>
+            <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+              刷新
+            </Button>
+            {isAdmin && device && (
+              <Popconfirm
                 title="确认删除该设备台账？"
                 description="将物理删除设备、全部观测记录和版本历史。"
                 okText="删除"
@@ -153,12 +165,19 @@ export function InventoryDevicePage() {
                 <Button danger loading={deleting}>
                   删除
                 </Button>
-            </Popconfirm>
-          )}
-        </Flex>
-      </Flex>
+              </Popconfirm>
+            )}
+          </Space>
+        }
+      />
 
-      {error && <Alert type="error" showIcon message={error} />}
+      {error && (
+        <LoadErrorState
+          description={error}
+          onRetry={() => void load()}
+          retrying={loading}
+        />
+      )}
       {loading && !device && <PageSkeleton rows={6} />}
       {device && (
         <Card>
@@ -189,7 +208,14 @@ export function InventoryDevicePage() {
 
       <Card title="版本历史">
         {history.length === 0 && !loading ? (
-          <EmptyState description="暂无版本历史" />
+          <EmptyState
+            description="暂无版本历史，上传包含 LST ME.txt 数据包后自动生成。"
+            action={
+              <Button type="primary" onClick={() => navigate("/tasks")}>
+                上传数据包
+              </Button>
+            }
+          />
         ) : (
           <Table rowKey={(record) => `${record.task_id}-${record.observed_at}`} columns={historyColumns} dataSource={history} loading={loading} pagination={false} scroll={{ x: 820 }} />
         )}
@@ -210,7 +236,14 @@ export function InventoryDevicePage() {
 
       <Card title="观测历史">
         {observations.length === 0 && !loading ? (
-          <EmptyState description="暂无观测记录" />
+          <EmptyState
+            description="暂无观测记录，设备出现在巡检包中后自动归档。"
+            action={
+              <Button type="primary" onClick={() => navigate("/tasks")}>
+                上传数据包
+              </Button>
+            }
+          />
         ) : (
           <Table rowKey="observation_id" columns={observationColumns} dataSource={observations} loading={loading} pagination={false} scroll={{ x: 980 }} />
         )}

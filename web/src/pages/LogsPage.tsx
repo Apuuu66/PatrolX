@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { App, Breadcrumb, Card, List, Space, Tag, Typography } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { App, Breadcrumb, Button, Card, List, Space, Tag, Typography } from "antd";
 import dayjs from "dayjs";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type LogEntry } from "../api/http";
+import { PageHeader } from "../components/PageHeader";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -14,59 +15,58 @@ const LEVEL_COLOR: Record<string, string> = {
 
 export function LogsPage() {
   const { taskId = "" } = useParams();
+  const navigate = useNavigate();
   const { message } = App.useApp();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await api.getTaskLogs(taskId);
+      setEntries(data.entries);
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "加载失败";
+      setLoadError(text);
+      message.error(text);
+    } finally {
+      setLoading(false);
+    }
+  }, [message, taskId]);
+
   useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const data = await api.getTaskLogs(taskId);
-        setEntries(data.entries);
-      } catch (err) {
-        const text = err instanceof Error ? err.message : "加载失败";
-        setLoadError(text);
-        message.error(text);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [taskId, message]);
+    void load();
+  }, [load]);
 
   return (
     <div>
-      <Breadcrumb
-        style={{ marginBottom: 16 }}
-        items={[
-          { title: <Link to="/tasks">巡检任务</Link> },
-          { title: <Link to={`/tasks/${taskId}`}>任务详情</Link> },
-          { title: "执行日志" },
-        ]}
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            items={[
+              { title: <Link to="/tasks">巡检任务</Link> },
+              { title: <Link to={`/tasks/${taskId}`}>任务详情</Link> },
+              { title: "执行日志" },
+            ]}
+          />
+        }
+        title="执行日志"
+        description={`任务 ${taskId} 的执行日志`}
       />
-      <Card title="执行日志">
+      <Card title="日志明细">
         {loading ? (
           <PageSkeleton rows={4} />
         ) : loadError ? (
-          <LoadErrorState description={loadError} onRetry={() => {
-            void (async () => {
-              setLoading(true);
-              setLoadError(null);
-              try {
-                setEntries((await api.getTaskLogs(taskId)).entries);
-              } catch (err) {
-                const text = err instanceof Error ? err.message : "加载失败";
-                setLoadError(text);
-                message.error(text);
-              } finally {
-                setLoading(false);
-              }
-            })();
-          }} />
+          <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
         ) : entries.length === 0 ? (
-          <EmptyState description="暂无日志" />
+          <EmptyState
+            description="暂无日志"
+            action={
+              <Button onClick={() => navigate(`/tasks/${taskId}`)}>返回任务详情</Button>
+            }
+          />
         ) : (
           <List
             size="small"

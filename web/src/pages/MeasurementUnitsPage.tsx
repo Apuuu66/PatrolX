@@ -8,7 +8,8 @@ import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { api, type MeasurementBinding, type MeasurementBindingBatchConfirmResponse, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
 import { ResourceNameCell } from "../components/ResourceNameCell";
 import { useAuth } from "../auth/AuthContext";
-import { LoadErrorState } from "../components/PageState";
+import { PageHeader } from "../components/PageHeader";
+import { EmptyState, LoadErrorState } from "../components/PageState";
 
 const STATUS_COLORS: Record<string, string> = {
   candidate: "gold", confirmed: "green", conflict: "red", ignored: "default",
@@ -210,8 +211,21 @@ function MeasurementUnitTab() {
       {loadError ? (
         <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
       ) : (
-        <Table rowKey="resource_id" loading={loading} columns={columns} dataSource={items}
-          pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }} />
+        <Table
+          rowKey="resource_id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          locale={{
+            emptyText: (
+              <EmptyState
+                description="暂无测量单元"
+                action={<Button onClick={() => void load()}>刷新列表</Button>}
+              />
+            ),
+          }}
+          pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); void load(nextPage, nextPageSize); } }}
+        />
       )}
       <Modal
         open={importResult !== null}
@@ -592,8 +606,22 @@ function MeasurementBindingTab() {
       {loadError ? (
         <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
       ) : (
-        <Table rowKey="id" loading={loading} columns={columns} dataSource={items} rowSelection={isAdmin ? rowSelection : undefined}
-          pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); setSelectedBindingIds([]); void load(nextPage, nextPageSize); } }} />
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          rowSelection={isAdmin ? rowSelection : undefined}
+          locale={{
+            emptyText: (
+              <EmptyState
+                description="暂无指标绑定关系"
+                action={<Button onClick={() => void load()}>刷新列表</Button>}
+              />
+            ),
+          }}
+          pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); setSelectedBindingIds([]); void load(nextPage, nextPageSize); } }}
+        />
       )}
 
       <Modal
@@ -858,8 +886,10 @@ function MeasurementDerivedTab() {
 export function MeasurementUnitsPage() {
   return (
     <div>
-      <Typography.Title level={3}>基础指标</Typography.Title>
-      <Typography.Paragraph type="secondary">基于测量单元维护资源目录、指标绑定和派生指标。</Typography.Paragraph>
+      <PageHeader
+        title="基础指标"
+        description="基于测量单元维护资源目录、指标绑定和派生指标"
+      />
       <Tabs defaultActiveKey="units" items={[
         { key: "units", label: "测量单元", children: <MeasurementUnitTab /> },
         { key: "bindings", label: "绑定关系", children: <MeasurementBindingTab /> },

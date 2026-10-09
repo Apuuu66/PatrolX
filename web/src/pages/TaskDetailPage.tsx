@@ -101,7 +101,16 @@ export function TaskDetailPage() {
     if (taskError) {
       return <LoadErrorState description={taskError} onRetry={() => void reload()} retrying={loading} />;
     }
-    return <EmptyState description="任务不存在" />;
+    return (
+      <EmptyState
+        description="任务不存在"
+        action={
+          <Button type="primary" onClick={() => navigate("/tasks")}>
+            返回任务列表
+          </Button>
+        }
+      />
+    );
   }
 
   // 主包解压失败等场景不会生成规则结果，此时不展示空规则表格（边界情况、FR-019）。

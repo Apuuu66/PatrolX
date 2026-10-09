@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { App, Card, Input, Select, Space, Switch, Tag, Typography } from "antd";
+import { App, Button, Card, Input, Select, Space, Switch, Tag, Typography } from "antd";
 import { Table } from "../components/ResizableTable";
 import type { ColumnsType } from "antd/es/table";
 import { api, type InspectorState } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
-import { LoadErrorState } from "../components/PageState";
+import { PageHeader } from "../components/PageHeader";
+import { EmptyState, LoadErrorState } from "../components/PageState";
 
-const DEFAULT_PAGE_SIZE = 20;
+/** 数据分页默认 10 条（宪法"数据分页默认"）。 */
+const DEFAULT_PAGE_SIZE = 10;
 
 const CATEGORY_LABELS: Record<string, string> = {
   log: "日志",
@@ -100,9 +102,14 @@ export function InspectorsPage() {
   ];
 
   return (
-    <Card
-      title={<Typography.Text strong>规则启停管理</Typography.Text>}
-      extra={
+    <>
+      <PageHeader
+        title="规则启停管理"
+        description="启停巡检规则，控制后续任务的执行范围"
+      />
+      <Card
+        title={<Typography.Text strong>规则清单</Typography.Text>}
+        extra={
         <Space wrap>
           <Select
             allowClear
@@ -144,11 +151,34 @@ export function InspectorsPage() {
       ) : (
         <Table
           rowKey="code"
-        size="small"
-        loading={loading}
-        dataSource={items}
-        columns={columns}
-        pagination={{
+          size="small"
+          loading={loading}
+          dataSource={items}
+          columns={columns}
+          locale={{
+            emptyText: (
+              <EmptyState
+                description={category || enabled !== undefined || search ? "没有符合筛选条件的规则" : "暂无已注册规则"}
+                action={
+                  category || enabled !== undefined || search ? (
+                    <Button
+                      onClick={() => {
+                        setPage(1);
+                        setCategory(undefined);
+                        setEnabled(undefined);
+                        setSearch("");
+                      }}
+                    >
+                      清除筛选
+                    </Button>
+                  ) : (
+                    <Button onClick={() => void load()}>刷新列表</Button>
+                  )
+                }
+              />
+            ),
+          }}
+          pagination={{
           current: page,
           pageSize,
           total,
@@ -161,6 +191,7 @@ export function InspectorsPage() {
         }}
         />
       )}
-    </Card>
+      </Card>
+    </>
   );
 }

@@ -1,6 +1,7 @@
-import { Alert, Breadcrumb, Button, Card, Space, Typography } from "antd";
-import { Link, useParams } from "react-router-dom";
+import { Alert, Breadcrumb, Button, Card } from "antd";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { reportUrl } from "../api/http";
+import { PageHeader } from "../components/PageHeader";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { TaskStatusTag } from "../components/StatusBadge";
 import { TaskMetaPanel } from "../components/task-detail/TaskMetaPanel";
@@ -8,6 +9,7 @@ import { useTaskDetailData } from "../hooks/useTaskDetailData";
 
 export function ReportPage() {
   const { taskId = "" } = useParams();
+  const navigate = useNavigate();
   const { data, loading, reload } = useTaskDetailData(taskId);
 
   const task = data?.task.status === "ready" ? data.task.data : null;
@@ -17,7 +19,6 @@ export function ReportPage() {
 
   const breadcrumb = (
     <Breadcrumb
-      style={{ marginBottom: 16 }}
       items={[
         { title: <Link to="/tasks">巡检任务</Link> },
         { title: <Link to={`/tasks/${taskId}`}>任务详情</Link> },
@@ -29,7 +30,7 @@ export function ReportPage() {
   if (loading && !task) {
     return (
       <div>
-        {breadcrumb}
+        <PageHeader breadcrumb={breadcrumb} title="巡检报告" />
         <PageSkeleton rows={3} />
       </div>
     );
@@ -38,29 +39,40 @@ export function ReportPage() {
   if (!task) {
     if (taskError) {
       return (
-        <LoadErrorState
-          description={taskError}
-          onRetry={() => void reload()}
-          retrying={loading}
-        />
+        <div>
+          <PageHeader breadcrumb={breadcrumb} title="巡检报告" />
+          <LoadErrorState
+            description={taskError}
+            onRetry={() => void reload()}
+            retrying={loading}
+          />
+        </div>
       );
     }
-    return <EmptyState description="任务不存在" />;
+    return (
+      <div>
+        <PageHeader breadcrumb={breadcrumb} title="巡检报告" />
+        <EmptyState
+          description="任务不存在"
+          action={
+            <Button type="primary" onClick={() => navigate("/tasks")}>
+              返回任务列表
+            </Button>
+          }
+        />
+      </div>
+    );
   }
 
   return (
     <div>
-      {breadcrumb}
-      <Card
-        title="任务信息"
-        className="report-task-card"
-        extra={
-          <Space size={8}>
-            <Typography.Text strong>{task.name}</Typography.Text>
-            <TaskStatusTag status={task.status} />
-          </Space>
-        }
-      >
+      <PageHeader
+        breadcrumb={breadcrumb}
+        title={task.name}
+        description="巡检报告"
+        status={<TaskStatusTag status={task.status} />}
+      />
+      <Card title="任务信息" className="report-task-card">
         {systemError && (
           <Alert
             type="warning"

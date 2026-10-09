@@ -36,6 +36,7 @@ describe("DictsPage", () => {
     expect(screen.queryByText("R10")).toBeNull();
     expect(screen.queryByText("js")).toBeNull();
     expect(screen.queryByText("cmcc")).toBeNull();
-    expect(screen.getByText("暂无数据")).toBeTruthy();
+    expect(screen.getByText("字典由部署配置维护，暂无可用选项")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "刷新字典" })).toBeTruthy();
   });
 });

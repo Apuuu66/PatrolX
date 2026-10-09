@@ -78,13 +78,13 @@ describe("InventoryPage", () => {
     vi.mocked(api.listInventoryDevices).mockResolvedValue({
       total: devices.length,
       page: 1,
-      page_size: 20,
+      page_size: 10,
       items: devices,
     });
     vi.mocked(api.listInventoryQualityIssues).mockResolvedValue({
       total: issues.length,
       page: 1,
-      page_size: 20,
+      page_size: 10,
       items: issues,
     });
   });
@@ -94,7 +94,7 @@ describe("InventoryPage", () => {
 
     fireEvent.click(await screen.findByRole("tab", { name: "质量问题" }));
     expect(await screen.findByText("版本值冲突")).toBeTruthy();
-    expect(api.listInventoryQualityIssues).toHaveBeenCalledWith({ page: 1, page_size: 20 });
+    expect(api.listInventoryQualityIssues).toHaveBeenCalledWith({ page: 1, page_size: 10 });
 
     const qualityPanel = await screen.findByRole("tabpanel", { name: "质量问题" });
     const typeSelect = (await within(qualityPanel).findByText("按类型筛选")).closest(".ant-select");
@@ -129,6 +129,14 @@ describe("InventoryPage", () => {
 
     expect(screen.getByRole("heading", { name: "设备台账" })).toBeTruthy();
     expect(await screen.findByText("GD-GZ-Core-01")).toBeTruthy();
+    // 设备台账默认分页 10 条（contracts/ui-baseline §4.4、T039）。
+    expect(api.listInventoryDevices).toHaveBeenCalledWith({
+      page: 1,
+      page_size: 10,
+      province: undefined,
+      operator: undefined,
+      quality_status: "all",
+    });
     fireEvent.click(screen.getByText("GD-GZ-Core-01"));
     expect(await screen.findByText("设备详情测试")).toBeTruthy();
   });

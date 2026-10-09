@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   App,
   Button,
   Card,
@@ -11,8 +10,7 @@ import {
   Space,
   Select,
   Tabs,
-  Tag,
-  Typography } from "antd";
+  Tag } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
@@ -23,8 +21,12 @@ import {
   type InventoryQualityIssue,
   type InventoryQualityIssueType } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState, PageSkeleton } from "../components/PageState";
+import { PageHeader } from "../components/PageHeader";
+import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { Table } from "../components/ResizableTable";
+
+/** 数据分页默认 10 条（contracts/ui-baseline §4.4）。 */
+const DEFAULT_PAGE_SIZE = 10;
 
 const QUALITY_LABELS: Record<
   InventoryQualityIssueType,
@@ -172,13 +174,21 @@ export function InventoryPage() {
   const [devices, setDevices] = useState<InventoryDevice[]>([]);
   const [deviceTotal, setDeviceTotal] = useState(0);
   const [devicePage, setDevicePage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [issues, setIssues] = useState<InventoryQualityIssue[]>([]);
   const [issueTotal, setIssueTotal] = useState(0);
   const [issuePage, setIssuePage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const hasDeviceFilters = Boolean(province || operator);
+  const hasIssueFilters = Boolean(issueType || province || operator);
+
+  const clearFilters = () => {
+    setProvince("");
+    setOperator("");
+    setIssueType("");
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -272,25 +282,27 @@ export function InventoryPage() {
 
   return (
     <Flex vertical gap={16}>
-      <Flex align="center" justify="space-between">
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            设备台账
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            按任务观测持续汇总设备资产和版本路径
-          </Typography.Text>
-        </div>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={() => void load()}
-          loading={loading}
-        >
-          刷新
-        </Button>
-      </Flex>
+      <PageHeader
+        title="设备台账"
+        description="按任务观测持续汇总设备资产和版本路径"
+        actions={
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => void load()}
+            loading={loading}
+          >
+            刷新
+          </Button>
+        }
+      />
 
-      {error && <Alert type="error" showIcon message={error} />}
+      {error && (
+        <LoadErrorState
+          description={error}
+          onRetry={() => void load()}
+          retrying={loading}
+        />
+      )}
 
       <Card styles={{ body: { paddingTop: 16 } }}>
         <Tabs
@@ -325,7 +337,20 @@ export function InventoryPage() {
                   {loading && devices.length === 0 ? (
                     <PageSkeleton rows={5} />
                   ) : devices.length === 0 && !error ? (
-                    <EmptyState description="暂无设备观测" />
+                    <EmptyState
+                      description={
+                        hasDeviceFilters ? "没有符合筛选条件的设备" : "暂无设备观测"
+                      }
+                      action={
+                        hasDeviceFilters ? (
+                          <Button onClick={clearFilters}>清空筛选</Button>
+                        ) : (
+                          <Button type="primary" onClick={() => navigate("/tasks")}>
+                            去上传数据包
+                          </Button>
+                        )
+                      }
+                    />
                   ) : (
                     <Table
                       rowKey="device_id"
@@ -395,7 +420,20 @@ export function InventoryPage() {
                   {loading && issues.length === 0 ? (
                     <PageSkeleton rows={5} />
                   ) : issues.length === 0 && !error ? (
-                    <EmptyState description="暂无质量问题" />
+                    <EmptyState
+                      description={
+                        hasIssueFilters ? "没有符合筛选条件的质量问题" : "暂无质量问题"
+                      }
+                      action={
+                        hasIssueFilters ? (
+                          <Button onClick={clearFilters}>清空筛选</Button>
+                        ) : (
+                          <Button type="primary" onClick={() => navigate("/tasks")}>
+                            去上传数据包
+                          </Button>
+                        )
+                      }
+                    />
                   ) : (
                     <Table
                       rowKey="issue_id"

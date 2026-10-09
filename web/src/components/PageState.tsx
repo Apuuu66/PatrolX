@@ -1,4 +1,5 @@
 import { Alert, Button, Empty, Skeleton } from "antd";
+import type { ReactNode } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
 
 export function PageSkeleton({ rows = 3 }: { rows?: number }) {
@@ -46,6 +47,17 @@ export function LoadErrorState({
   );
 }
 
-export function EmptyState({ description }: { description: string }) {
-  return <Empty className="page-empty-state" description={description} />;
+export function EmptyState({
+  description,
+  action,
+}: {
+  description: string;
+  /** 下一步动作；列表为空时必须给出（contracts/ui-baseline §5）。 */
+  action?: ReactNode;
+}) {
+  return (
+    <Empty className="page-empty-state" description={description}>
+      {action}
+    </Empty>
+  );
 }

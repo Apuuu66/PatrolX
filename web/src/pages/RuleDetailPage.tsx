@@ -15,7 +15,7 @@ import {
 } from "antd";
 import { RedoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult, type TaskStatus } from "../api/http";
 import { AlarmFlappingPanel, type AlarmFlappingMetadata } from "../components/AlarmFlappingPanel";
 import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
@@ -54,6 +54,7 @@ function resultSignature(result: RuleResult | null): string {
 
 export function RuleDetailPage() {
   const { taskId = "", ruleCode = "" } = useParams();
+  const navigate = useNavigate();
   const { message } = App.useApp();
   const [result, setResult] = useState<RuleResult | null>(null);
   const [meta, setMeta] = useState<InspectorInfo | null>(null);
@@ -151,7 +152,16 @@ export function RuleDetailPage() {
     if (loadError) {
       return <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />;
     }
-    return <EmptyState description="规则结果不存在" />;
+    return (
+      <EmptyState
+        description="规则结果不存在"
+        action={
+          <Button onClick={() => navigate(`/tasks/${taskId}`)}>
+            返回任务详情
+          </Button>
+        }
+      />
+    );
   }
 
   const conclusion = result.summary || meta?.description || "已完成规则执行";

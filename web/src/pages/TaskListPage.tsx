@@ -736,7 +736,14 @@ export function TaskListPage() {
               }}
               locale={{
                 emptyText: (
-                  <EmptyState description="暂无巡检任务，先上传一个数据包开始巡检。" />
+                  <EmptyState
+                    description="暂无巡检任务，先上传一个数据包开始巡检。"
+                    action={
+                      <Button icon={<PlusOutlined />} onClick={showUploadModal}>
+                        上传数据包
+                      </Button>
+                    }
+                  />
                 ),
               }}
               scroll={{ x: 1200 }}

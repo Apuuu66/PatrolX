@@ -66,7 +66,7 @@ test("报告详情先展示任务信息再展示报告", async ({ page }) => {
   const taskCard = cards.nth(0);
   const reportCard = cards.nth(1);
   await expect(taskCard.getByText("任务信息")).toBeVisible();
-  await expect(taskCard.getByText("报告任务")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "报告任务" })).toBeVisible();
   await expect(taskCard.getByText("report-package.zip")).toBeVisible();
   await expect(taskCard.getByText("report-device-001")).toBeVisible();
   await expect(reportCard.getByText("巡检报告")).toBeVisible();

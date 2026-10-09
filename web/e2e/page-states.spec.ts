@@ -78,3 +78,37 @@ test("任务状态快捷筛选会把状态传给任务列表接口", async ({ pa
   await page.getByLabel("任务状态快捷筛选").getByText("失败").click();
   await expect.poll(() => requestedStatus).toBe("failed");
 });
+test("任务列表加载态使用骨架屏且空态提供上传动作", async ({ page }) => {
+  let releaseTasks: () => void = () => {};
+  const taskGate = new Promise<void>((resolve) => {
+    releaseTasks = resolve;
+  });
+
+  await page.route("**/api/v2/tasks?page=1&page_size=10**", async (route) => {
+    await taskGate;
+    return route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 10 } });
+  });
+  await page.route("**/api/v2/overview", (route) =>
+    route.fulfill({
+      json: {
+        task_count: 0,
+        registered_rule_count: 0,
+        rule_result_count: 0,
+        finding_count: 0,
+        status_counts: { pass: 0, warn: 0, fail: 0, error: 0, skip: 0 },
+      },
+    }),
+  );
+  await page.route("**/api/v2/dicts", (route) =>
+    route.fulfill({ json: { province: [], operator: [], product: [], version: [] } }),
+  );
+
+  await page.goto("/");
+  await expect(page.getByLabel("页面加载中").first()).toBeVisible();
+
+  releaseTasks();
+  await expect(page.getByText("暂无巡检任务，先上传一个数据包开始巡检。")).toBeVisible();
+  await expect(
+    page.locator(".page-empty-state").getByRole("button", { name: "上传数据包" }),
+  ).toBeVisible();
+});

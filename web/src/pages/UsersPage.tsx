@@ -19,7 +19,8 @@ import { PlusOutlined, RedoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api, type User } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
-import { LoadErrorState } from "../components/PageState";
+import { PageHeader } from "../components/PageHeader";
+import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 
 const ROLE_OPTIONS = [
   { value: "admin", label: "管理员" },
@@ -198,37 +199,53 @@ export function UsersPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Card
-        title={<Typography.Text strong>用户台账</Typography.Text>}
-        extra={
-          <Space>
-            <Typography.Text type="secondary">共 {total} 个用户</Typography.Text>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-              创建用户
-            </Button>
-          </Space>
+      <PageHeader
+        title="用户管理"
+        description="创建账号、重置密码并维护角色权限"
+        actions={
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            创建用户
+          </Button>
         }
+      />
+      <Card
+        title={<Typography.Text strong>用户清单</Typography.Text>}
+        extra={<Typography.Text type="secondary">共 {total} 个用户</Typography.Text>}
       >
         {loadError ? (
           <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
+        ) : loading && items.length === 0 ? (
+          <PageSkeleton rows={4} />
         ) : (
           <Table
             rowKey="username"
-          size="small"
-          loading={loading}
-          dataSource={items}
-          columns={columns}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
+            size="small"
+            loading={loading}
+            dataSource={items}
+            columns={columns}
+            locale={{
+              emptyText: (
+                <EmptyState
+                  description="暂无用户"
+                  action={
+                    <Button icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+                      创建用户
+                    </Button>
+                  }
+                />
+              ),
+            }}
+            pagination={{
+              current: page,
+              pageSize,
+              total,
+              showSizeChanger: true,
               onChange: (nextPage, nextPageSize) => {
-              setPage(nextPage);
-              setPageSize(nextPageSize);
-              void load(nextPage, nextPageSize);
-            },
-          }}
+                setPage(nextPage);
+                setPageSize(nextPageSize);
+                void load(nextPage, nextPageSize);
+              },
+            }}
           />
         )}
       </Card>

@@ -106,13 +106,13 @@ describe("InventoryDevicePage", () => {
     vi.mocked(api.getInventoryVersionHistory).mockResolvedValue({
       total: versionHistory.length,
       page: 1,
-      page_size: 20,
+      page_size: 10,
       items: versionHistory,
     });
     vi.mocked(api.listInventoryObservations).mockResolvedValue({
       total: observations.length,
       page: 1,
-      page_size: 20,
+      page_size: 10,
       items: observations,
     });
   });
@@ -127,10 +127,10 @@ describe("InventoryDevicePage", () => {
     expect(screen.getAllByText("V900R021C10SPC100").length).toBeGreaterThan(0);
     expect(screen.getByText("config/LST ME.txt")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: "task-current" }).length).toBeGreaterThan(0);
-    expect(api.getInventoryVersionHistory).toHaveBeenCalledWith("gd-gz-core-01", { page: 1, page_size: 20 });
+    expect(api.getInventoryVersionHistory).toHaveBeenCalledWith("gd-gz-core-01", { page: 1, page_size: 10 });
     expect(api.listInventoryObservations).toHaveBeenCalledWith("gd-gz-core-01", {
       page: 1,
-      page_size: 20,
+      page_size: 10,
       order: "desc",
     });
   });
