@@ -52,4 +52,7 @@ jobs:
       - name: 生产构建
         run: npm run build
       - name: 前端单测
-        run: npm test
+        run: npm test 2>&1 | tee /tmp/frontend-test.log
+      - name: 前端单测失败摘要
+        if: failure()
+        run: tail -n 40 /tmp/frontend-test.log | sed 's/^/::error::/'
