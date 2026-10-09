@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { LogEntry } from "../api/http";
-import { latestTaskFailure } from "./taskFailure.ts";
+import type { LogEntry, TaskSummary } from "../api/http";
+import { getTaskFailureStage, latestTaskFailure } from "./taskFailure.ts";
 
 describe("latestTaskFailure", () => {
   it("优先展示最新错误及其详细原因", () => {
@@ -28,5 +28,35 @@ describe("latestTaskFailure", () => {
     ];
 
     assert.equal(latestTaskFailure(entries), null);
+  });
+});
+
+describe("getTaskFailureStage", () => {
+  it("数据准备失败归入数据准备阶段", () => {
+    const task = {
+      status: "failed",
+      preparation: {
+        status: "fail",
+        items: [{ category: "main", status: "fail", total_count: 1, extracted_count: 0, issues: [] }],
+        total: 1,
+        success_count: 0,
+        warning_count: 0,
+        failure_count: 1,
+        skip_count: 0,
+      },
+    } as unknown as Pick<TaskSummary, "status" | "preparation">;
+
+    assert.equal(getTaskFailureStage(task), "数据准备");
+  });
+
+  it("其余失败归入任务执行阶段，非失败任务返回空值", () => {
+    assert.equal(
+      getTaskFailureStage({ status: "failed", preparation: null } as Pick<TaskSummary, "status" | "preparation">),
+      "任务执行",
+    );
+    assert.equal(
+      getTaskFailureStage({ status: "completed", preparation: null } as Pick<TaskSummary, "status" | "preparation">),
+      null,
+    );
   });
 });

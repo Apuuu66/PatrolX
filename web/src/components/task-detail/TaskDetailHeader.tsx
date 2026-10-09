@@ -1,76 +1,59 @@
-import { Button, Card, Dropdown, Space, Typography } from "antd";
+import { Button, Dropdown } from "antd";
 import {
   ClearOutlined,
-  FileTextOutlined,
   MoreOutlined,
   RedoOutlined,
   RollbackOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
-import type { TaskSummary } from "../../api/http";
-import { TaskStatusTag } from "../StatusBadge";
 
-type TaskDetailHeaderProps = {
-  task: TaskSummary;
+type TaskDetailMoreMenuProps = {
   busy: boolean;
   canRebuild: boolean;
   rebuilding: boolean;
-  onOpenReport: () => void;
   onOpenLogs: () => void;
   onRerunAll: () => void;
   onOpenRebuild: () => void;
   onBack: () => void;
 };
 
-export function TaskDetailHeader({
-  task,
+/** 任务详情低频 / 危险操作入口，保持既有能力不变（FR-013）。 */
+export function TaskDetailMoreMenu({
   busy,
   canRebuild,
   rebuilding,
-  onOpenReport,
   onOpenLogs,
   onRerunAll,
   onOpenRebuild,
   onBack,
-}: TaskDetailHeaderProps) {
+}: TaskDetailMoreMenuProps) {
   return (
-    <Card
-      title={
-        <Space>
-          <Typography.Text strong>{task.name}</Typography.Text>
-          <TaskStatusTag status={task.status} />
-        </Space>
-      }
-      extra={
-        <Space>
-          <Button type="primary" icon={<FileTextOutlined />} onClick={onOpenReport}>
-            查看报告
-          </Button>
-          <Dropdown
-            menu={{
-              items: [
-                { key: "logs", label: "执行日志", icon: <UnorderedListOutlined /> },
-                { key: "rerun", label: "重跑全部", icon: <RedoOutlined /> },
-                { key: "rebuild", label: "增量重建", disabled: busy || !canRebuild || rebuilding, icon: <ClearOutlined /> },
-                { type: "divider" },
-                { key: "back", label: "返回列表", icon: <RollbackOutlined /> },
-              ],
-              onClick: ({ key }) => {
-                if (key === "logs") onOpenLogs();
-                if (key === "rerun") onRerunAll();
-                if (key === "rebuild") onOpenRebuild();
-                if (key === "back") onBack();
-              },
-            }}
-            trigger={["click"]}
-          >
-            <Button aria-label="更多操作" icon={<MoreOutlined />} />
-          </Dropdown>
-        </Space>
-      }
-      className="task-detail-panel"
-    />
+    <Dropdown
+      menu={{
+        items: [
+          { key: "logs", label: "执行日志", icon: <UnorderedListOutlined /> },
+          { key: "rerun", label: "重跑全部", icon: <RedoOutlined /> },
+          {
+            key: "rebuild",
+            label: "增量重建",
+            disabled: busy || !canRebuild || rebuilding,
+            icon: <ClearOutlined />,
+          },
+          { type: "divider" },
+          { key: "back", label: "返回列表", icon: <RollbackOutlined /> },
+        ],
+        onClick: ({ key }) => {
+          if (key === "logs") onOpenLogs();
+          if (key === "rerun") onRerunAll();
+          if (key === "rebuild") onOpenRebuild();
+          if (key === "back") onBack();
+        },
+      }}
+      trigger={["click"]}
+    >
+      <Button aria-label="更多操作" icon={<MoreOutlined />} />
+    </Dropdown>
   );
 }
 

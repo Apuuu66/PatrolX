@@ -5,7 +5,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 E2E_DIR="$ROOT_DIR/web/e2e/.tmp"
 VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
 if [ ! -x "$VENV_PYTHON" ]; then
-  VENV_PYTHON="$(dirname "$(dirname "$ROOT_DIR")")/.venv/bin/python"
+  # 工作树内没有 .venv 时向上查找主仓库的 .venv（相对层级随 worktree 路径变化，不能写死）
+  SEARCH_DIR="$(dirname "$ROOT_DIR")"
+  while [ "$SEARCH_DIR" != "/" ] && [ ! -x "$SEARCH_DIR/.venv/bin/python" ]; do
+    SEARCH_DIR="$(dirname "$SEARCH_DIR")"
+  done
+  VENV_PYTHON="$SEARCH_DIR/.venv/bin/python"
+fi
+if [ ! -x "$VENV_PYTHON" ]; then
+  echo "未找到可用的 .venv/bin/python，请先在仓库根执行 python build.py install" >&2
+  exit 1
 fi
 # 工作树运行时必须显式指定仓库根，避免 editable 安装把 app 解析到主工作区。
 export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"

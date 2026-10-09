@@ -15,16 +15,19 @@ const task = {
 
 test("任务列表保留高频操作并收纳低频操作", async ({ page }) => {
   await page.goto("/");
-  const taskCard = page.locator(".ant-card").filter({ hasText: "首页失败任务样例" }).last();
+  const taskRow = page
+    .locator(".task-table .ant-table-tbody > tr.ant-table-row")
+    .filter({ hasText: "首页失败任务样例" })
+    .first();
 
-  await expect(taskCard.getByRole("button", { name: "详情" })).toBeVisible();
-  await expect(taskCard.getByRole("button", { name: "报告" })).toBeVisible();
-  await expect(taskCard.getByRole("button", { name: "重跑" })).toHaveCount(0);
-  await expect(taskCard.getByRole("button", { name: "删除" })).toHaveCount(0);
+  await expect(taskRow.getByRole("button", { name: "详情" })).toBeVisible();
+  await expect(taskRow.getByRole("button", { name: "失败日志" })).toBeVisible();
+  await expect(taskRow.getByRole("button", { name: "重跑" })).toHaveCount(0);
+  await expect(taskRow.getByRole("button", { name: "删除" })).toHaveCount(0);
 
-  await taskCard.getByLabel("更多操作").click();
+  await taskRow.getByLabel("更多操作").click();
   await expect(page.getByRole("menuitem", { name: "重跑" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "重建" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "全量重建" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "删除" })).toBeVisible();
 });
 

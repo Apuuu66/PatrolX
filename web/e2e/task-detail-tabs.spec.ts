@@ -56,10 +56,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("健康度条、任务视图和筛选状态同步到 URL", async ({ page }) => {
+test("状态计数、任务视图和筛选状态同步到 URL", async ({ page }) => {
   await page.goto("/tasks/task-detail-tabs-e2e");
 
-  await expect(page.getByRole("tab", { name: "规则结果" })).toBeVisible();
+  // 规则结果不再是独立 Tab，全部规则常驻首屏（FR-017）。
+  await expect(page.getByTestId("rule-browser")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "规则结果" })).toHaveCount(0);
   await page.getByRole("tab", { name: "执行日志" }).click();
   await expect(page).toHaveURL(/view=logs/);
   await expect(page.getByText("暂无日志")).toBeVisible();
@@ -68,8 +70,7 @@ test("健康度条、任务视图和筛选状态同步到 URL", async ({ page })
   await expect(page).toHaveURL(/view=report/);
   await expect(page.getByTitle("巡检报告")).toBeVisible();
 
-  await page.getByRole("tab", { name: "规则结果" }).click();
-  await page.locator(".health-bar-segment").filter({ hasText: "" }).nth(1).click();
+  await page.getByTestId("conclusion-hero").getByLabel("筛选失败").click();
   await expect(page).toHaveURL(/status=fail/);
   const allRulesCard = page.locator(".ant-card").filter({ hasText: "全部规则" });
   await expect(allRulesCard.getByText("配置通过")).toBeHidden();

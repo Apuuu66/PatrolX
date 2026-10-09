@@ -99,6 +99,16 @@ const ATTENTION_STATUS_WEIGHT: Record<RuleResult["status"], number> = {
   skip: 9,
 };
 
+/** 关注项排序：fail → warn → error，保持后端执行顺序作为同状态次序。 */
+export function getSortedAttentionRules(rules: RuleResult[]): RuleResult[] {
+  return rules
+    .filter((rule) => rule.status === "fail" || rule.status === "warn" || rule.status === "error")
+    .sort(
+      (left, right) =>
+        ATTENTION_STATUS_WEIGHT[left.status] - ATTENTION_STATUS_WEIGHT[right.status],
+    );
+}
+
 export interface AttentionDisplayRules {
   rules: RuleResult[];
   hiddenCount: number;
@@ -108,15 +118,33 @@ export function getAttentionDisplayRules(
   rules: RuleResult[],
   limit = 5,
 ): AttentionDisplayRules {
-  const attentionRules = rules
-    .filter((rule) => rule.status === "fail" || rule.status === "warn" || rule.status === "error")
-    .sort(
-      (left, right) =>
-        ATTENTION_STATUS_WEIGHT[left.status] - ATTENTION_STATUS_WEIGHT[right.status],
-    );
+  const attentionRules = getSortedAttentionRules(rules);
 
   return {
     rules: attentionRules.slice(0, limit),
     hiddenCount: Math.max(0, attentionRules.length - limit),
   };
+}
+
+export interface RuleCategoryGroup {
+  value: string;
+  rules: RuleResult[];
+}
+
+/** 按类别分组，保留传入顺序（含类别聚焦排序），供「全部规则」折叠分组使用。 */
+export function groupRulesByCategory(rules: RuleResult[]): RuleCategoryGroup[] {
+  const groups = new Map<string, RuleResult[]>();
+  for (const rule of rules) {
+    const bucket = groups.get(rule.category);
+    if (bucket) bucket.push(rule);
+    else groups.set(rule.category, [rule]);
+  }
+  return Array.from(groups, ([value, groupRules]) => ({ value, rules: groupRules }));
+}
+
+/** 分组是否包含异常（fail / warn / error），决定默认展开。 */
+export function hasAttentionRules(rules: RuleResult[]): boolean {
+  return rules.some(
+    (rule) => rule.status === "fail" || rule.status === "warn" || rule.status === "error",
+  );
 }

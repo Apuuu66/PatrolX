@@ -57,12 +57,15 @@ test("任务详情状态数字点击后过滤规则", async ({ page }) => {
 
   await page.goto("/tasks/task-filter-e2e");
   const allRulesCard = page.locator(".ant-card").filter({ hasText: "全部规则" });
-  const failCard = page.locator(".ant-card-small").filter({ has: page.locator(".ant-statistic-title", { hasText: /^失败$/ }) });
-  await failCard.click();
+  const failCount = page.getByTestId("conclusion-hero").getByLabel("筛选失败");
+  await expect(failCount).toContainText("失败 1");
+  await failCount.click();
 
   await expect(allRulesCard.getByText("失败规则")).toBeVisible();
   await expect(allRulesCard.getByText("通过规则")).toBeHidden();
-  await expect
-    .poll(() => failCard.evaluate((element) => getComputedStyle(element).backgroundColor))
-    .not.toBe("rgb(255, 255, 255)");
+  await expect(failCount).toHaveAttribute("aria-pressed", "true");
+
+  await failCount.click();
+  await expect(failCount).toHaveAttribute("aria-pressed", "false");
+  await expect(allRulesCard.getByText("通过规则")).toBeVisible();
 });

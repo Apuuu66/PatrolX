@@ -28,10 +28,10 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 
 **目的**：建立实现 worktree，并落地视觉基线的单一来源
 
-- [ ] T001 从已提交规划产物的 `main` 创建实现分支 `feature/031-ui-information-hierarchy` 与 worktree `.worktrees/feature/031-ui-information-hierarchy`；执行 `git worktree list` 与 `git branch --show-current` 前置检查并在回合报告记录结果（阻塞全部后续任务；AGENTS.md 实现前置检查）
-- [ ] T002 [P] 在 `web/src/theme.css` 建立基线语义变量层（字号层级、区块间距、状态软色），间距沿用既有 `--space-1..5` 与 `--radius-round`；不新增依赖（R1、contracts/ui-baseline §1）
-- [ ] T003 [P] 在 `web/src/App.tsx` 的 `ConfigProvider` 补齐 token（字号层级、次要边框色），保持 `colorPrimary: #1677ff`、`borderRadius: 8`、`colorBgLayout: #f5f5f5` 不变（R1、FR-001）
-- [ ] T004 [P] 新增 `web/src/components/PageHeader.tsx`：统一页头（16px/600 标题 + 12px 说明 + 状态区 slot + 操作区 slot，最多 1 个主操作）（FR-001、FR-004、contracts/ui-baseline §1/§3）
+- [X] T001 从已提交规划产物的 `main` 创建实现分支 `feature/031-ui-information-hierarchy` 与 worktree `.worktrees/feature/031-ui-information-hierarchy`；执行 `git worktree list` 与 `git branch --show-current` 前置检查并在回合报告记录结果（阻塞全部后续任务；AGENTS.md 实现前置检查）
+- [X] T002 [P] 在 `web/src/theme.css` 建立基线语义变量层（字号层级、区块间距、状态软色），间距沿用既有 `--space-1..5` 与 `--radius-round`；不新增依赖（R1、contracts/ui-baseline §1）
+- [X] T003 [P] 在 `web/src/App.tsx` 的 `ConfigProvider` 补齐 token（字号层级、次要边框色），保持 `colorPrimary: #1677ff`、`borderRadius: 8`、`colorBgLayout: #f5f5f5` 不变（R1、FR-001）
+- [X] T004 [P] 新增 `web/src/components/PageHeader.tsx`：统一页头（16px/600 标题 + 12px 说明 + 状态区 slot + 操作区 slot，最多 1 个主操作）（FR-001、FR-004、contracts/ui-baseline §1/§3）
 
 **检查点**：基线变量与 `PageHeader` 可用，既有页面样式无回归。
 
@@ -41,11 +41,11 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 
 **目的**：结论推导与状态摘要成为可单测的共享能力，避免列表与详情各写一份
 
-- [ ] T005 [P] 先写失败单测 `web/src/utils/taskConclusion.test.ts`：覆盖任务失败 / 排队中 / 执行中 / fail+error / 仅 warn / 全通过 / 空 stats 七个分支（R4、data-model §2）
-- [ ] T006 实现 `web/src/utils/taskConclusion.ts` 的 `deriveTaskConclusion`（推导优先级严格按 data-model §2；只消费既有字段，不得解析后端文案）（依赖 T005）
-- [ ] T007 [P] 先写失败单测 `web/src/components/StatusDistribution.test.tsx`：0 值不渲染、五态全 0 渲染空态、`percent` 计算（FR-003、FR-009、data-model 校验规则）
-- [ ] T008 实现 `web/src/components/StatusDistribution.tsx`：分段条 + 非零计数，紧凑/完整两形态，复用 `getHealthBarSegments` 与 `RESULT_STATUS_META`；五态文字标签必须与非零状态一同呈现，不得只依赖颜色（FR-002、FR-003、依赖 T007）
-- [ ] T009 [P] 新增 `web/src/components/MetadataList.tsx`：轻量键值元数据（label 次要色 + value 主色，4px 间距，不产生彩色 Tag 噪音）；复用 `getTaskMetadataTags` 输出（DESIGN.md Metadata Tag）
+- [X] T005 [P] 先写失败单测 `web/src/utils/taskConclusion.test.ts`：覆盖任务失败 / 排队中 / 执行中 / fail+error / 仅 warn / 全通过 / 空 stats 七个分支（R4、data-model §2）
+- [X] T006 实现 `web/src/utils/taskConclusion.ts` 的 `deriveTaskConclusion`（推导优先级严格按 data-model §2；只消费既有字段，不得解析后端文案）（依赖 T005）
+- [X] T007 [P] 先写失败单测 `web/src/components/StatusDistribution.test.tsx`：0 值不渲染、五态全 0 渲染空态、`percent` 计算（FR-003、FR-009、data-model 校验规则）
+- [X] T008 实现 `web/src/components/StatusDistribution.tsx`：分段条 + 非零计数，紧凑/完整两形态，复用 `getHealthBarSegments` 与 `RESULT_STATUS_META`；五态文字标签必须与非零状态一同呈现，不得只依赖颜色（FR-002、FR-003、依赖 T007）
+- [X] T009 [P] 新增 `web/src/components/MetadataList.tsx`：轻量键值元数据（label 次要色 + value 主色，4px 间距，不产生彩色 Tag 噪音）；复用 `getTaskMetadataTags` 输出（DESIGN.md Metadata Tag）
 
 **检查点**：`deriveTaskConclusion`、`StatusDistribution`、`MetadataList` 单测通过；四个用户故事可以开始。
 
@@ -57,15 +57,15 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 
 **独立测试**：`cd web && npx playwright test e2e/task-home.spec.ts e2e/task-actions.spec.ts e2e/task-delete-confirm.spec.ts`；Unit：`npm run test`。
 
-- [ ] T010 [P] [US1] 在 `web/e2e/task-home.spec.ts` 中先写新断言：行式表格形态、失败任务第一行、行内失败原因摘要、状态摘要无彩色 0 值、首屏可见概览条与 4 条种子任务、从失败任务行到失败规则详情不超过 3 次点击（SC-001、SC-003、SC-004、FR-006~FR-009）
-- [ ] T011 [US1] 在 `web/src/pages/TaskListPage.tsx` 用 AntD `Table` 重写列表容器：列顺序「任务（名称+状态+ID+失败原因摘要）→ 状态摘要 → 元数据 → 时间与耗时 → 操作」，保留状态筛选、搜索、分页默认 10、轮询与上传表单（FR-006、FR-013、FR-026）
-- [ ] T012 [US1] 在 `web/src/utils/taskListSort.ts` 实现默认排序纯函数并接入列表：`failed → running → pending → completed`，`completed` 且 `fail + error > 0` 视为异常提前；同优先级按 `created_at` 倒序；不新增排序控件（FR-007、Clarifications）
-- [ ] T013 [US1] 在 `web/src/pages/TaskListPage.tsx` 用 `StatusDistribution` + `MetadataList` 渲染状态摘要与元数据，失败任务行直接渲染原因摘要（复用 `taskFailure` 展示工具）；空状态保留"上传数据包"主入口（FR-008、FR-009、边界情况）
-- [ ] T014 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现操作分层：行主操作"详情"；次要操作"报告""失败日志"；重跑 / 增量重建 / 全量重建 / 删除收进 `⋯` 菜单，删除与全量重建保持二次确认；删除失败错误改为行内/展开区表达，保留 `TaskDeleteError` 语义（FR-012、FR-004）
-- [ ] T015 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现行展开区：数据准备状态、问题文件摘要与重试入口、失败日志入口（FR-011）
-- [ ] T016 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现顶部概览条（任务总量 + 状态分布 + 注册规则 / 规则结果 / 发现数），替换等权数字组（含注册规则 / 规则结果 / 发现问题数；FR-010、边界情况："全部正常"不得出现高权重提示）
-- [ ] T017 [P] [US1] 补充单测 `web/src/utils/taskListSort.test.ts` 与 `web/src/pages/TaskListPage.test.tsx`：异常置顶、同状态倒序、0 值不渲染、分页默认 10（T012/T013 完成后）
-- [ ] T018 [US1] 等价迁移既有 E2E：`web/e2e/task-actions.spec.ts`、`web/e2e/task-delete-confirm.spec.ts`，更新选择器但保留全部行为覆盖（FR-030）
+- [X] T010 [P] [US1] 在 `web/e2e/task-home.spec.ts` 中先写新断言：行式表格形态、失败任务第一行、行内失败原因摘要、状态摘要无彩色 0 值、首屏可见概览条与 4 条种子任务、从失败任务行到失败规则详情不超过 3 次点击（SC-001、SC-003、SC-004、FR-006~FR-009）
+- [X] T011 [US1] 在 `web/src/pages/TaskListPage.tsx` 用 AntD `Table` 重写列表容器：列顺序「任务（名称+状态+ID+失败原因摘要）→ 状态摘要 → 元数据 → 时间与耗时 → 操作」，保留状态筛选、搜索、分页默认 10、轮询与上传表单（FR-006、FR-013、FR-026）
+- [X] T012 [US1] 在 `web/src/utils/taskListSort.ts` 实现默认排序纯函数并接入列表：`failed → running → pending → completed`，`completed` 且 `fail + error > 0` 视为异常提前；同优先级按 `created_at` 倒序；不新增排序控件（FR-007、Clarifications）
+- [X] T013 [US1] 在 `web/src/pages/TaskListPage.tsx` 用 `StatusDistribution` + `MetadataList` 渲染状态摘要与元数据，失败任务行直接渲染原因摘要（复用 `taskFailure` 展示工具）；空状态保留"上传数据包"主入口（FR-008、FR-009、边界情况）
+- [X] T014 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现操作分层：行主操作"详情"；次要操作"报告""失败日志"；重跑 / 增量重建 / 全量重建 / 删除收进 `⋯` 菜单，删除与全量重建保持二次确认；删除失败错误改为行内/展开区表达，保留 `TaskDeleteError` 语义（FR-012、FR-004）
+- [X] T015 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现行展开区：数据准备状态、问题文件摘要与重试入口、失败日志入口（FR-011）
+- [X] T016 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现顶部概览条（任务总量 + 状态分布 + 注册规则 / 规则结果 / 发现数），替换等权数字组（含注册规则 / 规则结果 / 发现问题数；FR-010、边界情况："全部正常"不得出现高权重提示）
+- [X] T017 [P] [US1] 补充单测 `web/src/utils/taskListSort.test.ts` 与 `web/src/pages/TaskListPage.test.tsx`：异常置顶、同状态倒序、0 值不渲染、分页默认 10（T012/T013 完成后）
+- [X] T018 [US1] 等价迁移既有 E2E：`web/e2e/task-actions.spec.ts`、`web/e2e/task-delete-confirm.spec.ts`，更新选择器但保留全部行为覆盖（FR-030）
 
 **检查点**：任务列表行式化且异常置顶；删除二次确认、重建、筛选、搜索、分页、轮询行为与迁移前等价。
 
@@ -77,15 +77,15 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 
 **独立测试**：`cd web && npx playwright test e2e/task-detail.spec.ts e2e/task-detail-states.spec.ts e2e/task-detail-tabs.spec.ts e2e/task-detail-filter.spec.ts e2e/task-detail-rule-browser.spec.ts e2e/task-detail-rule-rerun.spec.ts`。
 
-- [ ] T019 [P] [US2] 迁移并扩展 `web/e2e/task-detail.spec.ts`、`web/e2e/task-detail-states.spec.ts`：结论 Hero 首屏元素（标签 / 一句话 / 状态计数 / 主操作 / 关键元数据）、全通过任务、解压失败任务（SC-002、SC-005、FR-014~FR-019）
-- [ ] T020 [US2] 新增 `web/src/components/ConclusionHero.tsx`：渲染 `deriveTaskConclusion` 结论 + 状态计数 + 主操作 + 关键元数据；任务失败时展示失败原因与阶段并给失败日志入口；执行中禁用报告并说明原因（依赖 T006；FR-014、FR-015、FR-019、SC-002）
-- [ ] T021 [US2] 重构 `web/src/pages/TaskDetailPage.tsx` 顶层顺序：面包屑 → 结论 Hero → 重点关注 → 全部规则 → 既有 Tab（执行日志 / 设备台账 / 报告预览）→ 折叠执行与技术信息（展开后可查看完整字段并复制，FR-005、FR-016~FR-018、R5）
-- [ ] T022 [US2] 调整 `web/src/components/task-detail/TaskHealthPanel.tsx`：删除与"重点关注"重复的 Alert 提示条，改为可点选状态计数块（保留状态筛选联动）；`web/src/components/SummaryCards.tsx` 在详情页改为概览条形态，不得出现第二组等权大数字（FR-016、SC-005、R5）
-- [ ] T023 [US2] 在 `web/src/pages/TaskDetailPage.tsx` 实现"重点关注"列表：fail → warn 排序、最多 5 条 + 其余折叠、每条可跳规则详情（FR-016、data-model §4）
-- [ ] T024 [US2] 在 `web/src/pages/TaskDetailPage.tsx` 将全部规则按类别分组折叠，默认展开含异常的分组；保留搜索、排序、类别筛选与单规则重跑（FR-017、FR-026）
-- [ ] T025 [US2] 主包解压失败任务在 `web/src/pages/TaskDetailPage.tsx` 不渲染空规则表格，改为失败阶段 + 原因 + 日志入口；`skip` 规则必须可见原因（边界情况、FR-019）
-- [ ] T026 [P] [US2] 补充单测 `web/src/components/ConclusionHero.test.tsx` 与 `web/src/pages/TaskDetailPage.test.tsx`：Hero 渲染、解压失败无规则表、详情页不出现重复提示条（T020~T025 完成后）
-- [ ] T027 [US2] 等价迁移既有 E2E：`web/e2e/task-detail-tabs.spec.ts`、`web/e2e/task-detail-filter.spec.ts`、`web/e2e/task-detail-rule-browser.spec.ts`、`web/e2e/task-detail-rule-rerun.spec.ts`（FR-030）
+- [X] T019 [P] [US2] 迁移并扩展 `web/e2e/task-detail.spec.ts`、`web/e2e/task-detail-states.spec.ts`：结论 Hero 首屏元素（标签 / 一句话 / 状态计数 / 主操作 / 关键元数据）、全通过任务、解压失败任务（SC-002、SC-005、FR-014~FR-019）
+- [X] T020 [US2] 新增 `web/src/components/ConclusionHero.tsx`：渲染 `deriveTaskConclusion` 结论 + 状态计数 + 主操作 + 关键元数据；任务失败时展示失败原因与阶段并给失败日志入口；执行中禁用报告并说明原因（依赖 T006；FR-014、FR-015、FR-019、SC-002）
+- [X] T021 [US2] 重构 `web/src/pages/TaskDetailPage.tsx` 顶层顺序：面包屑 → 结论 Hero → 重点关注 → 全部规则 → 既有 Tab（执行日志 / 设备台账 / 报告预览）→ 折叠执行与技术信息（展开后可查看完整字段并复制，FR-005、FR-016~FR-018、R5）
+- [X] T022 [US2] 调整 `web/src/components/task-detail/TaskHealthPanel.tsx`：删除与"重点关注"重复的 Alert 提示条，改为可点选状态计数块（保留状态筛选联动）；`web/src/components/SummaryCards.tsx` 在详情页改为概览条形态，不得出现第二组等权大数字（FR-016、SC-005、R5）
+- [X] T023 [US2] 在 `web/src/pages/TaskDetailPage.tsx` 实现"重点关注"列表：fail → warn 排序、最多 5 条 + 其余折叠、每条可跳规则详情（FR-016、data-model §4）
+- [X] T024 [US2] 在 `web/src/pages/TaskDetailPage.tsx` 将全部规则按类别分组折叠，默认展开含异常的分组；保留搜索、排序、类别筛选与单规则重跑（FR-017、FR-026）
+- [X] T025 [US2] 主包解压失败任务在 `web/src/pages/TaskDetailPage.tsx` 不渲染空规则表格，改为失败阶段 + 原因 + 日志入口；`skip` 规则必须可见原因（边界情况、FR-019）
+- [X] T026 [P] [US2] 补充单测 `web/src/components/ConclusionHero.test.tsx` 与 `web/src/pages/TaskDetailPage.test.tsx`：Hero 渲染、解压失败无规则表、详情页不出现重复提示条（T020~T025 完成后）
+- [X] T027 [US2] 等价迁移既有 E2E：`web/e2e/task-detail-tabs.spec.ts`、`web/e2e/task-detail-filter.spec.ts`、`web/e2e/task-detail-rule-browser.spec.ts`、`web/e2e/task-detail-rule-rerun.spec.ts`（FR-030）
 
 **检查点**：详情首屏结论完整；同一事实不重复表达；筛选、排序、单规则重跑、设备编辑、重建保持可用。
 

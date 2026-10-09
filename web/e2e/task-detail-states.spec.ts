@@ -44,18 +44,49 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("重点关注超过 5 条时只渲染前 5 条并说明剩余位置", async ({ page }) => {
+test("重点关注超过 5 条时只渲染前 5 条并可展开其余", async ({ page }) => {
   await page.goto("/tasks/task-detail-states-e2e");
 
-  const attentionCard = page.locator(".ant-card").filter({ hasText: "重点关注（7）" });
-  await expect(page.getByText("重点关注 7 条规则")).toBeVisible();
-  await expect(page.getByText(/其余 2 条在全部规则中查看。/)).toBeVisible();
-  await expect(attentionCard.locator(".ant-table-tbody tr")).toHaveCount(5);
-  await expect(attentionCard.getByText("失败规则 1")).toBeVisible();
-  await expect(attentionCard.getByText("失败规则 6")).toBeHidden();
+  const hero = page.getByTestId("conclusion-hero");
+  await expect(hero.getByText("需要关注")).toBeVisible();
+  await expect(hero.getByText("发现失败 5 条、异常 0 条规则结果，需要处理。")).toBeVisible();
+  await expect(hero.getByLabel("筛选失败")).toContainText("失败 5");
+  await expect(hero.getByLabel("筛选告警")).toContainText("告警 2");
+  await expect(hero.getByRole("button", { name: "查看报告" })).toBeVisible();
 
-  const allRulesCard = page.locator(".ant-card").filter({ hasText: "全部规则" });
-  await expect(allRulesCard.locator(".ant-table-tbody tr")).toHaveCount(7);
+  const attentionCard = page.getByTestId("attention-panel");
+  await expect(attentionCard.getByText("重点关注（7）")).toBeVisible();
+  await expect(attentionCard.locator(".ant-table-tbody tr.ant-table-row")).toHaveCount(5);
+  await expect(attentionCard.getByText("失败规则 1")).toBeVisible();
+  await expect(attentionCard.getByText("失败规则 6")).toHaveCount(0);
+  await expect(page.getByText("重点关注 7 条规则")).toHaveCount(0);
+  await expect(page.getByText(/其余 2 条在全部规则中查看。/)).toHaveCount(0);
+
+  await attentionCard.getByRole("button", { name: "展开其余 2 条" }).click();
+  await expect(attentionCard.locator(".ant-table-tbody tr.ant-table-row")).toHaveCount(7);
+  await expect(attentionCard.getByText("失败规则 6")).toBeVisible();
+  await attentionCard.getByRole("button", { name: "收起" }).click();
+  await expect(attentionCard.locator(".ant-table-tbody tr.ant-table-row")).toHaveCount(5);
+
+  const allRulesCard = page.getByTestId("rule-browser");
+  await expect(allRulesCard.getByText("失败规则 6")).toBeVisible();
+  await expect(allRulesCard.getByText("失败规则 7")).toBeVisible();
+});
+
+test("状态计数点选后联动状态筛选", async ({ page }) => {
+  await page.goto("/tasks/task-detail-states-e2e");
+
+  const failCount = page.getByTestId("conclusion-hero").getByLabel("筛选失败");
+  await failCount.click();
+  await expect(page).toHaveURL(/status=fail/);
+  await expect(failCount).toHaveAttribute("aria-pressed", "true");
+
+  const allRulesCard = page.getByTestId("rule-browser");
+  await expect(allRulesCard.getByText("失败规则 1")).toBeVisible();
+  await expect(allRulesCard.getByText("失败规则 6")).toHaveCount(0);
+
+  await failCount.click();
+  await expect(page).not.toHaveURL(/status=fail/);
   await expect(allRulesCard.getByText("失败规则 6")).toBeVisible();
 });
 

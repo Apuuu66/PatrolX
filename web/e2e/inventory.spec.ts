@@ -65,6 +65,8 @@ test("巡检包上传后可在任务详情、设备台账和设备详情间追�
   await expect(page.getByText("NJ-CSP-001")).toHaveCount(0);
   await expect(page.getByText("V900R016C10SPC200").first()).toBeVisible();
   // 未手工填写设备 ID 时，客户与环境区域回退展示台账解析出的网元名称。
+  // 完整字段收敛在「执行与技术信息」折叠区中（FR-018）。
+  await page.getByText("执行与技术信息").click();
   const deviceIdItem = page.locator(".ant-descriptions-item").filter({ hasText: "设备 ID" });
   await expect(deviceIdItem).toContainText("NJ-AGG-001");
   await expect(deviceIdItem).toContainText("台账解析");

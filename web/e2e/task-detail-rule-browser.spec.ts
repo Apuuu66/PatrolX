@@ -66,11 +66,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("任务详情提供健康度条、规则搜索、分类聚焦和严重度排序", async ({ page }) => {
+test("任务详情提供状态分布、规则搜索、分类聚焦和严重度排序", async ({ page }) => {
   await page.goto("/tasks/task-rule-browser-e2e");
 
-  await expect(page.getByLabel("规则健康度分布")).toBeVisible();
-  await expect(page.locator(".health-bar-segment")).toHaveCount(2);
+  await expect(page.getByLabel("规则状态分布")).toBeVisible();
+  await expect(page.getByTestId("conclusion-hero").getByLabel("筛选失败")).toBeVisible();
+  await expect(page.getByTestId("conclusion-hero").getByLabel("筛选通过")).toBeVisible();
 
   const allRulesCard = page.locator(".ant-card").filter({ hasText: "全部规则" });
   const failSegment = page.getByLabel("筛选失败");
@@ -85,6 +86,9 @@ test("任务详情提供健康度条、规则搜索、分类聚焦和严重度�
 
   await page.locator(".ant-tag-checkable").filter({ hasText: /^日志\s*2$/ }).click();
   await expect(allRulesCard.getByText("配置 1", { exact: true })).toBeVisible();
+  // 默认只展开含异常的分组；通过分组展开后其它类别的规则仍然保留（FR-017）。
+  await expect(allRulesCard.getByText("配置通过")).toBeHidden();
+  await allRulesCard.getByRole("button", { name: /配置（1）/ }).click();
   await expect(allRulesCard.getByText("配置通过")).toBeVisible();
   const firstRow = allRulesCard.locator(".ant-table-tbody").first().locator("tr").first();
   await expect(firstRow).toContainText("日志访问");

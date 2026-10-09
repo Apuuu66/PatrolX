@@ -12,9 +12,11 @@ import {
   Segmented,
   Select,
   Space,
+  Table,
   Typography,
   Upload,
 } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import {
   CaretDownOutlined,
   CaretRightOutlined,
@@ -44,11 +46,13 @@ import {
   getPreparationDisplay,
 } from "../utils/preparationDisplay";
 import { TaskStatusTag } from "../components/StatusBadge";
-import { RESULT_STATUS_META } from "../components/statusLabels";
+import { StatusDistribution } from "../components/StatusDistribution";
+import { MetadataList } from "../components/MetadataList";
 import { usePolling } from "../hooks/usePolling";
 import { formatTaskDuration, getTaskMetadataTags } from "../utils/taskCard";
-import { getStatusStatEmphasis } from "../utils/taskDisplay";
+import { getTaskFailureReason, sortTasksForList } from "../utils/taskListSort";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
+import { PageHeader } from "../components/PageHeader";
 
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "全部" },
@@ -57,14 +61,6 @@ const STATUS_FILTER_OPTIONS = [
   { value: "completed", label: "已完成" },
   { value: "failed", label: "失败" },
 ];
-
-const OVERVIEW_ITEMS = [
-  { key: "task_count", label: "巡检任务" },
-  { key: "registered_rule_count", label: "注册规则" },
-  { key: "rule_result_count", label: "规则结果" },
-  { key: "finding_count", label: "发现问题" },
-] as const;
-
 
 const PREPARATION_STATUS_COLORS: Record<string, string> = {
   pass: "#52c41a",
@@ -91,7 +87,7 @@ function TaskDeletePanel({
 }) {
   if (collapsed) {
     return (
-      <Button type="text" size="small" danger onClick={() => onToggle(taskId)} style={{ marginTop: 10, paddingInline: 0 }}>
+      <Button type="text" size="small" danger onClick={() => onToggle(taskId)} style={{ paddingInline: 0 }}>
         <Flex align="center" gap={6}>
           删除失败
           <CaretRightOutlined />
@@ -103,7 +99,6 @@ function TaskDeletePanel({
     <Alert
       type="error"
       showIcon
-      style={{ marginTop: 12 }}
       message={
         <Flex align="center" gap={8} wrap="wrap">
           <Typography.Text strong>删除任务失败</Typography.Text>
@@ -163,7 +158,7 @@ function PreparationPanel({
     );
 
   return (
-    <div style={{ marginTop: 12, borderTop: "1px solid #f0f0f0", paddingTop: 10 }}>
+    <div className="preparation-panel">
       <Button type="text" size="small" onClick={() => onToggle(taskId)} style={{ paddingInline: 0 }}>
         <Flex align="center" gap={8}>
           <Typography.Text strong>数据准备</Typography.Text>
@@ -240,7 +235,12 @@ function PreparationPanel({
               );
             })}
             {display.hiddenAbnormalCount > 0 && (
-              <Button type="link" size="small" style={{ alignSelf: "flex-start" }} onClick={() => setShowAllAbnormal(true)}>
+              <Button
+                type="link"
+                size="small"
+                style={{ alignSelf: "flex-start" }}
+                onClick={() => setShowAllAbnormal(true)}
+              >
                 展开全部 {display.abnormalItems.length} 类
               </Button>
             )}
@@ -279,7 +279,7 @@ export function TaskListPage() {
   const packageKind = Form.useWatch("package_kind", form);
   const isInspection = packageKind !== "log_supplement";
   const [file, setFile] = useState<File | null>(null);
-  const [preparationExpanded, setPreparationExpanded] = useState<Record<string, boolean>>({});
+  const [expandedRowKeys, setExpandedRowKeys] = useState<readonly string[]>([]);
   const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
   const [deleteCollapsed, setDeleteCollapsed] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
@@ -316,14 +316,14 @@ export function TaskListPage() {
     api.listDicts().then(setDicts).catch(() => undefined);
   }, []);
 
+  const sortedItems = useMemo(() => sortTasksForList(items), [items]);
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
-  const preparationOpen = (taskId: string) => preparationExpanded[taskId] ?? false;
-  const togglePreparation = (taskId: string) =>
-    setPreparationExpanded((current) => ({
-      ...current,
-      [taskId]: !preparationOpen(taskId),
-    }));
   usePolling(load, 2000, busy);
+
+  const togglePreparation = (taskId: string) =>
+    setExpandedRowKeys((current) =>
+      current.includes(taskId) ? current.filter((value) => value !== taskId) : [...current, taskId],
+    );
 
   const submitUpload = async () => {
     if (!file) {
@@ -333,11 +333,11 @@ export function TaskListPage() {
     setSubmitting(true);
     try {
       const values = form.getFieldsValue();
-      const packageKind = values.package_kind === "log_supplement" ? "log_supplement" : "inspection";
+      const packageKindValue = values.package_kind === "log_supplement" ? "log_supplement" : "inspection";
       const fd = new FormData();
       fd.append("package_file", file);
-      fd.append("package_kind", packageKind);
-      if (packageKind === "inspection") {
+      fd.append("package_kind", packageKindValue);
+      if (packageKindValue === "inspection") {
         if (values.province) fd.append("province", values.province);
         if (values.operator) fd.append("operator", values.operator);
         if (values.product) fd.append("product", values.product);
@@ -425,6 +425,7 @@ export function TaskListPage() {
           const failure = detail as TaskDeleteError;
           setDeleteErrors((current) => ({ ...current, [taskId]: failure }));
           setDeleteCollapsed((current) => ({ ...current, [taskId]: false }));
+          setExpandedRowKeys((current) => (current.includes(taskId) ? current : [...current, taskId]));
           return;
         }
         const fallback: TaskDeleteError = {
@@ -435,6 +436,7 @@ export function TaskListPage() {
         };
         setDeleteErrors((current) => ({ ...current, [taskId]: fallback }));
         setDeleteCollapsed((current) => ({ ...current, [taskId]: false }));
+        setExpandedRowKeys((current) => (current.includes(taskId) ? current : [...current, taskId]));
       } finally {
         setDeleting((current) => ({ ...current, [taskId]: false }));
       }
@@ -455,72 +457,225 @@ export function TaskListPage() {
     return () => window.clearTimeout(timer);
   }, [deleteErrors, deleteCollapsed]);
 
+  const showUploadModal = () => {
+    const last = sortedItems[0];
+    if (last) {
+      form.setFieldsValue({
+        province: last.customer_province ?? undefined,
+        operator: last.customer_operator ?? undefined,
+        product: last.customer_product ?? undefined,
+        version: last.customer_version ?? undefined,
+      });
+    }
+    setOpen(true);
+  };
+
+  const columns: ColumnsType<TaskSummary> = [
+    {
+      title: "任务",
+      key: "task",
+      width: 320,
+      render: (_, record) => {
+        const failureReason = getTaskFailureReason(record);
+        return (
+          <div className="task-table-task">
+            <Flex align="center" gap={8} wrap="wrap">
+              <Typography.Link strong onClick={() => navigate(`/tasks/${record.task_id}`)}>
+                {record.name}
+              </Typography.Link>
+              <TaskStatusTag status={record.status} />
+            </Flex>
+            <Typography.Text code type="secondary" className="task-table-id" ellipsis>
+              {record.task_id}
+            </Typography.Text>
+            {failureReason && (
+              <Typography.Text
+                type="danger"
+                className="task-table-reason"
+                data-testid="task-failure-reason"
+                ellipsis={{ tooltip: failureReason }}
+              >
+                {failureReason}
+              </Typography.Text>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      title: "状态摘要",
+      key: "stats",
+      width: 240,
+      render: (_, record) => <StatusDistribution stats={record.stats} />,
+    },
+    {
+      title: "元数据",
+      key: "metadata",
+      width: 260,
+      render: (_, record) => <MetadataList items={getTaskMetadataTags(record, dicts)} />,
+    },
+    {
+      title: "时间与耗时",
+      key: "timeline",
+      width: 220,
+      render: (_, record) => {
+        const duration = formatTaskDuration(record.created_at, record.completed_at);
+        return (
+          <Flex vertical gap={2} className="task-table-time">
+            <Typography.Text type="secondary">
+              创建 {dayjs(record.created_at).format("YYYY-MM-DD HH:mm")}
+            </Typography.Text>
+            {record.completed_at && (
+              <Typography.Text type="secondary">
+                完成 {dayjs(record.completed_at).format("YYYY-MM-DD HH:mm")}
+              </Typography.Text>
+            )}
+            {duration && <Typography.Text type="secondary">耗时 {duration}</Typography.Text>}
+          </Flex>
+        );
+      },
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 220,
+      align: "right",
+      render: (_, record) => {
+        const isFailed = record.status === "failed";
+        const canReport = record.status === "completed";
+        const canRebuild = record.status === "completed" || record.status === "failed";
+        return (
+          <Space size={0} wrap className="task-table-actions">
+            <Button type="link" size="small" onClick={() => navigate(`/tasks/${record.task_id}`)}>
+              详情
+            </Button>
+            {/* 失败任务没有报告产物，用失败日志替代报告，保证行内平铺业务操作不超过 3 个（FR-012） */}
+            {isFailed ? (
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<FileTextOutlined />}
+                onClick={() => navigate(`/tasks/${record.task_id}/logs`)}
+              >
+                失败日志
+              </Button>
+            ) : (
+              <Button
+                type="link"
+                size="small"
+                disabled={!canReport}
+                title={canReport ? undefined : "任务执行中不可查看报告"}
+                onClick={() => navigate(`/tasks/${record.task_id}/report`)}
+              >
+                报告
+              </Button>
+            )}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: "rerun", label: "重跑", icon: <RedoOutlined /> },
+                  ...(canRebuild
+                    ? [{ key: "rebuild", label: "全量重建", danger: true, icon: <ClearOutlined /> }]
+                    : []),
+                  { type: "divider" as const },
+                  { key: "delete", label: "删除", danger: true, icon: <DeleteOutlined /> },
+                ],
+                onClick: ({ key }) => {
+                  if (key === "rerun") void rerun(record.task_id);
+                  if (key === "rebuild") confirmRebuildFull(record.task_id);
+                  if (key === "delete") {
+                    modal.confirm({
+                      title: "删除任务（含现场数据）？",
+                      content: "删除后无法恢复。",
+                      okText: "删除",
+                      okButtonProps: { danger: true },
+                      cancelText: "取消",
+                      onOk: () => remove(record.task_id),
+                    });
+                  }
+                },
+              }}
+              trigger={["click"]}
+            >
+              <Button aria-label="更多操作" type="text" size="small" icon={<MoreOutlined />} />
+            </Dropdown>
+          </Space>
+        );
+      },
+    },
+  ];
+
   return (
     <Flex vertical gap={16}>
-      <Card styles={{ body: { padding: "18px 20px" } }}>
-        <Flex gap={28} align="center" justify="space-between" wrap="wrap">
-          <Flex gap={36} wrap="wrap">
-            {OVERVIEW_ITEMS.map((item) => (
-              <div key={item.key}>
-                <Typography.Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-                  {(overview?.[item.key] ?? 0).toLocaleString()}
-                </Typography.Title>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {item.label}
-                </Typography.Text>
+      <PageHeader
+        title="巡检任务"
+        description="按异常优先查看任务结果，失败原因直接显示在任务行内。"
+        actions={
+          <Button type="primary" icon={<PlusOutlined />} onClick={showUploadModal}>
+            上传数据包
+          </Button>
+        }
+      />
+
+      <Card data-testid="task-overview" styles={{ body: { padding: "16px 20px" } }}>
+        <div className="task-overview">
+          <div className="task-overview-metrics">
+            {[
+              { key: "task_count", label: "巡检任务" },
+              { key: "registered_rule_count", label: "注册规则" },
+              { key: "rule_result_count", label: "规则结果" },
+              { key: "finding_count", label: "发现问题数" },
+            ].map((item) => (
+              <div key={item.key} className="task-overview-metric">
+                <div className="task-overview-value">
+                  {(overview?.[item.key as keyof OverviewSummary] ?? 0).toLocaleString()}
+                </div>
+                <div className="task-overview-label">{item.label}</div>
               </div>
             ))}
-          </Flex>
-          <Flex gap={16} wrap="wrap">
-            {RESULT_STATUS_META.map((item) => (
-              <div key={item.key} style={{ minWidth: 72, textAlign: "center" }}>
-                <Typography.Text strong style={{ display: "block", fontSize: 20, color: item.color }}>
-                  {(overview?.status_counts?.[item.key] ?? 0).toLocaleString()}
-                </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {item.label}
-                </Typography.Text>
-              </div>
-            ))}
-          </Flex>
-        </Flex>
+          </div>
+          <div className="task-overview-divider" />
+          <div className="task-overview-status">
+            <div className="task-overview-label">规则结果状态分布</div>
+            {overview ? (
+              <StatusDistribution
+                stats={{
+                  pass: overview.status_counts.pass,
+                  warn: overview.status_counts.warn,
+                  fail: overview.status_counts.fail,
+                  error: overview.status_counts.error,
+                  skip: overview.status_counts.skip,
+                }}
+                variant="full"
+                emptyText="暂无规则结果"
+              />
+            ) : (
+              <Typography.Text type="secondary">统计数据加载中</Typography.Text>
+            )}
+          </div>
+        </div>
       </Card>
 
       <Card
         title={
           <Flex align="center" gap={8}>
             <Typography.Text strong>任务列表</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               共 {total} 个任务
             </Typography.Text>
           </Flex>
         }
         extra={
-          <Space wrap>
-            <Segmented
-              aria-label="任务状态快捷筛选"
-              options={STATUS_FILTER_OPTIONS}
-              value={status}
-              onChange={(value) => {
-                setStatus(value as TaskStatus | "");
-                setPage(1);
-              }}
-            />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                const last = items[0];
-                if (last) {
-                  form.setFieldsValue({
-                    province: last.customer_province ?? undefined,
-                    operator: last.customer_operator ?? undefined,
-                    product: last.customer_product ?? undefined,
-                    version: last.customer_version ?? undefined,
-                  });
-                }
-                setOpen(true);
-              }}>
-                上传数据包
-              </Button>
-          </Space>
+          <Segmented
+            aria-label="任务状态快捷筛选"
+            options={STATUS_FILTER_OPTIONS}
+            value={status}
+            onChange={(value) => {
+              setStatus(value as TaskStatus | "");
+              setPage(1);
+            }}
+          />
         }
       >
         <Flex vertical gap={12}>
@@ -528,183 +683,65 @@ export function TaskListPage() {
           {loadError && items.length === 0 && (
             <LoadErrorState description={loadError} onRetry={retryLoad} retrying={loading} />
           )}
-          {items.map((record) => {
-            const duration = formatTaskDuration(record.created_at, record.completed_at);
-            const metadataTags = getTaskMetadataTags(record, dicts);
-            return (
-            <Card
-              key={record.task_id}
-              hoverable
-              styles={{ body: { padding: 16 } }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(220px, 1.2fr) minmax(300px, 1fr) auto",
-                  gap: 18,
-                  alignItems: "center",
-                }}
-              >
-              <div>
-                <Typography.Link strong onClick={() => navigate(`/tasks/${record.task_id}`)}>
-                  {record.name}
-                </Typography.Link>
-                <Flex gap={8} align="center" wrap="wrap" style={{ marginTop: 6 }}>
-                  <Typography.Text code type="secondary" style={{ fontSize: 12 }}>
-                    {record.task_id}
-                  </Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {record.mode === "online" ? "在线" : "本地"}
-                  </Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {dayjs(record.created_at).format("YYYY-MM-DD HH:mm")}
-                  </Typography.Text>
-                  {record.completed_at && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      完成 {dayjs(record.completed_at).format("YYYY-MM-DD HH:mm")}
-                    </Typography.Text>
-                  )}
-                  {duration && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      耗时 {duration}
-                    </Typography.Text>
-                  )}
-                </Flex>
-                {metadataTags.length > 0 && (
-                  <Flex gap={4} wrap="wrap" style={{ marginTop: 6 }}>
-                    {metadataTags.map((item, index) => (
-                      <Flex key={item.key} gap={4} align="center">
-                        {index > 0 && (
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            ·
-                          </Typography.Text>
-                        )}
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          {item.label}
-                        </Typography.Text>
-                        <Typography.Text style={{ fontSize: 12 }}>{item.value}</Typography.Text>
-                      </Flex>
-                    ))}
-                  </Flex>
-                )}
-              </div>
-
-              <Flex gap={8} wrap="wrap">
-                {RESULT_STATUS_META.map((item) => {
-                  const value = record.stats[item.key];
-                  return (() => {
-                      const emphasis = getStatusStatEmphasis(item.key, value);
-                      return (
-                        <div
-                          key={item.key}
-                          style={{
-                            flex: emphasis === "quiet" ? "0 1 auto" : "1 1 56px",
-                            minWidth: emphasis === "quiet" ? 44 : 56,
-                            padding: emphasis === "quiet" ? "5px 4px" : "7px 6px",
-                            borderRadius: 10,
-                            textAlign: "center",
-                            background: emphasis === "attention" ? `${item.color}14` : undefined,
-                            opacity: emphasis === "quiet" ? 0.55 : 1,
-                          }}
-                        >
-                          <Typography.Text
-                            strong={emphasis !== "quiet"}
-                            style={{
-                              display: "block",
-                              color: emphasis === "quiet" ? undefined : item.color,
-                              fontSize: emphasis === "quiet" ? 14 : emphasis === "attention" ? 18 : 16,
-                            }}
-                          >
-                            {value}
-                          </Typography.Text>
-                          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                            {item.label}
-                          </Typography.Text>
-                        </div>
-                      );
-                  })();
-                })}
-              </Flex>
-
-              <Flex vertical align="flex-end" gap={8}>
-                <TaskStatusTag status={record.status} />
-                {record.status === "failed" && (
-                  <Button
-                    type="text"
-                    size="small"
-                    danger
-                    icon={<FileTextOutlined />}
-                    onClick={() => navigate(`/tasks/${record.task_id}/logs`)}
-                  >
-                    失败日志
-                  </Button>
-                )}
-                <Space size={0} wrap>
-                  <Button type="text" size="small" onClick={() => navigate(`/tasks/${record.task_id}`)}>
-                    详情
-                  </Button>
-                  <Button type="text" size="small" onClick={() => navigate(`/tasks/${record.task_id}/report`)}>
-                    报告
-                  </Button>
-                  <Dropdown
-                    menu={{
-                      items: [
-                        { key: "rerun", label: "重跑", icon: <RedoOutlined /> },
-                        ...(record.status === "completed" || record.status === "failed"
-                          ? [{ key: "rebuild", label: "重建", danger: true, icon: <ClearOutlined /> }]
-                          : []),
-                        { type: "divider" },
-                        { key: "delete", label: "删除", danger: true, icon: <DeleteOutlined /> },
-                      ],
-                      onClick: ({ key }) => {
-                        if (key === "rerun") void rerun(record.task_id);
-                        if (key === "rebuild") confirmRebuildFull(record.task_id);
-                        if (key === "delete") {
-                          modal.confirm({
-                            title: "删除任务（含现场数据）？",
-                            content: "删除后无法恢复。",
-                            okText: "删除",
-                            okButtonProps: { danger: true },
-                            cancelText: "取消",
-                            onOk: () => remove(record.task_id),
-                          });
+          {!loadError && (
+            <Table<TaskSummary>
+              className="task-table"
+              rowKey="task_id"
+              columns={columns}
+              dataSource={sortedItems}
+              loading={loading && items.length > 0}
+              pagination={false}
+              expandable={{
+                expandedRowKeys: [...expandedRowKeys],
+                onExpandedRowsChange: (keys) => setExpandedRowKeys(keys.map(String)),
+                expandedRowRender: (record) => (
+                  <Flex vertical gap={12} className="task-table-expanded">
+                    {deleteErrors[record.task_id] && (
+                      <TaskDeletePanel
+                        taskId={record.task_id}
+                        error={deleteErrors[record.task_id]}
+                        collapsed={Boolean(deleteCollapsed[record.task_id])}
+                        retrying={Boolean(deleting[record.task_id])}
+                        onToggle={(id) =>
+                          setDeleteCollapsed((current) => ({ ...current, [id]: !current[id] }))
                         }
-                      },
-                    }}
-                    trigger={["click"]}
-                  >
-                    <Button aria-label="更多操作" type="text" size="small" icon={<MoreOutlined />} />
-                  </Dropdown>
-                </Space>
-              </Flex>
-              </div>
-
-              {deleteErrors[record.task_id] && (
-                <TaskDeletePanel
-                  taskId={record.task_id}
-                  error={deleteErrors[record.task_id]}
-                  collapsed={Boolean(deleteCollapsed[record.task_id])}
-                  retrying={Boolean(deleting[record.task_id])}
-                  onToggle={(id) =>
-                    setDeleteCollapsed((current) => ({ ...current, [id]: !current[id] }))
-                  }
-                  onRetry={(id) => void remove(id)}
-                />
-              )}
-
-              {record.preparation && (
-                <PreparationPanel
-                  preparation={record.preparation}
-                  taskId={record.task_id}
-                  expanded={preparationOpen(record.task_id)}
-                  onToggle={togglePreparation}
-                />
-              )}
-            </Card>
-            );
-          })}
-
-          {!loading && items.length === 0 && !loadError && <EmptyState description="暂无巡检任务" />}
+                        onRetry={(id) => void remove(id)}
+                      />
+                    )}
+                    {record.preparation ? (
+                      <PreparationPanel
+                        preparation={record.preparation}
+                        taskId={record.task_id}
+                        expanded
+                        onToggle={togglePreparation}
+                      />
+                    ) : (
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        暂无数据准备记录
+                      </Typography.Text>
+                    )}
+                    {record.status === "failed" && (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<FileTextOutlined />}
+                        style={{ alignSelf: "flex-start", paddingInline: 0 }}
+                        onClick={() => navigate(`/tasks/${record.task_id}/logs`)}
+                      >
+                        查看失败日志
+                      </Button>
+                    )}
+                  </Flex>
+                ),
+              }}
+              locale={{
+                emptyText: (
+                  <EmptyState description="暂无巡检任务，先上传一个数据包开始巡检。" />
+                ),
+              }}
+              scroll={{ x: 1200 }}
+            />
+          )}
 
           <Flex justify="flex-end">
             <Pagination
