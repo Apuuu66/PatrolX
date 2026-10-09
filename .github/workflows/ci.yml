@@ -24,10 +24,15 @@ jobs:
       - name: 静态检查
         run: python build.py lint
       - name: 后端测试
-        run: python build.py test 2>&1 | tee /tmp/backend-test.log
+        run: |
+          set -o pipefail
+          python build.py test 2>&1 | tee /tmp/backend-test.log
       - name: 后端测试失败摘要
         if: failure()
-        run: tail -n 60 /tmp/backend-test.log | sed 's/^/::error::/'
+        run: |
+          set -o pipefail
+          grep -m5 -E '^(FAILED|ERROR) ' /tmp/backend-test.log | sed 's/^/::error::/' || true
+          tail -n 30 /tmp/backend-test.log | sed 's/^/::error::/'
       - name: 契约一致性
         run: python build.py contract
 
@@ -55,7 +60,12 @@ jobs:
       - name: 生产构建
         run: npm run build
       - name: 前端单测
-        run: npm test 2>&1 | tee /tmp/frontend-test.log
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/frontend-test.log
       - name: 前端单测失败摘要
         if: failure()
-        run: tail -n 40 /tmp/frontend-test.log | sed 's/^/::error::/'
+        run: |
+          set -o pipefail
+          grep -m5 -E '(^| )(FAIL |not ok )' /tmp/frontend-test.log | sed 's/^/::error::/' || true
+          tail -n 30 /tmp/frontend-test.log | sed 's/^/::error::/'
