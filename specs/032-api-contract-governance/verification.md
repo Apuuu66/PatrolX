@@ -64,7 +64,7 @@ main
 4. **可诊断性**：`::error::` 回显在 check-run 上形成注解，注解可通过公开 API 读取（已验证本仓库 `GET /repos/Apuuu66/PatrolX/check-runs/{id}/annotations` 无凭据可读），因此下次 CI 失败可直接定位失败用例，无需 Actions 日志权限。
 5. **契约同步**：`contracts/ci-gate.md` 增补每个 job 的「失败诊断」步骤行与「退出码与失败诊断」小节，保持 quickstart 场景 5「步骤与契约一致」成立。
 
-## 五、CI 偶发失败（已知风险，本回合未闭环）
+## 五、CI 偶发失败（2026-10-10 已闭环）
 
 | 运行 | 提交 | 结果 | 失败步骤耗时 |
 | --- | --- | --- | --- |
@@ -74,7 +74,26 @@ main
 
 - 三次运行的被测代码树相同（仅 `ci.yml` 变化），说明与环境相关而非代码回归。
 - 本回合本地复现 1 次：`tests/test_api.py::test_upload_list_system_rules_report_logs_delete`（`1 failed, 580 passed`），当时输出被 `tail` 截断未留 traceback；随后 12 次全量重跑（6 次 `pytest`、6 次 `build.py test`）与 1 次双进程并发重跑全部通过，未复现。
-- 处置：不做无证据的「修复」；失败诊断钩子已就位。下次失败时先取注解定位用例，再按证据收敛（必要时隔离重负载用例或调整超时）。
+### 闭环记录（2026-10-10）
+
+- **再次红跑与精确定位**：补录 CI 证据的文档提交推送后，[run 37976522302](https://github.com/Apuuu66/PatrolX/actions/runs/37976522302) 的 backend job 失败。借助失败诊断钩子的 `::error::` 注解（`GET /repos/Apuuu66/PatrolX/check-runs/113976112331/annotations`，无凭据可读）精确定位 3 个失败用例：
+  - `tests/test_delete_race.py::test_completed_task_without_task_json_falls_back_to_record` —— 断言 `"running" == "completed"`；
+  - `tests/test_delete_race.py::test_delete_failure_keeps_task_and_restores_meta` —— 断言 `409 == 500`；
+  - `tests/test_observability.py::test_task_lifecycle_logs` —— 缺少「任务完成」日志。
+- **根因（确定性，非猜测）**：`app/cli.py:run_task` 在收尾步骤（设备台账归档 → 报告渲染 → 「任务完成」日志）**之前**就写了终态 `task.json`；`TaskService._execute` 又要等其返回后才把 SQLite 记录更新为 completed。慢速 runner 放大该窗口，读方（`GET /tasks`、删除竞态、文件缺失兜底列表）可能命中「文件已 completed / 记录仍 running」的不一致状态；本地机器快，12+ 次全量重跑从未复现，与「环境相关」的表象吻合。
+- **修复**（`3667c80`）：终态 `task.json` 改为任务现场**最后一次写入**（`_publish_terminal` 发布器，`app/cli.py`）；在线模式发布顺序固定为「SQLite 先收敛 → 再写文件」（`app/services/tasks.py`），普通执行、全量重建、增量重建、重跑与异常路径统一走同一顺序。
+- **确定性回归测试**：新增 `tests/test_task_terminal_publication.py` 两个不变量——阻塞 `render_report` 时任务对外不得暴露终态；写终态 `task.json` 前 SQLite 记录必须已 completed。RED 阶段正确失败，修复后 GREEN。
+- **本地证据**：`lint`（182 files）、`test` 583 passed、`contract` OK、`verify` exit 0、`e2e` 35 passed；定向用例（新增 2 例 + delete_race + observability + baseline_rerun + rule_state_tasks）20 passed。
+
+修复提交推送后自动触发 [run 37977867312](https://github.com/Apuuu66/PatrolX/actions/runs/37977867312)，两个 job 全部通过：
+
+| Job | 结果 | 耗时 |
+| --- | --- | --- |
+| backend（lint / test / contract） | success | 91s |
+| frontend（客户端零漂移 / 构建 / 单测） | success | 50s |
+
+- 至此第五节从「已知风险」转为「已闭环」：偶发失败由终态发布时序缺陷导致，已用确定性测试锁定，不再依赖「重跑碰运气」。
+- 本闭环记录所在提交为纯文档变更，同一 workflow 再次触发复核，其结果不影响上述闭环结论。
 
 ## 六、残留与洁净度
 
