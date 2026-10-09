@@ -24,7 +24,10 @@ jobs:
       - name: 静态检查
         run: python build.py lint
       - name: 后端测试
-        run: python build.py test
+        run: python build.py test 2>&1 | tee /tmp/backend-test.log
+      - name: 后端测试失败摘要
+        if: failure()
+        run: tail -n 60 /tmp/backend-test.log | sed 's/^/::error::/'
       - name: 契约一致性
         run: python build.py contract
 
