@@ -418,3 +418,46 @@ SQLite 单文件数据库（`data/patrolx.db`）在程序空闲时可直接复�
 
 - 并行度固定 4，本版不提供配置项；放开 prepare 跨规则共享消费属于后续独立版本，需先修订宪法与相关契约。
 - 解压阶段、收尾阶段与单条规则内的 chunk 级并行不在本版范围。
+
+## 15. 告警生命周期与闪断判定机制
+
+### 目标设计
+
+- 恢复结论必须来自清除时间与观察窗口，不能信任告警源系统的状态字段。
+- 闪断（反复出现）与未恢复是两个独立事实，必须同时呈现，不能互相掩盖。
+- 数据不足、数据脏和真正"稳定"要显式区分：不确定时标注，不猜测。
+- 规则只读自身 `source_patterns` 匹配文件，不消费其他规则结果与 prepare 数据。
+
+### 当前实现
+
+`alarm.flapping`（`app/inspectors/alarm/flapping.py`）按 `alarm_code + object` 分组，单次遍历解析记录后聚合：
+
+1. 解析层：CSV 与 TXT 统一解码（UTF-8 / GB18030），字段名归一为小写去空白；时间兼容 ISO-8601 与
+   `YYYY-MM-DD HH:MM:SS`，无时区按 +08:00 解释；TXT 没有清除时间时按未清除处理。
+2. 清洗层：行级校验（时间不可解析、清除早于创建、缺 `alarm_code`）计入 `excluded_rows`；
+   四元组 `alarm_id + created_at + alarm_code + object` 去重计入 `duplicate_rows`。
+3. 聚合成组：每条分组的记录按出现时间排序，计算出现/清除计数、首末时间、持续时长、最短复发间隔与闪断事件。
+4. 判定层：`_main_state()` 输出六态互斥主状态——未清除且反复（fail/CRITICAL）、未清除未反复（warn）、
+   已清除但反复（fail/HIGH）、已清除但短告警（warn/MEDIUM）、观察窗不足（warn）、已清除且稳定（pass）。
+5. 证据层：Finding 文案携带分组键、出现分布、首末与最近清除时间、最短复发间隔、本次生效阈值、
+   操作窗证据与来源文件行号；`metadata.alarm_flapping` 输出 `policy`、`coverage`、`totals`、`state_counts` 与分组明细。
+
+窗口与阈值口径：
+
+| 口径 | 定义 | 默认值 |
+| --- | --- | --- |
+| 短告警 | 已清除分组的最长持续时长 ≤ 阈值 | `short_alarm_sec=300` |
+| 复发 | 同一窗口内出现次数 ≥ 阈值 | `repeat_window_sec=3600`、`min_repeat_count=3` |
+| 闪断事件 | 相邻出现间隔 ≤ 阈值时并入同一事件 | `flap_gap_sec=1800` |
+| 稳定观察窗 | 最后一次清除距覆盖末端 ≥ 阈值才可判稳定 | `stable_observation_sec=1800` |
+| 操作窗 | 只标注窗口内/外出现与窗口外再现、窗口后未恢复，不降级主状态 | `operation_window=00:00-02:00`、`operation_window_enabled=true` |
+
+判定优先级固定：未清除事实 > 反复事实 > 短告警 > 观察窗不足兜底 > 稳定。因此一个分组可能同时携带
+`cleared_repeated` 主状态与 `observation_insufficient` 标记（例如三次闪断后刚清除），两者在界面上分别呈现。
+
+### 差异
+
+- 本版无运行时阈值配置面：参数只在规则 `params` 表声明，改默认值需改代码并整包重跑；
+  单规则重跑（`python build.py verify-one --rule alarm.flapping`）可验证参数变化后的结论可解释性。
+- 时间轴联动（把闪断结论叠加到设备时间轴）不在本版范围，后续版本必须通过既有 `RuleResult` 读取，
+  不得让其他普通规则直接消费本规则产物。

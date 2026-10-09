@@ -64,7 +64,8 @@ python build.py verify-one --rule alarm.flapping
 
 ## 5. 阈值变更后重跑（US4）
 
-临时把 `flapping.py` 中的复发次数阈值默认值（`FlappingPolicy` 的 `min_repeat_count`）改为 `4`，执行：
+临时把 `flapping.py` 中参数表 `FLAPPING_PARAM_DEFAULTS` 的 `min_repeat_count` 默认值从 `"3"` 改为 `"4"`
+（`FlappingPolicy` 由该参数表生成，参数默认值是字符串、由 `resolve_policy()` 解析为整数），执行：
 
 ```bash
 python build.py verify-one --rule alarm.flapping
@@ -72,7 +73,8 @@ python build.py verify-one --rule alarm.flapping
 
 **预期**：`1051`、`1052` 都只有 3 次出现，低于新阈值 4：`1051` 从 `uncleared_repeated` 变为 `uncleared_single`，`1052` 从 `cleared_repeated` 变为 `observation_insufficient`（清除距覆盖末端仅 330 秒）；规则状态从 `fail` 降为 `warn`，CRITICAL 与 HIGH Finding 消失，Finding 数从 3 降到 1（仅剩 `SCTP_LINK_DOWN / umf-node-01` 的 MEDIUM）。恢复默认值（`3`）后重跑必须回到第 3 步结果。
 
-> 本版阈值通过规则参数表声明、无运行时配置面；验证方式就是改默认值后单规则重跑，结论可解释、可追溯。
+> 本版阈值通过 `FLAPPING_PARAM_DEFAULTS` 参数表声明、无运行时配置面；验证方式就是改默认值后单规则重跑，
+> 结论可解释、可追溯；改完必须恢复 `"3"` 并重跑一次，避免把调试值带进提交。
 
 ## 6. 数据不足与容错
 
@@ -109,3 +111,19 @@ python build.py web-build
 ```
 
 **预期**：全部通过；`alarm.stat` 的既有断言（总量、未处理、严重级分布，按新增样例调整后的数值）保持一致语义，仅数值随样例包扩充更新。本功能不改 `docs/api/openapi.yaml`，无需执行 `python build.py contract` / `gen-web-api`；若实现阶段需要新增对外字段，必须先补契约再实现。
+
+## 9. 实测记录（2026-10-09）
+
+- 第 2 步：`.venv/bin/python tests/fixtures/make_real_package.py uploads` 生成 62,043 字节样例包；
+  `python build.py verify` 任务 `completed`，`pass=4 warn=3 fail=5 error=0 skip=2`，
+  `alarm.flapping` 调度 `matched_files` 为三个告警 CSV，不再是静默跳过。
+- 第 3 步：`coverage.span_sec=93929`、`totals.rows=22`、`totals.groups=17`、六态计数 `1/8/1/1/1/5`、
+  8 项状态指标 `17/2/1/1/5/11/1/1`、`excluded_rows=duplicate_rows=failed_files=0`，
+  Finding 3 条（CRITICAL 1051、HIGH 1052、MEDIUM SCTP_LINK_DOWN/umf-node-01）。
+  个别分组的 `observation_gap_sec` 与表格一致（`SCTP_LINK_DOWN/umf-node-01=93900`、`1052=330`、
+  `1053=0`、`CONTAINER_RESTART/pod-csp-1=92480`）。
+- 第 4 步：`verify-one` 与整包结果除 `executed_at`、`duration_ms` 外逐字段一致；`alarm.stat.json` 未被触碰。
+- 第 5 步：`min_repeat_count` 改 `4` 后 `1051 → uncleared_single`、`1052 → observation_insufficient`、
+  规则状态 `fail → warn`、Finding 3 → 1（仅 MEDIUM）；恢复 `"3"` 后结果回到第 3 步基线。
+- 实现偏差：`InspectorInfo.params` 契约为 `list[dict[str, str]]`，参数默认值必须声明为字符串
+  （`"300"`、`"true"` 等），类型化取值统一由 `resolve_policy()` 完成；本指南第 5 节已按此更新。

@@ -653,3 +653,42 @@ python tools/generate_scan_rules.py validate --source-dir output/task-<cleaned-p
 
 Windows 上推荐使用 Git Bash 或 WSL。YAML 中的 `source_patterns` 必须使用 POSIX `/` 分隔符；
 运行时任务清单会把相对路径统一转换为 `/` 后再做 `re.fullmatch()`。路径包含空格时加引号。
+
+### 7.10 告警生命周期与闪断检测
+
+`alarm.flapping`（P1）与 `alarm.stat` 共用 `scan_rules.yaml` 的 `alarm_all` 扫描组，但各自读取匹配文件、
+互不依赖、不消费对方结果：`alarm.stat` 只做总量与未处理统计，`alarm.flapping` 负责生命周期结论。
+
+- 分组键为 `alarm_code + object`；`object` 为空归入"对象未知"分组，不丢弃记录。
+- 恢复证据只来自清除时间与观察窗；CSV 的 `status` 字段（`已处理` / `处理中`）只做展示，绝不作为恢复依据。
+- 覆盖窗口：`start_at = min(created_at)`、`end_at = max(cleared_at ?? created_at)`、`span_sec` 为整数秒。
+- 观察窗：`observation_gap_sec = end_at - recent_cleared_at`；未清除、无清除时间或
+  `observation_gap_sec < stable_observation_sec`（默认 1800 秒）时标记 `observation_insufficient`，
+  不得判为稳定恢复。
+- 复发：`repeat_window_sec`（默认 3600 秒）窗口内出现次数 `>= min_repeat_count`（默认 3）即 `repeated`。
+- 操作窗：默认 `00:00-02:00`（按 +08:00 解释的本地时间），只作为证据标注（窗口内/外出现次数、
+  窗口外再现、窗口后仍未恢复），不改变主状态；`operation_window_enabled=false` 时窗口计数归零、窗口标记全为 false。
+- 参数默认值只在规则 `params` 表声明，结果 `metadata.alarm_flapping.policy` 携带本次生效阈值；
+  纯参数取值变化不递增 `rule_version`，判定逻辑变化才递增。
+
+主状态六选一（互斥；反复优先于短告警，观察窗不足只作兜底）：
+
+| 状态 | 判定 | 贡献规则状态 | Finding |
+| --- | --- | --- | --- |
+| `uncleared_repeated` | 存在未清除记录且命中复发窗口 | fail | CRITICAL |
+| `uncleared_single` | 存在未清除记录且未命中复发窗口 | warn | 无 |
+| `cleared_repeated` | 全部已清除且命中复发窗口 | fail | HIGH |
+| `cleared_short` | 全部已清除、未复发，最长持续 ≤ `short_alarm_sec` | warn | MEDIUM |
+| `observation_insufficient` | 全部已清除、未复发、非短告警，但观察窗不足 | warn | 无 |
+| `cleared_stable` | 全部已清除、未复发且观察窗充足 | pass | 无 |
+
+容错与数据卫生：
+
+- 行级：`created_at` 不可解析、`cleared_at` 存在但不可解析、`cleared_at < created_at`、`alarm_code` 缺失的行计入
+  `excluded_rows` 并记录原因分类；`alarm_id + created_at + alarm_code + object` 重复的行计入 `duplicate_rows` 且只统计一次。
+- 文件级：单个文件解析失败只计入 `failed_files`，不影响其他文件。
+- 无匹配文件或全部记录时间不可解析时返回 `skip` + `skip_reason`，不静默通过、不伪装为 `pass`。
+- `groups` 超过 `groups_max`（500）时按状态优先级截断并在 `totals.groups_truncated` 标注；Finding 上限 20 条。
+
+结果契约见 [`specs/030-alarm-flapping/contracts/alarm-flapping-result.md`](../specs/030-alarm-flapping/contracts/alarm-flapping-result.md)；
+规则详情页由"告警生命周期分组"面板渲染 `metadata.alarm_flapping`（六态计数、覆盖窗口、生效阈值与分组明细）。

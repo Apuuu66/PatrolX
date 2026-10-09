@@ -38,8 +38,13 @@ ZZapp01BCN_app_Problem_scene_333.zip
 ```text
 alarm_history_202609010101137101.zip
 ├── alarm_history_202609010101137101_001.csv
-└── alarm_history_202609010101137101_002.csv
+├── alarm_history_202609010101137101_002.csv
+└── alarm_history_202609010101137101_003.csv
 ```
+
+`_003.csv` 是闪断检测的固定演示数据（告警 1050–1053：操作窗内出现后窗口外再现、未清除且反复、
+清除后反复闪断、清除后观察窗不足），与 `_001` / `_002` 合并后由 `alarm.stat` 与 `alarm.flapping`
+各自独立读取；两条规则共用同一批告警文件但互不依赖。
 
 ### 性能包
 
@@ -127,7 +132,7 @@ logs/UMFAcc/logs/paas-192.168.2.3/UMFAcc.log
 
 | 文件 | 类别 | 规则 |
 | --- | --- | --- |
-| `alarm_history_*.csv` | `alarm` | `alarm.stat` |
+| `alarm_history_*.csv` | `alarm` | `alarm.stat`、`alarm.flapping`（共用同一批文件，互不依赖） |
 | `system_info.ini`、`version.ini` | `config` | `config.check` |
 | `LST ME.txt` | `config` | 台账解析（`site_device_lst_me`）；`config_all` 显式排除，不进 `config.check` |
 | `Call_Session_API_Statistics_*` | `kpi` | `kpi.measurement_units` |
