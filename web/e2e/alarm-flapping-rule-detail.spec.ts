@@ -26,8 +26,11 @@ test("告警闪断规则详情展示四类生命周期结论与三条 Finding", 
   for (const severity of ["critical", "high", "medium"]) {
     await expect(findingsCard.locator(".ant-tag").filter({ hasText: severity })).toHaveCount(1);
   }
-  await expect(findingsCard.getByText("1051 / pod-umf-9").first()).toBeVisible();
-  await expect(findingsCard.getByText("1052 / pod-umf-9").first()).toBeVisible();
+  await expect(findingsCard.getByText("1051 / UMF核心服务").first()).toBeVisible();
+  await expect(findingsCard.getByText("1052 / UMF核心服务").first()).toBeVisible();
+  // 真实导出的定位信息进入证据文案（应用名称是分组键，实例定位在 定位信息 列）。
+  await expect(findingsCard.getByText("定位 pod-umf-9", { exact: false }).first()).toBeVisible();
+  await expect(findingsCard.getByText("定位 umf-node-01", { exact: false }).first()).toBeVisible();
 
   // 生命周期分组卡片：六态分布 + 分组明细（SC-005）。
   const panel = page.locator(".ant-card").filter({ hasText: CARD_TITLE });
@@ -52,7 +55,7 @@ test("告警闪断规则详情展示四类生命周期结论与三条 Finding", 
   await expect(clearedRepeated).toContainText("已清除但反复");
   await expect(clearedRepeated).toContainText("600 秒");
 
-  const shortAlarm = page.locator('tr[data-row-key="SCTP_LINK_DOWN-umf-node-01"]');
+  const shortAlarm = page.locator('tr[data-row-key="1002-UMF核心服务"]');
   await expect(shortAlarm).toContainText("已清除但短告警");
   await expect(shortAlarm).toContainText("短告警");
 

@@ -15,6 +15,48 @@ from app.services.executor import RuleContext, make_result
 
 UNHANDLED_STATUS = {"未处理", "UNHANDLED", "OPEN"}
 
+# 真实告警 CSV 表头：告警流水号、应用ID、应用名称、告警ID、告警名称、告警级别、
+# 发生时间、清除时间、清除类型、事件类型、告警重复次数、定位信息。
+# 保留英文列名别名，兼容既有样例与测试内联构造的数据。
+_CSV_ALIASES: dict[str, tuple[str, ...]] = {
+    "created_time": ("发生时间", "created_time", "first_occurrence_time", "created_at"),
+    "cleared_time": ("清除时间", "cleared_time", "clear_time", "cleared_at"),
+    "alarm_code": ("告警ID", "alarm_code", "code"),
+    "object": ("应用名称", "object", "object_name"),
+    "severity": ("告警级别", "severity"),
+    "status": ("status", "告警状态"),
+}
+
+_SEVERITY_MAP: dict[str, str] = {
+    "紧急": "CRITICAL",
+    "严重": "HIGH",
+    "重要": "MEDIUM",
+    "次要": "LOW",
+    "提示": "LOW",
+    "critical": "CRITICAL",
+    "major": "HIGH",
+    "minor": "MEDIUM",
+    "warning": "LOW",
+    "high": "HIGH",
+    "medium": "MEDIUM",
+    "low": "LOW",
+}
+
+
+def _pick(row: dict[str, str], key: str) -> str:
+    for alias in _CSV_ALIASES[key]:
+        value = row.get(alias.lower())
+        if value:
+            return value
+    return ""
+
+
+def _normalize_severity(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    return _SEVERITY_MAP.get(text, _SEVERITY_MAP.get(text.lower(), text.upper()))
+
 
 inspector = Inspector(
     code="alarm.stat",
@@ -22,7 +64,7 @@ inspector = Inspector(
     category=RuleCategory.ALARM,
     severity=Severity.HIGH,
     priority=Priority.P1,
-    rule_version="1.1.0",
+    rule_version="1.2.0",
     description="统计告警总量、严重级分布与未处理/未清除告警；存在 CRITICAL 或未处理告警时告警",
     recommendation="优先处理 CRITICAL/HIGH 未处理告警，核查根因",
     source_refs=["alarm_all"],
@@ -43,16 +85,16 @@ def _read_csv_alarm(path: Path) -> list[dict]:
         reader = csv.DictReader(fh)
         rows: list[dict] = []
         for raw in reader:
-            row = {(k or "").strip().lower(): (v or "").strip() for k, v in raw.items()}
-            status = row.get("status", "")
-            cleared = row.get("cleared_time", "")
+            row = {(k or "").strip().lower().lstrip("\ufeff"): (v or "").strip() for k, v in raw.items()}
+            status = _pick(row, "status")
+            cleared = _pick(row, "cleared_time")
             rows.append(
                 {
-                    "time": row.get("created_time") or row.get("first_occurrence_time") or "",
-                    "code": row.get("alarm_code") or row.get("code") or "",
-                    "severity": row.get("severity", "").upper(),
+                    "time": _pick(row, "created_time"),
+                    "code": _pick(row, "alarm_code"),
+                    "severity": _normalize_severity(_pick(row, "severity")),
                     "status": status,
-                    "object": row.get("object") or row.get("object_name") or "",
+                    "object": _pick(row, "object"),
                     "cleared": bool(cleared),
                 }
             )

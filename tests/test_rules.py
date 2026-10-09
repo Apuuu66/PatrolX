@@ -8,6 +8,15 @@ from app.inspectors.log import ddd_service as ddd_service_module
 from app.inspectors.registry import registry
 from app.models.schemas import RuleStatus
 from app.services.executor import RuleContext
+from tests.fixtures.make_real_package import ALARM_CSV_001
+
+# 真实导出告警表头（App Problem Scene 12 列），与样例包保持一致。
+ALARM_HEADER = ALARM_CSV_001.splitlines()[0]
+
+
+def _alarm_csv(*rows: tuple[str, ...]) -> str:
+    """按真实 12 列告警表头拼装 CSV 文本。"""
+    return "\n".join([ALARM_HEADER, *(",".join(row) for row in rows)]) + "\n"
 
 
 def _ctx(tmp_path: Path, files: dict[str, str]) -> RuleContext:
@@ -94,10 +103,35 @@ def test_traffic_stat_skip(tmp_path: Path) -> None:
 
 
 def test_alarm_stat_csv_created_and_cleared_time(tmp_path: Path) -> None:
-    csv_text = (
-        "alarm_id,created_time,cleared_time,alarm_code,severity,status,object,description\n"
-        "1001,2026-09-01 10:00:01,,DB_DOWN,CRITICAL,未处理,node-1,数据库连接池耗尽\n"
-        "1002,2026-09-01 10:00:04,2026-09-01 10:00:30,SCTP_DOWN,HIGH,处理中,node-1,SCTP链路中断\n"
+    csv_text = _alarm_csv(
+        (
+            "1001",
+            "9001",
+            "CSP核心服务",
+            "DB_DOWN",
+            "数据库连接池耗尽",
+            "紧急",
+            "2026-09-01 10:00:01",
+            "",
+            "",
+            "通信告警",
+            "1",
+            "paas-192.168.2.2",
+        ),
+        (
+            "1002",
+            "9001",
+            "CSP核心服务",
+            "SCTP_DOWN",
+            "SCTP链路中断",
+            "严重",
+            "2026-09-01 10:00:04",
+            "2026-09-01 10:00:30",
+            "自动清除",
+            "通信告警",
+            "1",
+            "paas-192.168.2.2",
+        ),
     )
     ctx = _ctx(tmp_path, {"alarm/alarm_history.csv": csv_text})
     result = _run_rule("alarm.stat", ctx)

@@ -15,7 +15,11 @@ from app.inspectors.registry import registry
 from app.services.unit_runtime import RuleContext
 from tests.fixtures.make_real_package import ALARM_CSV_001, ALARM_CSV_002, ALARM_CSV_003
 
-HEADER = "alarm_id,created_time,cleared_time,alarm_code,severity,status,object,description"
+# 真实告警 CSV 表头（App Problem Scene 导出，12 列），直接复用样例包首行，避免口径漂移。
+HEADER = ALARM_CSV_001.splitlines()[0]
+
+# 中文告警级别 -> 契约严重度，供测试内断言与构造数据共用。
+SEVERITY_ZH = {"CRITICAL": "紧急", "HIGH": "严重", "MEDIUM": "重要", "LOW": "次要"}
 
 
 @pytest.fixture(autouse=True)
@@ -56,12 +60,42 @@ def alarm_row(
     cleared: str = "",
     code: str = "1050",
     severity: str = "MEDIUM",
-    status: str = "已处理",
-    obj: str = "pod-umf-9",
+    status: str = "",
+    obj: str = "UMF核心服务",
     description: str = "演示告警",
+    app_id: str = "9002",
+    app_name: str = "",
+    repeat_count: str = "1",
+    event_type: str = "通信告警",
+    clear_type: str = "",
+    location: str = "",
 ) -> str:
-    """构造单行告警 CSV（字段顺序与真实样例一致）。"""
-    return ",".join([alarm_id, created, cleared, code, severity, status, obj, description])
+    """按真实告警 CSV 表头构造单行数据。
+
+    ``obj`` 对应真实表头的“应用名称”分组键；``status`` 仅为兼容既有测试调用保留：
+    真实导出没有状态列，恢复结论只由清除时间决定。
+    """
+    del status
+    app_name = app_name or obj
+    level = SEVERITY_ZH.get(severity.upper(), severity)
+    if cleared and not clear_type:
+        clear_type = "自动清除"
+    cells = [
+        alarm_id,
+        app_id,
+        app_name,
+        code,
+        description,
+        level,
+        created,
+        cleared,
+        clear_type,
+        event_type,
+        repeat_count,
+        location,
+    ]
+    escaped = ['"' + cell.replace('"', '""') + '"' if "," in cell else cell for cell in cells]
+    return ",".join(escaped)
 
 
 def csv_text(*rows: str) -> str:
@@ -114,7 +148,7 @@ def test_rule_registered_with_contract_metadata() -> None:
     assert inspector.category.value == "alarm"
     assert inspector.priority.name == "P1"
     assert inspector.severity.value == "high"
-    assert inspector.rule_version == "1.0.0"
+    assert inspector.rule_version == "1.1.0"
     assert inspector.source_refs == ["alarm_all"]
     assert inspector.prepare is None
     assert {item["key"]: item["default"] for item in inspector.params} == PARAM_DEFAULTS
@@ -177,7 +211,7 @@ def metric_value(result: Any, key: str) -> Any:
 def uncleared_rows(prefix: str, code: str, starts: list[str]) -> list[str]:
     """构造同一分组的未清除记录（status 字段只作展示）。"""
     return [
-        alarm_row(f"{prefix}{index}", start, "", code=code, severity="CRITICAL", status="处理中", obj="pod-umf-9")
+        alarm_row(f"{prefix}{index}", start, "", code=code, severity="CRITICAL", status="处理中", obj="UMF核心服务")
         for index, start in enumerate(starts)
     ]
 
@@ -195,7 +229,7 @@ def test_cleared_repeated_group_produces_high_finding(tmp_path: Path) -> None:
         },
     )
     result = run_flapping(ctx)
-    group = group_detail(result, "1050", "pod-umf-9")
+    group = group_detail(result, "1050", "UMF核心服务")
     assert group["state"] == "cleared_repeated"
     assert group["repeated"] is True
     assert group["is_short"] is False
@@ -203,10 +237,10 @@ def test_cleared_repeated_group_produces_high_finding(tmp_path: Path) -> None:
     assert group["recent_cleared_at"] == "2026-09-02T10:50:00+08:00"
     assert group["observation_insufficient"] is False
     assert result.status.value == "fail"
-    assert [finding.finding_id for finding in result.findings] == ["alarm.flapping-cleared_repeated-1050-pod-umf-9"]
+    assert [finding.finding_id for finding in result.findings] == ["alarm.flapping-cleared_repeated-1050-UMF核心服务"]
     finding = result.findings[0]
     assert finding.severity.value == "high"
-    assert "分组 1050 / pod-umf-9" in finding.evidence
+    assert "分组 1050 / UMF核心服务" in finding.evidence
     assert "最短复发间隔 600 秒" in finding.evidence
     assert "3600" in finding.evidence
 
@@ -216,20 +250,20 @@ def test_single_short_alarm_produces_medium_finding(tmp_path: Path) -> None:
         tmp_path,
         {
             "alarm/a.csv": csv_text(
-                alarm_row("1", "2026-09-01 10:00:04", "2026-09-01 10:00:30", code="SCTP_LINK_DOWN", obj="umf-node-01"),
+                alarm_row("1", "2026-09-01 10:00:04", "2026-09-01 10:00:30", code="SCTP_LINK_DOWN", obj="UMF核心服务"),
                 alarm_row("9", "2026-09-01 12:00:00", "2026-09-01 12:20:00", code="9999", obj="other"),
             )
         },
     )
     result = run_flapping(ctx)
-    group = group_detail(result, "SCTP_LINK_DOWN", "umf-node-01")
+    group = group_detail(result, "SCTP_LINK_DOWN", "UMF核心服务")
     assert group["state"] == "cleared_short"
     assert group["is_short"] is True
     assert group["max_duration_sec"] == 26
     assert group["observation_gap_sec"] == 8370
     assert result.status.value == "warn"
     assert [finding.finding_id for finding in result.findings] == [
-        "alarm.flapping-cleared_short-SCTP_LINK_DOWN-umf-node-01"
+        "alarm.flapping-cleared_short-SCTP_LINK_DOWN-UMF核心服务"
     ]
     assert result.findings[0].severity.value == "medium"
 
@@ -245,7 +279,7 @@ def test_cleared_group_with_enough_observation_is_stable_and_silent(tmp_path: Pa
         },
     )
     result = run_flapping(ctx)
-    group = group_detail(result, "1050", "pod-umf-9")
+    group = group_detail(result, "1050", "UMF核心服务")
     assert group["state"] == "cleared_stable"
     assert group["repeated"] is False
     assert group["is_short"] is False
@@ -269,7 +303,7 @@ def test_operation_window_evidence_spans_days_without_downgrading_state(tmp_path
         },
     )
     result = run_flapping(ctx)
-    group = group_detail(result, "1050", "pod-umf-9")
+    group = group_detail(result, "1050", "UMF核心服务")
     assert group["state"] == "cleared_stable"
     assert group["in_window_occurrences"] == 1
     assert group["out_of_window_occurrences"] == 2
@@ -292,12 +326,12 @@ def test_finding_order_follows_state_priority_then_recent_seen_desc(tmp_path: Pa
     ]
     result = run_flapping(make_ctx(tmp_path, {"alarm/a.csv": csv_text(*rows)}))
     assert [finding.finding_id for finding in result.findings] == [
-        "alarm.flapping-uncleared_repeated-U_NEW-pod-umf-9",
-        "alarm.flapping-uncleared_repeated-U_OLD-pod-umf-9",
-        "alarm.flapping-cleared_repeated-R_NEW-pod-umf-9",
-        "alarm.flapping-cleared_repeated-R_OLD-pod-umf-9",
-        "alarm.flapping-cleared_short-S_NEW-pod-umf-9",
-        "alarm.flapping-cleared_short-S_OLD-pod-umf-9",
+        "alarm.flapping-uncleared_repeated-U_NEW-UMF核心服务",
+        "alarm.flapping-uncleared_repeated-U_OLD-UMF核心服务",
+        "alarm.flapping-cleared_repeated-R_NEW-UMF核心服务",
+        "alarm.flapping-cleared_repeated-R_OLD-UMF核心服务",
+        "alarm.flapping-cleared_short-S_NEW-UMF核心服务",
+        "alarm.flapping-cleared_short-S_OLD-UMF核心服务",
     ]
     assert [finding.severity.value for finding in result.findings] == [
         "critical",
@@ -321,14 +355,14 @@ def test_findings_are_capped_at_twenty(tmp_path: Path) -> None:
                 code=f"G{index:02d}",
                 severity="CRITICAL",
                 status="处理中",
-                obj="pod-umf-9",
+                obj="UMF核心服务",
             )
             for step in range(3)
         )
     result = run_flapping(make_ctx(tmp_path, {"alarm/a.csv": csv_text(*rows)}))
     assert len(result.findings) == 20
-    assert result.findings[0].finding_id == "alarm.flapping-uncleared_repeated-G24-pod-umf-9"
-    assert result.findings[-1].finding_id == "alarm.flapping-uncleared_repeated-G05-pod-umf-9"
+    assert result.findings[0].finding_id == "alarm.flapping-uncleared_repeated-G24-UMF核心服务"
+    assert result.findings[-1].finding_id == "alarm.flapping-uncleared_repeated-G05-UMF核心服务"
     metadata = result.metadata["alarm_flapping"]
     assert metadata["totals"]["findings_truncated"] is True
     assert metadata["state_counts"]["uncleared_repeated"] == 25
@@ -383,9 +417,9 @@ def test_uncleared_status_is_not_recovery_evidence(tmp_path: Path) -> None:
                 alarm_row("1", "2026-09-02 09:00:00", "2026-09-02 09:10:00", code="MIXED"),
                 alarm_row("2", "2026-09-02 09:20:00", "", code="MIXED", status="已处理"),
                 # 同分组：status=已处理/处理中但无清除时间，60 分钟内 3 次
-                alarm_row("3", "2026-09-02 00:10:00", "", code="1051", status="已处理", obj="pod-umf-9"),
-                alarm_row("4", "2026-09-02 00:40:00", "", code="1051", status="处理中", obj="pod-umf-9"),
-                alarm_row("5", "2026-09-02 01:00:00", "", code="1051", status="已处理", obj="pod-umf-9"),
+                alarm_row("3", "2026-09-02 00:10:00", "", code="1051", status="已处理", obj="UMF核心服务"),
+                alarm_row("4", "2026-09-02 00:40:00", "", code="1051", status="处理中", obj="UMF核心服务"),
+                alarm_row("5", "2026-09-02 01:00:00", "", code="1051", status="已处理", obj="UMF核心服务"),
                 alarm_row("9", "2026-09-02 06:00:00", "2026-09-02 06:20:00", code="ANCHOR", obj="other"),
             )
         },
@@ -393,13 +427,13 @@ def test_uncleared_status_is_not_recovery_evidence(tmp_path: Path) -> None:
     result = run_flapping(ctx)
     metadata = result.metadata["alarm_flapping"]
 
-    mixed = group_detail(result, "MIXED", "pod-umf-9")
+    mixed = group_detail(result, "MIXED", "UMF核心服务")
     assert mixed["cleared_count"] == 1
     assert mixed["uncleared_count"] == 1
     assert mixed["state"] == "uncleared_single"
     assert mixed["observation_insufficient"] is True
 
-    repeated = group_detail(result, "1051", "pod-umf-9")
+    repeated = group_detail(result, "1051", "UMF核心服务")
     assert repeated["state"] == "uncleared_repeated"
     assert repeated["cleared_count"] == 0
     assert repeated["uncleared_count"] == 3
@@ -411,7 +445,7 @@ def test_uncleared_status_is_not_recovery_evidence(tmp_path: Path) -> None:
 
     assert metadata["groups"][0]["alarm_code"] == "1051"
     assert result.status.value == "fail"
-    assert [finding.finding_id for finding in result.findings] == ["alarm.flapping-uncleared_repeated-1051-pod-umf-9"]
+    assert [finding.finding_id for finding in result.findings] == ["alarm.flapping-uncleared_repeated-1051-UMF核心服务"]
     assert result.findings[0].severity.value == "critical"
     assert "窗口后仍未恢复" in result.findings[0].evidence
 
@@ -451,7 +485,7 @@ def test_row_level_anomalies_are_excluded_without_breaking_other_groups(tmp_path
     )
     for reason in reasons:
         assert reason in notes
-    assert group_detail(result, "OK", "pod-umf-9")["state"] == "cleared_stable"
+    assert group_detail(result, "OK", "UMF核心服务")["state"] == "cleared_stable"
     assert result.status.value == "warn"
 
 
@@ -503,7 +537,7 @@ def test_unreadable_file_is_isolated(tmp_path: Path) -> None:
     assert metadata["totals"]["failed_files"] == 1
     assert metric_value(result, "failed_files") == 1
     assert any("解析失败" in note for note in metadata["notes"])
-    assert group_detail(result, "1050", "pod-umf-9")["state"] == "cleared_stable"
+    assert group_detail(result, "1050", "UMF核心服务")["state"] == "cleared_stable"
 
 
 @pytest.mark.parametrize(
@@ -526,7 +560,7 @@ def test_observation_window_boundary_blocks_false_stable(
         },
     )
     result = run_flapping(ctx)
-    group = group_detail(result, "1050", "pod-umf-9")
+    group = group_detail(result, "1050", "UMF核心服务")
     assert group["state"] == expected_state
     assert group["observation_insufficient"] is (expected_state == "observation_insufficient")
 
@@ -562,7 +596,7 @@ def threshold_rows() -> list[str]:
         alarm_row("f2", "2026-09-02 11:00:00", "2026-09-02 11:10:00", code="1052"),
         alarm_row("f3", "2026-09-02 11:30:00", "2026-09-02 11:40:00", code="1052"),
         alarm_row("f4", "2026-09-02 11:50:00", "2026-09-02 12:00:00", code="1052"),
-        alarm_row("f5", "2026-09-01 10:00:04", "2026-09-01 10:00:30", code="SCTP_LINK_DOWN", obj="umf-node-01"),
+        alarm_row("f5", "2026-09-01 10:00:04", "2026-09-01 10:00:30", code="SCTP_LINK_DOWN", obj="UMF核心服务"),
         alarm_row("f9", "2026-09-02 12:05:30", "2026-09-02 12:20:00", code="ANCHOR", obj="other"),
     ]
 
@@ -575,28 +609,28 @@ def test_min_repeat_count_threshold_changes_conclusions(flapping_params, tmp_pat
 
     flapping_params(min_repeat_count=4)
     changed = run_flapping(ctx)
-    assert group_detail(changed, "1051", "pod-umf-9")["state"] == "uncleared_single"
-    assert group_detail(changed, "1052", "pod-umf-9")["state"] == "observation_insufficient"
+    assert group_detail(changed, "1051", "UMF核心服务")["state"] == "uncleared_single"
+    assert group_detail(changed, "1052", "UMF核心服务")["state"] == "observation_insufficient"
     assert changed.status.value == "warn"
     assert [finding.finding_id for finding in changed.findings] == [
-        "alarm.flapping-cleared_short-SCTP_LINK_DOWN-umf-node-01"
+        "alarm.flapping-cleared_short-SCTP_LINK_DOWN-UMF核心服务"
     ]
     assert changed.metadata["alarm_flapping"]["policy"]["min_repeat_count"] == 4
-    assert registry.get("alarm.flapping").rule_version == "1.0.0"
+    assert registry.get("alarm.flapping").rule_version == "1.1.0"
 
     flapping_params(min_repeat_count=3)
     restored = run_flapping(ctx)
     assert restored.status.value == "fail"
     assert len(restored.findings) == 3
-    assert group_detail(restored, "1051", "pod-umf-9")["state"] == "uncleared_repeated"
+    assert group_detail(restored, "1051", "UMF核心服务")["state"] == "uncleared_repeated"
 
 
 def test_operation_window_can_be_disabled_without_changing_states(flapping_params, tmp_path: Path) -> None:
     ctx = make_ctx(tmp_path, {"alarm/a.csv": csv_text(*threshold_rows())})
     enabled = run_flapping(ctx)
     assert metric_value(enabled, "out_of_window_groups") >= 0
-    assert group_detail(enabled, "1051", "pod-umf-9")["unrecovered_after_window"] is True
-    assert group_detail(enabled, "1051", "pod-umf-9")["in_window_occurrences"] == 3
+    assert group_detail(enabled, "1051", "UMF核心服务")["unrecovered_after_window"] is True
+    assert group_detail(enabled, "1051", "UMF核心服务")["in_window_occurrences"] == 3
 
     flapping_params(operation_window_enabled=False)
     disabled = run_flapping(ctx)
@@ -611,6 +645,73 @@ def test_operation_window_can_be_disabled_without_changing_states(flapping_param
     ]
     assert metric_value(disabled, "out_of_window_groups") == 0
     assert metric_value(disabled, "unrecovered_after_window_groups") == 0
+
+
+def test_real_export_context_fields_are_surfaced_without_affecting_state(tmp_path: Path) -> None:
+    """真实导出的应用ID/定位信息/清除类型/事件类型/重复次数只作展示，不改变判定。"""
+    ctx = make_ctx(
+        tmp_path,
+        {
+            "alarm/a.csv": csv_text(
+                alarm_row(
+                    "1",
+                    "2026-09-02 10:00:00",
+                    "2026-09-02 10:00:10",
+                    app_id="9002",
+                    location="pod-umf-1",
+                    clear_type="自动清除",
+                    event_type="性能告警",
+                    repeat_count="3",
+                ),
+                alarm_row(
+                    "2",
+                    "2026-09-02 10:05:00",
+                    "2026-09-02 10:05:10",
+                    location="pod-umf-2",
+                    clear_type="手动清除",
+                    event_type="性能告警",
+                    repeat_count="2",
+                ),
+                alarm_row(
+                    "3",
+                    "2026-09-02 10:10:00",
+                    "2026-09-02 10:10:10",
+                    location="pod-umf-1",
+                    clear_type="自动清除",
+                    event_type="性能告警",
+                    repeat_count="",
+                ),
+                # 无上下文字段的历史行：展示层保持空，不推断任何定位信息。
+                alarm_row(
+                    "9",
+                    "2026-09-02 12:00:00",
+                    code="9999",
+                    obj="other",
+                    app_id="",
+                    event_type="",
+                    repeat_count="",
+                    location="",
+                ),
+            )
+        },
+    )
+    result = run_flapping(ctx)
+    group = group_detail(result, "1050", "UMF核心服务")
+    assert group["state"] == "cleared_repeated"
+    assert group["app_ids"] == ["9002"]
+    assert group["locations"] == ["pod-umf-1", "pod-umf-2"]
+    assert group["clear_types"] == ["自动清除", "手动清除"]
+    assert group["event_types"] == ["性能告警"]
+    assert group["source_repeat_max"] == 3
+    finding = next(item for item in result.findings if item.finding_id.endswith("-1050-UMF核心服务"))
+    assert "定位 pod-umf-1、pod-umf-2" in finding.evidence
+
+    bare = group_detail(result, "9999", "other")
+    assert bare["app_ids"] == []
+    assert bare["locations"] == []
+    assert bare["clear_types"] == []
+    assert bare["event_types"] == []
+    assert bare["source_repeat_max"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -131,6 +131,7 @@ def test_real_container_resource_and_alarm_rule_results(tmp_path: Path) -> None:
     assert alarm_result.status == RuleStatus.FAIL
     assert alarm_result.metrics[0].value == 22
     assert alarm_result.metrics[1].value == 11
+    # 真实导出使用中文级别，解析侧归一化为契约严重度键。
     assert alarm_result.metadata["severity_distribution"] == {
         "CRITICAL": 6,
         "HIGH": 8,
@@ -239,18 +240,25 @@ def test_real_alarm_flapping_contract_snapshot(tmp_path: Path) -> None:
 
     groups = {(group["alarm_code"], group["object"]): group for group in metadata["groups"]}
     assert len(groups) == 17
-    assert groups[("1051", "pod-umf-9")]["state"] == "uncleared_repeated"
-    assert groups[("1051", "pod-umf-9")]["unrecovered_after_window"] is True
-    assert groups[("1052", "pod-umf-9")]["state"] == "cleared_repeated"
-    assert groups[("1052", "pod-umf-9")]["min_repeat_gap_sec"] == 600
-    assert groups[("1052", "pod-umf-9")]["observation_gap_sec"] == 330
-    assert groups[("1053", "pod-umf-9")]["state"] == "observation_insufficient"
-    assert groups[("1053", "pod-umf-9")]["observation_gap_sec"] == 0
-    short = groups[("SCTP_LINK_DOWN", "umf-node-01")]
+    assert groups[("1051", "UMF核心服务")]["state"] == "uncleared_repeated"
+    assert groups[("1051", "UMF核心服务")]["unrecovered_after_window"] is True
+    assert groups[("1052", "UMF核心服务")]["state"] == "cleared_repeated"
+    assert groups[("1052", "UMF核心服务")]["min_repeat_gap_sec"] == 600
+    assert groups[("1052", "UMF核心服务")]["observation_gap_sec"] == 330
+    # 真实导出上下文（应用ID/定位信息/清除类型/事件类型/重复次数）只作展示，不参与判定。
+    assert groups[("1052", "UMF核心服务")]["app_ids"] == ["9002"]
+    assert groups[("1052", "UMF核心服务")]["locations"] == ["pod-umf-9"]
+    assert groups[("1052", "UMF核心服务")]["clear_types"] == ["自动清除"]
+    assert groups[("1052", "UMF核心服务")]["event_types"] == ["通信告警"]
+    assert groups[("1052", "UMF核心服务")]["source_repeat_max"] == 3
+    assert groups[("1001", "CSP核心服务")]["locations"] == ["paas-192.168.2.2"]
+    assert groups[("1053", "UMF核心服务")]["state"] == "observation_insufficient"
+    assert groups[("1053", "UMF核心服务")]["observation_gap_sec"] == 0
+    short = groups[("1002", "UMF核心服务")]
     assert short["state"] == "cleared_short"
     assert short["max_duration_sec"] == 26
     assert short["observation_gap_sec"] == 93900
-    cross_window = groups[("1050", "pod-umf-9")]
+    cross_window = groups[("1050", "UMF核心服务")]
     assert cross_window["state"] == "cleared_stable"
     assert cross_window["in_window_occurrences"] == 1
     assert cross_window["out_of_window_occurrences"] == 1
@@ -260,7 +268,9 @@ def test_real_alarm_flapping_contract_snapshot(tmp_path: Path) -> None:
     assert cross_window["observation_gap_sec"] == 33930
 
     assert [(finding.finding_id, finding.severity.value) for finding in result.findings] == [
-        ("alarm.flapping-uncleared_repeated-1051-pod-umf-9", "critical"),
-        ("alarm.flapping-cleared_repeated-1052-pod-umf-9", "high"),
-        ("alarm.flapping-cleared_short-SCTP_LINK_DOWN-umf-node-01", "medium"),
+        ("alarm.flapping-uncleared_repeated-1051-UMF核心服务", "critical"),
+        ("alarm.flapping-cleared_repeated-1052-UMF核心服务", "high"),
+        ("alarm.flapping-cleared_short-1002-UMF核心服务", "medium"),
     ]
+    for finding in result.findings:
+        assert "定位 pod-umf-9" in finding.evidence or "定位 umf-node-01" in finding.evidence

@@ -432,15 +432,17 @@ SQLite 单文件数据库（`data/patrolx.db`）在程序空闲时可直接复�
 
 `alarm.flapping`（`app/inspectors/alarm/flapping.py`）按 `alarm_code + object` 分组，单次遍历解析记录后聚合：
 
-1. 解析层：CSV 与 TXT 统一解码（UTF-8 / GB18030），字段名归一为小写去空白；时间兼容 ISO-8601 与
-   `YYYY-MM-DD HH:MM:SS`，无时区按 +08:00 解释；TXT 没有清除时间时按未清除处理。
+1. 解析层：CSV 与 TXT 统一解码（UTF-8 / GB18030，CSV 兼容 UTF-8 BOM），字段名归一为小写去空白后经别名表映射
+   真实导出中文表头（`应用名称` → `object`、`告警ID` → `alarm_code`、`发生时间` / `清除时间` → 生命周期起止等）；
+   时间兼容 ISO-8601 与 `YYYY-MM-DD HH:MM:SS`，无时区按 +08:00 解释；TXT 没有清除时间时按未清除处理。
 2. 清洗层：行级校验（时间不可解析、清除早于创建、缺 `alarm_code`）计入 `excluded_rows`；
    四元组 `alarm_id + created_at + alarm_code + object` 去重计入 `duplicate_rows`。
 3. 聚合成组：每条分组的记录按出现时间排序，计算出现/清除计数、首末时间、持续时长、最短复发间隔与闪断事件。
 4. 判定层：`_main_state()` 输出六态互斥主状态——未清除且反复（fail/CRITICAL）、未清除未反复（warn）、
    已清除但反复（fail/HIGH）、已清除但短告警（warn/MEDIUM）、观察窗不足（warn）、已清除且稳定（pass）。
-5. 证据层：Finding 文案携带分组键、出现分布、首末与最近清除时间、最短复发间隔、本次生效阈值、
-   操作窗证据与来源文件行号；`metadata.alarm_flapping` 输出 `policy`、`coverage`、`totals`、`state_counts` 与分组明细。
+5. 证据层：Finding 文案携带分组键、出现分布、首末与最近清除时间、最短复发间隔、定位信息（去重、最多展示 3 处）、
+   本次生效阈值、操作窗证据与来源文件行号；`metadata.alarm_flapping` 输出 `policy`、`coverage`、`totals`、`state_counts`
+   与分组明细，明细携带展示用 `app_ids` / `locations` / `event_types` / `clear_types` / `source_repeat_max`（不参与判定）。
 
 窗口与阈值口径：
 

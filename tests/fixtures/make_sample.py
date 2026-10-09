@@ -128,10 +128,12 @@ def _call_kpi_5_csv() -> str:
 
 FILES: dict[str, str] = {
     f"{BASE}/Alarm Information/alarm_history_202609010101137101.csv": (
-        "alarm_id,created_time,cleared_time,alarm_code,severity,status,object,description\n"
-        "1001,2026-09-01 10:00:01,,DB_CONNECTION_POOL_EXHAUSTED,CRITICAL,未处理,app-node-01,数据库连接池耗尽\n"
-        "1002,2026-09-01 10:00:04,2026-09-01 10:00:30,SCTP_LINK_DOWN,HIGH,处理中,app-node-01,SCTP链路中断\n"
-        "1003,2026-09-01 10:02:11,,CPU_USAGE_HIGH,MEDIUM,未处理,pod-app-1,CPU使用率偏高\n"
+        "告警流水号,应用ID,应用名称,告警ID,告警名称,告警级别,发生时间,清除时间,清除类型,事件类型,告警重复次数,"
+        "定位信息\n"
+        "1001,9001,应用服务,1001,数据库连接池耗尽,紧急,2026-09-01 10:00:01,,,通信告警,1,app-node-01\n"
+        "1002,9001,应用服务,1002,SCTP链路中断,严重,2026-09-01 10:00:04,2026-09-01 10:00:30,自动清除,通信告警,1,"
+        "app-node-01\n"
+        "1003,9001,应用服务,1003,CPU使用率偏高,重要,2026-09-01 10:02:11,,,性能告警,1,pod-app-1\n"
     ),
     f"{BASE}/Basic Information/system_info.ini": (
         "[app]\nname=app\nlog_level=INFO\n\n[system]\nnode_id=app-node-01\nregion=gd\ncollect_time=2026-09-01T10:00:00Z\n"

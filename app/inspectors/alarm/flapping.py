@@ -11,6 +11,7 @@ import csv
 import io
 import sys
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -86,7 +87,7 @@ inspector = Inspector(
     category=RuleCategory.ALARM,
     severity=Severity.HIGH,
     priority=Priority.P1,
-    rule_version="1.0.0",
+    rule_version="1.1.0",
     description=(
         "按 alarm_code + object 分组计算告警生命周期：识别短告警、反复闪断与未清除告警，"
         "并只在清除后观察窗充足且无复发时判为稳定恢复"
@@ -127,6 +128,12 @@ class AlarmRecord:
     severity: str
     status: str
     description: str
+    # 真实导出上下文：只用于展示与定位，不参与判定。
+    app_id: str
+    event_type: str
+    clear_type: str
+    location: str
+    repeat_count: int | None
     source_file: str
     line_no: int
     source_format: str
@@ -187,21 +194,76 @@ def _parse_time(value: str) -> datetime | None:
     return parsed
 
 
+# 真实告警 CSV 表头（App Problem Scene 导出）：
+# 告警流水号、应用ID、应用名称、告警ID、告警名称、告警级别、
+# 发生时间、清除时间、清除类型、事件类型、告警重复次数、定位信息。
+# 同时保留英文列名别名，兼容既有样例与测试内联构造的数据。
 _CSV_ALIASES: dict[str, tuple[str, ...]] = {
-    "alarm_id": ("alarm_id", "id"),
-    "created_time": ("created_time", "first_occurrence_time", "created_at"),
-    "cleared_time": ("cleared_time", "clear_time", "cleared_at"),
-    "alarm_code": ("alarm_code", "code"),
-    "object": ("object", "object_name"),
-    "severity": ("severity",),
-    "status": ("status",),
-    "description": ("description",),
+    "alarm_id": ("告警流水号", "alarm_id", "id", "流水号"),
+    "created_time": ("发生时间", "created_time", "first_occurrence_time", "created_at"),
+    "cleared_time": ("清除时间", "cleared_time", "clear_time", "cleared_at"),
+    "alarm_code": ("告警ID", "alarm_code", "code"),
+    "object": ("应用名称", "object", "object_name"),
+    "severity": ("告警级别", "severity"),
+    "status": ("status", "告警状态"),
+    "description": ("告警名称", "description"),
+    "app_id": ("应用ID", "app_id"),
+    "event_type": ("事件类型", "event_type"),
+    "clear_type": ("清除类型", "clear_type"),
+    "repeat_count": ("告警重复次数", "repeat_count"),
+    "location": ("定位信息", "location"),
 }
+
+# 真实样例的告警级别为中文口径；统一归一化为既有英文严重度取值。
+_SEVERITY_MAP: dict[str, str] = {
+    "紧急": "CRITICAL",
+    "严重": "HIGH",
+    "重要": "MEDIUM",
+    "次要": "LOW",
+    "提示": "LOW",
+    "critical": "CRITICAL",
+    "major": "HIGH",
+    "minor": "MEDIUM",
+    "warning": "LOW",
+    "high": "HIGH",
+    "medium": "MEDIUM",
+    "low": "LOW",
+}
+
+
+def _normalize_severity(value: str) -> str:
+    """把真实告警级别（中文或英文别名）归一化为契约严重度取值。"""
+    text = (value or "").strip()
+    if not text:
+        return ""
+    return _SEVERITY_MAP.get(text, _SEVERITY_MAP.get(text.lower(), text.upper()))
+
+
+def _parse_repeat_count(value: str) -> int | None:
+    """解析真实导出的“告警重复次数”；非法或负数取值按缺失处理。"""
+    text = (value or "").strip()
+    if not text:
+        return None
+    try:
+        count = int(text)
+    except ValueError:
+        return None
+    return count if count >= 0 else None
+
+
+def _unique_in_order(values: Iterable[str]) -> list[str]:
+    """按首次出现顺序去重，空值不保留。"""
+    seen: dict[str, None] = {}
+    for value in values:
+        text = (value or "").strip()
+        if text:
+            seen.setdefault(text, None)
+    return list(seen)
 
 
 def _pick(fields: dict[str, str], key: str) -> str:
     for alias in _CSV_ALIASES[key]:
-        value = fields.get(alias)
+        value = fields.get(alias.lower())
         if value:
             return value
     return ""
@@ -279,9 +341,15 @@ def _build_record(
         cleared_at=cleared_at,
         alarm_code=alarm_code,
         object=_pick(fields, "object"),
-        severity=_pick(fields, "severity"),
-        status=_pick(fields, "status"),
+        severity=_normalize_severity(_pick(fields, "severity")),
+        # 真实导出没有“状态”列：清除时间存在即视为已清除，未清除保持空状态。
+        status=_pick(fields, "status") or ("已清除" if cleared_at is not None else "未清除"),
         description=_pick(fields, "description"),
+        app_id=_pick(fields, "app_id"),
+        event_type=_pick(fields, "event_type"),
+        clear_type=_pick(fields, "clear_type"),
+        location=_pick(fields, "location"),
+        repeat_count=_parse_repeat_count(_pick(fields, "repeat_count")),
         source_file=source_file,
         line_no=line_no,
         source_format=source_format,
@@ -523,6 +591,15 @@ class GroupFacts:
         return {
             "alarm_code": self.alarm_code,
             "object": self.object,
+            # 真实导出上下文：供展示与定位，不参与状态判定。
+            "app_ids": _unique_in_order(record.app_id for record in self.records),
+            "locations": _unique_in_order(record.location for record in self.records),
+            "event_types": _unique_in_order(record.event_type for record in self.records),
+            "clear_types": _unique_in_order(record.clear_type for record in self.records),
+            "source_repeat_max": max(
+                (record.repeat_count for record in self.records if record.repeat_count is not None),
+                default=None,
+            ),
             "state": self.state,
             "occurrence_count": self.occurrence_count,
             "cleared_count": self.cleared_count,
@@ -659,6 +736,10 @@ def _finding_evidence(facts: GroupFacts, policy: FlappingPolicy, window: Operati
         f"闪断间隔 {policy.flap_gap_sec} 秒、稳定观察窗 {policy.stable_observation_sec} 秒",
         window_text,
     ]
+    locations = _unique_in_order(record.location for record in facts.records)
+    if locations:
+        shown = "、".join(locations[:3])
+        parts.append(f"定位 {shown}{f' 等 {len(locations)} 处' if len(locations) > 3 else ''}")
     if facts.out_of_window_reappear:
         parts.append("窗口外再现")
     if facts.unrecovered_after_window:

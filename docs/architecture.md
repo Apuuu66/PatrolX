@@ -659,8 +659,13 @@ Windows 上推荐使用 Git Bash 或 WSL。YAML 中的 `source_patterns` 必须�
 `alarm.flapping`（P1）与 `alarm.stat` 共用 `scan_rules.yaml` 的 `alarm_all` 扫描组，但各自读取匹配文件、
 互不依赖、不消费对方结果：`alarm.stat` 只做总量与未处理统计，`alarm.flapping` 负责生命周期结论。
 
-- 分组键为 `alarm_code + object`；`object` 为空归入"对象未知"分组，不丢弃记录。
-- 恢复证据只来自清除时间与观察窗；CSV 的 `status` 字段（`已处理` / `处理中`）只做展示，绝不作为恢复依据。
+- 分组键为 `alarm_code + object`（对应真实导出的 `告警ID + 应用名称`）；`object` 为空归入"对象未知"分组，不丢弃记录。
+- 告警 CSV 以真实导出表头为准（`告警流水号,应用ID,应用名称,告警ID,告警名称,告警级别,发生时间,清除时间,清除类型,事件类型,告警重复次数,定位信息`），
+  解析层同时保留英文列名别名；`告警级别` 的中文口径（`紧急` / `严重` / `重要` / `次要`）归一化为 `CRITICAL` / `HIGH` / `MEDIUM` / `LOW`。
+- 恢复证据只来自清除时间与观察窗；真实导出没有独立状态列，`status` 只由清除时间推断（`已清除` / `未清除`）并用于展示，
+  绝不作为恢复依据。
+- `应用ID`、`定位信息`、`事件类型`、`清除类型`、`告警重复次数` 只进入展示字段（`groups[].app_ids` / `locations` /
+  `event_types` / `clear_types` / `source_repeat_max`）与 Finding 定位文案，不参与任何判定或版本口径。
 - 覆盖窗口：`start_at = min(created_at)`、`end_at = max(cleared_at ?? created_at)`、`span_sec` 为整数秒。
 - 观察窗：`observation_gap_sec = end_at - recent_cleared_at`；未清除、无清除时间或
   `observation_gap_sec < stable_observation_sec`（默认 1800 秒）时标记 `observation_insufficient`，
