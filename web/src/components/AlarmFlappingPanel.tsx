@@ -133,15 +133,17 @@ function GroupFlags({ group }: { group: AlarmFlappingGroup }) {
   );
 }
 
-const columns: ColumnsType<AlarmFlappingGroup> = [
+const ALL_COLUMNS: ColumnsType<AlarmFlappingGroup> = [
   {
     title: "分组",
+    key: "group",
     dataIndex: "alarm_code",
     width: 180,
     render: (_value, group) => <GroupKey group={group} />,
   },
   {
     title: "结论",
+    key: "state",
     dataIndex: "state",
     width: 120,
     render: (state: string) => {
@@ -151,6 +153,7 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   },
   {
     title: "出现次数",
+    key: "occurrence_count",
     dataIndex: "occurrence_count",
     width: 150,
     render: (count: number, group) => (
@@ -164,6 +167,7 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   },
   {
     title: "首次 / 最近出现",
+    key: "first_seen_at",
     dataIndex: "first_seen_at",
     width: 190,
     render: (_value, group) => (
@@ -180,6 +184,7 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   },
   {
     title: "最短复发间隔",
+    key: "min_repeat_gap_sec",
     dataIndex: "min_repeat_gap_sec",
     width: 130,
     render: (value: number | null) => <GapCell value={value} />,
@@ -212,7 +217,17 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   },
 ];
 
-export function AlarmFlappingPanel({ metadata }: { metadata: AlarmFlappingMetadata }) {
+/** 精简列下隐藏的明细列：完整时间线与来源文件仍可通过"显示全部列"查看（FR-022）。 */
+const DETAIL_COLUMN_KEYS = new Set(["first_seen_at", "evidence"]);
+
+export function AlarmFlappingPanel({
+  metadata,
+  showAllColumns = false,
+}: {
+  metadata: AlarmFlappingMetadata;
+  /** 证据面板的"显示全部列"开关；默认精简列（FR-022）。 */
+  showAllColumns?: boolean;
+}) {
   const groups = [...(metadata.groups ?? [])]
     .map((group, index) => ({ group, index }))
     .sort((left, right) => {
@@ -280,10 +295,14 @@ export function AlarmFlappingPanel({ metadata }: { metadata: AlarmFlappingMetada
         <Table
           rowKey={(group) => `${group.alarm_code}-${group.object ?? "unknown"}`}
           size="small"
-          columns={columns}
+          columns={
+            showAllColumns
+              ? ALL_COLUMNS
+              : ALL_COLUMNS.filter((column) => !DETAIL_COLUMN_KEYS.has(String(column.key)))
+          }
           dataSource={groups}
           pagination={groups.length > 20 ? { pageSize: 20, showSizeChanger: false } : false}
-          scroll={{ x: 1110 }}
+          scroll={{ x: showAllColumns ? 1110 : 770 }}
         />
       )}
       {(metadata.notes ?? []).length > 0 && (

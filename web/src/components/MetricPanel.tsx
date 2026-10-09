@@ -10,7 +10,14 @@ function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-export function MetricPanel({ metrics }: { metrics: Metric[] }) {
+export function MetricPanel({
+  metrics,
+  showAllColumns = false,
+}: {
+  metrics: Metric[];
+  /** 证据面板的"显示全部列"开关；默认精简列（FR-022）。 */
+  showAllColumns?: boolean;
+}) {
   if (!metrics?.length) {
     return <Typography.Text type="secondary">无指标数据</Typography.Text>;
   }
@@ -43,7 +50,9 @@ export function MetricPanel({ metrics }: { metrics: Metric[] }) {
       {trend.map((m) => (
         <TrendChart key={m.key} metric={m} />
       ))}
-      {metrics.every((m) => !isNumber(m.value)) && <FallbackTable metrics={metrics} />}
+      {metrics.every((m) => !isNumber(m.value)) && (
+        <FallbackTable metrics={metrics} showAllColumns={showAllColumns} />
+      )}
     </div>
   );
 }
@@ -83,7 +92,7 @@ function TrendChart({ metric }: { metric: Metric }) {
   );
 }
 
-function FallbackTable({ metrics }: { metrics: Metric[] }) {
+function FallbackTable({ metrics, showAllColumns }: { metrics: Metric[]; showAllColumns: boolean }) {
   const rows = metrics
     .filter((m) => !isNumber(m.value))
     .map((m) => ({
@@ -94,18 +103,19 @@ function FallbackTable({ metrics }: { metrics: Metric[] }) {
       threshold: m.threshold ? JSON.stringify(m.threshold) : "-",
     }));
   if (!rows.length) return null;
+  const columns = [
+    { title: "指标", key: "label", dataIndex: "label" },
+    { title: "值", key: "value", dataIndex: "value" },
+    { title: "单位", key: "unit", dataIndex: "unit" },
+    ...(showAllColumns ? [{ title: "阈值", key: "threshold", dataIndex: "threshold" }] : []),
+  ];
   return (
     <Table
       size="small"
       style={{ marginTop: 12 }}
       dataSource={rows}
       pagination={false}
-      columns={[
-        { title: "指标", dataIndex: "label" },
-        { title: "值", dataIndex: "value" },
-        { title: "单位", dataIndex: "unit" },
-        { title: "阈值", dataIndex: "threshold" },
-      ]}
+      columns={columns}
     />
   );
 }

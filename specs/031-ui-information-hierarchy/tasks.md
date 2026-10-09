@@ -97,12 +97,12 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 
 **独立测试**：`cd web && npx playwright test e2e/alarm-flapping-rule-detail.spec.ts`。
 
-- [ ] T028 [P] [US3] 迁移并扩展 `web/e2e/alarm-flapping-rule-detail.spec.ts`：结论与建议首屏可见、证据顺序、"显示全部列"切换、skip 原因可见（FR-020~FR-023）
-- [ ] T029 [US3] 重构 `web/src/pages/RuleDetailPage.tsx` 顺序：结论 + 建议 → 源文件匹配 → 发现 → 证据面板（`MetricPanel` / `MeasurementInspectionPanel` / `AlarmFlappingPanel` 按条件渲染）→ 折叠技术信息（展开后可查看完整字段并复制，FR-005、FR-020、R6）
-- [ ] T030 [US3] 在 `web/src/pages/RuleDetailPage.tsx` 保证 `skip` 必显 `skip_reason`（为空时给兜底文案），不得静默通过（FR-021、边界情况）
-- [ ] T031 [US3] 在 `web/src/pages/RuleDetailPage.tsx` 将指标表默认精简列并保留"显示全部列"切换；不改面板内部判定与数据来源（FR-022、R6）
-- [ ] T032 [US3] 在 `web/src/pages/RuleDetailPage.tsx` 把单规则重跑入口上移到首屏，保持进行中状态可见与完成仅刷新本页结果（FR-023）
-- [ ] T033 [P] [US3] 补充单测 `web/src/pages/RuleDetailPage.test.tsx`：区块顺序、skip 原因渲染、精简列默认值（T029~T032 完成后）
+- [X] T028 [P] [US3] 迁移并扩展 `web/e2e/alarm-flapping-rule-detail.spec.ts`：结论与建议首屏可见、证据顺序、"显示全部列"切换、skip 原因可见（FR-020~FR-023）
+- [X] T029 [US3] 重构 `web/src/pages/RuleDetailPage.tsx` 顺序：结论 + 建议 → 源文件匹配 → 发现 → 证据面板（`MetricPanel` / `MeasurementInspectionPanel` / `AlarmFlappingPanel` 按条件渲染）→ 折叠技术信息（展开后可查看完整字段并复制，FR-005、FR-020、R6）
+- [X] T030 [US3] 在 `web/src/pages/RuleDetailPage.tsx` 保证 `skip` 必显 `skip_reason`（为空时给兜底文案），不得静默通过（FR-021、边界情况）
+- [X] T031 [US3] 在 `web/src/pages/RuleDetailPage.tsx` 将指标表默认精简列并保留"显示全部列"切换；不改面板内部判定与数据来源（FR-022、R6）
+- [X] T032 [US3] 在 `web/src/pages/RuleDetailPage.tsx` 把单规则重跑入口上移到首屏，保持进行中状态可见与完成仅刷新本页结果（FR-023）
+- [X] T033 [P] [US3] 补充单测 `web/src/pages/RuleDetailPage.test.tsx`：区块顺序、skip 原因渲染、精简列默认值（T029~T032 完成后）
 
 **检查点**：规则详情顺序符合契约；skip 原因可见；重跑入口首屏可及。
 

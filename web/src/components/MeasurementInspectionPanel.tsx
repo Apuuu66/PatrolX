@@ -69,6 +69,9 @@ const TREND_SIGNAL_COLORS: Record<string, string> = {
   none: "blue",
 };
 
+/** 精简列下隐藏的行对象明细列（FR-022）。 */
+const OBJECT_DETAIL_COLUMN_KEYS = new Set(["null_count", "parse_error_count", "avg_value"]);
+
 const TREND_SIGNAL_LABELS: Record<string, string> = {
   improved: "改善",
   worsened: "恶化",
@@ -159,10 +162,13 @@ export function MeasurementInspectionPanel({
   metadata,
   taskId,
   ruleCode,
+  showAllColumns = false,
 }: {
   metadata?: Record<string, unknown>;
   taskId?: string;
   ruleCode?: string;
+  /** 证据面板的"显示全部列"开关；默认精简列（FR-022）。 */
+  showAllColumns?: boolean;
 }) {
   const [metricDetails, setMetricDetails] = useState<Record<string, MeasurementMetricDetail | undefined>>({});
   const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({});
@@ -302,7 +308,7 @@ export function MeasurementInspectionPanel({
                   render: (value: string) => IMPORTANCE_LABELS[value] ?? "普通",
                 },
                 { title: "CSV 列名", dataIndex: "raw_source_name", key: "raw_source_name" },
-                { title: "单位", dataIndex: "display_unit", key: "display_unit", render: (value) => value || "-" },
+                { title: "单位", dataIndex: "display_unit", key: "display_unit", render: (value: string) => value || "-" },
                 {
                   title: "可读性",
                   key: "read_status",
@@ -340,7 +346,7 @@ export function MeasurementInspectionPanel({
                     </Space>
                   ),
                 },
-              ]}
+              ].filter((column) => showAllColumns || column.key !== "raw_source_name")}
               dataSource={metrics}
               pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: false }}
               expandable={{
@@ -384,7 +390,19 @@ export function MeasurementInspectionPanel({
                       ) : null}
                       {displayMetric.trends?.length ? <TrendTable trends={displayMetric.trends} /> : null}
                       {displayMetric.observations?.length ? (
-                        <Table rowKey="object_key" size="small" columns={objectColumns} dataSource={displayMetric.observations} pagination={false} />
+                        <Table
+                          rowKey="object_key"
+                          size="small"
+                          columns={
+                            showAllColumns
+                              ? objectColumns
+                              : objectColumns.filter(
+                                  (column) => !OBJECT_DETAIL_COLUMN_KEYS.has(String(column.key)),
+                                )
+                          }
+                          dataSource={displayMetric.observations}
+                          pagination={false}
+                        />
                       ) : (
                         <Typography.Text type="secondary">没有行数据</Typography.Text>
                       )}

@@ -416,3 +416,61 @@
   border-top: 1px solid var(--border-color-split);
   padding-top: var(--space-2);
 }
+
+.rule-detail-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.rule-detail-panel {
+  margin-bottom: var(--space-4);
+}
+
+.rule-detail-recommendation {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.rule-detail-recommendation-label {
+  flex: 0 0 auto;
+  font-size: var(--font-size-caption);
+}
+
+.rule-detail-skip,
+.rule-detail-rerun-progress {
+  margin-top: var(--space-2);
+}
+
+.rule-source-pattern {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-size-caption);
+}
+
+.rule-finding {
+  width: 100%;
+}
+
+.rule-finding-body {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+}
+
+.rule-evidence-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.rule-evidence-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.rule-evidence-title.ant-typography {
+  font-size: var(--font-size-section);
+}

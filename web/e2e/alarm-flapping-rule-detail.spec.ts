@@ -1,13 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 const TASK_ID = "task-alarm-flapping-e2e";
-const CARD_TITLE = "告警生命周期分组";
+const SECTION_ORDER = [
+  "rule-section-conclusion",
+  "rule-section-source-patterns",
+  "rule-section-findings",
+  "rule-section-evidence",
+  "rule-section-technical",
+];
 
-test("告警闪断规则详情展示四类生命周期结论与三条 Finding", async ({ page }) => {
+function collectPageErrors(page: import("@playwright/test").Page) {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   const apiErrors: string[] = [];
-
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
@@ -17,12 +22,37 @@ test("告警闪断规则详情展示四类生命周期结论与三条 Finding", 
       apiErrors.push(`${response.status()} ${response.url()}`);
     }
   });
+  return { consoleErrors, pageErrors, apiErrors };
+}
 
+test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发现 → 证据 → 技术信息组织", async ({ page }) => {
+  const { consoleErrors, pageErrors, apiErrors } = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/tasks/${TASK_ID}/rules/alarm.flapping`);
 
-  // 顶部 Finding 列表：CRITICAL / HIGH / MEDIUM 三条证据可见（SC-008）。
-  const findingsCard = page.locator(".ant-card").filter({ hasText: "发现（3）" });
-  await expect(findingsCard).toBeVisible();
+  // 结论区首屏可见：状态、严重度、结论摘要、处理建议与重跑入口（FR-020、FR-023、SC-004）。
+  const conclusion = page.getByTestId("rule-section-conclusion");
+  await expect(conclusion).toBeVisible();
+  await expect(conclusion.getByText("FAIL")).toBeVisible();
+  await expect(conclusion.getByText("high")).toBeVisible();
+  await expect(conclusion.getByText("告警生命周期判定完成", { exact: false })).toBeVisible();
+  await expect(conclusion.getByTestId("rule-recommendation")).toBeVisible();
+  await expect(page.getByTestId("rule-section-source-patterns")).toBeInViewport();
+  await expect(page.getByRole("button", { name: "重跑本规则" })).toBeInViewport();
+
+  // 证据顺序（FR-020）。
+  const order = await page
+    .locator('[data-testid^="rule-section-"]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
+  expect(order).toEqual(SECTION_ORDER);
+
+  // 源文件匹配：规则声明的 source_patterns 上移为独立区块。
+  const sourcePatterns = page.getByTestId("rule-section-source-patterns");
+  await expect(sourcePatterns).toContainText("alarm");
+
+  // 发现列表：CRITICAL / HIGH / MEDIUM 三条证据可见（SC-008）。
+  const findingsCard = page.getByTestId("rule-section-findings");
+  await expect(findingsCard).toContainText("发现（3）");
   for (const severity of ["critical", "high", "medium"]) {
     await expect(findingsCard.locator(".ant-tag").filter({ hasText: severity })).toHaveCount(1);
   }
@@ -32,18 +62,18 @@ test("告警闪断规则详情展示四类生命周期结论与三条 Finding", 
   await expect(findingsCard.getByText("定位 pod-umf-9", { exact: false }).first()).toBeVisible();
   await expect(findingsCard.getByText("定位 umf-node-01", { exact: false }).first()).toBeVisible();
 
-  // 生命周期分组卡片：六态分布 + 分组明细（SC-005）。
-  const panel = page.locator(".ant-card").filter({ hasText: CARD_TITLE });
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText("未清除且反复 1")).toBeVisible();
-  await expect(panel.getByText("未清除未反复 8")).toBeVisible();
-  await expect(panel.getByText("已清除但反复 1")).toBeVisible();
-  await expect(panel.getByText("已清除但短告警 1")).toBeVisible();
-  await expect(panel.getByText("观察窗不足 1")).toBeVisible();
-  await expect(panel.getByText("已清除且稳定 5")).toBeVisible();
-  await expect(panel.getByText("告警分组")).toBeVisible();
+  // 证据面板：六态分布 + 分组明细（SC-005）。
+  const evidence = page.getByTestId("rule-section-evidence");
+  await expect(evidence).toContainText("告警生命周期分组");
+  await expect(evidence.getByText("未清除且反复 1")).toBeVisible();
+  await expect(evidence.getByText("未清除未反复 8")).toBeVisible();
+  await expect(evidence.getByText("已清除但反复 1")).toBeVisible();
+  await expect(evidence.getByText("已清除但短告警 1")).toBeVisible();
+  await expect(evidence.getByText("观察窗不足 1")).toBeVisible();
+  await expect(evidence.getByText("已清除且稳定 5")).toBeVisible();
+  await expect(evidence.getByRole("columnheader", { name: "分组", exact: true })).toBeVisible();
 
-  const rows = panel.locator(".ant-table-tbody tr:not(.ant-table-measure-row)");
+  const rows = evidence.locator(".ant-table-tbody tr:not(.ant-table-measure-row)");
   await expect(rows).toHaveCount(17);
 
   // 结论分类：未恢复 / 反复闪断 / 单次短告警 / 稳定恢复
@@ -66,7 +96,103 @@ test("告警闪断规则详情展示四类生命周期结论与三条 Finding", 
   const insufficient = rows.filter({ hasText: "1053" });
   await expect(insufficient).toContainText("观察窗不足");
 
+  // 指标表默认精简列，"显示全部列"可切换（FR-022）。
+  const columnToggle = page.getByRole("switch", { name: "显示全部列" });
+  await expect(columnToggle).toBeVisible();
+  await expect(evidence.getByRole("columnheader", { name: "来源" })).toHaveCount(0);
+  await expect(evidence.getByRole("columnheader", { name: "首次 / 最近出现" })).toHaveCount(0);
+  await expect(evidence.getByRole("columnheader", { name: "结论" })).toBeVisible();
+
+  await columnToggle.click();
+  await expect(evidence.getByRole("columnheader", { name: "来源" })).toBeVisible();
+  await expect(evidence.getByRole("columnheader", { name: "首次 / 最近出现" })).toBeVisible();
+
+  await columnToggle.click();
+  await expect(evidence.getByRole("columnheader", { name: "来源" })).toHaveCount(0);
+
+  // 技术信息默认折叠，展开后可见完整字段（FR-005）。
+  const technical = page.getByTestId("rule-section-technical");
+  await expect(technical.getByText("技术信息")).toBeVisible();
+  await expect(technical.getByText("规则版本")).toHaveCount(0);
+  await technical.getByText("技术信息").click();
+  await expect(technical.getByText("规则版本")).toBeVisible();
+
   expect(pageErrors).toEqual([]);
   expect(apiErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
+});
+
+test("skip 规则详情必须展示跳过原因", async ({ page }) => {
+  await page.goto(`/tasks/${TASK_ID}/rules/traffic.stat`);
+
+  const conclusion = page.getByTestId("rule-section-conclusion");
+  await expect(conclusion.getByText("SKIP")).toBeVisible();
+  await expect(page.getByTestId("rule-skip-reason")).toContainText("source_patterns 未匹配到文件");
+  await expect(page.getByTestId("rule-skip-reason")).toContainText("^traffic/.*$");
+});
+
+test("规则详情重跑入口在执行中可见，完成后只刷新本页结果", async ({ page }) => {
+  const ruleTask = "task-rule-detail-rerun-e2e";
+  let accepted = false;
+  let taskPolls = 0;
+
+  const ruleResult = (summary: string, duration: number, executedAt: string) => ({
+    code: "config.a",
+    name: "配置一致性",
+    category: "config",
+    priority: 1,
+    execution_order: 0,
+    status: "fail",
+    severity: "high",
+    summary,
+    skip_reason: null,
+    executed_at: executedAt,
+    duration_ms: duration,
+    metrics: [],
+    findings: [],
+    metadata: {},
+  });
+
+  await page.route("**/api/v2/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/rerun")) {
+      accepted = true;
+      return route.fulfill({ status: 202, json: { task_id: ruleTask } });
+    }
+    if (url.pathname.endsWith("/api/v2/inspectors")) return route.fulfill({ json: [] });
+    if (url.pathname.endsWith(`/api/v2/tasks/${ruleTask}/rules/config.a`)) {
+      return route.fulfill({
+        json: ruleResult(
+          accepted ? "重跑完成：配置不一致" : "配置不一致",
+          accepted ? 99 : 12,
+          accepted ? "2026-10-10T01:00:00Z" : "2026-10-10T00:00:00Z",
+        ),
+      });
+    }
+    if (url.pathname.endsWith(`/api/v2/tasks/${ruleTask}`)) {
+      taskPolls += 1;
+      return route.fulfill({
+        json: {
+          task_id: ruleTask,
+          name: "规则详情重跑任务",
+          mode: "local",
+          status: taskPolls === 1 ? "running" : "completed",
+          trigger: "ui",
+          created_at: "2026-10-10T00:00:00Z",
+          completed_at: taskPolls === 1 ? null : "2026-10-10T01:00:00Z",
+          stats: { total: 1, pass: 0, warn: 0, fail: 1, error: 0, skip: 0, systems: 1 },
+        },
+      });
+    }
+    return route.fulfill({ json: {} });
+  });
+
+  await page.goto(`/tasks/${ruleTask}/rules/config.a`);
+  await expect(page.getByText("配置不一致", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "重跑本规则" }).click();
+
+  await expect(page.getByTestId("rule-rerun-progress")).toBeVisible();
+  await expect(page.getByText("重跑完成：配置不一致", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("rule-rerun-progress")).toHaveCount(0);
 });
