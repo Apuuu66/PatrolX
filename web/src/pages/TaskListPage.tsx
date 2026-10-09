@@ -62,6 +62,11 @@ import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageStat
 import { PageHeader } from "../components/PageHeader";
 import { DensitySegmented } from "../components/DensitySegmented";
 import { useTableDensity } from "../hooks/useTableDensity";
+import {
+  deriveTaskIdPreview,
+  formatFileSize,
+  validatePackageFile,
+} from "../utils/uploadPrecheck";
 
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "全部" },
@@ -294,6 +299,25 @@ export function TaskListPage() {
   const { density, tableSize, setDensity } = useTableDensity();
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
 
+  const [uploadConflict, setUploadConflict] = useState<{ taskId: string; message: string } | null>(null);
+
+  // 上传前置校验：与后端同规则派生任务 ID，并前移格式 / 空文件 / 超限 / 超长校验（FR-023、R16）。
+  const uploadPrecheck = useMemo(() => {
+    if (!file) return null;
+    const info = { name: file.name, size: file.size };
+    return {
+      taskId: deriveTaskIdPreview(file.name),
+      fileSize: formatFileSize(file.size),
+      validation: validatePackageFile(info),
+    };
+  }, [file]);
+
+  // 当前已加载列表内出现同名任务：提交前给出说明与"查看已有任务"入口（FR-024，不新增接口调用）。
+  const uploadDuplicate = useMemo(
+    () => (uploadPrecheck ? items.find((item) => item.task_id === uploadPrecheck.taskId) ?? null : null),
+    [items, uploadPrecheck],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -353,15 +377,25 @@ export function TaskListPage() {
         if (values.operator) fd.append("operator", values.operator);
         if (values.product) fd.append("product", values.product);
       }
+      const knownDuplicate = items.some(
+        (item) => item.task_id === (uploadPrecheck?.taskId ?? deriveTaskIdPreview(file.name)),
+      );
       const created = await api.createTaskV3(fd);
-      message.success("任务已创建，开始执行");
+      message.success(
+        knownDuplicate ? "同名数据包已存在，将打开已有任务" : "任务已创建，开始执行",
+      );
+      setUploadConflict(null);
       setOpen(false);
       setFile(null);
       form.resetFields();
       navigate(`/tasks/${created.task_id}`);
     } catch (err) {
       if (err instanceof ApiError && err.code === "package_checksum_conflict") {
-        message.error("同名任务已存在，但数据包 checksum 不同，请修改压缩包文件名或删除旧任务");
+        // 冲突提示落在弹窗内，附带两个明确的下一步动作（FR-024）。
+        setUploadConflict({
+          taskId: uploadPrecheck?.taskId ?? deriveTaskIdPreview(file.name),
+          message: err.message,
+        });
       } else {
         message.error(err instanceof Error ? err.message : "创建失败");
       }
@@ -812,6 +846,9 @@ export function TaskListPage() {
         open={open}
         confirmLoading={submitting}
         onOk={() => void submitUpload()}
+        okButtonProps={{
+          disabled: !file || !uploadPrecheck?.validation.valid || submitting,
+        }}
         onCancel={() => {
           setOpen(false);
           setFile(null);
@@ -827,14 +864,135 @@ export function TaskListPage() {
               accept=".zip,.tar,.gz,.tgz,.tar.gz"
               beforeUpload={(f) => {
                 setFile(f);
+                setUploadConflict(null);
                 return false;
               }}
-              onRemove={() => setFile(null)}
+              onRemove={() => {
+                setFile(null);
+                setUploadConflict(null);
+              }}
             >
               <p>点击或拖拽压缩包到此处</p>
               <p style={{ color: "#999", fontSize: 12 }}>zip / tar.gz，默认上限 2GB</p>
             </Upload.Dragger>
           </Form.Item>
+          {uploadConflict && (
+            <div className="upload-conflict" data-testid="upload-conflict">
+              <Alert
+                type="error"
+                showIcon
+                message="同名任务已存在，数据包 checksum 不同"
+                description={
+                  <Flex vertical gap={8}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      任务 {uploadConflict.taskId} 已使用另一个数据包，继续提交不会覆盖已有结果。
+                      请修改本地压缩包文件名后重新选择，或直接查看已有任务。
+                    </Typography.Text>
+                    <Space size={8} wrap>
+                      <Button
+                        size="small"
+                        icon={<RedoOutlined />}
+                        onClick={() => {
+                          setFile(null);
+                          setUploadConflict(null);
+                          message.info("请修改本地压缩包文件名后重新选择数据包");
+                        }}
+                      >
+                        修改文件名
+                      </Button>
+                      <Button
+                        size="small"
+                        type="link"
+                        onClick={() => {
+                          const taskId = uploadConflict.taskId;
+                          setOpen(false);
+                          setFile(null);
+                          setUploadConflict(null);
+                          form.resetFields();
+                          navigate(`/tasks/${taskId}`);
+                        }}
+                      >
+                        查看已有任务
+                      </Button>
+                    </Space>
+                  </Flex>
+                }
+              />
+            </div>
+          )}
+          {uploadPrecheck && (
+            <div
+              className="upload-precheck"
+              data-testid="upload-precheck"
+              data-precheck-valid={uploadPrecheck.validation.valid ? "true" : "false"}
+            >
+              <Flex vertical gap={6}>
+                <Flex align="center" gap={8} wrap="wrap">
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    任务 ID 预览
+                  </Typography.Text>
+                  <Typography.Text
+                    code
+                    className="upload-precheck-task-id"
+                    data-testid="upload-task-id-preview"
+                  >
+                    {uploadPrecheck.taskId}
+                  </Typography.Text>
+                </Flex>
+                <Flex align="center" gap={8} wrap="wrap">
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    文件大小
+                  </Typography.Text>
+                  <Typography.Text data-testid="upload-file-size">
+                    {uploadPrecheck.fileSize}
+                  </Typography.Text>
+                </Flex>
+                <Alert
+                  type={uploadPrecheck.validation.valid ? "success" : "error"}
+                  showIcon
+                  message={
+                    uploadPrecheck.validation.valid
+                      ? "校验通过，可以提交"
+                      : "校验未通过，请先修正后再提交"
+                  }
+                  description={
+                    uploadPrecheck.validation.valid ? undefined : (
+                      <ul className="upload-precheck-reasons">
+                        {uploadPrecheck.validation.messages.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    )
+                  }
+                />
+              </Flex>
+            </div>
+          )}
+          {uploadDuplicate && (
+            <div className="upload-duplicate-hint" data-testid="upload-existing-task-hint">
+              <Flex align="center" gap={8} wrap="wrap">
+                <InfoCircleOutlined className="upload-duplicate-icon" role="img" aria-label="同名任务提示" />
+                <Typography.Text style={{ fontSize: 12 }}>
+                  同名任务已存在：checksum 相同时提交将打开已有任务，不同时会提示冲突。
+                </Typography.Text>
+                <Button
+                  size="small"
+                  type="link"
+                  style={{ paddingInline: 0 }}
+                  onClick={() => {
+                    const taskId = uploadDuplicate.task_id;
+                    setOpen(false);
+                    setFile(null);
+                    setUploadConflict(null);
+                    form.resetFields();
+                    navigate(`/tasks/${taskId}`);
+                  }}
+                >
+                  查看已有任务
+                </Button>
+              </Flex>
+            </div>
+          )}
           <Form.Item label="包类型" name="package_kind" initialValue="inspection">
             <Select
               options={[

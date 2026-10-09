@@ -937,3 +937,37 @@
   outline-offset: 2px;
 }
 
+/* 上传前置反馈（FR-023、FR-024、R16） */
+.upload-precheck {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color-split);
+  border-radius: 8px;
+  background: var(--surface-subtle, #fafafa);
+}
+
+.upload-precheck-task-id.ant-typography code,
+.upload-precheck .ant-typography code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  user-select: all;
+}
+
+.upload-precheck-reasons {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.upload-conflict,
+.upload-duplicate-hint {
+  margin-bottom: 16px;
+}
+
+.upload-duplicate-hint {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-subtle, #fafafa);
+}
+
+.upload-duplicate-icon {
+  color: var(--text-secondary);
+}
