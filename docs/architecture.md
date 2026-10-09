@@ -566,39 +566,35 @@ python build.py gen-web-api
 - 双模式测试：CLI 与 API 结果一致性，除 id/时间戳外逐字段比对。
 - 前端构建：`python build.py web-build` 或等效命令。
 
-### 7.8 KPI CSV 巡检
+### 7.8 KPI 测量单元巡检
 
 KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 `测量开始时间`、`测量结束时间` 和 `周期(分钟)`，该周期列之后的列均为指标值。
 
-由三条普通规则分别处理，互不依赖：
+现行 KPI 能力由单一规则 `kpi.measurement_units`（P1）承载，匹配 `^kpi/.*\.csv$` 与 `^traffic/.*\.csv$`：
 
-| 规则 | source pattern |
+- 测量单元归属：按文件名主干匹配已启用测量单元，未归属文件计入 `unmatched_files`，多周期文件按优先级保留并在 `skipped_files` 记录跳过原因。
+- 指标自动入库：任务执行时按 CSV 表头归属指标列——复用既有指标、暴露跨测量单元冲突、目录未覆盖的列自动创建并默认启用（specs/021）。
+  人工注册（`/api/v5/kpi/measurement-bindings/{binding_id}/register-metric`）与绑定批量确认（`/api/v5/kpi/measurement-bindings/batch-confirm`）只作为异常修正能力。
+- 判定维度：文件归属、数值可读性、指标静态阈值、任务内趋势；单文件或单指标解析失败不中断其他单元。
+- 结果形态：`metadata.measurement_units[]` 保存每个测量单元的指标明细与状态，任务摘要与报告只读该结构。
+
+在线维护入口（SQLite 权威，`docs/api/openapi.yaml` 为准）：
+
+| 能力 | 入口 |
 | --- | --- |
-| `kpi.api` | `^kpi/(?:.*/)?kpi-api-(?:5\|15\|30\|60)\.csv$` |
-| `kpi.media` | `^kpi/(?:.*/)?kpi-media-(?:5\|15\|30\|60)\.csv$` |
-| `kpi.call` | `^kpi/(?:.*/)?kpi-call-(?:5\|15\|30\|60)\.csv$` |
+| 测量单元导入/列表/启停 | `/api/v5/kpi/measurement-units`、`/api/v5/kpi/measurement-units/{resource_id}` |
+| 指标资源 | `/api/v5/kpi/measurement-resources`、`/api/v5/kpi/measurement-resources/{resource_id}` |
+| 指标绑定 | `/api/v5/kpi/measurement-bindings`、`/api/v5/kpi/measurement-bindings/batch-confirm`、`/api/v5/kpi/measurement-bindings/{binding_id}` |
+| 界面派生指标 | `/api/v5/kpi/measurement-derived`（模板限 `success_rate` / `reverse_success_rate`） |
+| 单任务内趋势与版本对比 | `/api/v2/tasks/{task_id}/rules/{rule_code}/measurement-units/.../history-trend`、`.../version-candidates`、`.../version-compare` |
 
-- 规则不使用私有 prepare，直接读取自己的 `source_patterns` 匹配文件。
-- 同一领域存在多个周期时按 `15 → 5 → 30 → 60` 选择一个最高优先级周期；
-  只有该周期的多个文件一起聚合，其他周期不混入同一条结果。
-- KPI 基础指标和预留单位来自 `deploy/data/kpi/base/` 两个固定 JSON 文件；业务域分类、指标口径、公式、阈值、容量语义、
-  展示规则和解析预算的权威来源是 SQLite。`deploy/data/kpi/rules/*.json` 不再是运行时依赖，仅可作为过渡期备份。
-- 任务执行在解压完成后生成 `output/<task_id>/kpi/kpi_catalog_snapshot.json`。普通规则只读取任务快照；
-  快照不可变，单规则重跑优先复用。快照缺失时从基础资源 + SQLite 重建，损坏时任务失败，不回退旧配置。
-- 目录化结果写入 `metric_catalog`、`kpi_results`、`unclassified_metrics`；未登记列只保留来源和样例，不改变规则状态。
-- 历史结果 `metadata.version=1` 前端回退明细表，后端不迁移、不重算；分页原始记录通过 `/api/v2/tasks/{task_id}/rules/{rule_code}/kpi/records` 按需查询。
-- KPI 结果组织完成后同步重建任务私有历史索引 `kpi/history/index.jsonl`；索引按 JSONL 增行存储当前任务有效点，不保存 `device_id`，删除任务目录即随任务隔离生命周期消失。跨任务历史查询只按需流式读取候选任务索引。
-- `统计峰值`、`最大并发` 等容量指标只展示和追溯，不参与成功/失败率判断。
-- 文件级、行级和配置级错误结构化返回；一个文件或一行失败不中断其他文件、行和领域。
-- 时间输入按 SQLite 公共配置中的 `input_timezone` 解释，持久化为 UTC。
-- 旧的通用 `kpi.threshold` 规则已下线，不再注册。
-- 资源 CSV 只能通过离线命令更新基础资源文件：`.venv/bin/python -m tools.kpi_catalog`；默认输入 `local_run/resource_metrics`，该目录必须且只能包含一个 CSV，默认输出 `deploy/data/kpi`。命令只原子替换 `base/metrics.json` 和 `base/units.json`，并在目标指标仍被 SQLite 动态配置引用时拒绝移除。
-  CSV 必须包含 `资源id`、`中文描述`、`英文描述` 三列；顺序不限，额外列忽略。仅保留 `ME_*` 和 `UNIT_*` 行，其他行跳过；`ME_*` 生成指标，重复 ID 且中文名不同时保留首次 ID，并生成 `ME_<原名>_<英文名>_<指纹>` 形式的新 ID；`UNIT_*` 仅生成预留单位且重复行跳过并保留首次定义，`unit_key` 当前固定为 null。
-- 基础指标配置使用 `/api/v3/kpi/resource-metrics`、`/api/v3/kpi/resource-metrics/classification` 和审计接口；
-  分类请求显式携带 `operator`，不提供乐观锁。在线 CSV 导入已退役。
-- 动态口径配置、审计和任务分类线索使用 `/api/v4`；聚合支持简单最值、均值、计数、中位数、标准差和受控成功率 ratio，
-  不提供任意表达式 DSL。
+历史索引：KPI 结果组织完成后重建任务私有索引 `kpi/history/index.jsonl`；跨任务历史查询只按需流式读取候选任务索引。
+时间输入按 SQLite 公共配置中的 `input_timezone` 解释，持久化为 UTC。
+
+历史设计（已被替代，不得作为现行指引）：`/api/v3/kpi/resource-metrics` 基础指标配置中心、v4 时代的动态口径配置中心与
+任务级分类线索接口均已退役；`deploy/data/kpi/` 资源目录与
+`kpi.api`、`kpi.media`、`kpi.call` 三条领域规则不再是运行时依赖。
 
 ### 7.9 扫描规则生成辅助
 

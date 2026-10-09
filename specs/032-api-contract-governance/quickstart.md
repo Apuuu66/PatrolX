@@ -21,8 +21,8 @@ python build.py contract
 ## 场景 2：API 表面与行为核对
 
 ```bash
-# 1) 契约中旧创建入口与 v4 均已消失
-grep -n '^  /api/v2/tasks:' docs/api/openapi.yaml || echo "OK：v2 创建路径已移除"
+# 1) 契约中旧创建操作与 v4 均已消失（v2 列表/详情等既有能力保留）
+.venv/bin/python -c "import yaml;s=yaml.safe_load(open('docs/api/openapi.yaml'));assert 'post' not in s['paths']['/api/v2/tasks'];print('OK：v2 创建操作已移除，GET 列表保留')"
 grep -n '^  /api/v4' docs/api/openapi.yaml || echo "OK：契约无 v4"
 
 # 2) 后端回归断言（随 tasks 落地的测试用例；build.py test 不透传参数，直接调 pytest）

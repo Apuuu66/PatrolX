@@ -1,3 +1,7 @@
+> 【历史设计】本文件中的 `/api/v4` 路径为规划期设计，未作为 v4 交付；
+> 派生指标现行入口是 `POST /api/v5/kpi/measurement-derived`。阅读时以现行契约
+> `docs/api/openapi.yaml` 为准。
+
 # 研究决策：界面新增动态派生指标
 
 ## 1. 配置存储与既有动态口径关系

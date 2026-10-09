@@ -1,3 +1,8 @@
+# 【历史设计，不得作为现行指引】
+# 本文件描述 015 规划期的 /api/v4 动态口径配置中心设计，该能力已被测量单元 KPI 重构替代：
+# 现行入口为 /api/v5/kpi/measurement-units、/api/v5/kpi/measurement-bindings、
+# /api/v5/kpi/measurement-resources 与 /api/v5/kpi/measurement-derived。
+# 本文件与 015 的 plan/tasks 同为历史产物，仅用于追溯设计脉络。
 # 本文件是 docs/api/openapi.yaml 中本功能新增片段的设计契约。
 # 实现时必须先合并到唯一契约源 docs/api/openapi.yaml，再生成前端客户端。
 

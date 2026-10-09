@@ -4,7 +4,7 @@
 
 **创建日期**：2026-09-21
 
-**状态**：草稿
+**状态**：已实现（历史设计中的 `/api/v4/kpi/config/derived-metrics` 未按原样落地；现行入口为 `/api/v5/kpi/measurement-derived`，派生指标存于 SQLite `kpi_measurement_derived`）
 
 **输入**：用户描述：“这种派生类的指标可以支持界面新增吗？这种每次后台配置其实很不方便。做成正式功能吧。反向功能可能也需要，公式受控即可。”
 

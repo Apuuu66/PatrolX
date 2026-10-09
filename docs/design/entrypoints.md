@@ -127,29 +127,14 @@ python main.py
 Windows 上推荐使用 Git Bash 或 WSL；路径可以用 `C:/data/sample.zip` 或 `/c/data/sample.zip`，
 含空格时加引号。
 
-工具脚本不直接读取压缩包。资源 CSV 的 KPI 目录维护使用独立离线命令，不从任务现场采集：
+工具脚本不直接读取压缩包。KPI 资源目录已改为在线维护，不再提供离线 `tools.kpi_catalog` 转换命令：
 
-```bash
-.venv/bin/python -m tools.kpi_catalog
-```
+- 测量单元导入：`POST /api/v5/kpi/measurement-units/import`（前端「测量单元」页面）；
+- 测量单元启停：`PATCH /api/v5/kpi/measurement-units/{resource_id}`；
+- 指标资源与绑定维护：`/api/v5/kpi/measurement-resources`、`/api/v5/kpi/measurement-bindings`（含批量确认与人工注册异常修正）；
+- 界面派生指标：`POST /api/v5/kpi/measurement-derived`（模板限 `success_rate` / `reverse_success_rate`）。
 
-默认读取 `local_run/resource_metrics`，并要求该目录内必须且只能有一个 CSV；不限定 CSV 文件名。CSV 必须包含 `资源id`、`中文描述`、`英文描述` 三列；顺序不限，额外列忽略。仅保留 `ME_*` 和 `UNIT_*` 行，其他行跳过；`ME_*` 重复 ID 且中文名相同时跳过并保留首次定义；中文名不同时保留首次 ID，并生成 `ME_<原名>_<英文名>_<指纹>` 形式的新 ID；`UNIT_*` 重复行跳过并保留首次定义。CSV 支持 UTF-8 和 GBK/GB2312/GB18030。默认更新 `deploy/data/kpi`。如需临时使用其他现场，可覆盖路径：
-
-```bash
-.venv/bin/python -m tools.kpi_catalog generate \
-  --input /path/to/resource_metrics \
-  --data-dir /path/to/kpi
-```
-
-基础资源导入不再提供 `--clear-rules`；动态口径由 SQLite 和 `/api/v4` 配置中心维护。如需临时使用其他现场，只需覆盖基础资源路径：
-
-```bash
-.venv/bin/python -m tools.kpi_catalog generate \
-  --input /path/to/resource_metrics \
-  --data-dir /path/to/kpi
-```
-
-该命令只做 CSV -> 拆分配置基础文件的确定性转换；运行时分类和任务巡检不会在线导入 CSV。
+任务执行时按 CSV 表头自动归属与入库指标（目录未覆盖的列默认启用），不需要人工逐条确认绑定。
 
 测量单元基础资源导入前可先做只读预览。该工具默认处理 `local_run/resource_metrics` 顶层的全部 CSV，
 不递归子目录，可选 `--dir` 覆盖目录，也支持 CSV 文件通配模式；CSV 支持 UTF-8 和 GBK/GB2312/GB18030，表头必须包含

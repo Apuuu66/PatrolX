@@ -1,3 +1,7 @@
+> 【历史设计】本文件中的 `/api/v4` 路径为规划期设计，未作为 v4 交付；
+> 派生指标现行入口是 `POST /api/v5/kpi/measurement-derived`。阅读时以现行契约
+> `docs/api/openapi.yaml` 为准。
+
 # API 契约草案：在线派生指标
 
 本文件是 plan 阶段的契约草案；实现前必须同步写入唯一契约源 `docs/api/openapi.yaml`，并运行契约生成。以下均为 `/api/v4` 新增资源，不修改既有字段含义。

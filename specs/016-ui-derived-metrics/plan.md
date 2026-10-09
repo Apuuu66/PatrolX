@@ -1,3 +1,6 @@
+> 【历史设计】本计划中的 v4 派生指标路由为规划期设计，未作为 v4 交付；
+> 派生指标现行入口是 `POST /api/v5/kpi/measurement-derived`。
+
 # 实现计划：界面新增动态派生指标
 
 **分支**：`016-ui-derived-metrics` | **日期**：2026-09-21 | **规格**：[spec.md](spec.md)

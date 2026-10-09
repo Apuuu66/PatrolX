@@ -309,76 +309,52 @@ GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元
 3. 阈值继续收敛到可配置参数，并保持结果契约稳定。
 4. 补充日志量大时的流式处理和内存边界测试。
 
-## 12. KPI 指标公式与增量分类机制
+## 12. KPI 测量单元与指标自动入库机制
 
 ### 目标设计
 
-- 指标公式以声明式配置驱动，不在调度器或规则代码中硬编码。
-- 派生指标通过受控 `ratio` / `inverse_ratio` 公式从原始指标计算得到，先汇总输入再算比率（sum-then-divide）。
-- 增量分类通过任务快照隔离历史状态：任务执行时固化当时的指标目录，后续分类线索只读该快照，不使用数据库最新状态重写历史任务。
-- 分类线索只读规则结果中记录的真实 CSV 列名，不引入规则间依赖。
+KPI 指标列必须按测量单元归属，并在任务执行时完成归属与登记：目录未覆盖的指标自动入库且默认启用，
+人工注册与绑定确认只作为异常修正手段；派生指标以受控公式（成功率/反向成功率）在前台维护。
 
 ### 当前实现
 
-#### 公式配置
+#### 文件归属与指标登记
 
-公式定义在 `deploy/data/kpi/rules/metric-rules.json`，每条指标通过 `source_type` 和 `formula` 字段区分：
+任务执行 `kpi.measurement_units` 规则时（`app/services/kpi_measurement_units.py`）：
 
-```json
-{
-  "key": "me_call_success_rate",
-  "source_type": "derived",
-  "formula": {
-    "kind": "ratio",
-    "numerator": "me_call_success_count",
-    "denominator": "me_call_attempts",
-    "scale": 100,
-    "denominator_fallback": null
-  }
-}
-```
+- 按文件名主干匹配已启用测量单元；未匹配文件计入 `unmatched_files`，多周期文件中非首选周期计入 `skipped_files` 并记录原因。
+- 解析 CSV 表头（允许表头前存在 `key：value` 元数据行），按 `测量开始时间`、`测量结束时间`、`周期(分钟)` 定位指标列。
+- 指标列归属规则：
+  - 目录已有同名指标 → 复用既有指标，不重复创建；
+  - 指标已归属其他测量单元 → 生成跨测量单元冲突记录，不自动改绑；
+  - 目录中不存在 → 自动创建指标资源并归属当前测量单元，默认启用（specs/021）。
+- 绑定状态为 `confirmed` / `candidate` / `conflict`，只有已确认且启用的绑定参与巡检；人工注册指标走
+  `POST /api/v5/kpi/measurement-bindings/{binding_id}/register-metric`，批量确认走 `POST /api/v5/kpi/measurement-bindings/batch-confirm`。
 
-计算逻辑在 `app/inspectors/kpi/catalog.py` 的 `aggregate_kpi_metric()`：
+#### 判定维度
 
-- 先对所有记录中分子和分母的值做 `sum` 聚合，再算比率。
-- 分母为 0 返回 `denominator_zero`，不产生值。
-- 分子或分母数据缺失返回 `missing_input: <key>`，不产生值。
-- 可选 `denominator_fallback` 列表提供分母回退输入。
-- 结果附带 provenance（来源列名、回退是否触发）供审计。
+| 维度 | 说明 |
+| --- | --- |
+| 文件归属 | 未匹配、周期跳过与解析失败按文件记录，不中断其他测量单元 |
+| 数值可读性 | 空值、非数值、时间列异常计入数据异常 |
+| 业务阈值 | 按指标方向（higher_better / lower_better / neutral）与预警、失败阈值输出 warn / fail（specs/022） |
+| 任务内趋势 | 同一指标在任务内多个时间点上的恶化判定计入趋势恶化计数 |
 
-#### 两个聚合层次
+#### 派生指标
 
-| 用途 | 范围 | 加法含义 |
-|---|---|---|
-| `main_value`（总览卡片） | 所有时间点全部记录 | 所有值加在一起再算比率 |
-| `series`（趋势图每个点） | 单个时间窗口 `(start_at, end_at, period_minutes)` | 只加该时段内的值再算比率 |
-| 逐行阈值检查 | 单条 CSV 记录 | 不加，直接用该行的值 |
+界面派生指标保存在 SQLite `kpi_measurement_derived`（测量单元 + 指标资源 + 分子/分母指标 + 模板），
+经 `POST /api/v5/kpi/measurement-derived` 维护；模板限 `success_rate` 与 `reverse_success_rate`，
+依赖的分子、分母指标必须已确认绑定。
 
-#### 增量分类线索
+#### 结果形态
 
-任务执行时写出两个关键产物：
-
-1. 规则结果 `output/<task_id>/rules/kpi.*.json` 的 `metadata.kpi_files` 记录 CSV 列名（`objects`）和样本值（`records[].values`）。
-2. 配置快照 `output/<task_id>/kpi/kpi_catalog_snapshot.json` 记录执行时刻的 `base_metrics`（基础指标全集）和 `metrics`（已分配业务域的指标）。
-
-调用 `GET /api/v4/tasks/{task_id}/kpi/classification-clues` 时，系统把 CSV 真实列名与快照中的指标目录逐个比对（归一化：NFKC + 去空白 + casefold），返回四种状态：
-
-| 状态 | 含义 | 处理建议 |
-|---|---|---|
-| `classified` | 已匹配且已分配业务域 | 无需处理 |
-| `unclassified` | 匹配到基础指标但未分配业务域 | 去数据库分配 domain |
-| `ambiguous` | 匹配到多个基础指标 | 人工确认唯一指标 |
-| `unregistered` | CSV 有此列但基础资源库没有 | 先离线导入基础指标 |
-
-关键实现位于 `app/services/kpi_classification_clues.py`。
+规则结果 `output/<task_id>/rules/kpi.measurement_units.json` 的 `metadata.measurement_units[]` 保存每个测量单元的
+指标明细、状态与来源文件；结果组织完成后重建任务私有历史索引 `kpi/history/index.jsonl`，跨任务趋势按需流式读取候选任务索引。
 
 ### 差异
 
-当前无已知差异。
-
-离线静态派生指标仍可声明在 `metric-rules.json` 中。界面派生指标则保存在 SQLite `kpi_derived_metrics` 表中，公式只允许 `ratio` 和 `inverse_ratio`；两者在任务执行时都走同一个 `aggregate_kpi_metric()` 口径。
-
-任务启动时，在线启用项会被写入任务快照 `derived_metrics`（当前 schema 版本 3），并注入当次 KPI 配置。快照创建后不再重写；修改、停用或删除界面派生指标只影响之后需要新建快照的任务。快照中缺少 `base_metrics` 字段的历史任务（schema 版本较低）所有线索都会显示为 `unregistered`，需重跑任务生成新快照。
+历史设计的 v4 动态口径配置中心、任务级分类线索接口与
+`metric-rules.json` 公式配置已被测量单元模型替代，不再作为现行实现描述。
 
 ## 13. SQLite 数据库文件使用注意
 
