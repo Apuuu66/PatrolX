@@ -33,6 +33,14 @@
   --status-fail: #ff4d4f;
   --status-error: #8c8c8c;
   --status-skip: #1677ff;
+
+  /* 文本安全状态色（FR-019、SC-006、R13）：与 web/src/utils/statusTextColors.ts 一一对应，
+     用于白底 / 浅色底上的状态文字，填充色继续使用上面的标准状态色。 */
+  --status-text-pass: #237804;
+  --status-text-warn: #874d00;
+  --status-text-fail: #cf1322;
+  --status-text-error: #595959;
+  --status-text-skip: #0958d9;
 }
 
 /* 应用骨架：内容区最大宽度 1600px，1280px~1920px 间不出现页面级横向滚动（contracts/ui-baseline §6） */
@@ -156,12 +164,41 @@
   border-radius: 50%;
 }
 
+/* 颜色以外的冗余标识：异常分段叠加斜纹、异常圆点改为方块（FR-019、SC-006、R13） */
+.status-distribution-segment[data-status-segment="error"] {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.65) 0 2px,
+    rgba(255, 255, 255, 0) 2px 5px
+  ) !important;
+}
+
+.status-distribution-dot[data-status-dot="error"] {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.75) 0 1px,
+    rgba(255, 255, 255, 0) 1px 3px
+  ) !important;
+}
+
+/* 异常状态标签：虚框 + 斜纹，避免仅靠灰色表达（FR-019、R13） */
+.rule-status-tag-error.ant-tag {
+  border-style: dashed;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.06) 0 2px,
+    rgba(0, 0, 0, 0) 2px 5px
+  );
+}
+
 .status-distribution-compact .status-distribution-bar {
   height: 6px;
 }
 
-.status-distribution-empty,
-.metadata-list-empty {
+.status-distribution-empty {
   font-size: var(--font-size-caption);
   color: var(--text-tertiary);
 }
