@@ -20,6 +20,31 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: "浏览者",
 };
 
+/**
+ * 路由 → 顶栏标题映射（FR-020、R14）。
+ * 顺序敏感：先匹配更具体的子路由，再匹配一级页面。
+ */
+const PAGE_TITLE_RULES: readonly { pattern: RegExp; title: string }[] = [
+  { pattern: /^\/tasks\/[^/]+\/rules\/[^/]+$/, title: "规则详情" },
+  { pattern: /^\/tasks\/[^/]+\/report$/, title: "巡检报告" },
+  { pattern: /^\/tasks\/[^/]+\/logs$/, title: "执行日志" },
+  { pattern: /^\/tasks\/[^/]+$/, title: "任务详情" },
+  { pattern: /^\/tasks?$/, title: "巡检任务" },
+  { pattern: /^\/inventory\/devices\/[^/]+$/, title: "设备详情" },
+  { pattern: /^\/inventory$/, title: "设备台账" },
+  { pattern: /^\/measurement-units$/, title: "基础指标" },
+  { pattern: /^\/inspectors$/, title: "规则管理" },
+  { pattern: /^\/dicts$/, title: "数据字典" },
+  { pattern: /^\/users$/, title: "用户管理" },
+];
+
+/** 顶栏标题：未知路径回退到默认落地页标题，避免出现空标题或产品名重复。 */
+export function resolvePageTitle(pathname: string): string {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  if (normalized === "/") return "巡检任务";
+  return PAGE_TITLE_RULES.find((rule) => rule.pattern.test(normalized))?.title ?? "巡检任务";
+}
+
 interface LoginFormValues {
   username: string;
   password: string;
@@ -103,24 +128,13 @@ export function MainLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider theme="dark" width={200}>
-        <div
-          style={{
-            height: 56,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            color: "#fff",
-            fontWeight: 600,
-            fontSize: 16,
-          }}
-        >
+      <Sider theme="light" width={200} className="app-sider">
+        <div className="app-sider-brand">
           <SafetyCertificateOutlined />
           PatrolX
         </div>
         <Menu
-          theme="dark"
+          theme="light"
           mode="inline"
           selectedKeys={[selected]}
           items={menuItems}
@@ -138,8 +152,8 @@ export function MainLayout() {
           }}
         >
           <div className="app-shell-inner app-shell-header">
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              系统维护巡检平台
+            <Typography.Title level={4} className="app-header-title" data-testid="app-page-title">
+              {resolvePageTitle(location.pathname)}
             </Typography.Title>
             <Space>
               {user ? (
@@ -155,7 +169,8 @@ export function MainLayout() {
               ) : (
                 <>
                   <Typography.Text type="secondary">访客模式</Typography.Text>
-                  <Button size="small" type="primary" onClick={() => setLoginOpen(true)}>
+                  {/* 访客模式登录降为默认按钮权重，不与页面主操作竞争（FR-020、R14） */}
+                  <Button size="small" onClick={() => setLoginOpen(true)}>
                     登录
                   </Button>
                 </>

@@ -79,7 +79,8 @@ test("巡检包上传后可在任务详情、设备台账和设备详情间追�
 
   await page.getByRole("button", { name: "返回台账" }).click();
   await expect(page).toHaveURL(/\/inventory$/);
-  await expect(page.getByRole("heading", { name: "设备台账" })).toBeVisible();
+  // 顶栏当前页面标题与页面标题同名；这里锁定页面主标题（h1）。
+  await expect(page.getByRole("heading", { level: 1, name: "设备台账" })).toBeVisible();
   await expect(page.getByText("NJ-AGG-001").first()).toBeVisible();
   await expect(
     page.getByRole("row").filter({ hasText: "NJ-AGG-001" }).locator(".ant-tag").first(),

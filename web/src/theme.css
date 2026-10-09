@@ -57,6 +57,62 @@
   gap: var(--space-4);
 }
 
+/* 顶栏承载当前页面标题，不再重复产品名（FR-020、R14） */
+.app-header-title.ant-typography {
+  margin: 0;
+  font-size: var(--font-size-title);
+}
+
+/* 侧边栏：浅色底 + 左侧指示条 + 品牌深色文字，不再用整块实心主色（FR-021、R14） */
+.app-sider.ant-layout-sider {
+  background: var(--surface);
+  border-right: 1px solid var(--border-color-split);
+}
+
+.app-sider-brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.app-sider .ant-menu-light {
+  border-inline-end: none;
+  background: transparent;
+}
+
+.app-sider .ant-menu-item {
+  position: relative;
+  color: var(--text-secondary);
+}
+
+.app-sider .ant-menu-item-selected {
+  /* #0958d9 在 --primary-soft 上对比度 5.7:1（FR-019、FR-021） */
+  background: var(--primary-soft);
+  color: var(--status-text-skip);
+  font-weight: 600;
+}
+
+.app-sider .ant-menu-item-selected::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: #1677ff;
+}
+
+.app-sider .ant-menu-item:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: -2px;
+}
+
 .page-header {
   margin-bottom: var(--space-5);
 }

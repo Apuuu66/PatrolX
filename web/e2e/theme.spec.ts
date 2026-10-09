@@ -36,6 +36,25 @@ test("布局在 1280px 与 1920px 下符合宽度约束", async ({ page }) => {
   expect(wide.contentWidth).toBeLessThanOrEqual(1600);
   expect(wide.headerLeft).toBe(wide.contentLeft);
 });
+
+test("顶栏承载当前页面标题且不重复产品名", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".app-shell-header .app-header-title")).toHaveText("巡检任务");
+  await expect(page.locator(".app-shell-header")).not.toContainText("系统维护巡检平台");
+
+  await page.goto("/inspectors");
+  await expect(page.locator(".app-shell-header .app-header-title")).toHaveText("规则管理");
+});
+
+test("访客模式登录按钮不是主按钮权重", async ({ page }) => {
+  await page.goto("/");
+
+  const login = page.locator(".app-shell-header").getByRole("button", { name: /登\s*录/ });
+  await expect(login).toBeVisible();
+  await expect(login).toHaveClass(/ant-btn-default/);
+  await expect(login).not.toHaveClass(/ant-btn-primary/);
+});
+
 test("关注状态文字满足 WCAG AA 对比度", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/tasks/task-alarm-flapping-e2e");
