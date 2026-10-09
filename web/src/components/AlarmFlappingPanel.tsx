@@ -77,6 +77,29 @@ function formatSeconds(value: number | null | undefined): string {
   return `${value} 秒（${(value / 3600).toFixed(1)} 小时）`;
 }
 
+function GapCell({ value }: { value: number | null }) {
+  if (value === null || value === undefined) return "—";
+  if (value < 60) return `${value} 秒`;
+  if (value < 3600) {
+    return (
+      <Space direction="vertical" size={0}>
+        <Typography.Text>{value} 秒</Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          ≈ {Math.round(value / 60)} 分钟
+        </Typography.Text>
+      </Space>
+    );
+  }
+  return (
+    <Space direction="vertical" size={0}>
+      <Typography.Text>{value} 秒</Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        ≈ {(value / 3600).toFixed(1)} 小时
+      </Typography.Text>
+    </Space>
+  );
+}
+
 function GroupKey({ group }: { group: AlarmFlappingGroup }) {
   return (
     <Space direction="vertical" size={0}>
@@ -114,13 +137,13 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   {
     title: "分组",
     dataIndex: "alarm_code",
-    width: 220,
+    width: 180,
     render: (_value, group) => <GroupKey group={group} />,
   },
   {
     title: "结论",
     dataIndex: "state",
-    width: 150,
+    width: 120,
     render: (state: string) => {
       const meta = STATE_META[state];
       return <Tag color={meta?.color ?? "default"}>{meta?.label ?? state}</Tag>;
@@ -129,7 +152,7 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   {
     title: "出现次数",
     dataIndex: "occurrence_count",
-    width: 130,
+    width: 150,
     render: (count: number, group) => (
       <Space direction="vertical" size={0}>
         <Typography.Text>{count} 次</Typography.Text>
@@ -142,7 +165,7 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   {
     title: "首次 / 最近出现",
     dataIndex: "first_seen_at",
-    width: 220,
+    width: 190,
     render: (_value, group) => (
       <Space direction="vertical" size={0}>
         <Typography.Text style={{ fontSize: 12 }}>{formatTime(group.first_seen_at)}</Typography.Text>
@@ -158,25 +181,30 @@ const columns: ColumnsType<AlarmFlappingGroup> = [
   {
     title: "最短复发间隔",
     dataIndex: "min_repeat_gap_sec",
-    width: 160,
-    render: (value: number | null) => formatSeconds(value),
+    width: 130,
+    render: (value: number | null) => <GapCell value={value} />,
   },
   {
     title: "标记",
     key: "flags",
+    width: 190,
     render: (_value, group) => <GroupFlags group={group} />,
   },
   {
     title: "来源",
     key: "evidence",
-    width: 260,
+    width: 150,
     render: (_value, group) => {
       const [first] = group.evidence_records ?? [];
       if (!first) return "—";
       const rest = (group.evidence_records?.length ?? 0) - 1;
+      const full = `${first.source_file}:${first.line_no}${rest > 0 ? ` 等 ${group.evidence_records.length} 处` : ""}`;
+      const base = first.source_file.split("/").pop() ?? first.source_file;
+      // 路径前缀（alarm/ 与批量导出的长文件名前缀）挤占列宽，列内只留可区分的文件尾，完整路径走 tooltip。
+      const short = base.length > 16 ? `…${base.slice(-16)}` : base;
       return (
-        <Typography.Text style={{ fontSize: 12 }} ellipsis={{ tooltip: true }}>
-          {first.source_file}:{first.line_no}
+        <Typography.Text style={{ fontSize: 12 }} ellipsis={{ tooltip: full }}>
+          {short}:{first.line_no}
           {rest > 0 ? ` 等 ${group.evidence_records.length} 处` : ""}
         </Typography.Text>
       );
@@ -255,7 +283,7 @@ export function AlarmFlappingPanel({ metadata }: { metadata: AlarmFlappingMetada
           columns={columns}
           dataSource={groups}
           pagination={groups.length > 20 ? { pageSize: 20, showSizeChanger: false } : false}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1110 }}
         />
       )}
       {(metadata.notes ?? []).length > 0 && (
