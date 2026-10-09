@@ -13,6 +13,7 @@ import {
   Select,
   Space,
   Table,
+  Tooltip,
   Typography,
   Upload,
 } from "antd";
@@ -23,12 +24,12 @@ import {
   ClearOutlined,
   DeleteOutlined,
   FileTextOutlined,
+  InfoCircleOutlined,
   MoreOutlined,
   PlusOutlined,
   RedoOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import {
   ApiError,
@@ -51,8 +52,16 @@ import { MetadataList } from "../components/MetadataList";
 import { usePolling } from "../hooks/usePolling";
 import { formatTaskDuration, getTaskMetadataTags } from "../utils/taskCard";
 import { getTaskFailureReason, sortTasksForList } from "../utils/taskListSort";
+import {
+  OVERVIEW_METRICS,
+  getOverviewDistribution,
+  getOverviewMetricValue,
+} from "../utils/taskOverview";
+import { TABULAR_NUMERIC_CLASS, getRelativeTimeDisplay } from "../utils/timeDisplay";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { PageHeader } from "../components/PageHeader";
+import { DensitySegmented } from "../components/DensitySegmented";
+import { useTableDensity } from "../hooks/useTableDensity";
 
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "全部" },
@@ -282,6 +291,7 @@ export function TaskListPage() {
   const [expandedRowKeys, setExpandedRowKeys] = useState<readonly string[]>([]);
   const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
   const [deleteCollapsed, setDeleteCollapsed] = useState<Record<string, boolean>>({});
+  const { density, tableSize, setDensity } = useTableDensity();
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
@@ -317,6 +327,7 @@ export function TaskListPage() {
   }, []);
 
   const sortedItems = useMemo(() => sortTasksForList(items), [items]);
+  const distribution = useMemo(() => getOverviewDistribution(overview), [overview]);
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
   usePolling(load, 2000, busy);
 
@@ -480,7 +491,12 @@ export function TaskListPage() {
         return (
           <div className="task-table-task">
             <Flex align="center" gap={8} wrap="wrap">
-              <Typography.Link strong onClick={() => navigate(`/tasks/${record.task_id}`)}>
+              <Typography.Link
+                strong
+                className="task-table-name"
+                title={record.name}
+                onClick={() => navigate(`/tasks/${record.task_id}`)}
+              >
                 {record.name}
               </Typography.Link>
               <TaskStatusTag status={record.status} />
@@ -489,14 +505,18 @@ export function TaskListPage() {
               {record.task_id}
             </Typography.Text>
             {failureReason && (
-              <Typography.Text
+              // 失败原因摘要本身即行内唯一日志入口，可点击进入失败日志（FR-008、FR-026、R5）
+              <Typography.Link
                 type="danger"
                 className="task-table-reason"
                 data-testid="task-failure-reason"
-                ellipsis={{ tooltip: failureReason }}
+                aria-label={`失败原因：${failureReason}，查看失败日志`}
+                title={`${failureReason}（点击查看失败日志）`}
+                ellipsis
+                onClick={() => navigate(`/tasks/${record.task_id}/logs`)}
               >
-                {failureReason}
-              </Typography.Text>
+                失败原因：{failureReason}
+              </Typography.Link>
             )}
           </div>
         );
@@ -512,25 +532,38 @@ export function TaskListPage() {
       title: "元数据",
       key: "metadata",
       width: 200,
-      render: (_, record) => <MetadataList items={getTaskMetadataTags(record, dicts)} />,
+      render: (_, record) => (
+        // 列表行保留全部 5 项元数据平铺，详情 Hero 才做 4 项收纳（FR-010）。
+        <MetadataList items={getTaskMetadataTags(record, dicts)} maxVisible={5} />
+      ),
     },
     {
       title: "时间与耗时",
       key: "timeline",
       width: 190,
       render: (_, record) => {
+        // 耗时为主信息，创建 / 完成为相对时间次要信息；完整时间走 Tooltip（FR-006、FR-007）。
         const duration = formatTaskDuration(record.created_at, record.completed_at);
+        const created = getRelativeTimeDisplay(record.created_at);
+        const completed = getRelativeTimeDisplay(record.completed_at);
+        const durationText = duration ?? (record.status === "pending" ? "排队中" : "进行中");
         return (
-          <Flex vertical gap={2} className="task-table-time">
-            <Typography.Text type="secondary">
-              创建 {dayjs(record.created_at).format("YYYY-MM-DD HH:mm")}
+          <Flex vertical gap={2} className={`task-table-time ${TABULAR_NUMERIC_CLASS}`}>
+            <Typography.Text className="task-table-duration" data-testid="task-duration">
+              耗时 {durationText}
             </Typography.Text>
-            {record.completed_at && (
-              <Typography.Text type="secondary">
-                完成 {dayjs(record.completed_at).format("YYYY-MM-DD HH:mm")}
+            <Tooltip title={created.title || undefined}>
+              <Typography.Text type="secondary" className="task-table-time-line">
+                创建 {created.text}
               </Typography.Text>
+            </Tooltip>
+            {record.completed_at && (
+              <Tooltip title={completed.title || undefined}>
+                <Typography.Text type="secondary" className="task-table-time-line">
+                  完成 {completed.text}
+                </Typography.Text>
+              </Tooltip>
             )}
-            {duration && <Typography.Text type="secondary">耗时 {duration}</Typography.Text>}
           </Flex>
         );
       },
@@ -545,29 +578,22 @@ export function TaskListPage() {
         const isFailed = record.status === "failed";
         const canReport = record.status === "completed";
         const canRebuild = record.status === "completed" || record.status === "failed";
+        const openLogs = () => navigate(`/tasks/${record.task_id}/logs`);
+        const openReport = () => navigate(`/tasks/${record.task_id}/report`);
         return (
           <Space size={0} wrap className="task-table-actions">
+            {/* 行内常驻操作只有详情；报告在行 hover / 键盘聚焦时显示，其余动作收进 ⋯ 菜单（FR-008、R5） */}
             <Button type="link" size="small" onClick={() => navigate(`/tasks/${record.task_id}`)}>
               详情
             </Button>
-            {/* 失败任务没有报告产物，用失败日志替代报告，保证行内平铺业务操作不超过 3 个（FR-012） */}
-            {isFailed ? (
+            {!isFailed && (
               <Button
                 type="link"
                 size="small"
-                danger
-                icon={<FileTextOutlined />}
-                onClick={() => navigate(`/tasks/${record.task_id}/logs`)}
-              >
-                失败日志
-              </Button>
-            ) : (
-              <Button
-                type="link"
-                size="small"
+                className="task-table-action-reveal"
                 disabled={!canReport}
                 title={canReport ? undefined : "任务执行中不可查看报告"}
-                onClick={() => navigate(`/tasks/${record.task_id}/report`)}
+                onClick={openReport}
               >
                 报告
               </Button>
@@ -575,6 +601,14 @@ export function TaskListPage() {
             <Dropdown
               menu={{
                 items: [
+                  isFailed
+                    ? { key: "logs", label: "失败日志", icon: <FileTextOutlined /> }
+                    : {
+                        key: "report",
+                        label: "报告",
+                        icon: <FileTextOutlined />,
+                        disabled: !canReport,
+                      },
                   { key: "rerun", label: "重跑", icon: <RedoOutlined /> },
                   ...(canRebuild
                     ? [{ key: "rebuild", label: "全量重建", danger: true, icon: <ClearOutlined /> }]
@@ -583,6 +617,8 @@ export function TaskListPage() {
                   { key: "delete", label: "删除", danger: true, icon: <DeleteOutlined /> },
                 ],
                 onClick: ({ key }) => {
+                  if (key === "logs") openLogs();
+                  if (key === "report") openReport();
                   if (key === "rerun") void rerun(record.task_id);
                   if (key === "rebuild") confirmRebuildFull(record.task_id);
                   if (key === "delete") {
@@ -622,33 +658,33 @@ export function TaskListPage() {
       <Card data-testid="task-overview" styles={{ body: { padding: "16px 20px" } }}>
         <div className="task-overview">
           <div className="task-overview-metrics">
-            {[
-              { key: "task_count", label: "巡检任务" },
-              { key: "registered_rule_count", label: "注册规则" },
-              { key: "rule_result_count", label: "规则结果" },
-              { key: "finding_count", label: "发现问题数" },
-            ].map((item) => (
-              <div key={item.key} className="task-overview-metric">
-                <div className="task-overview-value">
-                  {(overview?.[item.key as keyof OverviewSummary] ?? 0).toLocaleString()}
+            {OVERVIEW_METRICS.map((metric) => {
+              const value = getOverviewMetricValue(overview, metric.key);
+              return (
+                <div key={metric.key} className="task-overview-metric" data-overview-metric={metric.key}>
+                  <div className="task-overview-value">{value === null ? "—" : value.toLocaleString()}</div>
+                  <div className="task-overview-label">
+                    <span>{metric.label}</span>
+                    <Tooltip title={`${metric.description}（${metric.scope}）`}>
+                      <InfoCircleOutlined
+                        className="task-overview-info"
+                        role="img"
+                        aria-label={`${metric.label}口径说明`}
+                      />
+                    </Tooltip>
+                  </div>
                 </div>
-                <div className="task-overview-label">{item.label}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="task-overview-divider" />
           <div className="task-overview-status">
             <div className="task-overview-label">规则结果状态分布</div>
-            {overview ? (
+            {distribution ? (
               <StatusDistribution
-                stats={{
-                  pass: overview.status_counts.pass,
-                  warn: overview.status_counts.warn,
-                  fail: overview.status_counts.fail,
-                  error: overview.status_counts.error,
-                  skip: overview.status_counts.skip,
-                }}
+                stats={distribution}
                 variant="full"
+                emphasis="overview"
                 emptyText="暂无规则结果"
               />
             ) : (
@@ -668,15 +704,18 @@ export function TaskListPage() {
           </Flex>
         }
         extra={
-          <Segmented
-            aria-label="任务状态快捷筛选"
-            options={STATUS_FILTER_OPTIONS}
-            value={status}
-            onChange={(value) => {
-              setStatus(value as TaskStatus | "");
-              setPage(1);
-            }}
-          />
+          <Flex align="center" gap={12} wrap>
+            <DensitySegmented value={density} onChange={setDensity} />
+            <Segmented
+              aria-label="任务状态快捷筛选"
+              options={STATUS_FILTER_OPTIONS}
+              value={status}
+              onChange={(value) => {
+                setStatus(value as TaskStatus | "");
+                setPage(1);
+              }}
+            />
+          </Flex>
         }
       >
         <Flex vertical gap={12}>
@@ -686,7 +725,8 @@ export function TaskListPage() {
           )}
           {!loadError && (
             <Table<TaskSummary>
-              className="task-table"
+              className={`task-table density-${density}`}
+              size={tableSize}
               rowKey="task_id"
               columns={columns}
               dataSource={sortedItems}

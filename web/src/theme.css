@@ -223,11 +223,53 @@
 }
 
 .metadata-list-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 200px;
   color: var(--text-primary);
+}
+
+.metadata-list-value-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 160px;
+}
+
+/* 复制按钮默认不抢注意力，hover / 键盘聚焦时出现（FR-010、contracts §7） */
+.metadata-list-copy {
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+}
+
+.metadata-list-item:hover .metadata-list-copy,
+.metadata-list-item:focus-within .metadata-list-copy,
+.metadata-list-more-item:hover .metadata-list-copy,
+.metadata-list-more-item:focus-within .metadata-list-copy {
+  opacity: 1;
+}
+
+.metadata-list-more-trigger.ant-btn {
+  height: auto;
+  padding-inline: 0;
+  font-size: var(--font-size-caption);
+}
+
+.metadata-list-more-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 360px;
+  font-size: var(--font-size-caption);
+  line-height: 20px;
+}
+
+.metadata-list-more-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
 }
 
 .ant-table-tbody > tr.rule-row-focus > td {
@@ -410,9 +452,18 @@
 }
 
 .task-overview-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--font-size-caption);
   line-height: 20px;
   color: var(--text-secondary);
+}
+
+.task-overview-info {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  cursor: help;
 }
 
 .task-overview-divider {
@@ -453,6 +504,43 @@
 
 .task-table-time .ant-typography {
   font-size: var(--font-size-caption);
+  white-space: nowrap;
+}
+
+.task-table-duration.ant-typography {
+  color: var(--text-primary);
+}
+
+/* 等宽数字：时间、耗时、计数共用（FR-007、R4） */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 操作分层：常驻只有详情，报告在行 hover / 键盘聚焦时显示（FR-008、R5） */
+.task-table-action-reveal {
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+}
+
+.task-table .ant-table-row:hover .task-table-action-reveal,
+.task-table .ant-table-row:focus-within .task-table-action-reveal,
+.task-table-action-reveal:focus-visible {
+  opacity: 1;
+}
+
+/* 超长任务名截断，完整值通过 title / Tooltip 获取（FR-027） */
+.task-table-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.task-table-reason.ant-typography {
+  display: inline-block;
+  max-width: 100%;
 }
 
 .task-table-actions {
@@ -525,3 +613,81 @@
 .rule-evidence-title.ant-typography {
   font-size: var(--font-size-section);
 }
+
+/* 密度切换（FR-016、contracts §6） */
+.density-segmented {
+  display: inline-flex;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-round);
+  overflow: hidden;
+}
+
+.density-segmented-option {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+}
+
+.density-segmented-option + .density-segmented-option {
+  border-left: 1px solid var(--border-color-split);
+}
+
+.density-segmented-option.is-active {
+  background: var(--primary-soft);
+  color: #0958d9;
+  font-weight: 600;
+}
+
+/* 行高由密度类控制，保证紧凑比舒适同视口多看到行（FR-016） */
+.task-table.density-compact .ant-table-tbody > tr > td,
+.task-detail-attention-table.density-compact .ant-table-tbody > tr > td,
+.inspectors-table.density-compact .ant-table-tbody > tr > td {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+.task-table.density-comfortable .ant-table-tbody > tr > td,
+.task-detail-attention-table.density-comfortable .ant-table-tbody > tr > td,
+.inspectors-table.density-comfortable .ant-table-tbody > tr > td {
+  padding-top: 16px !important;
+  padding-bottom: 16px !important;
+}
+
+/* 复制按钮与降级文本（FR-010、FR-014、contracts §7） */
+.copy-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.copy-text-button-trigger.ant-btn {
+  color: var(--text-secondary);
+}
+
+.copy-text-feedback {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.copy-text-fallback {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-size-caption);
+  color: var(--text-primary);
+  word-break: break-all;
+  user-select: all;
+}
+
+/* 键盘可见焦点（FR-015、contracts §7） */
+.copy-text-button-trigger:focus-visible,
+.density-segmented-option:focus-visible,
+.task-table-action-reveal:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+

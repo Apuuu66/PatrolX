@@ -1,9 +1,11 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { App } from "antd";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, type TaskStats, type TaskSummary } from "../api/http";
+import { ApiError, api, type TaskStats, type TaskSummary } from "../api/http";
+import { TABLE_DENSITY_STORAGE_KEY } from "../hooks/useTableDensity";
 import { TaskListPage } from "./TaskListPage";
 
 vi.mock("../api/http", () => ({
@@ -49,6 +51,7 @@ function renderPage() {
 
 describe("TaskListPage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     vi.mocked(api.getOverview).mockResolvedValue({
       task_count: 4,
       registered_rule_count: 12,
@@ -108,4 +111,64 @@ describe("TaskListPage", () => {
     expect(within(bodyRows[0]).getByText("异常 1")).toBeDefined();
     expect(within(bodyRows[0]).queryByText("通过 0")).toBeNull();
   });
+
+  it("默认紧凑密度，切换为舒适后写入偏好且不重置筛选与分页", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [makeTask()],
+      total: 25,
+      page: 2,
+      page_size: 10,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("task-001")).toBeDefined();
+    });
+    const table = document.querySelector(".task-table");
+    expect(table?.classList.contains("density-compact")).toBe(true);
+
+    // 先选中状态筛选，再切换密度：筛选条件不得被重置。
+    const user = userEvent.setup();
+    fireEvent.click(
+      within(screen.getByLabelText("任务状态快捷筛选")).getByText("失败"),
+    );
+    await waitFor(() => {
+      expect(api.listTasks).toHaveBeenLastCalledWith({ page: 1, page_size: 10, status: "failed" });
+    });
+
+    await user.click(screen.getByRole("button", { name: "舒适" }));
+
+    expect(window.localStorage.getItem(TABLE_DENSITY_STORAGE_KEY)).toBe("comfortable");
+    await waitFor(() => {
+      expect(document.querySelector(".task-table")?.classList.contains("density-comfortable")).toBe(
+        true,
+      );
+    });
+    expect(api.listTasks).toHaveBeenLastCalledWith({ page: 1, page_size: 10, status: "failed" });
+    expect(
+      document.querySelector(".ant-segmented-item-selected")?.textContent,
+    ).toBe("失败");
+  });
+});
+
+async function openUploadModal() {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: /上传数据包/ }));
+  await waitFor(() => {
+    expect(screen.getByText("上传数据包（一个压缩包 = 一个任务）")).toBeDefined();
+  });
+  return user;
+}
+
+function selectUploadFile(file: File) {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  expect(input).not.toBeNull();
+  fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
+}
+
+function okButton(): HTMLButtonElement {
+  return screen.getByRole("button", { name: "提交巡检" }) as HTMLButtonElement;
+}
+
 });
