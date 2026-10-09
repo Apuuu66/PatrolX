@@ -617,14 +617,159 @@
   font-size: var(--font-size-caption);
 }
 
+/* 源文件匹配降级为结论卡内一行等宽元数据（FR-015、R9、SC-005） */
+.rule-detail-source-patterns {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  flex-wrap: nowrap;
+  font-size: var(--font-size-caption);
+}
+
+.rule-detail-source-patterns-label {
+  flex: 0 0 auto;
+}
+
+.rule-detail-source-patterns-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rule-detail-source-patterns-value code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.rule-detail-source-patterns-value .copy-text-button {
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+}
+
+.rule-detail-source-patterns:hover .copy-text-button,
+.rule-detail-source-patterns:focus-within .copy-text-button {
+  opacity: 1;
+}
+
 .rule-finding {
   width: 100%;
 }
 
 .rule-finding-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   margin-top: var(--space-1);
   color: var(--text-secondary);
   font-size: var(--font-size-body);
+}
+
+.rule-finding-field {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.rule-finding-field-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.rule-finding-field-value {
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.rule-finding-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rule-finding-source code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.rule-finding-source .copy-text-button {
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+}
+
+.rule-finding-source:hover .copy-text-button,
+.rule-finding-source:focus-within .copy-text-button {
+  opacity: 1;
+}
+
+/* 证据分段：键值分行、关键数值高亮、折叠后仍保持行距（FR-012~FR-014） */
+.rule-finding-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rule-finding-evidence-part {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+.rule-finding-evidence-label {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+.rule-finding-evidence-label::after {
+  content: "：";
+}
+
+.rule-finding-evidence-value {
+  color: var(--text-primary);
+}
+
+.rule-finding-highlight {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: #fff7e6;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rule-finding-toggle.ant-btn {
+  height: auto;
+  padding-inline: 0;
+}
+
+/* 展开 / 收起必须可键盘触发且焦点可见（FR-019、contracts §7） */
+.rule-finding-toggle.ant-btn:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+/* 严重度轻量表达：色点 + 文字（FR-013、R10） */
+.severity-plain {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-caption);
+  color: var(--text-primary);
+  cursor: help;
+}
+
+.severity-plain-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
 }
 
 .rule-evidence-sections {

@@ -34,7 +34,8 @@ test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发�
   const conclusion = page.getByTestId("rule-section-conclusion");
   await expect(conclusion).toBeVisible();
   await expect(conclusion.locator(".ant-tag").filter({ hasText: "失败" })).toBeVisible();
-  await expect(conclusion.locator(".ant-tag").filter({ hasText: "高" })).toBeVisible();
+  // 严重度改为轻量"色点 + 文字"，不再占用彩色标签（FR-013、R10）
+  await expect(conclusion.getByLabel("严重程度：高")).toBeVisible();
   await expect(conclusion.getByText("告警生命周期判定完成", { exact: false })).toBeVisible();
   await expect(conclusion.getByTestId("rule-recommendation")).toBeVisible();
   await expect(page.getByTestId("rule-section-source-patterns")).toBeInViewport();
@@ -46,21 +47,67 @@ test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发�
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
   expect(order).toEqual(SECTION_ORDER);
 
-  // 源文件匹配：规则声明的 source_patterns 上移为独立区块。
+  // 源文件匹配降级为结论卡内一行等宽元数据，不再独立占位（FR-015、R9、SC-005）。
   const sourcePatterns = page.getByTestId("rule-section-source-patterns");
+  await expect(conclusion.getByTestId("rule-section-source-patterns")).toHaveCount(1);
   await expect(sourcePatterns).toContainText("alarm");
+  const sourcePatternsBox = await sourcePatterns.boundingBox();
+  expect(sourcePatternsBox?.height ?? 0).toBeLessThan(40);
+  await expect(page.locator(".ant-card-head").filter({ hasText: "源文件匹配" })).toHaveCount(0);
+
+  // 一行元数据仍可复制完整 pattern（contracts §5、§7）。
+  const copyPattern = sourcePatterns.getByRole("button", { name: "复制源文件匹配" });
+  await sourcePatterns.hover();
+  await copyPattern.click();
+  await expect(copyPattern).not.toHaveAttribute("data-copy-state", "idle");
 
   // 发现列表：CRITICAL / HIGH / MEDIUM 三条证据可见（SC-008）。
   const findingsCard = page.getByTestId("rule-section-findings");
   await expect(findingsCard).toContainText("发现（3）");
   for (const severity of ["严重", "高", "中"]) {
-    await expect(findingsCard.locator(".ant-tag").filter({ hasText: severity })).toHaveCount(1);
+    await expect(findingsCard.getByLabel(`严重程度：${severity}`)).toHaveCount(1);
   }
+  // 发现条目结构化分行：来源 / 证据 / 详情 / 建议（FR-012）。
+  const firstFinding = findingsCard.getByTestId("finding-item").first();
+  await expect(firstFinding.getByTestId("finding-field-source")).toContainText("alarm/alarm_history_");
+  await expect(firstFinding.getByTestId("finding-field-evidence")).toContainText("出现");
+  await expect(firstFinding.getByTestId("finding-field-details")).toContainText("判定为");
+  await expect(firstFinding.getByTestId("finding-field-recommendation")).toContainText("优先处置");
+
+  // 关键数值高亮（FR-013）。
+  const highlights = firstFinding.locator(".rule-finding-highlight");
+  await expect(highlights.first()).toBeVisible();
+  await expect(highlights.filter({ hasText: "3 次" }).first()).toBeVisible();
+
+  // 来源路径可复制（FR-014）。
+  const sourceField = firstFinding.getByTestId("finding-field-source");
+  const copySource = sourceField.getByRole("button", { name: "复制来源路径" });
+  await sourceField.hover();
+  await copySource.click();
+  await expect(copySource).not.toHaveAttribute("data-copy-state", "idle");
+
+  // 超过 4 行默认折叠，可展开查看全部证据分段（FR-014）。
+  const evidenceParts = firstFinding
+    .getByTestId("finding-evidence-parts")
+    .locator("[data-evidence-part]");
+  const collapsedParts = await evidenceParts.count();
+  expect(collapsedParts).toBeGreaterThan(0);
+  expect(collapsedParts).toBeLessThan(12);
+  await firstFinding.getByRole("button", { name: /展开/ }).click();
+  await expect(evidenceParts).toHaveCount(12);
+  await expect(firstFinding.getByRole("button", { name: /收起/ })).toBeVisible();
+
   await expect(findingsCard.getByText("1051 / UMF核心服务").first()).toBeVisible();
   await expect(findingsCard.getByText("1052 / UMF核心服务").first()).toBeVisible();
-  // 真实导出的定位信息进入证据文案（应用名称是分组键，实例定位在 定位信息 列）。
-  await expect(findingsCard.getByText("定位 pod-umf-9", { exact: false }).first()).toBeVisible();
-  await expect(findingsCard.getByText("定位 umf-node-01", { exact: false }).first()).toBeVisible();
+  // 真实导出的定位信息进入证据分段（应用名称是分组键，实例定位是独立分段）。
+  await expect(
+    firstFinding.locator("[data-evidence-part]").filter({ hasText: "pod-umf-9" }),
+  ).toHaveCount(1);
+  const thirdFinding = findingsCard.getByTestId("finding-item").nth(2);
+  await thirdFinding.getByRole("button", { name: /展开/ }).click();
+  await expect(
+    thirdFinding.locator("[data-evidence-part]").filter({ hasText: "umf-node-01" }),
+  ).toHaveCount(1);
 
   // 证据面板：六态分布 + 分组明细（SC-005）。
   const evidence = page.getByTestId("rule-section-evidence");

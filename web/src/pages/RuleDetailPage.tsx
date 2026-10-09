@@ -18,9 +18,12 @@ import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult, type TaskStatus } from "../api/http";
 import { AlarmFlappingPanel, type AlarmFlappingMetadata } from "../components/AlarmFlappingPanel";
+import { CopyTextButton } from "../components/CopyTextButton";
+import { getStatusTextColor } from "../utils/statusTextColors";
 import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
 import { MetricPanel } from "../components/MetricPanel";
 import { PageHeader } from "../components/PageHeader";
+import { FindingItem } from "../components/FindingItem";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { RuleStatusTag, SeverityTag } from "../components/StatusBadge";
 import { RESULT_STATUS_META } from "../components/statusLabels";
@@ -195,7 +198,7 @@ export function RuleDetailPage() {
           status={
             <Space size={8} wrap>
               <RuleStatusTag status={result.status} skipReason={result.skip_reason} />
-              <SeverityTag severity={result.severity} />
+              <SeverityTag severity={result.severity} variant="plain" />
             </Space>
           }
           actions={
@@ -211,7 +214,12 @@ export function RuleDetailPage() {
         />
         <div className="conclusion-hero-body">
           <div className="conclusion-hero-conclusion">
-            <span className="conclusion-hero-tag" style={{ background: statusColor }}>
+            <span
+              className="conclusion-hero-tag"
+              data-status={result.status}
+              style={{ color: getStatusTextColor(result.status, "#595959") }}
+            >
+              <span aria-hidden="true" className="conclusion-hero-tag-dot" style={{ background: statusColor }} />
               {statusLabel}
             </span>
             <Typography.Text strong className="conclusion-hero-sentence">
@@ -223,6 +231,20 @@ export function RuleDetailPage() {
               处理建议
             </Typography.Text>
             <Typography.Text>{recommendation}</Typography.Text>
+          </div>
+          {/* 源文件匹配降级为一行等宽元数据，不再独占区块（FR-015、R9、SC-005）。 */}
+          <div className="rule-detail-source-patterns" data-testid="rule-section-source-patterns">
+            <Typography.Text type="secondary" className="rule-detail-source-patterns-label">
+              源文件匹配
+            </Typography.Text>
+            {sourcePatterns.length > 0 ? (
+              <span className="rule-detail-source-patterns-value">
+                <code title={sourcePatterns.join(" ")}>{sourcePatterns.join(" ")}</code>
+                <CopyTextButton text={sourcePatterns.join(" ")} label="源文件匹配" />
+              </span>
+            ) : (
+              <Typography.Text type="secondary">该规则未声明源文件匹配范围</Typography.Text>
+            )}
           </div>
           {result.status === "skip" && (
             <Alert
@@ -247,21 +269,6 @@ export function RuleDetailPage() {
         </div>
       </Card>
 
-      {/* 源文件匹配（FR-020）：规则声明的 source_patterns 独立成区块。 */}
-      <Card title="源文件匹配" className="rule-detail-panel" data-testid="rule-section-source-patterns">
-        {sourcePatterns.length > 0 ? (
-          <Space size={[4, 8]} wrap>
-            {sourcePatterns.map((pattern) => (
-              <Tag key={pattern} className="rule-source-pattern">
-                {pattern}
-              </Tag>
-            ))}
-          </Space>
-        ) : (
-          <Typography.Text type="secondary">该规则未声明源文件匹配范围</Typography.Text>
-        )}
-      </Card>
-
       <Card
         title={`发现（${findings.length}）`}
         className="rule-detail-panel"
@@ -274,18 +281,7 @@ export function RuleDetailPage() {
             dataSource={findings}
             renderItem={(finding) => (
               <List.Item>
-                <div className="rule-finding">
-                  <Space size={8} wrap>
-                    <SeverityTag severity={finding.severity} />
-                    <Typography.Text strong>{finding.title}</Typography.Text>
-                  </Space>
-                  <div className="rule-finding-body">
-                    {finding.source_file && <div>来源：{finding.source_file}</div>}
-                    {finding.evidence && <div>证据：{finding.evidence}</div>}
-                    {finding.details && <div>详情：{finding.details}</div>}
-                    {finding.recommendation && <div>建议：{finding.recommendation}</div>}
-                  </div>
-                </div>
+                <FindingItem finding={finding} />
               </List.Item>
             )}
           />

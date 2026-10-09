@@ -163,6 +163,25 @@ describe("RuleDetailPage", () => {
     expect(conclusion.textContent).toContain("失败");
     expect(conclusion.textContent).toContain("高");
     expect(screen.getByTestId("rule-section-evidence").textContent).toContain("告警生命周期分组");
+
+    // 源文件匹配降级为结论卡内一行等宽元数据（FR-015、R9、SC-005）。
+    const sourcePatterns = screen.getByTestId("rule-section-source-patterns");
+    expect(conclusion.contains(sourcePatterns)).toBe(true);
+    expect(sourcePatterns.textContent).toContain("^alarm/.*\\.csv$");
+    expect(sourcePatterns.querySelector(".ant-card-head")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "复制源文件匹配" }),
+    ).toBeDefined();
+
+    // 发现条目结构化分行 + 关键数值高亮（FR-012、FR-013）。
+    const finding = screen.getByTestId("finding-item");
+    expect(finding.querySelector('[data-testid="finding-field-source"]')).not.toBeNull();
+    expect(finding.querySelector('[data-testid="finding-field-evidence"]')).not.toBeNull();
+    expect(finding.querySelector('[data-testid="finding-field-details"]')).not.toBeNull();
+    expect(finding.querySelector('[data-testid="finding-field-recommendation"]')).not.toBeNull();
+    expect(finding.querySelectorAll(".rule-finding-highlight").length).toBeGreaterThan(0);
+    // 严重度使用轻量色点变体，不再是彩色 Tag（FR-013、R10）。
+    expect(finding.querySelector(".severity-plain")?.textContent).toBe("严重");
   });
 
   it("skip 规则展示跳过原因，缺失时给出兜底文案", async () => {
@@ -183,6 +202,10 @@ describe("RuleDetailPage", () => {
       expect(screen.getByTestId("rule-skip-reason")).toBeDefined();
     });
     expect(screen.getByTestId("rule-skip-reason").textContent).toContain("source_patterns 未匹配到文件: ^traffic/.*$");
+    // 跳过原因必须与结论同屏可见，不能只藏在技术信息里（FR-015、SC-005）。
+    expect(screen.getByTestId("rule-section-conclusion").textContent).toContain(
+      "source_patterns 未匹配到文件: ^traffic/.*$",
+    );
   });
 
   it("skip 且无跳过原因时给出兜底文案，不静默通过", async () => {
@@ -197,6 +220,7 @@ describe("RuleDetailPage", () => {
       expect(screen.getByTestId("rule-skip-reason")).toBeDefined();
     });
     expect(screen.getByTestId("rule-skip-reason").textContent).toContain("未提供跳过原因");
+    expect(screen.getByTestId("rule-section-conclusion").textContent).toContain("未提供跳过原因");
   });
 
   it("证据表默认精简列，切换后显示全部列", async () => {
