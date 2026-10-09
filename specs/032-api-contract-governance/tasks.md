@@ -134,7 +134,7 @@ description: "功能实现任务列表：API 契约治理与持续集成门禁�
 - [X] T030 按 `specs/032-api-contract-governance/quickstart.md` 执行场景 1–4 全部命令并记录结果（后端 4 条、检索断言、前端 4 条）
 - [X] T031 确认 `tests/fixtures/make_real_package.py` 无需变更（本批次无新业务数据与展示用例），并在提交信息中说明
 - [X] T032 运行 `python build.py lint`、`python build.py test`、`python build.py contract`、`python build.py gen-web-api` 收尾门禁；勾选本文件全部任务项并按中文提交信息提交
-- [ ] T033 合入 `main` 后按宪法执行合入验证：`python build.py lint`、`python build.py test`、`python build.py web-build`、`python build.py e2e`（本批次改动 `web/src/api/client.ts`，属前端变更）全部通过后方可清理工作树
+- [X] T033 合入 `main` 后按宪法执行合入验证：`python build.py lint`、`python build.py test`、`python build.py web-build`、`python build.py e2e`（本批次改动 `web/src/api/client.ts`，属前端变更）全部通过后方可清理工作树
 - [ ] T034 推送 `origin/main` 后核对 GitHub Actions：`backend` 与 `frontend` 两个 job 自动触发并通过（quickstart 场景 5），保留运行链接作为交付证据
 
 ---
