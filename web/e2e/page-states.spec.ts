@@ -112,3 +112,69 @@ test("任务列表加载态使用骨架屏且空态提供上传动作", async ({
     page.locator(".page-empty-state").getByRole("button", { name: "上传数据包" }),
   ).toBeVisible();
 });
+
+/** 用 Tab 键推进焦点直到命中目标，验证键盘可达性（FR-019、contracts §7）。 */
+async function tabTo(
+  page: import("@playwright/test").Page,
+  target: import("@playwright/test").Locator,
+  limit = 120,
+) {
+  const handle = await target.elementHandle();
+  if (!handle) return false;
+  for (let index = 0; index < limit; index += 1) {
+    await page.keyboard.press("Tab");
+    const focused = await page.evaluate((node) => document.activeElement === node, handle);
+    if (focused) return true;
+  }
+  return false;
+}
+
+test("密度切换、复制与展开可键盘触发且有可见焦点", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+
+  // 密度：Tab 可达、焦点可见、Enter 可切换且不重置筛选。
+  const comfortable = page
+    .locator('[data-testid="density-control"]')
+    .getByRole("button", { name: "舒适" });
+  expect(await tabTo(page, comfortable)).toBe(true);
+  const densityFocus = await comfortable.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { outlineStyle: style.outlineStyle, outlineWidth: Number.parseFloat(style.outlineWidth) };
+  });
+  expect(densityFocus.outlineStyle).not.toBe("none");
+  expect(densityFocus.outlineWidth).toBeGreaterThanOrEqual(2);
+
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".task-table")).toHaveClass(/density-comfortable/);
+
+  // 复制与展开 / 收起：进入规则详情继续用键盘操作。
+  await page.goto("/tasks/task-alarm-flapping-e2e/rules/alarm.flapping");
+  await page
+    .context()
+    .grantPermissions(["clipboard-read", "clipboard-write"], { origin: "http://127.0.0.1:5183" });
+
+  const sourcePatterns = page.getByTestId("rule-section-source-patterns");
+  const patternText = (await sourcePatterns.locator("code").first().textContent())?.trim() ?? "";
+  expect(patternText.length).toBeGreaterThan(0);
+
+  const copyButton = sourcePatterns.getByRole("button", { name: "复制源文件匹配" });
+  await sourcePatterns.hover();
+  expect(await tabTo(page, copyButton)).toBe(true);
+  const copyFocus = await copyButton.evaluate((node) => getComputedStyle(node).outlineStyle);
+  expect(copyFocus).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".rule-detail-source-patterns .copy-text-feedback")).toHaveText("已复制");
+  const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clipboardText).toBe(patternText);
+
+  const toggle = page.locator(".rule-finding-toggle").first();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(await tabTo(page, toggle)).toBe(true);
+  const toggleFocus = await toggle.evaluate((node) => getComputedStyle(node).outlineStyle);
+  expect(toggleFocus).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});

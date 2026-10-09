@@ -115,7 +115,8 @@ test("设备台账只支持管理员物理删除", async ({ page }) => {
 
   await uploadPackage(page, rerunZip, "inspection");
   await page.getByRole("tab", { name: "设备台账" }).click();
-  await expect(page.getByText("NJ-AGG-001").first()).toBeVisible();
+  // 重新巡检需要重新解压并回填台账，全量并行运行时要给后台留出处理时间。
+  await expect(page.getByText("NJ-AGG-001").first()).toBeVisible({ timeout: 20_000 });
 
   // 列表页同样提供危险确认删除入口
   await page.goto("/inventory");

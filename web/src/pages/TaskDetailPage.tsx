@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Button, Card, Collapse, Descriptions, Tabs, Typography } from "antd";
+import { Alert, Button, Card, Collapse, Descriptions, Flex, Tabs, Typography } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import type { RuleStatus } from "../api/http";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
+import { DensitySegmented } from "../components/DensitySegmented";
+import { useTableDensity } from "../hooks/useTableDensity";
 import { useAuth } from "../auth/AuthContext";
 import { useTaskDetailData } from "../hooks/useTaskDetailData";
 import { useTaskDetailFilters } from "../hooks/useTaskDetailFilters";
@@ -20,7 +22,6 @@ import { getPreparationDisplay } from "../utils/preparationDisplay";
 import { latestTaskFailure } from "../utils/taskFailure";
 import {
   filterRuleResults,
-  getRuleCategoryOptions,
   getSortedAttentionRules,
   sortRuleResultsByFocus,
   type RuleSortMode,
@@ -38,6 +39,7 @@ export function TaskDetailPage() {
   const navigate = useNavigate();
   const { filters, updateFilters } = useTaskDetailFilters();
   const [attentionExpanded, setAttentionExpanded] = useState(false);
+  const { density, tableSize, setDensity } = useTableDensity();
 
   const { data, loading, busy, reload } = useTaskDetailData(taskId);
   const task = data?.task.status === "ready" ? data.task.data : null;
@@ -82,15 +84,15 @@ export function TaskDetailPage() {
     () => filterRuleResults(filterByStatus(rules, filters.status), { search: filters.search }),
     [rules, filters.status, filters.search],
   );
-  const categoryCounts = useMemo(
-    () => getRuleCategoryOptions(rules, filteredRules),
-    [rules, filteredRules],
-  );
   const sortedRules = useMemo(
     () => sortRuleResultsByFocus(filteredRules, filters.category, filters.sort),
     [filteredRules, filters.category, filters.sort],
   );
   const attentionRules = useMemo(() => getSortedAttentionRules(rules), [rules]);
+  const attentionRuleCodes = useMemo(
+    () => attentionRules.map((rule) => rule.code),
+    [attentionRules],
+  );
   const failure = useMemo(() => latestTaskFailure(logEntries), [logEntries]);
 
   if (loading && !task) {
@@ -171,15 +173,20 @@ export function TaskDetailPage() {
               className="task-detail-panel"
               data-testid="attention-panel"
               extra={
-                attentionHiddenCount > 0 || attentionExpanded ? (
-                  <Button type="link" size="small" onClick={() => setAttentionExpanded((value) => !value)}>
-                    {attentionExpanded ? "收起" : `展开其余 ${attentionHiddenCount} 条`}
-                  </Button>
-                ) : null
+                <Flex align="center" gap={12} wrap>
+                  <DensitySegmented value={density} onChange={setDensity} />
+                  {(attentionHiddenCount > 0 || attentionExpanded) && (
+                    <Button type="link" size="small" onClick={() => setAttentionExpanded((value) => !value)}>
+                      {attentionExpanded ? "收起" : `展开其余 ${attentionHiddenCount} 条`}
+                    </Button>
+                  )}
+                </Flex>
               }
             >
               <RuleResultTable
                 rules={visibleAttentionRules}
+                density={density}
+                tableSize={tableSize}
                 onOpenRule={openRule}
                 onRerunRule={(ruleCode) => void actions.rerunOne(ruleCode)}
               />
@@ -187,8 +194,9 @@ export function TaskDetailPage() {
           )}
 
           <RuleBrowser
-            categoryCounts={categoryCounts}
             sortedRules={sortedRules}
+            attentionRuleCodes={attentionRuleCodes}
+            categorySourceRules={rules}
             statusFilter={statusFilter}
             search={filters.search}
             sort={filters.sort}

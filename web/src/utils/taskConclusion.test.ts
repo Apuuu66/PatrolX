@@ -73,6 +73,39 @@ describe("deriveTaskConclusion", () => {
     assert.equal(conclusion.nextAction, "rules");
   });
 
+  it("失败与异常并存时只表达非零状态", () => {
+    const conclusion = deriveTaskConclusion(
+      makeTask({ stats: makeStats({ pass: 1, fail: 2, error: 1 }) }),
+    );
+
+    assert.equal(conclusion.tone, "danger");
+    assert.match(conclusion.sentence, /失败 2 条/);
+    assert.match(conclusion.sentence, /异常 1 条/);
+    assert.doesNotMatch(conclusion.sentence, /0 条/);
+  });
+
+  it("只有失败规则时结论不出现异常 0 条", () => {
+    const conclusion = deriveTaskConclusion(
+      makeTask({ stats: makeStats({ pass: 1, fail: 2 }) }),
+    );
+
+    assert.equal(conclusion.label, "需要关注");
+    assert.match(conclusion.sentence, /失败 2 条/);
+    assert.doesNotMatch(conclusion.sentence, /异常/);
+    assert.doesNotMatch(conclusion.sentence, /0 条/);
+  });
+
+  it("只有异常规则时结论只表达异常", () => {
+    const conclusion = deriveTaskConclusion(
+      makeTask({ stats: makeStats({ pass: 1, error: 3 }) }),
+    );
+
+    assert.equal(conclusion.label, "需要关注");
+    assert.match(conclusion.sentence, /异常 3 条/);
+    assert.doesNotMatch(conclusion.sentence, /失败/);
+    assert.doesNotMatch(conclusion.sentence, /0 条/);
+  });
+
   it("仅有告警时使用警告语气而不是失败红", () => {
     const conclusion = deriveTaskConclusion(
       makeTask({ stats: makeStats({ pass: 3, warn: 2 }) }),

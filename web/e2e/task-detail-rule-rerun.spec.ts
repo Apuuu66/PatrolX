@@ -64,8 +64,11 @@ test.beforeEach(async ({ page }) => {
 test("任务详情支持确认后单规则重跑", async ({ page }) => {
   await page.goto("/tasks/task-rule-rerun-e2e");
 
-  const allRulesCard = page.locator(".ant-card").filter({ hasText: "全部规则" });
-  const ruleRow = allRulesCard.locator("tr").filter({ hasText: "config.b" });
+  // 失败规则默认只在「重点关注」出现（FR-011），行级重跑入口以该处为准。
+  await expect(page.getByTestId("rule-browser").getByText("config.b")).toHaveCount(0);
+  const attentionCard = page.getByTestId("attention-panel");
+  const ruleRow = attentionCard.locator("tr").filter({ hasText: "config.b" });
+  await expect(ruleRow).toBeVisible();
   await ruleRow.getByRole("button", { name: "重跑" }).click();
 
   const rerunPromise = page.waitForRequest((request) =>

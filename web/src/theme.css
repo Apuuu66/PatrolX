@@ -308,12 +308,29 @@
 .conclusion-hero-tag {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   padding: 0 var(--space-2);
   border-radius: var(--radius-round);
+  background: var(--surface-subtle);
   font-size: var(--font-size-caption);
   font-weight: 600;
   line-height: 20px;
-  color: #ffffff;
+}
+
+.conclusion-hero-tag-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.conclusion-hero-tag[data-status="error"] .conclusion-hero-tag-dot {
+  border-radius: 1px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.75) 0 2px,
+    rgba(255, 255, 255, 0) 2px 4px
+  ) !important;
 }
 
 .conclusion-hero-sentence.ant-typography {
@@ -328,6 +345,19 @@
 .rule-category-collapse .ant-collapse-header {
   font-size: var(--font-size-section);
   font-weight: 600;
+}
+
+/* 全部规则与「重点关注」的去重提示：一行次要信息 + 轻量入口（FR-011） */
+.rule-browser-dedupe {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) 0;
+  font-size: var(--font-size-caption);
+}
+
+.rule-browser-dedupe .ant-typography {
+  font-size: var(--font-size-caption);
 }
 
 .task-technical-collapse {

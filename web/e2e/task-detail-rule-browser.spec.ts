@@ -99,3 +99,33 @@ test("任务详情提供状态分布、规则搜索、分类聚焦和严重度�
   await page.locator(".ant-select-item-option[title=严重度优先]").click();
   await expect(firstRow).toContainText("日志错误");
 });
+
+test("重点关注规则默认不在全部规则中重复展示且可恢复", async ({ page }) => {
+  await page.goto("/tasks/task-rule-browser-e2e");
+
+  const allRulesCard = page.getByTestId("rule-browser");
+  // log.b 已在「重点关注」，默认不在「全部规则」等权重复（FR-011、SC-004）。
+  await expect(page.getByTestId("attention-panel").getByText("日志错误")).toBeVisible();
+  await expect(allRulesCard.getByTestId("rule-browser-dedupe")).toContainText(
+    "另有 1 条已在上方重点关注",
+  );
+  await expect(allRulesCard.getByText("日志错误")).toHaveCount(0);
+  // 分类计数沿用既有筛选语义，不因去重减少（R7）。
+  await expect(
+    allRulesCard.locator(".ant-tag-checkable").filter({ hasText: /^日志\s*2$/ }),
+  ).toBeVisible();
+
+  await allRulesCard.getByTestId("rule-browser-show-all").click();
+  await expect(allRulesCard.getByTestId("rule-browser-show-all-active")).toContainText(
+    "已包含重点关注中的规则",
+  );
+  await expect(allRulesCard.getByText("日志错误")).toBeVisible();
+
+  await allRulesCard.getByTestId("rule-browser-hide-all").click();
+  await expect(allRulesCard.getByText("日志错误")).toHaveCount(0);
+
+  // 搜索命中被排除的规则时自动纳入，不丢失入口（FR-011）。
+  await page.getByLabel("规则搜索").fill("log.b");
+  await expect(allRulesCard.getByText("日志错误")).toBeVisible();
+  await expect(allRulesCard.getByTestId("rule-browser-dedupe")).toHaveCount(0);
+});

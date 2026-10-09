@@ -49,7 +49,9 @@ test("重点关注超过 5 条时只渲染前 5 条并可展开其余", async ({
 
   const hero = page.getByTestId("conclusion-hero");
   await expect(hero.getByText("需要关注")).toBeVisible();
-  await expect(hero.getByText("发现失败 5 条、异常 0 条规则结果，需要处理。")).toBeVisible();
+  // 结论句只表达非零状态，不出现"异常 0 条"（FR-009）
+  await expect(hero.getByText("发现失败 5 条规则结果，需要处理。")).toBeVisible();
+  await expect(hero.getByText(/异常 0 条/)).toHaveCount(0);
   await expect(hero.getByLabel("筛选失败")).toContainText("失败 5");
   await expect(hero.getByLabel("筛选告警")).toContainText("告警 2");
   await expect(hero.getByRole("button", { name: "查看报告" })).toBeVisible();
@@ -68,7 +70,14 @@ test("重点关注超过 5 条时只渲染前 5 条并可展开其余", async ({
   await attentionCard.getByRole("button", { name: "收起" }).click();
   await expect(attentionCard.locator(".ant-table-tbody tr.ant-table-row")).toHaveCount(5);
 
+  // 7 条规则都在上方「重点关注」，全部规则默认不重复展示（FR-011、SC-004）
   const allRulesCard = page.getByTestId("rule-browser");
+  await expect(allRulesCard.getByTestId("rule-browser-dedupe")).toContainText(
+    "另有 7 条已在上方重点关注",
+  );
+  await expect(allRulesCard.getByText("失败规则 6")).toHaveCount(0);
+
+  await allRulesCard.getByTestId("rule-browser-show-all").click();
   await expect(allRulesCard.getByText("失败规则 6")).toBeVisible();
   await expect(allRulesCard.getByText("失败规则 7")).toBeVisible();
 });
@@ -87,7 +96,11 @@ test("状态计数点选后联动状态筛选", async ({ page }) => {
 
   await failCount.click();
   await expect(page).not.toHaveURL(/status=fail/);
-  await expect(allRulesCard.getByText("失败规则 6")).toBeVisible();
+  // 清除筛选后回到默认去重视图，被排除的规则改由上方重点关注承载（FR-011）
+  await expect(allRulesCard.getByTestId("rule-browser-dedupe")).toContainText(
+    "另有 7 条已在上方重点关注",
+  );
+  await expect(allRulesCard.getByText("失败规则 6")).toHaveCount(0);
 });
 
 test("执行日志加载失败时展示错误态而不是空态", async ({ page }) => {

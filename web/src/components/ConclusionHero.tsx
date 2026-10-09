@@ -11,6 +11,7 @@ import { RESULT_STATUS_META } from "./statusLabels";
 import { formatTaskDuration } from "../utils/taskCard";
 import { getDeviceIdDisplay } from "../utils/taskDisplay";
 import { deriveTaskConclusion, type TaskConclusionTone } from "../utils/taskConclusion";
+import { getStatusTextColor } from "../utils/statusTextColors";
 import { getTaskFailureStage } from "../utils/taskFailure";
 import type { StatusFilter } from "../utils/taskFilter";
 
@@ -30,33 +31,41 @@ function trimmed(value?: string | null): string {
   return (value ?? "").trim();
 }
 
-/** FR-014 关键元数据：数据包、版本、设备、省份、运营商、网元类型、时间与耗时。 */
+/**
+ * FR-014 关键元数据：数据包、版本、设备、省份、运营商、网元类型、时间与耗时。
+ *
+ * 只收集真实有值的字段，不生成 "-" 占位；超过 4 项由 MetadataList 收纳进"更多元数据"（FR-010、R6）。
+ */
 function buildMetadataItems(task: TaskSummary, system: SystemInspection | null): MetadataListItem[] {
   const customer = system?.customer ?? {};
-  const items: MetadataListItem[] = [
-    { key: "package", label: "数据包", value: trimmed(system?.package_file) || "-" },
-    { key: "version", label: "版本", value: trimmed(task.customer_version ?? system?.version) || "-" },
-  ];
+  const items: MetadataListItem[] = [];
+
+  const push = (key: string, label: string, raw?: string | null) => {
+    const value = trimmed(raw);
+    if (value) items.push({ key, label, value });
+  };
+
+  push("package", "数据包", system?.package_file);
+  push("version", "版本", task.customer_version ?? system?.version);
 
   const device = getDeviceIdDisplay(task, system?.customer);
-  items.push({
-    key: "device_id",
-    label: "设备",
-    value: device.source === "ledger" ? `${device.value}（台账解析）` : device.value,
-  });
+  if (device.source !== null) {
+    push(
+      "device_id",
+      "设备",
+      device.source === "ledger" ? `${device.value}（台账解析）` : device.value,
+    );
+  }
 
-  const customerFields: Array<{ key: string; label: string; value: string }> = [
-    { key: "province", label: "省份", value: trimmed(task.customer_province ?? customer.province) || "-" },
-    { key: "operator", label: "运营商", value: trimmed(task.customer_operator ?? customer.operator) || "-" },
-    { key: "product", label: "网元类型", value: trimmed(task.customer_product ?? customer.product) || "-" },
-  ];
-  items.push(...customerFields);
+  push("province", "省份", task.customer_province ?? customer.province);
+  push("operator", "运营商", task.customer_operator ?? customer.operator);
+  push("product", "网元类型", task.customer_product ?? customer.product);
 
-  items.push({
-    key: "created_at",
-    label: "创建时间",
-    value: dayjs(task.created_at).format("YYYY-MM-DD HH:mm"),
-  });
+  const createdAt = dayjs(task.created_at);
+  if (createdAt.isValid()) {
+    items.push({ key: "created_at", label: "创建时间", value: createdAt.format("YYYY-MM-DD HH:mm") });
+  }
+
   const duration = formatTaskDuration(task.created_at, task.completed_at);
   if (duration) {
     items.push({ key: "duration", label: "耗时", value: duration });
@@ -96,7 +105,10 @@ export function ConclusionHero({
   extraActions,
 }: ConclusionHeroProps) {
   const conclusion = deriveTaskConclusion(task, failureReason, getTaskFailureStage(task));
-  const toneColor = STATUS_COLOR.get(TONE_STATUS[conclusion.tone]) ?? "#8c8c8c";
+  const toneStatus = TONE_STATUS[conclusion.tone];
+  const toneColor = STATUS_COLOR.get(toneStatus) ?? "#8c8c8c";
+  // 文字用文本安全色、填充色保留标准状态色，两者分离满足 AA（FR-019、R13）。
+  const toneTextColor = getStatusTextColor(toneStatus, "#595959");
   const blockedReason =
     task.status === "pending"
       ? "任务排队中，报告暂不可用。"
@@ -137,7 +149,12 @@ export function ConclusionHero({
 
       <div className="conclusion-hero-body">
         <div className="conclusion-hero-conclusion">
-          <span className="conclusion-hero-tag" style={{ background: toneColor }}>
+          <span className="conclusion-hero-tag" data-status={toneStatus} style={{ color: toneTextColor }}>
+            <span
+              aria-hidden="true"
+              className="conclusion-hero-tag-dot"
+              style={{ background: toneColor }}
+            />
             {conclusion.label}
           </span>
           <Typography.Text strong className="conclusion-hero-sentence">

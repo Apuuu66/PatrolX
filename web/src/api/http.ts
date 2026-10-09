@@ -9,6 +9,7 @@ export type TaskSummary = components["schemas"]["TaskSummary"];
 export type TaskStats = components["schemas"]["TaskStats"];
 export type SystemInspection = components["schemas"]["SystemInspection"];
 export type RuleResult = components["schemas"]["RuleResult"];
+export type RuleFinding = components["schemas"]["Finding"];
 export type MeasurementMetricDetail = components["schemas"]["MeasurementMetricDetail"];
 export type RuleStatus = components["schemas"]["RuleStatus"];
 export type Severity = components["schemas"]["Severity"];

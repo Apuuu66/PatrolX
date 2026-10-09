@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { App } from "antd";
 import { describe, expect, it, vi } from "vitest";
 
@@ -66,7 +67,51 @@ describe("ConclusionHero", () => {
     expect(screen.getByText("package.zip")).toBeDefined();
     expect(screen.getByText("V900R016C10SPC200")).toBeDefined();
     expect(screen.getByText("cmcc")).toBeDefined();
-    expect(screen.getByText("umf")).toBeDefined();
+
+    // 超过 4 项的真实字段进入"更多元数据"，不产生占位噪音（FR-010）
+    expect(screen.queryByText("umf")).toBeNull();
+    expect(screen.getByRole("button", { name: /更多元数据/ })).toBeDefined();
+  });
+
+  it("关键元数据最多平铺 4 项，其余可展开查看", async () => {
+    const { container } = renderHero({
+      system: {
+        package_file: "package.zip",
+        version: "V900R016C10SPC200",
+        status: "completed",
+        summary: makeStats(),
+        rules: [],
+        customer: { province: "js", operator: "cmcc", product: "umf" },
+      } as unknown as SystemInspection,
+    });
+
+    expect(container.querySelectorAll("[data-metadata-key]")).toHaveLength(4);
+
+    await userEvent.click(screen.getByRole("button", { name: /更多元数据/ }));
+    expect(await screen.findByText("umf")).toBeDefined();
+    expect(screen.getByText("2026-10-10 08:00")).toBeDefined();
+  });
+
+  it("关键元数据不渲染空字段与横线占位", () => {
+    const { container } = renderHero({ task: makeTask({ task_id: "task001" }), system: null });
+
+    const values = Array.from(container.querySelectorAll(".metadata-list-value-text")).map(
+      (node) => node.textContent ?? "",
+    );
+    expect(values.length).toBeGreaterThan(0);
+    expect(values.every((value) => value.trim().length > 0 && value.trim() !== "-")).toBe(true);
+    expect(container.querySelector('[data-metadata-key="package"]')).toBeNull();
+    expect(container.querySelector('[data-metadata-key="province"]')).toBeNull();
+  });
+
+  it("结论句不出现零值状态", () => {
+    renderHero({
+      task: makeTask({ stats: makeStats({ total: 3, pass: 1, fail: 2 }) }),
+      statusCounts: makeCounts({ pass: 1, fail: 2 }),
+    });
+
+    expect(screen.getByText("发现失败 2 条规则结果，需要处理。")).toBeDefined();
+    expect(screen.queryByText(/异常 0 条/)).toBeNull();
   });
 
   it("任务失败时展示失败原因与阶段并给出失败日志主操作", () => {

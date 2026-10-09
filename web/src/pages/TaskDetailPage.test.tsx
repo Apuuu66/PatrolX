@@ -1,10 +1,12 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { App } from "antd";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, type RuleResult, type SystemInspection, type TaskStats, type TaskSummary } from "../api/http";
 import { AuthProvider } from "../auth/AuthContext";
+import { TABLE_DENSITY_STORAGE_KEY } from "../hooks/useTableDensity";
 import { TaskDetailPage } from "./TaskDetailPage";
 
 vi.mock("../api/http", () => ({
@@ -78,6 +80,7 @@ function renderPage(taskId = "task-001") {
 
 describe("TaskDetailPage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     vi.mocked(api.listInspectors).mockResolvedValue([]);
     vi.mocked(api.getTaskLogs).mockResolvedValue({ task_id: "task-001", entries: [] });
   });
@@ -143,5 +146,47 @@ describe("TaskDetailPage", () => {
     expect(screen.queryByText("重点关注 1 条规则")).toBeNull();
     expect(screen.queryByText(/其余 \d+ 条在全部规则中查看/)).toBeNull();
     expect(screen.getByTestId("rule-browser")).toBeDefined();
+  });
+
+  it("重点关注表默认紧凑，切换舒适后写入偏好且不改变既有状态筛选", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(
+      makeTask({ stats: makeStats({ total: 2, pass: 1, fail: 1 }) }),
+    );
+    vi.mocked(api.getSystem).mockResolvedValue(
+      makeSystem({
+        summary: makeStats({ total: 2, pass: 1, fail: 1 }),
+        rules: [
+          makeRule(),
+          makeRule({ code: "log.b", name: "日志错误", category: "log", status: "fail", severity: "high" }),
+        ],
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("attention-panel")).toBeDefined();
+    });
+    const table = document.querySelector(".task-detail-attention-table");
+    expect(table?.classList.contains("density-compact")).toBe(true);
+
+    const user = userEvent.setup();
+    const densityControl = screen
+      .getAllByRole("group", { name: "表格密度" })
+      .find((node) => node.closest('[data-testid="attention-panel"]') !== null);
+    expect(densityControl).toBeDefined();
+    await user.click(
+      Array.from(densityControl?.querySelectorAll("button") ?? []).find(
+        (node) => node.textContent === "舒适",
+      ) as HTMLElement,
+    );
+
+    expect(window.localStorage.getItem(TABLE_DENSITY_STORAGE_KEY)).toBe("comfortable");
+    await waitFor(() => {
+      expect(document.querySelector(".task-detail-attention-table")?.classList.contains("density-comfortable")).toBe(
+        true,
+      );
+    });
+    expect(screen.getByTestId("attention-panel")).toBeDefined();
   });
 });

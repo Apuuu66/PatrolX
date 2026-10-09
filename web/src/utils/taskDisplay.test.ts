@@ -113,17 +113,47 @@ describe("getDeviceIdDisplay", () => {
 });
 
 describe("getHealthBarSegments", () => {
-  it("按非零状态生成健康度分段", () => {
-    const segments = getHealthBarSegments(makeStats({ total: 4, pass: 2, warn: 1, fail: 1 }));
+  it("按 fail → warn → error → skip → pass 排序并过滤 0 值", () => {
+    const segments = getHealthBarSegments(
+      makeStats({ total: 8, pass: 3, warn: 1, fail: 2, error: 1, skip: 1 }),
+    );
 
     assert.deepEqual(
-      segments.map((segment) => ({ key: segment.key, value: segment.value, percent: segment.percent })),
+      segments.map((segment) => ({
+        key: segment.key,
+        value: segment.value,
+        percent: segment.percent,
+      })),
       [
-        { key: "pass", value: 2, percent: 50 },
-        { key: "warn", value: 1, percent: 25 },
-        { key: "fail", value: 1, percent: 25 },
+        { key: "fail", value: 2, percent: 25 },
+        { key: "warn", value: 1, percent: 12.5 },
+        { key: "error", value: 1, percent: 12.5 },
+        { key: "skip", value: 1, percent: 12.5 },
+        { key: "pass", value: 3, percent: 37.5 },
       ],
     );
+  });
+
+  it("概览场景弱化通过与会话，并保留关注状态的强调级别", () => {
+    const segments = getHealthBarSegments(makeStats({ total: 4, pass: 3, warn: 1 }), {
+      emphasis: "overview",
+    });
+
+    const pass = segments.find((segment) => segment.key === "pass");
+    const warn = segments.find((segment) => segment.key === "warn");
+
+    assert.equal(pass?.color, "#b7eb8f");
+    assert.equal(pass?.emphasis, "quiet");
+    assert.equal(warn?.color, "#faad14");
+    assert.equal(warn?.emphasis, "attention");
+  });
+
+  it("任务行与详情保持标准状态色", () => {
+    const segments = getHealthBarSegments(makeStats({ total: 2, pass: 1, skip: 1 }));
+
+    assert.equal(segments.find((segment) => segment.key === "pass")?.color, "#52c41a");
+    assert.equal(segments.find((segment) => segment.key === "skip")?.color, "#1677ff");
+    assert.equal(segments.find((segment) => segment.key === "pass")?.emphasis, "normal");
   });
 
   it("全部状态为零时返回空分段", () => {

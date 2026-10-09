@@ -60,11 +60,15 @@ export function deriveTaskConclusion(
     };
   }
 
-  if (stats.fail > 0 || stats.error > 0) {
+  // 结论句只拼接非零状态，不出现"异常 0 条"这类噪音（FR-009、contracts §4）。
+  const attentionParts: string[] = [];
+  if (stats.fail > 0) attentionParts.push(`失败 ${stats.fail} 条`);
+  if (stats.error > 0) attentionParts.push(`异常 ${stats.error} 条`);
+  if (attentionParts.length > 0) {
     return {
       tone: "danger",
       label: "需要关注",
-      sentence: `发现失败 ${stats.fail} 条、异常 ${stats.error} 条规则结果，需要处理。`,
+      sentence: `发现${attentionParts.join("、")}规则结果，需要处理。`,
       detail: null,
       nextAction: "rules",
     };

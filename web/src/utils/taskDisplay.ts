@@ -98,21 +98,57 @@ export interface HealthBarSegment {
   color: string;
   value: number;
   percent: number;
+  /** 视觉权重：概览条弱化 pass/skip，任务行与详情按状态推导（R1、data-model §1）。 */
+  emphasis: StatusStatEmphasis;
 }
+
+/** 全站统一状态分布顺序：异常优先、通过最后（FR-001、R1）。 */
+export const HEALTH_BAR_STATUS_ORDER: readonly RuleStatus[] = ["fail", "warn", "error", "skip", "pass"];
+
+const HEALTH_BAR_LABELS: Record<RuleStatus, string> = {
+  pass: "通过",
+  warn: "告警",
+  fail: "失败",
+  error: "异常",
+  skip: "跳过",
+};
+
+const HEALTH_BAR_COLORS: Record<RuleStatus, string> = {
+  pass: "#52c41a",
+  warn: "#faad14",
+  fail: "#ff4d4f",
+  error: "#8c8c8c",
+  skip: "#1677ff",
+};
+
+/** 概览条弱化色：只降低通过 / 跳过的权重，关注状态保持标准色（R1）。 */
+const OVERVIEW_HEALTH_BAR_COLORS: Record<RuleStatus, string> = {
+  ...HEALTH_BAR_COLORS,
+  pass: "#b7eb8f",
+  skip: "#91caff",
+};
+
+/** 概览场景：弱化通过与会话；标准场景：任务行与任务详情。 */
+export type HealthBarEmphasisMode = "standard" | "overview";
 
 export function getHealthBarSegments(
   stats: Pick<TaskStats, "pass" | "warn" | "fail" | "error" | "skip">,
+  options: { emphasis?: HealthBarEmphasisMode } = {},
 ): HealthBarSegment[] {
   const total = stats.pass + stats.warn + stats.fail + stats.error + stats.skip;
   if (total === 0) return [];
 
-  return ([
-    { key: "pass", label: "通过", color: "#52c41a", value: stats.pass },
-    { key: "warn", label: "告警", color: "#faad14", value: stats.warn },
-    { key: "fail", label: "失败", color: "#ff4d4f", value: stats.fail },
-    { key: "error", label: "异常", color: "#8c8c8c", value: stats.error },
-    { key: "skip", label: "跳过", color: "#1677ff", value: stats.skip },
-  ] as HealthBarSegment[])
-    .filter((segment) => segment.value > 0)
-    .map((segment) => ({ ...segment, percent: (segment.value / total) * 100 }));
+  const mode = options.emphasis ?? "standard";
+
+  return HEALTH_BAR_STATUS_ORDER.map((key) => ({
+    key,
+    label: HEALTH_BAR_LABELS[key],
+    color: mode === "overview" ? OVERVIEW_HEALTH_BAR_COLORS[key] : HEALTH_BAR_COLORS[key],
+    value: stats[key],
+    percent: (stats[key] / total) * 100,
+    emphasis:
+      mode === "overview" && (key === "pass" || key === "skip")
+        ? "quiet"
+        : getStatusStatEmphasis(key, stats[key]),
+  })).filter((segment) => segment.value > 0);
 }

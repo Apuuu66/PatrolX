@@ -5,11 +5,15 @@ import type { ColumnsType } from "antd/es/table";
 import type { RuleResult } from "../api/http";
 import { RuleStatusTag, SeverityTag } from "./StatusBadge";
 import { getRuleCategoryLabel } from "../utils/ruleCategories";
+import type { TableDensity } from "../hooks/useTableDensity";
 
 type RuleResultTableProps = {
   rules: RuleResult[];
   focusCategory?: string | null;
   emptyDescription?: string;
+  /** 密度偏好透传；未提供时保持 AntD 默认紧凑表格（FR-016）。 */
+  density?: TableDensity;
+  tableSize?: "small" | "middle";
   onOpenRule: (ruleCode: string) => void;
   onRerunRule?: (ruleCode: string) => void;
 };
@@ -18,6 +22,8 @@ export function RuleResultTable({
   rules,
   focusCategory = null,
   emptyDescription = "暂无规则结果",
+  density,
+  tableSize = "small",
   onOpenRule,
   onRerunRule,
 }: RuleResultTableProps) {
@@ -50,7 +56,7 @@ export function RuleResultTable({
       title: "严重度",
       dataIndex: "severity",
       width: 90,
-      render: (value: string) => <SeverityTag severity={value} />,
+      render: (value: string) => <SeverityTag severity={value} variant="plain" />,
     },
     { title: "结果摘要", dataIndex: "summary" },
     {
@@ -86,7 +92,8 @@ export function RuleResultTable({
   return (
     <Table
       rowKey="code"
-      size="small"
+      className={density ? `task-detail-attention-table density-${density}` : undefined}
+      size={tableSize}
       columns={columns}
       dataSource={rules}
       pagination={false}
