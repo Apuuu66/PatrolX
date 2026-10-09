@@ -4,6 +4,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from app.models.schemas import InspectionTask, RuleResult, RuleStatus, Summary, SystemInspection
 
@@ -31,7 +32,8 @@ def append_log(output: Path, task_id: str, level: str, message: str, **detail) -
 def write_json_atomic(path: Path, data: object) -> None:
     """流式原子写 JSON，避免大结果序列化整串造成的内存放大。"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    # 临时名必须同时区分进程与同进程内的并发写者，否则两者会互相搬走/删除临时文件。
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
     try:
         with tmp.open("w", encoding="utf-8") as fh:
             json.dump(data, fh, ensure_ascii=False, indent=2)

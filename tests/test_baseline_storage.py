@@ -266,3 +266,54 @@ def test_single_rule_rerun_keeps_task_system_summary_only(tmp_path: Path, monkey
 
     after = json.loads(task_path.read_text(encoding="utf-8"))
     assert metadata_size(after) <= 2
+
+
+def test_concurrent_json_write_uses_unique_temp_files(tmp_path: Path, monkeypatch) -> None:
+    """同进程并发写同一路径时，临时文件必须各自独立，替换不得互相删除。
+
+    CI 上 ``test_concurrent_rerun_requests_complete_consistently`` 偶发失败：
+    两个重跑请求在同一进程内并发落盘 ``task.json``，共享 ``.task.json.<pid>.tmp``
+    使先完成者的 ``os.replace`` 搬走临时文件，另一方随即 ``FileNotFoundError``。
+    """
+    import os
+    import threading
+
+    from app.services.store import write_json_atomic
+
+    path = tmp_path / "task.json"
+    paused = threading.Event()
+    resume = threading.Event()
+    real_replace = os.replace
+    lock = threading.Lock()
+    calls = 0
+
+    def gated_replace(src: object, dst: object) -> None:
+        nonlocal calls
+        with lock:
+            calls += 1
+            is_first = calls == 1
+        if is_first:
+            paused.set()
+            resume.wait(timeout=5)
+        real_replace(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", gated_replace)
+    errors: list[BaseException] = []
+
+    def writer(payload: dict[str, object]) -> None:
+        try:
+            write_json_atomic(path, payload)
+        except BaseException as exc:  # noqa: BLE001 - 测试需要收集线程内的异常
+            errors.append(exc)
+
+    first = threading.Thread(target=writer, args=({"writer": 1},))
+    first.start()
+    assert paused.wait(timeout=5)
+    second = threading.Thread(target=writer, args=({"writer": 2},))
+    second.start()
+    second.join(timeout=5)
+    resume.set()
+    first.join(timeout=5)
+
+    assert not errors
+    assert json.loads(path.read_text(encoding="utf-8")) == {"writer": 1}
