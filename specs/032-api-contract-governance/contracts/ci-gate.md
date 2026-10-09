@@ -14,7 +14,7 @@
 | 安装 | `python build.py install` | 按 `requirements-lock.txt` 建立 `.venv` 并 `--no-deps -e .` 成功 |
 | 静态检查 | `python build.py lint` | Ruff check 与 format check 无问题 |
 | 测试 | `set -o pipefail` + `python build.py test 2>&1 \| tee /tmp/backend-test.log` | pytest 全绿，含契约三条守卫 |
-| 失败诊断（仅失败时） | `grep -m5 -E '^(FAILED\|ERROR) ' /tmp/backend-test.log` 与 `tail -n 30 /tmp/backend-test.log`，逐行加 `::error::` 前缀 | 不改变门禁判定；失败用例名与日志末尾以 check-run 注解形式回显 |
+| 失败诊断（仅失败时） | `grep -m5 -E '^(FAILED\|ERROR) '`、`grep -m2 -B 2 -A 10 -E 'Error:|Not implemented|Timed out|FAILED'` 与 `tail -n 20 /tmp/backend-test.log`，逐行加 `::error::` 前缀 | 不改变门禁判定；失败用例名、错误上下文与日志末尾以 check-run 注解形式回显 |
 | 契约 | `python build.py contract` | FastAPI 生成结果与 `docs/api/openapi.yaml` 路径/方法/operationId 完全一致 |
 
 ## Job 2：frontend（ubuntu-latest，Node 22，timeout 15 分钟，工作目录 `web/`）
@@ -25,7 +25,7 @@
 | 客户端零漂移 | `npm run gen-api` + `git diff --exit-code -- src/api/client.ts` | 再生成后无差异 |
 | 构建 | `npm run build` | `tsc -b && vite build` 成功 |
 | 单测 | `set -o pipefail` + `npm test 2>&1 \| tee /tmp/frontend-test.log` | node --test 与 vitest 全绿 |
-| 失败诊断（仅失败时） | `grep -m5 -E '(^\| )(FAIL \|not ok )' /tmp/frontend-test.log` 与 `tail -n 30 /tmp/frontend-test.log`，逐行加 `::error::` 前缀 | 不改变门禁判定；失败用例名与日志末尾以 check-run 注解形式回显 |
+| 失败诊断（仅失败时） | `grep -m5 -E '(^\| )(FAIL \|not ok )'`、`grep -m2 -B 2 -A 10 -E 'Error:|Not implemented|Timed out|not ok'` 与 `tail -n 20 /tmp/frontend-test.log`，逐行加 `::error::` 前缀 | 不改变门禁判定；失败用例名、错误上下文与日志末尾以 check-run 注解形式回显 |
 
 ## 退出码与失败诊断
 

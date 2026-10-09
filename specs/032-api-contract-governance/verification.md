@@ -95,6 +95,24 @@ main
 - 至此第五节从「已知风险」转为「已闭环」：偶发失败由终态发布时序缺陷导致，已用确定性测试锁定，不再依赖「重跑碰运气」。
 - 本闭环记录所在提交（`149aeb4`）为纯文档变更，同一 workflow 再次触发复核并同样全绿（[run 37978312071](https://github.com/Apuuu66/PatrolX/actions/runs/37978312071)：backend 97s、frontend 53s），确认闭环记录本身不破坏门禁；该次复核的结果即本记录的终点，不再为记录自身追加提交。
 
+### 第二阶段闭环（2026-10-10，另有多条独立根因）
+
+前条记录完成后，纯文档复核红跑暴露出与终态发布时序无关的独立根因，同日分别用确定性用例锁定并修复：
+
+- **前端 jsdom 伪元素样式查询**：[run 37978615903](https://github.com/Apuuu66/PatrolX/actions/runs/37978615903) 的 frontend job 在 `InventoryPage`/`InventoryDevicePage` 用例偶发报 `Not implemented: window.getComputedStyle(elt, pseudoElt)`（`rc-util/getScrollBarSize.js` 以 `::-webkit-scrollbar` 调用），jsdomError 会挂到当前正在执行的用例上。修复（`63b6e3c`）：`web/src/test/setup.ts` 包装原生 `getComputedStyle` 并丢弃伪元素参数；新增 `web/src/test/setup.test.tsx` 覆盖 antd Table + scroll 触发路径，RED → GREEN。
+- **同进程并发落盘临时文件名冲突**：同次红跑的 backend job 在 `test_concurrent_rerun_requests_complete_consistently` 报 `FileNotFoundError: .task.json.2428.tmp -> task.json`。根因：`app/services/store.py:write_json_atomic` 的临时名只含 pid，同进程两个并发写者共享同一临时文件，先完成者 `os.replace` 搬走后另一方失败。修复（`89f812d`）：临时名追加 `uuid4().hex`；新增 `tests/test_baseline_storage.py::test_concurrent_json_write_uses_unique_temp_files`，用 `os.replace` gate 阻塞第一个写者，RED 阶段复现同款 `FileNotFoundError`。
+- **前端单测 5s 超时误报**：jsdom 垫片提交后 [run 37980168841](https://github.com/Apuuu66/PatrolX/actions/runs/37980168841) 的 frontend job 仍红，失败仍集中在这两个用例且注解中无 `Not implemented`。本地以 16 路 CPU 抢占复现 `Error: Test timed out in 5000ms`（与 CI 报的用例一致），确认为慢速/高负载环境的超时误报。修复（`57b8013`）：`web/vitest.config.ts` 增 `testTimeout: 15000`；并增强失败摘要（`e792ead`）：红跑时额外 grep `Error:|Not implemented|Timed out` 上下文各 2 处（前后 2/10 行），日志尾部保留 20 行，契约 `contracts/ci-gate.md` 同步更新。
+
+修复推送后自动触发 [run 37980872923](https://github.com/Apuuu66/PatrolX/actions/runs/37980872923)，两个 job 全部通过：
+
+| Job | 结果 | 耗时 |
+| --- | --- | --- |
+| backend（lint / test / contract） | success | 101s |
+| frontend（客户端零漂移 / 构建 / 单测） | success | 41s |
+
+- **本地证据**：`lint` 182 files；`test` 584 passed（含新增并发用例）；`contract` OK；`verify` exit 0；web `npm test` 33 passed（16 路负载下复跑全绿）、`npm run build` OK；`build.py e2e` 35 passed（24.9s；首次失败的单例 `kpi-measurement-version-compare` 单跑 1.3s 通过，判断为并发会话负载下的偶发）。
+- 至此第五节四类根因（终态发布时序、并发临时文件名、jsdom 伪元素查询、慢速环境超时）全部闭环；`37980872923` 的绿跑已包含全部修复与增强后的失败摘要，本记录为第五节终点，不再为记录追加额外复核提交。
+
 ## 六、残留与洁净度
 
 - 未提交残留（与本批次无关，不提交）：`web/.tmp-show-detail.mjs`、`web/.tmp-show-updates.mjs`、`web/e2e/screenshots/`。
