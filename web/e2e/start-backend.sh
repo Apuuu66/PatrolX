@@ -6,8 +6,9 @@ E2E_DIR="$ROOT_DIR/web/e2e/.tmp"
 VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
 if [ ! -x "$VENV_PYTHON" ]; then
   VENV_PYTHON="$(dirname "$(dirname "$ROOT_DIR")")/.venv/bin/python"
-export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
 fi
+# 工作树运行时必须显式指定仓库根，避免 editable 安装把 app 解析到主工作区。
+export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
 LEGACY_TASK_ID="task-legacy-e2e"
 
 rm -rf "$E2E_DIR"
@@ -57,4 +58,5 @@ export PATROLX_SQLITE_PATH="$E2E_DIR/patrolx.db"
 cd "$ROOT_DIR"
 "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_kpi_measurement_history.py"
 "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_home_task.py"
+"$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_alarm_flapping.py"
 exec "$VENV_PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port 8010
