@@ -474,7 +474,7 @@ export function TaskListPage() {
     {
       title: "任务",
       key: "task",
-      width: 320,
+      width: 280,
       render: (_, record) => {
         const failureReason = getTaskFailureReason(record);
         return (
@@ -505,19 +505,19 @@ export function TaskListPage() {
     {
       title: "状态摘要",
       key: "stats",
-      width: 240,
+      width: 190,
       render: (_, record) => <StatusDistribution stats={record.stats} />,
     },
     {
       title: "元数据",
       key: "metadata",
-      width: 260,
+      width: 200,
       render: (_, record) => <MetadataList items={getTaskMetadataTags(record, dicts)} />,
     },
     {
       title: "时间与耗时",
       key: "timeline",
-      width: 220,
+      width: 190,
       render: (_, record) => {
         const duration = formatTaskDuration(record.created_at, record.completed_at);
         return (
@@ -538,8 +538,9 @@ export function TaskListPage() {
     {
       title: "操作",
       key: "actions",
-      width: 220,
+      width: 190,
       align: "right",
+      fixed: "right",
       render: (_, record) => {
         const isFailed = record.status === "failed";
         const canReport = record.status === "completed";
@@ -746,7 +747,7 @@ export function TaskListPage() {
                   />
                 ),
               }}
-              scroll={{ x: 1200 }}
+              scroll={{ x: 1098 }}
             />
           )}
 

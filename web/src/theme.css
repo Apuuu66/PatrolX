@@ -35,6 +35,20 @@
   --status-skip: #1677ff;
 }
 
+/* 应用骨架：内容区最大宽度 1600px，1280px~1920px 间不出现页面级横向滚动（contracts/ui-baseline §6） */
+.app-shell-inner {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.app-shell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
 .page-header {
   margin-bottom: var(--space-5);
 }

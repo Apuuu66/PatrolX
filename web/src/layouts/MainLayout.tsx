@@ -135,35 +135,38 @@ export function MainLayout() {
             borderBottom: "1px solid #f0f0f0",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
           }}
         >
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            系统维护巡检平台
-          </Typography.Title>
-          <Space>
-            {user ? (
-              <>
-                <Typography.Text type="secondary">{user.username}</Typography.Text>
-                <Tag color={user.role === "admin" ? "blue" : "default"}>
-                  {ROLE_LABELS[user.role] ?? user.role}
-                </Tag>
-                <Button size="small" icon={<LogoutOutlined />} onClick={() => void logout()}>
-                  登出
-                </Button>
-              </>
-            ) : (
-              <>
-                <Typography.Text type="secondary">访客模式</Typography.Text>
-                <Button size="small" type="primary" onClick={() => setLoginOpen(true)}>
-                  登录
-                </Button>
-              </>
-            )}
-          </Space>
+          <div className="app-shell-inner app-shell-header">
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              系统维护巡检平台
+            </Typography.Title>
+            <Space>
+              {user ? (
+                <>
+                  <Typography.Text type="secondary">{user.username}</Typography.Text>
+                  <Tag color={user.role === "admin" ? "blue" : "default"}>
+                    {ROLE_LABELS[user.role] ?? user.role}
+                  </Tag>
+                  <Button size="small" icon={<LogoutOutlined />} onClick={() => void logout()}>
+                    登出
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Typography.Text type="secondary">访客模式</Typography.Text>
+                  <Button size="small" type="primary" onClick={() => setLoginOpen(true)}>
+                    登录
+                  </Button>
+                </>
+              )}
+            </Space>
+          </div>
         </Header>
         <Content style={{ padding: 24, background: "#f5f5f5" }}>
-          <Outlet />
+          <div className="app-shell-inner">
+            <Outlet />
+          </div>
         </Content>
       </Layout>
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
