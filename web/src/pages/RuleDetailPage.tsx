@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, App, Breadcrumb, Button, Card, Descriptions, List, Space, Tag, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult } from "../api/http";
+import { AlarmFlappingPanel, type AlarmFlappingMetadata } from "../components/AlarmFlappingPanel";
 import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
 import { MetricPanel } from "../components/MetricPanel";
 import { RuleStatusTag, SeverityTag } from "../components/StatusBadge";
@@ -70,6 +71,7 @@ export function RuleDetailPage() {
 
   const conclusion = result.summary || meta?.description || "已完成规则执行";
   const hasMeasurementResults = Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "measurement_units");
+  const alarmFlapping = (result.metadata ?? {})["alarm_flapping"] as AlarmFlappingMetadata | undefined;
   const alertType = result.status === "fail" || result.status === "error" ? "error" : result.status === "warn" ? "warning" : "info";
 
   return (
@@ -122,6 +124,12 @@ export function RuleDetailPage() {
           />
         )}
       </Card>
+
+      {alarmFlapping && (
+        <Card title="告警生命周期分组" style={{ marginBottom: 16 }}>
+          <AlarmFlappingPanel metadata={alarmFlapping} />
+        </Card>
+      )}
 
       {hasMeasurementResults && (
         <Card title="KPI 测量单元巡检" style={{ marginBottom: 16 }}>
