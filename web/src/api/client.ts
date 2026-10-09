@@ -118,8 +118,7 @@ export interface paths {
         /** List Tasks V2 */
         get: operations["listTasksV2"];
         put?: never;
-        /** Create Task V2 */
-        post: operations["createTaskV2"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -765,23 +764,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** Body_createTaskV2 */
-        Body_createTaskV2: {
-            /** Package File */
-            package_file: string;
-            /** Name */
-            name?: string | null;
-            /** Version */
-            version?: string | null;
-            /** Province */
-            province?: string | null;
-            /** Operator */
-            operator?: string | null;
-            /** Product */
-            product?: string | null;
-            /** Device Id */
-            device_id?: string | null;
-        };
         /** Body_createTaskV3 */
         Body_createTaskV3: {
             /** Package File */
@@ -2548,39 +2530,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    createTaskV2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_createTaskV2"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskCreated"];
                 };
             };
             /** @description Validation Error */

@@ -259,28 +259,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/tasks:
-    post:
-      summary: Create Task V2
-      operationId: createTaskV2
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_createTaskV2'
-      responses:
-        '202':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskCreated'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
     get:
       summary: List Tasks V2
       operationId: listTasksV2
@@ -1792,46 +1770,6 @@ paths:
               schema: {}
 components:
   schemas:
-    Body_createTaskV2:
-      properties:
-        package_file:
-          type: string
-          contentMediaType: application/octet-stream
-          title: Package File
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Name
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-        province:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Province
-        operator:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Operator
-        product:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Product
-        device_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Device Id
-      type: object
-      required:
-      - package_file
-      title: Body_createTaskV2
     Body_createTaskV3:
       properties:
         package_file:

@@ -132,7 +132,6 @@ OptionalIntQuery = Annotated[int | None, BeforeValidator(_parse_optional_int_que
 v1_router = APIRouter(prefix="/api/v1")
 router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
-v4_router = APIRouter(prefix="/api/v4")
 v5_router = APIRouter(prefix="/api/v5")
 DICT_NAMES = ("province", "operator", "product")
 
@@ -171,71 +170,6 @@ async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
 
 
 # ---- /api/v2 契约路由 ----
-
-
-@router.post("/tasks", response_model=TaskCreated, status_code=202, operation_id="createTaskV2")
-async def create_task_v2(
-    response: Response,
-    package_file: UploadFile = File(...),
-    name: str | None = Form(None),
-    version: str | None = Form(None),
-    province: str | None = Form(None),
-    operator: str | None = Form(None),
-    product: str | None = Form(None),
-    device_id: str | None = Form(None),
-) -> TaskCreated:
-    filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
-    if len(filename.encode("utf-8")) > 255:
-        raise AppError("invalid_filename", "数据包文件名过长，请限制在 255 字节内", 400)
-    if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
-        raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
-
-    task_id = generate_task_id(filename)
-    temp_path: Path | None = None
-    created: TaskCreated | None = None
-    try:
-        checksum, size, temp_path = await _receive_upload(package_file)
-        if size == 0:
-            raise AppError("invalid_package", "数据包不能为空", 400)
-        if size > settings.max_upload_mb * 1024 * 1024:
-            raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
-
-        if task_service.exists(task_id):
-            existing = settings.uploads / task_id / filename
-            existing_checksum = sha256_file(existing) if existing.exists() else None
-            if existing_checksum != checksum:
-                raise AppError(
-                    "package_checksum_conflict",
-                    "同名任务已存在，但数据包 checksum 不同",
-                    409,
-                )
-            response.headers["Location"] = f"/api/v2/tasks/{task_id}"
-            return TaskCreated(task_id=task_id)
-
-        created = task_service.reserve(
-            filename,
-            name,
-            province,
-            operator,
-            version,
-            product=product,
-            device_id=device_id,
-        )
-        task_dir = settings.uploads / created.task_id
-        task_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(temp_path, task_dir / filename)
-        response.headers["Location"] = f"/api/v2/tasks/{created.task_id}"
-        task_service.submit(created.task_id)
-        return created
-    except Exception:
-        if created is not None:
-            task_service.discard(created.task_id)
-            shutil.rmtree(settings.uploads / created.task_id, ignore_errors=True)
-            shutil.rmtree(settings.output / created.task_id, ignore_errors=True)
-        raise
-    finally:
-        if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
 
 
 @v3_router.post("/tasks", response_model=TaskCreated, status_code=202, operation_id="createTaskV3")
