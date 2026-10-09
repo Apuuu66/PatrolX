@@ -85,4 +85,13 @@ main
 
 ## 七、T034 CI 记录
 
-（运行链接在推送后补录，见本文件下一次提交。）
+推送 `main`（`8c3edf9..f0f6cdd`）后自动触发 [run 37975950153](https://github.com/Apuuu66/PatrolX/actions/runs/37975950153)，两个 job 均通过：
+
+| Job | 结果 | 耗时 | 关键步骤 |
+| --- | --- | --- | --- |
+| backend（lint / test / contract） | success | 89s | 静态检查 1s、后端测试 69s、契约 2s；「后端测试失败摘要」`skipped` |
+| frontend（客户端零漂移 / 构建 / 单测） | success | 43s | 客户端零漂移、生产构建 10s、前端单测 22s；「前端单测失败摘要」`skipped` |
+
+- 绿跑时失败诊断步骤为 `skipped`，不改变门禁结论；红跑时其 `::error::` 注解即为失败用例定位入口。
+- 本文件所在提交为纯文档变更，同一 workflow 再次触发复核。
+- 历史对照：`37972053466`（frontend 失败）、`37972601601`（backend 失败）、`37973143973`（全绿）——见第五节。
