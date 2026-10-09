@@ -32,7 +32,8 @@ jobs:
         run: |
           set -o pipefail
           grep -m5 -E '^(FAILED|ERROR) ' /tmp/backend-test.log | sed 's/^/::error::/' || true
-          tail -n 30 /tmp/backend-test.log | sed 's/^/::error::/'
+          grep -m2 -B 2 -A 10 -E 'Error:|Not implemented|Timed out|FAILED' /tmp/backend-test.log | sed 's/^/::error::/' || true
+          tail -n 20 /tmp/backend-test.log | sed 's/^/::error::/'
       - name: 契约一致性
         run: python build.py contract
 
@@ -68,4 +69,5 @@ jobs:
         run: |
           set -o pipefail
           grep -m5 -E '(^| )(FAIL |not ok )' /tmp/frontend-test.log | sed 's/^/::error::/' || true
-          tail -n 30 /tmp/frontend-test.log | sed 's/^/::error::/'
+          grep -m2 -B 2 -A 10 -E 'Error:|Not implemented|Timed out|not ok' /tmp/frontend-test.log | sed 's/^/::error::/' || true
+          tail -n 20 /tmp/frontend-test.log | sed 's/^/::error::/'
