@@ -1,7 +1,7 @@
 ---
 spec: 032-api-contract-governance
 branch: feature/032-api-contract-governance（已 fast-forward 合入 main）
-worktree: .worktrees/feature-032-api-contract-governance（合入验证通过后清理）
+worktree: .worktrees/feature-032-api-contract-governance（2026-10-10 已清理）
 verified_at: 2026-10-10
 ---
 
@@ -81,6 +81,7 @@ main
 - 未提交残留（与本批次无关，不提交）：`web/.tmp-show-detail.mjs`、`web/.tmp-show-updates.mjs`、`web/e2e/screenshots/`。
 - 环境残留进程（截图/调试会话遗留，未清理）：`uvicorn:8000` + `vite:5173`（run_online）、`uvicorn:8011` + `vite:5174`。
 - 本回合未改契约、客户端、后端与测试代码；`git status` 中无本批次未跟踪产物。
+- 分支与 worktree 已清理：`git worktree remove .worktrees/feature-032-api-contract-governance` + `git branch -d feature/032-api-contract-governance`（删除前确认工作区洁净且 `a88ddc1` 为 `main` 祖先）；`git worktree list` 仅剩 030 / 033 两个非本批次 worktree。
 - 并发会话产物（同样不提交）：`web/src/components/MeasurementTrendChart.tsx`、`web/src/components/MeasurementTrendChart.test.tsx`、`web/e2e/kpi-measurement-single-point.spec.ts`、`web/e2e/seed_kpi_measurement_history.py`。
 
 ## 七、T034 CI 记录
@@ -94,4 +95,13 @@ main
 
 - 绿跑时失败诊断步骤为 `skipped`，不改变门禁结论；红跑时其 `::error::` 注解即为失败用例定位入口。
 - 本文件所在提交为纯文档变更，同一 workflow 再次触发复核。
+
+该文档提交推送后自动触发 [run 37976223400](https://github.com/Apuuu66/PatrolX/actions/runs/37976223400)（`f0f6cdd..e3b076d`），两个 job 同样全部通过，确认「纯文档变更」不破坏门禁：
+
+| Job | 结果 | 耗时 | 关键步骤 |
+| --- | --- | --- | --- |
+| backend（lint / test / contract） | success | 84s | 静态检查、后端测试、契约一致性全过；「后端测试失败摘要」`skipped` |
+| frontend（客户端零漂移 / 构建 / 单测） | success | 60s | 客户端零漂移、生产构建、前端单测全过；「前端单测失败摘要」`skipped` |
+
+- 至此 `main` 上连续两次 CI（`37975950153`、`37976223400`）双 job 全绿，T034 完成。
 - 历史对照：`37972053466`（frontend 失败）、`37972601601`（backend 失败）、`37973143973`（全绿）——见第五节。
