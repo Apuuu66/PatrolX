@@ -160,8 +160,8 @@ describe("RuleDetailPage", () => {
     const conclusion = screen.getByTestId("rule-section-conclusion");
     expect(conclusion.textContent).toContain("结论摘要：17 个分组，3 条 Finding");
     expect(conclusion.textContent).toContain("处理建议：确认网元侧告警收敛配置。");
-    expect(conclusion.textContent).toContain("FAIL");
-    expect(conclusion.textContent).toContain("high");
+    expect(conclusion.textContent).toContain("失败");
+    expect(conclusion.textContent).toContain("高");
     expect(screen.getByTestId("rule-section-evidence").textContent).toContain("告警生命周期分组");
   });
 

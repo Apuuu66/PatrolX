@@ -33,8 +33,8 @@ test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发�
   // 结论区首屏可见：状态、严重度、结论摘要、处理建议与重跑入口（FR-020、FR-023、SC-004）。
   const conclusion = page.getByTestId("rule-section-conclusion");
   await expect(conclusion).toBeVisible();
-  await expect(conclusion.getByText("FAIL")).toBeVisible();
-  await expect(conclusion.getByText("high")).toBeVisible();
+  await expect(conclusion.locator(".ant-tag").filter({ hasText: "失败" })).toBeVisible();
+  await expect(conclusion.locator(".ant-tag").filter({ hasText: "高" })).toBeVisible();
   await expect(conclusion.getByText("告警生命周期判定完成", { exact: false })).toBeVisible();
   await expect(conclusion.getByTestId("rule-recommendation")).toBeVisible();
   await expect(page.getByTestId("rule-section-source-patterns")).toBeInViewport();
@@ -53,7 +53,7 @@ test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发�
   // 发现列表：CRITICAL / HIGH / MEDIUM 三条证据可见（SC-008）。
   const findingsCard = page.getByTestId("rule-section-findings");
   await expect(findingsCard).toContainText("发现（3）");
-  for (const severity of ["critical", "high", "medium"]) {
+  for (const severity of ["严重", "高", "中"]) {
     await expect(findingsCard.locator(".ant-tag").filter({ hasText: severity })).toHaveCount(1);
   }
   await expect(findingsCard.getByText("1051 / UMF核心服务").first()).toBeVisible();
@@ -126,7 +126,7 @@ test("skip 规则详情必须展示跳过原因", async ({ page }) => {
   await page.goto(`/tasks/${TASK_ID}/rules/traffic.stat`);
 
   const conclusion = page.getByTestId("rule-section-conclusion");
-  await expect(conclusion.getByText("SKIP")).toBeVisible();
+  await expect(conclusion.getByText("跳过").first()).toBeVisible();
   await expect(page.getByTestId("rule-skip-reason")).toContainText("source_patterns 未匹配到文件");
   await expect(page.getByTestId("rule-skip-reason")).toContainText("^traffic/.*$");
 });
