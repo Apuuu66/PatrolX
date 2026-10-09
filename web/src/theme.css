@@ -817,6 +817,21 @@
   font-weight: 600;
 }
 
+/* 规则管理：编码等宽，复制入口不抢注意力（FR-017、R12） */
+.inspectors-code.ant-typography code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.inspectors-code .ant-typography-copy {
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+}
+
+.inspectors-code:hover .ant-typography-copy,
+.inspectors-code:focus-within .ant-typography-copy {
+  opacity: 1;
+}
+
 /* 行高由密度类控制，保证紧凑比舒适同视口多看到行（FR-016） */
 .task-table.density-compact .ant-table-tbody > tr > td,
 .task-detail-attention-table.density-compact .ant-table-tbody > tr > td,

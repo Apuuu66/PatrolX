@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { App, Button, Card, Input, Select, Space, Switch, Tag, Typography } from "antd";
+import { App, Button, Card, Input, Select, Space, Switch, Tag, Tooltip, Typography } from "antd";
 import { Table } from "../components/ResizableTable";
 import type { ColumnsType } from "antd/es/table";
 import { api, type InspectorState } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
+import { DensitySegmented } from "../components/DensitySegmented";
+import { useTableDensity } from "../hooks/useTableDensity";
+import { TABULAR_NUMERIC_CLASS, getRelativeTimeDisplay } from "../utils/timeDisplay";
 import { EmptyState, LoadErrorState } from "../components/PageState";
 
 /** 数据分页默认 10 条（宪法"数据分页默认"）。 */
@@ -34,6 +37,7 @@ export function InspectorsPage() {
   const [enabled, setEnabled] = useState<boolean | undefined>();
   const [search, setSearch] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const { density, tableSize, setDensity } = useTableDensity();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,7 +73,16 @@ export function InspectorsPage() {
   };
 
   const columns: ColumnsType<InspectorState> = [
-    { title: "规则编码", dataIndex: "code", width: 220 },
+    {
+      title: "规则编码",
+      dataIndex: "code",
+      width: 220,
+      render: (value: string) => (
+        <Typography.Text code copyable={{ text: value }} className="inspectors-code">
+          {value}
+        </Typography.Text>
+      ),
+    },
     { title: "名称", dataIndex: "name", width: 180, ellipsis: true },
     {
       title: "类别",
@@ -87,7 +100,8 @@ export function InspectorsPage() {
           checked={value}
           checkedChildren="启用"
           unCheckedChildren="停用"
-          disabled={!isAdmin}
+          aria-label={`${record.code} 启停状态`}
+          disabled={!isAdmin || updatingCode !== undefined}
           loading={updatingCode === record.code}
           onChange={(checked) => void updateEnabled(record, checked)}
         />
@@ -97,7 +111,18 @@ export function InspectorsPage() {
       title: "更新时间",
       dataIndex: "updated_at",
       width: 190,
-      render: (value: string) => new Date(value).toLocaleString("zh-CN", { hour12: false }),
+      // 相对时间为主、完整时间走 Tooltip，与任务列表口径一致（FR-017、R12）。
+      sorter: (a, b) => (a.updated_at ?? "").localeCompare(b.updated_at ?? ""),
+      render: (value: string) => {
+        const display = getRelativeTimeDisplay(value);
+        return (
+          <Tooltip title={display.title || undefined}>
+            <span className={TABULAR_NUMERIC_CLASS} data-testid="inspector-updated-at">
+              {display.text}
+            </span>
+          </Tooltip>
+        );
+      },
     },
   ];
 
@@ -111,6 +136,7 @@ export function InspectorsPage() {
         title={<Typography.Text strong>规则清单</Typography.Text>}
         extra={
         <Space wrap>
+          <DensitySegmented value={density} onChange={setDensity} />
           <Select
             allowClear
             placeholder="类别筛选"
@@ -150,8 +176,9 @@ export function InspectorsPage() {
         <LoadErrorState description={loadError} onRetry={() => void load()} retrying={loading} />
       ) : (
         <Table
+          className={`inspectors-table density-${density}`}
           rowKey="code"
-          size="small"
+          size={tableSize}
           loading={loading}
           dataSource={items}
           columns={columns}
