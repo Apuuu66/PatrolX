@@ -11,19 +11,22 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 from app.cli import generate_task_id, run_incremental_rebuild, run_single_rule, run_task
 from app.core.checksum import sha256_file
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
 from app.inspectors.registry import registry
-from app.models.db import TaskRecord, init_db, session_factory
+from app.models.db import InventoryParseResult, TaskRecord, init_db, session_factory
 from app.models.schemas import (
     InspectionTask,
     PackageKind,
     RebuildMode,
     RebuildRequest,
     TaskCreated,
+    TaskInventory,
     TaskMode,
     TaskStatus,
     TaskSummary,
@@ -421,6 +424,27 @@ class TaskService:
                 session.delete(record)
                 session.commit()
 
+    @staticmethod
+    def _record_package_kind(record: TaskRecord) -> PackageKind:
+        """SQLite 兜底读：package_kind 必须与创建请求一致，非法历史值降级为 inspection。"""
+        raw = getattr(record, "package_kind", None) or PackageKind.INSPECTION.value
+        try:
+            return PackageKind(str(raw))
+        except ValueError:
+            return PackageKind.INSPECTION
+
+    @staticmethod
+    def _fallback_inventory(session: Session, task_id: str) -> TaskInventory | None:
+        """SQLite 兜底读：从任务级台账证据快照重建 inventory，坏快照只降级不报错。"""
+        result = session.get(InventoryParseResult, task_id)
+        snapshot = result.snapshot if result is not None else None
+        if not isinstance(snapshot, dict):
+            return None
+        try:
+            return TaskInventory.model_validate(snapshot)
+        except Exception:  # noqa: BLE001 - 坏快照不得阻断任务兜底读取
+            return None
+
     def get(self, task_id: str) -> InspectionTask | None:
         """读取任务：优先 output/（唯一数据源），SQLite 兜底查状态。"""
         task = load_task_meta(settings.output, task_id)
@@ -440,6 +464,8 @@ class TaskService:
                 completed_at=record.completed_at,
                 stats={"total": 0, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 0, "systems": 1},
                 system=None,
+                package_kind=self._record_package_kind(record),
+                inventory=self._fallback_inventory(session, record.task_id),
             )
 
     def list_tasks(self, page: int, page_size: int, status: str | None) -> tuple[list[TaskSummary], int]:
@@ -499,6 +525,8 @@ class TaskService:
                         customer_product=record.customer.get("product"),
                         customer_version=record.version,
                         device_id=record.customer.get("device_id"),
+                        package_kind=self._record_package_kind(record),
+                        inventory=self._fallback_inventory(session, record.task_id),
                     )
                 )
 

@@ -82,3 +82,45 @@ def test_terminal_record_converges_before_task_file(monkeypatch) -> None:
 
     assert task["status"] == "completed"
     assert observed.get("record_status") == "completed", "文件发布终态前数据库记录必须已收敛"
+
+
+def test_terminal_fallback_read_carries_inventory_and_package_kind(monkeypatch, tmp_path: Path) -> None:
+    """发布窗口内（记录已终态、task.json 尚未写出）的兜底读必须携带完整元数据。"""
+    from app.services.tasks import task_service
+    from tests.fixtures.inventory.builder import make_inventory_zip
+
+    observed: dict[str, object] = {}
+    original = store.save_task_meta
+
+    def spy(output: Path, task) -> None:
+        if task.status in TERMINAL and "fallback" not in observed:
+            assert store.load_task_meta(settings.output, task.task_id) is None, "仅在任务文件发布前触发兜底读"
+            observed["fallback"] = task_service.get(task.task_id)
+        original(output, task)
+
+    monkeypatch.setattr(store, "save_task_meta", spy)
+    client = TestClient(app)
+    package = tmp_path / "inventory-publish-window.zip"
+    make_inventory_zip(package)
+    with package.open("rb") as fh:
+        response = client.post(
+            "/api/v3/tasks",
+            files={"package_file": (package.name, fh, "application/zip")},
+            data={
+                "package_kind": "inspection",
+                "name": "台账发布窗口",
+                "province": "江苏",
+                "operator": "移动",
+                "product": "UMF2020",
+            },
+        )
+    assert response.status_code == 202, response.text
+    task = _wait_terminal(client, response.json()["task_id"])
+    assert task["status"] == "completed"
+
+    fallback = observed.get("fallback")
+    assert fallback is not None, "发布窗口内必须触发一次兜底读"
+    assert fallback.package_kind is not None, "兜底读不得丢失 package_kind"
+    assert fallback.package_kind.value == "inspection"
+    assert fallback.inventory is not None, "兜底读不得丢失已归档的台账证据"
+    assert fallback.inventory.status.value == "archived"
