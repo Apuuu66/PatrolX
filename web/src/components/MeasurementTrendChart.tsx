@@ -1,4 +1,4 @@
-import { Alert, Button, Descriptions, Empty, Modal, Select, Spin, Tabs, Typography } from "antd";
+import { Alert, Button, Descriptions, Empty, Modal, Select, Spin, Table, Tabs, Typography } from "antd";
 import type { ECharts } from "echarts/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -62,6 +62,72 @@ function formatValue(value: number | null | undefined, unit?: string | null): st
 function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "-";
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatPointTime(value: string): string {
+  return value.replace("T", " ").slice(0, 19);
+}
+
+function formatSourceEvidence(point: MeasurementTrendPoint): string {
+  const rows = point.source_rows ?? [];
+  if (!rows.length) return "-";
+  return rows.map((row) => `${row.source_file}:${row.line_number}`).join("、");
+}
+
+function insufficientPointsReason(pointCount: number, trendReason?: string | null): string {
+  if (trendReason === "no_time_series") return "未找到可用时间序列，测量时间缺失或格式非法";
+  if (pointCount === 0) return "本任务内没有可用于趋势判断的时间点";
+  if (pointCount === 1) return "本任务内只有 1 个时间点，至少需要 2 个时间点才能判断趋势";
+  return "时间点数量不足，无法判断趋势";
+}
+
+function TimePointDetail({ points, unit }: { points: MeasurementTrendPoint[]; unit?: string | null }) {
+  // 时间点明细给出可核对的时间、数值与来源证据（趋势点不足时是唯一可核对的数据入口）。
+  if (!points.length) return null;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ marginBottom: 8, fontWeight: 600 }}>时间点明细</div>
+      <Table
+        rowKey={(point) => `${point.time}-${point.object_key ?? "__all__"}-${point.period_minutes ?? "na"}`}
+        size="small"
+        columns={[
+          {
+            title: "时间",
+            dataIndex: "time",
+            key: "time",
+            render: (value: string) => formatPointTime(value),
+          },
+          {
+            title: "对象",
+            dataIndex: "object_key",
+            key: "object_key",
+            render: (value: string | null | undefined) => value || "-",
+          },
+          {
+            title: "周期",
+            dataIndex: "period_minutes",
+            key: "period_minutes",
+            width: 100,
+            render: (value: number | null | undefined) => (value ? `${value} 分钟` : "-"),
+          },
+          {
+            title: "值",
+            dataIndex: "value",
+            key: "value",
+            width: 140,
+            render: (value: number | null | undefined) => formatValue(value, unit),
+          },
+          {
+            title: "来源",
+            key: "source",
+            render: (_: unknown, point: MeasurementTrendPoint) => formatSourceEvidence(point),
+          },
+        ]}
+        dataSource={points}
+        pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: false }}
+      />
+    </div>
+  );
 }
 
 function TrendComparisonSummary({ comparison, unit }: { comparison: TrendComparison; unit?: string | null }) {
@@ -505,7 +571,13 @@ function HistoryTrendPanel({
 
 type MetricTrendCellMetric = Pick<
   MeasurementMetadataMetric,
-  "base_source_name" | "display_unit" | "metric_resource_id" | "metric_resource_name_zh" | "trend_points" | "trends"
+  | "base_source_name"
+  | "display_unit"
+  | "metric_resource_id"
+  | "metric_resource_name_zh"
+  | "trend_points"
+  | "trend_reason"
+  | "trends"
 >;
 
 export function MetricTrendCell({
@@ -544,21 +616,19 @@ export function MetricTrendCell({
   }, [detailError, detailMetric, isModalOpen, metric.metric_resource_id, ruleCode, taskId, unitId]);
 
   const displayMetric = detailMetric ?? metric;
-
-  if (allPoints.length < 2) {
-    return <span style={{ color: "rgba(0, 0, 0, 0.45)" }}>趋势点不足</span>;
-  }
+  const displayPoints = displayMetric.trend_points ?? allPoints;
+  const insufficientPoints = allPoints.length < 2;
 
   return (
     <>
       <Button
-        type="text"
+        type={insufficientPoints ? "link" : "text"}
         style={{ height: "auto", padding: 0 }}
-        title="查看完整趋势"
+        title={insufficientPoints ? "查看时间点明细" : "查看完整趋势"}
         aria-label={`查看${metricName}完整趋势`}
         onClick={() => setIsModalOpen(true)}
       >
-        <MiniTrend points={allPoints} />
+        {insufficientPoints ? "趋势点不足，查看明细" : <MiniTrend points={allPoints} />}
       </Button>
       <Modal
         destroyOnHidden
@@ -574,13 +644,27 @@ export function MetricTrendCell({
             {
               key: "single",
               label: "单任务",
-              children: (
+              children: insufficientPoints ? (
+                <>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="趋势点不足，无法判断趋势"
+                    description={insufficientPointsReason(allPoints.length, displayMetric.trend_reason)}
+                  />
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                    可核对下方时间点明细，或切换历史对比、版本对比查看其他任务的数据。
+                  </Typography.Paragraph>
+                  <TimePointDetail points={displayPoints} unit={metric.display_unit} />
+                </>
+              ) : (
                 <>
                   <TrendComparisonSummary comparison={comparison} unit={metric.display_unit} />
                   <TrendChart metricName={metricName} points={allPoints} unit={metric.display_unit} />
                   {comparison.mode === "multi_day" && (
                     <DailyTrendChart metricName={metricName} points={allPoints} unit={metric.display_unit} />
                   )}
+                  <TimePointDetail points={displayPoints} unit={metric.display_unit} />
                 </>
               ),
             },

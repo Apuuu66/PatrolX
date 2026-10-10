@@ -23,6 +23,12 @@ HISTORY_TASK_ID = "task-kpi-history-past"
 RULE_CODE = "kpi.measurement_units"
 HEADER = "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次)\n"
 FILE_NAME = "ne333_Call_Statistics_15_0_202609160000.csv"
+# 单点指标文件：同一测量单元内只有 1 个时间点，用于看护“趋势点不足仍可点击查看明细”的入口。
+SINGLE_POINT_FILE_NAME = "ne333_Call_Statistics_15_0_202609201000.csv"
+SINGLE_POINT_CSV = (
+    "container,测量开始时间,测量结束时间,周期(分钟),最大注册用户数(户)\n"
+    + "pod-a,2026-09-20 10:00:00,2026-09-20 10:15:00,15,2048\n"
+)
 
 CURRENT_CSV = (
     HEADER
@@ -37,10 +43,9 @@ HISTORY_CSV = (
 )
 
 
-def _rule_result(task_id: str):
+def _rule_result(task_id: str, file_names: list[str]):
     task_dir = settings.output / task_id
-    csv_path = task_dir / FILE_NAME
-    files = [(FILE_NAME, csv_path)]
+    files = [(file_name, task_dir / file_name) for file_name in file_names]
     discover_measurement_bindings(task_id, files)
     inspection = inspect_measurement_files(task_id, files)
     units = inspection["measurement_units"]
@@ -58,22 +63,32 @@ def _rule_result(task_id: str):
         ],
         metadata={
             "measurement_units": units,
-            "files": [FILE_NAME],
+            "files": list(file_names),
             "unmatched_files": [],
             "skipped_files": [],
         },
     )
 
 
-def _seed_task(task_id: str, csv_body: str, created_at: datetime, completed_at: datetime, version: str) -> None:
+def _seed_task(
+    task_id: str,
+    csv_body: str,
+    created_at: datetime,
+    completed_at: datetime,
+    version: str,
+    extra_files: dict[str, str] | None = None,
+) -> None:
     task_dir = settings.output / task_id
     upload_dir = settings.uploads / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     upload_dir.mkdir(parents=True, exist_ok=True)
     (task_dir / FILE_NAME).write_text(csv_body, encoding="utf-8")
+    extra_files = extra_files or {}
+    for file_name, file_body in extra_files.items():
+        (task_dir / file_name).write_text(file_body, encoding="utf-8")
     (upload_dir / "kpi-history.zip").write_bytes(b"e2e")
 
-    rule = _rule_result(task_id)
+    rule = _rule_result(task_id, [FILE_NAME, *extra_files])
     summary = Summary(total=1, pass_=1, warn=0, fail=0, error=0, skip=0)
     system = SystemInspection(
         package_file="kpi-history.zip",
@@ -106,7 +121,12 @@ def _seed_task(task_id: str, csv_body: str, created_at: datetime, completed_at: 
 def main() -> None:
     init_db()
     import_resource_csv(
-        io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\nME_CALL,呼叫请求次数,Call Requests\n")
+        io.StringIO(
+            "资源id,中文描述,英文描述\n"
+            "MU_CALL,呼叫统计,Call Statistics\n"
+            "ME_CALL,呼叫请求次数,Call Requests\n"
+            "ME_MAX_USERS,最大注册用户数,Max Registered Users\n"
+        )
     )
     _seed_task(
         CURRENT_TASK_ID,
@@ -114,6 +134,7 @@ def main() -> None:
         datetime(2026, 9, 20, 9, 0, tzinfo=UTC),
         datetime(2026, 9, 20, 10, 30, tzinfo=UTC),
         version="V2",
+        extra_files={SINGLE_POINT_FILE_NAME: SINGLE_POINT_CSV},
     )
     _seed_task(
         HISTORY_TASK_ID,
