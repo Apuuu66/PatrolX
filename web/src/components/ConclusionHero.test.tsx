@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "antd";
+import dayjs from "dayjs";
 import { describe, expect, it, vi } from "vitest";
 
 import type { RuleStatus, SystemInspection, TaskStats, TaskSummary } from "../api/http";
@@ -89,7 +90,9 @@ describe("ConclusionHero", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /更多元数据/ }));
     expect(await screen.findByText("umf")).toBeDefined();
-    expect(screen.getByText("2026-10-10 08:00")).toBeDefined();
+    // 创建时间按本地时区展示，避免在 UTC 环境（CI）下硬编码偏移导致误报。
+    const expectedCreatedAt = dayjs("2026-10-10T00:00:00Z").format("YYYY-MM-DD HH:mm");
+    expect(screen.getByText(expectedCreatedAt)).toBeDefined();
   });
 
   it("关键元数据不渲染空字段与横线占位", () => {

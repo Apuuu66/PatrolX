@@ -366,7 +366,8 @@ describe("TaskListPage 同名冲突", () => {
       expect(okButton().disabled).toBe(false);
     });
     expect(document.querySelector('[data-testid="upload-conflict"]')).toBeNull();
-  }, 15000);
+    // antd 重页面在慢速 CI 上单例耗时可达 15s+，按 60s 留出余量（函数体仍即时校验）。
+  }, 60000);
 
   it("冲突提示中的查看已有任务会跳到已有任务", async () => {
     const conflict = await prepareConflict();
@@ -376,7 +377,7 @@ describe("TaskListPage 同名冲突", () => {
     await waitFor(() => {
       expect(screen.getByTestId("task-route")).toBeDefined();
     });
-  }, 15000);
+  }, 60000);
 
   it("checksum 相同则提示将打开已有任务并进入该任务", async () => {
     vi.mocked(api.listTasks).mockResolvedValue({
@@ -402,5 +403,5 @@ describe("TaskListPage 同名冲突", () => {
       expect(screen.getByTestId("task-route")).toBeDefined();
     });
     expect(document.body.textContent ?? "").toContain("将打开已有任务");
-  }, 15000);
+  }, 60000);
 });
