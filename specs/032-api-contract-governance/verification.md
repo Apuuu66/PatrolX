@@ -113,6 +113,22 @@ main
 - **本地证据**：`lint` 182 files；`test` 584 passed（含新增并发用例）；`contract` OK；`verify` exit 0；web `npm test` 33 passed（16 路负载下复跑全绿）、`npm run build` OK；`build.py e2e` 35 passed（24.9s；首次失败的单例 `kpi-measurement-version-compare` 单跑 1.3s 通过，判断为并发会话负载下的偶发）。
 - 至此第五节四类根因（终态发布时序、并发临时文件名、jsdom 伪元素查询、慢速环境超时）全部闭环；`37980872923` 的绿跑已包含全部修复与增强后的失败摘要，本记录为第五节终点，不再为记录追加额外复核提交。
 
+### 第三阶段闭环（2026-10-10，发布窗口兜底与前端慢例）
+
+第二阶段终点后的红跑再次暴露两个独立根因，同日用确定性用例锁定并修复：
+
+- **终态发布窗口内的兜底读取缺字段**：[run 38017946035](https://github.com/Apuuu66/PatrolX/actions/runs/38017946035)（`8772583`）的 backend job 在 `tests/test_inventory_api.py` 报 `package_kind` 为 `None`、`inventory`/`task` 缺失。根因：`3667c80` 的「SQLite 记录先收敛为 `completed` → 再发布 `task.json`」顺序制造发布窗口，读方在窗口内走 `TaskService` 兜底分支，而兜底构造 `InspectionTask`/`TaskSummary` 时未传 `package_kind` 与 `inventory`。修复（`d8fc645`）：`app/services/tasks.py` 新增 `_record_package_kind()`（非法历史值降级 `inspection`）与 `_fallback_inventory()`（由 `InventoryParseResult.snapshot` 重建，坏快照降级 `None`），`get()`/`list_tasks()` 兜底分支同步补齐；新增 RED → GREEN 用例 `tests/test_task_terminal_publication.py::test_terminal_fallback_read_carries_inventory_and_package_kind`（在发布窗口内触发兜底读）。该修复在 [run 38018393037](https://github.com/Apuuu66/PatrolX/actions/runs/38018393037) 的 backend job 复核通过（后端测试 72s）。
+- **前端时区硬编码与慢例超时误报**：同次 `38018393037` 的 frontend job 有三例失败。`ConclusionHero.test.tsx` 断言硬编码 `2026-10-10 08:00`（本地 Asia/Shanghai），CI UTC 下实际渲染 `00:00` —— 修复（`716588e`）改为按 `dayjs("2026-10-10T00:00:00Z").format("YYYY-MM-DD HH:mm")` 计算期望值。`TaskListPage.test.tsx` 两例注解中只有 `FAIL` 行、无 `file=` 注解，与「断言失败必产出 `::error file=`、超时失败不产出」的本地对照实验结论比对后判定为 15s 超时；本地实测 9.2s–15.1s，按 CI 约 1.65 倍慢计算正好越过上限 —— 修复（`716588e`）将三条重页面用例超时提升至 60s。
+- **本地证据**：web `npm test` 96 passed（默认时区）、`TZ=UTC` 定向 17 passed、`npm run build` OK；`lint` 182 files、`test` 585 passed。
+- 复核 [run 38019407028](https://github.com/Apuuu66/PatrolX/actions/runs/38019407028)（`716588e`）两个 job 全部通过：
+
+| Job | 结果 | 耗时 | 关键步骤 |
+| --- | --- | --- | --- |
+| backend（lint / test / contract） | success | 99s | 静态检查、后端测试 76s、契约一致性 |
+| frontend（客户端零漂移 / 构建 / 单测） | success | 152s | 生产构建 14s、前端单测 124s |
+
+- 至此第五节五类根因（终态发布时序、并发临时文件名、jsdom 伪元素查询、慢速环境超时、发布窗口兜底缺字段）全部闭环；本记录所在提交为纯文档变更，会再次触发同一 workflow 复核，按前例以该次结果为准，不再为记录自身追加提交。
+
 ## 六、残留与洁净度
 
 - 未提交残留（与本批次无关，不提交）：`web/.tmp-show-detail.mjs`、`web/.tmp-show-updates.mjs`、`web/e2e/screenshots/`。
