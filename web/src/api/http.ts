@@ -230,9 +230,14 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
         code,
       });
       if (resp.status === 401) {
-        clearSession();
-        if (typeof window !== "undefined") {
-          window.location.reload();
+        // 未登录（本地无会话）时不能再触发整页重载，否则受保护接口会形成
+        // 401 -> reload -> 再次 401 的无限刷新循环；仅会话失效时才强制回登录态。
+        const hadSession = token !== null;
+        if (hadSession) {
+          clearSession();
+          if (typeof window !== "undefined") {
+            window.location.reload();
+          }
         }
       }
       throw new ApiError(code, message, resp.status, detail);

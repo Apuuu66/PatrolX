@@ -64,3 +64,71 @@ test("401 响应自动清理会话并抛出业务错误", async () => {
 
   assert.deepEqual(cleared, ["patrolx_token", "patrolx_user"]);
 });
+
+test("401 且存在本地会话时清理会话并重载页面", async () => {
+  const cleared: string[] = [];
+  let reloadCount = 0;
+  const localStorageMock = {
+    getItem: (_key: string) => "expired-token",
+    setItem: (_key: string, _value: string) => undefined,
+    removeItem: (key: string) => cleared.push(key),
+    clear: () => undefined,
+    key: (_index: number) => null,
+    length: 0,
+  };
+  Object.defineProperty(globalThis, "localStorage", { value: localStorageMock, configurable: true });
+  Object.defineProperty(globalThis, "window", {
+    value: { location: { reload: () => { reloadCount += 1; } } },
+    configurable: true,
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ code: "unauthorized", message: "会话已失效" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    })) as typeof fetch;
+
+  try {
+    await assert.rejects(api.listTasks(), (error: Error) => error.message === "会话已失效");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Reflect.deleteProperty(globalThis, "window");
+  }
+
+  assert.deepEqual(cleared, ["patrolx_token", "patrolx_user"]);
+  assert.equal(reloadCount, 1);
+});
+
+test("无本地会话的 401 不重载页面，避免未登录访问受保护接口时整页刷新循环", async () => {
+  let reloadCount = 0;
+  const localStorageMock = {
+    getItem: (_key: string) => null,
+    setItem: (_key: string, _value: string) => undefined,
+    removeItem: (_key: string) => undefined,
+    clear: () => undefined,
+    key: (_index: number) => null,
+    length: 0,
+  };
+  Object.defineProperty(globalThis, "localStorage", { value: localStorageMock, configurable: true });
+  Object.defineProperty(globalThis, "window", {
+    value: { location: { reload: () => { reloadCount += 1; } } },
+    configurable: true,
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ code: "unauthorized", message: "未登录" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    })) as typeof fetch;
+
+  try {
+    await assert.rejects(api.listTasks(), (error: Error) => error.message === "未登录");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Reflect.deleteProperty(globalThis, "window");
+  }
+
+  assert.equal(reloadCount, 0);
+});

@@ -343,7 +343,10 @@ function MeasurementBindingTab() {
         });
         setItems(data.items);
         setTotal(data.total);
-        await loadResourceGovernance(data.items);
+        // 指标资源目录接口仅管理员可读，浏览者直接展示绑定列表本身。
+        if (isAdmin) {
+          await loadResourceGovernance(data.items);
+        }
       } catch (err) {
         const text = err instanceof Error ? err.message : "绑定关系加载失败";
         setLoadError(text);
@@ -352,7 +355,7 @@ function MeasurementBindingTab() {
         setLoading(false);
       }
     },
-    [loadResourceGovernance, message, page, pageSize, status, unitSearch],
+    [isAdmin, loadResourceGovernance, message, page, pageSize, status, unitSearch],
   );
 
   useEffect(() => { void load(); }, [load]);
@@ -506,6 +509,34 @@ function MeasurementBindingTab() {
     }
   };
 
+  const governanceColumns: ColumnsType<MeasurementBinding> = isAdmin
+    ? [
+        {
+          title: "分组", key: "metric_group", width: 120,
+          render: (_, record) => {
+            if (!record.metric_resource_id) return "-";
+            return resourceMap[record.metric_resource_id]?.metric_group || "未分组";
+          },
+        },
+        {
+          title: "方向", key: "direction", width: 110,
+          render: (_, record) => {
+            if (!record.metric_resource_id) return "-";
+            const direction = resourceMap[record.metric_resource_id]?.direction;
+            return direction ? DIRECTION_LABELS[direction] : "未配置";
+          },
+        },
+        {
+          title: "重点", key: "importance", width: 90,
+          render: (_, record) => {
+            if (!record.metric_resource_id) return "-";
+            const importance = resourceMap[record.metric_resource_id]?.importance || "normal";
+            return <Tag color={IMPORTANCE_COLORS[importance]}>{importance}</Tag>;
+          },
+        },
+      ]
+    : [];
+
   const columns: ColumnsType<MeasurementBinding> = [
     {
       title: "指标", dataIndex: "metric_resource_id", key: "metric_resource_id",
@@ -524,29 +555,7 @@ function MeasurementBindingTab() {
     },
     { title: "任务", dataIndex: "task_id", key: "task_id" },
     { title: "来源文件", dataIndex: "source_file", key: "source_file" },
-    {
-      title: "分组", key: "metric_group", width: 120,
-      render: (_, record) => {
-        if (!record.metric_resource_id) return "-";
-        return resourceMap[record.metric_resource_id]?.metric_group || "未分组";
-      },
-    },
-    {
-      title: "方向", key: "direction", width: 110,
-      render: (_, record) => {
-        if (!record.metric_resource_id) return "-";
-        const direction = resourceMap[record.metric_resource_id]?.direction;
-        return direction ? DIRECTION_LABELS[direction] : "未配置";
-      },
-    },
-    {
-      title: "重点", key: "importance", width: 90,
-      render: (_, record) => {
-        if (!record.metric_resource_id) return "-";
-        const importance = resourceMap[record.metric_resource_id]?.importance || "normal";
-        return <Tag color={IMPORTANCE_COLORS[importance]}>{importance}</Tag>;
-      },
-    },
+    ...governanceColumns,
     {
       title: "状态", dataIndex: "status", key: "status", width: 110,
       render: (value: string) => <Tag color={STATUS_COLORS[value]}>{STATUS_LABELS[value]}</Tag>,
@@ -720,6 +729,8 @@ const DERIVED_TEMPLATE_OPTIONS = [
 
 function MeasurementDerivedTab() {
   const { message } = App.useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [form] = Form.useForm<DerivedFormValues>();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -805,7 +816,9 @@ function MeasurementDerivedTab() {
         description="反向成功率等于 100 减去正向成功率；分母均值为 0 时展示为疑似业务未触发，默认不按业务阈值判定。"
         style={{ marginBottom: 16 }}
       />
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建派生指标</Button>
+      {isAdmin ? (
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建派生指标</Button>
+      ) : null}
       <Modal open={open} title="派生指标" confirmLoading={submitting} okText="创建" onCancel={() => setOpen(false)} onOk={() => form.submit()}>
         <Form form={form} layout="vertical" initialValues={{ template: "success_rate" }} onFinish={(values) => void create(values)}>
           <Space direction="vertical" style={{ width: "100%" }}>

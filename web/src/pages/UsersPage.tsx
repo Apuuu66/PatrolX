@@ -81,9 +81,13 @@ export function UsersPage() {
     [message, page, pageSize],
   );
 
+  const isAdmin = user?.role === "admin";
+
   useEffect(() => {
+    // 非管理员（含访客）不请求管理员接口，避免无谓的 401 与刷新。
+    if (!isAdmin) return;
     void load();
-  }, [load]);
+  }, [isAdmin, load]);
 
   const handleCreate = async (values: CreateUserValues) => {
     try {
@@ -193,7 +197,7 @@ export function UsersPage() {
     },
   ];
 
-  if (user?.role !== "admin") {
+  if (!isAdmin) {
     return <Alert type="warning" showIcon message="仅管理员可以使用用户管理" />;
   }
 
