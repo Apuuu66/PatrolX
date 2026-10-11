@@ -90,3 +90,25 @@ feature/031-ui-information-hierarchy
 1. 1280px 下任务列表 5 列总宽超过可视区，按 AntD 既有模式使用表格内部横向滚动并固定操作列；页面本身不出现横向滚动，符合 contracts/ui-baseline §6 的页面级约束，该约定已回写 DESIGN.md。
 2. 1920px 下新增 `.app-shell-inner`（`max-width: 1600px`）约束，页头与内容区使用同一容器宽度，避免内容无限拉伸。
 3. 固定列遮挡缺陷（1440 下时间列被操作列覆盖）在本回合修复：任务列 280、状态摘要 190、元数据 200、时间与耗时 190、操作 190。
+
+## 八、2026-10-12 修订验证（任务列表行内信息与操作收敛）
+
+**修订范围**：FR-006（列顺序新增"数据准备"）、FR-011（固定列 + 列内弹层，不使用行展开；删除失败操作列就地重试）、FR-012（去掉任务级"重跑"、"全量重建"更名"重建"并收进 `⋯` 菜单）。产物同步见 `spec.md` 修订记录与 `tasks.md` 修订记录。
+
+**工作区形态**：本修订为小改动，按 AGENTS.md「小改动不创建 worktree」，在主工作区 `main` 直接完成实现与验证；未触碰 OpenAPI 与后端。
+
+| 命令 | 结果 |
+| --- | --- |
+| `cd web && npm run build` | 通过（`tsc -b` + `vite build`，4.7s，仅既有 chunk 体积提示） |
+| `cd web && npm test` | 通过：24 files / 106 passed |
+| `npx playwright test e2e/task-actions.spec.ts e2e/task-home.spec.ts e2e/upload-precheck.spec.ts` | 通过：14 passed |
+| `.venv/bin/python build.py lint` | `All checks passed!` / `182 files already formatted` |
+| `.venv/bin/python build.py test` | 通过：585 passed |
+
+**修订后断言要点**：
+
+- `e2e/task-actions.spec.ts`：操作列不出现"重跑"；`⋯` 菜单内"重建"可及且为危险样式；重建二次确认按钮文案为"重建"。
+- `e2e/task-home.spec.ts`：列表无 `.ant-table-row-expand-icon`（无行展开）；"数据准备"列摘要常驻可见，问题文件明细在列内弹层打开。
+- `web/src/pages/TaskListPage.test.tsx`：删除失败不再依赖行展开区，操作列就地渲染"删除失败"并可重试。
+
+**例外说明**：E2E 中两字中文按钮（"取消"）经 AntD 处理会插入空格，断言改用 `/取\s*消/` 宽松匹配，与既有 `web/e2e/task-delete-confirm.spec.ts` 惯例一致；属选择器写法调整，未降低行为覆盖。

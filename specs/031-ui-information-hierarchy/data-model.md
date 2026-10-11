@@ -74,10 +74,10 @@
 | `reasonSummary` | `string \| null` | 任务失败时取失败阶段与原因；成功任务为 `null`（FR-008） |
 | `metadataTags` | `TaskMetadataTag[]` | 复用 `getTaskMetadataTags` |
 | `durationText` | `string \| null` | 复用 `formatTaskDuration` |
-| `preparationIssue` | `{ failureCount: number; skipCount: number } \| null` | `preparation.failure_count / skip_count > 0` 时给出，展开区可触发重试（FR-011） |
+| `preparationIssue` | `{ failureCount: number; skipCount: number } \| null` | `preparation.failure_count / skip_count > 0` 时给出，在"数据准备"列的列内弹层展示问题明细（FR-011）；删除现场失败的重试入口在操作列 |
 | `primaryAction` | `"detail"` | 固定主操作（FR-012） |
 | `secondaryActions` | `("report" \| "logs")[]` | 报告可用性由任务状态决定；失败任务给出日志入口 |
-| `moreActions` | `("rerun" \| "rebuild_incremental" \| "rebuild_full" \| "delete")[]` | 收进 `⋯` 菜单；`delete` 与 `rebuild_full` 需二次确认 |
+| `moreActions` | `("rebuild_full" \| "delete")[]` | 收进 `⋯` 菜单，界面文案为"重建"与"删除"且均需二次确认；任务级 `rerun` 不再出现在列表（2026-10-12 修订） |
 
 **排序规则（默认，不可开关）**：
 1. 优先级：`failed(0) < running(1) < pending(2) < completed(3)`；`completed` 且 `fail + error > 0` 视同异常提前。

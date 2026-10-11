@@ -62,10 +62,11 @@
 | formatValid | boolean | 扩展名校验结果 |
 | sizeValid | boolean | 空文件与上限校验结果 |
 | messages | string[] | 具体原因与下一步动作 |
-| conflict | `none \| same_checksum \| different_checksum` | 同名冲突状态 |
+| conflict | `none \| same_name \| checksum_conflict` | 同名冲突状态：列表/探测命中为 `same_name`，提交时后端返回 `package_checksum_conflict` 为 `checksum_conflict` |
+| overwriteTargetTaskId | string \| null | 覆盖目标任务：列表命中、提交前探测命中、checksum 冲突三者取一；非空时提交按钮显示"覆盖并重建" |
 
 **派生规则**（与后端一致）：去 `zip/tar.gz/tgz/tar` 扩展名 → 小写 → 非 `[a-z0-9]` 连续字符替换为 `_` → 去首尾 `_` → 空串回退 `task` → 前缀 `task-`。
-**校验规则**：非法格式、超长文件名、空文件、超过上限时禁用提交并给出具体原因；同名且 checksum 相同提示"将打开已有任务"，checksum 不同提示"修改文件名或查看已有任务"。
+**校验规则**：非法格式、超长文件名、空文件、超过上限时禁用提交并给出具体原因；同名任务存在时不区分 checksum，提交前一律二次确认覆盖（文案写明原数据包与巡检结果会被清除，随后用当前数据包全量重建），并同时提供"修改文件名 / 查看已有任务"替代动作；确认后先清空旧现场再创建，删除成功但创建失败时提示"原任务现场已清除，请重新选择数据包"；任何路径都不得静默打开旧任务。
 
 ## 6. 术语表（Glossary）
 

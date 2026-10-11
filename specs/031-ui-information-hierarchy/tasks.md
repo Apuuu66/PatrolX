@@ -58,11 +58,11 @@ description: "主界面信息层级重构（巡检控制台方向） — 实现�
 **独立测试**：`cd web && npx playwright test e2e/task-home.spec.ts e2e/task-actions.spec.ts e2e/task-delete-confirm.spec.ts`；Unit：`npm run test`。
 
 - [X] T010 [P] [US1] 在 `web/e2e/task-home.spec.ts` 中先写新断言：行式表格形态、失败任务第一行、行内失败原因摘要、状态摘要无彩色 0 值、首屏可见概览条与 4 条种子任务、从失败任务行到失败规则详情不超过 3 次点击（SC-001、SC-003、SC-004、FR-006~FR-009）
-- [X] T011 [US1] 在 `web/src/pages/TaskListPage.tsx` 用 AntD `Table` 重写列表容器：列顺序「任务（名称+状态+ID+失败原因摘要）→ 状态摘要 → 元数据 → 时间与耗时 → 操作」，保留状态筛选、搜索、分页默认 10、轮询与上传表单（FR-006、FR-013、FR-026）
+- [X] T011 [US1] 在 `web/src/pages/TaskListPage.tsx` 用 AntD `Table` 重写列表容器：列顺序「任务（名称+状态+ID+失败原因摘要）→ 状态摘要 → 数据准备 → 元数据 → 时间与耗时 → 操作」，保留状态筛选、搜索、分页默认 10、轮询与上传表单（FR-006、FR-013、FR-026；2026-10-12 修订）
 - [X] T012 [US1] 在 `web/src/utils/taskListSort.ts` 实现默认排序纯函数并接入列表：`failed → running → pending → completed`，`completed` 且 `fail + error > 0` 视为异常提前；同优先级按 `created_at` 倒序；不新增排序控件（FR-007、Clarifications）
 - [X] T013 [US1] 在 `web/src/pages/TaskListPage.tsx` 用 `StatusDistribution` + `MetadataList` 渲染状态摘要与元数据，失败任务行直接渲染原因摘要（复用 `taskFailure` 展示工具）；空状态保留"上传数据包"主入口（FR-008、FR-009、边界情况）
-- [X] T014 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现操作分层：行主操作"详情"；次要操作"报告""失败日志"；重跑 / 增量重建 / 全量重建 / 删除收进 `⋯` 菜单，删除与全量重建保持二次确认；删除失败错误改为行内/展开区表达，保留 `TaskDeleteError` 语义（FR-012、FR-004）
-- [X] T015 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现行展开区：数据准备状态、问题文件摘要与重试入口、失败日志入口（FR-011）
+- [X] T014 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现操作分层：行主操作"详情"；次要操作"报告""失败日志"；"重建"与"删除"收进 `⋯` 菜单并保持二次确认；任务级"重跑"不再提供；删除失败在操作列就地提示与重试，保留 `TaskDeleteError` 语义（FR-012、FR-004；2026-10-12 修订）
+- [X] T015 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现"数据准备"列：列内展示准备摘要，问题文件明细与状态在列内弹层查看；不使用行展开（FR-011；2026-10-12 修订）
 - [X] T016 [US1] 在 `web/src/pages/TaskListPage.tsx` 实现顶部概览条（任务总量 + 状态分布 + 注册规则 / 规则结果 / 发现数），替换等权数字组（含注册规则 / 规则结果 / 发现问题数；FR-010、边界情况："全部正常"不得出现高权重提示）
 - [X] T017 [P] [US1] 补充单测 `web/src/utils/taskListSort.test.ts` 与 `web/src/pages/TaskListPage.test.tsx`：异常置顶、同状态倒序、0 值不渲染、分页默认 10（T012/T013 完成后）
 - [X] T018 [US1] 等价迁移既有 E2E：`web/e2e/task-actions.spec.ts`、`web/e2e/task-delete-confirm.spec.ts`，更新选择器但保留全部行为覆盖（FR-030）
@@ -211,3 +211,14 @@ python build.py e2e
 ```
 
 任一门禁失败不得进入下一故事；前端结构变化只允许等价替换测试断言，不得删除既有覆盖。
+
+---
+
+## 修订记录
+
+### 2026-10-12 任务列表行内信息与操作收敛（修订 031）
+
+- **触发**：用户提出"任务列表里的操作列，把重跑去掉，全量重建换一个两个字的名字，并且去掉收缩"。
+- **受影响任务**：T011（列顺序新增"数据准备"）、T014（去掉任务级"重跑"、"全量重建"更名"重建"、删除失败改操作列就地重试）、T015（行展开区改为固定列 + 列内弹层）。
+- **同步产物**：`spec.md`（FR-006 / FR-011 / FR-012、US1 验收场景 4、修订记录）、`contracts/ui-baseline.md`（§3 操作分层、§4.1 任务列表）、`data-model.md`（`preparationIssue` 展示位置）、`quickstart.md`（人工检查项）、`research.md`（R2 决策）、`verification.md`（第八节）。
+- **验证**：`python build.py e2e`、`cd web && npm test`、`python build.py lint`、`python build.py test` 全绿；E2E `task-actions.spec.ts` / `task-home.spec.ts` 断言操作列无"重跑"、无行展开箭头、"重建"在 `⋯` 菜单内可及、数据准备明细在列内弹层。

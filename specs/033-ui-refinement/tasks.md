@@ -65,10 +65,10 @@ description: "界面降噪与一致性精修 — 实现任务清单"
 - [x] T013 [US1] 重构 `web/src/components/StatusDistribution.tsx`：使用 AntD `Tooltip` 替换原生 `title`、`variant="full"` 的概览场景应用弱化色、计数与分段顺序一致、空态不渲染空条；保持 `onStatusClick` 状态筛选与既有 `data-status-*` 属性（依赖 T003、T012；FR-001~FR-003、FR-005、contracts §1）
 - [x] T014 [US1] 在 `web/src/pages/TaskListPage.tsx` 概览指标区（`task-overview-metrics`）接入 `taskOverview` 口径说明 Tooltip 与统计范围；0 值状态不渲染；分布条使用弱化形态（依赖 T007、T013；FR-002、FR-004、FR-005、R3）
 - [x] T015 [US1] 在 `web/src/pages/TaskListPage.tsx` 重排"时间与耗时"列：耗时为主信息、创建 / 完成为相对时间次要信息、Tooltip 提供完整时间、列内不换行（依赖 T005、T014；FR-006、FR-007）
-- [x] T016 [US1] 在 `web/src/pages/TaskListPage.tsx` 收敛行内操作：常驻仅"详情"；报告 / 失败日志 hover 或聚焦显示且保留在 `⋯` 菜单；重跑 / 重建 / 删除仅在菜单，危险操作保留二次确认；失败原因摘要可点击进入日志且不出现第二个失败日志入口（依赖 T015；FR-008、FR-026、R5、contracts §3）
+- [x] T016 [US1] 在 `web/src/pages/TaskListPage.tsx` 收敛行内操作：常驻仅"详情"；报告 / 失败日志 hover 或聚焦显示且保留在 `⋯` 菜单；"重建"（原"全量重建"）与删除仅在菜单，危险操作保留二次确认；不提供任务级"重跑"；失败原因摘要可点击进入日志且不出现第二个失败日志入口（依赖 T015；FR-008、FR-026、R5、contracts §3；2026-10-12 修订）
 - [x] T017 [US1] 在 `web/src/theme.css` 落地概览弱化色、时间列等宽数字（`tabular-nums`）、操作列 hover / focus-visible 显隐与焦点样式，确保 1280px 下固定列不遮挡；超长任务名 / 规则名 / 路径在紧凑密度下截断并提供悬浮完整值与复制（依赖 T015、T016；FR-002、FR-006、FR-007、FR-027、边界情况）
 - [x] T018 [P] [US1] 扩展 `web/e2e/task-home.spec.ts`：异常优先排序、概览条弱化色、Tooltip 文案与占比、时间列层级、0 值状态不出现、加载中不渲染 0 值分布（依赖 T014~T017；SC-001、SC-002、SC-009、边界情况）
-- [x] T019 [P] [US1] 扩展 `web/e2e/task-actions.spec.ts`、`web/e2e/task-delete-confirm.spec.ts`：报告 / 失败日志 / 重跑 / 重建 / 删除在收敛后仍可及，确认流程行为不变（依赖 T016；FR-008、FR-026、SC-009）
+- [x] T019 [P] [US1] 扩展 `web/e2e/task-actions.spec.ts`、`web/e2e/task-delete-confirm.spec.ts`：报告 / 失败日志 / 重建 / 删除在收敛后仍可及，确认流程行为不变，且断言操作列不出现"重跑"、列表不出现行展开箭头（依赖 T016；FR-008、FR-026、SC-009；2026-10-12 修订）
 
 **检查点**：MVP 可用——列表首屏异常优先、口径可查、操作收敛；`task-home` 与 `task-actions` E2E 通过。
 
@@ -149,14 +149,14 @@ description: "界面降噪与一致性精修 — 实现任务清单"
 
 ## 阶段 8：用户故事 6 - 上传前置反馈（优先级：P3）
 
-**目标**：选择文件后即可看到任务 ID 预览与校验结论；同名冲突给出下一步动作；不改契约。
+**目标**：选择文件后即可看到任务 ID 预览与校验结论；同名任务提交前确认覆盖并全量重建（附替代动作）；不新增接口端点、不改契约。
 
 **独立测试**：`cd web && npx playwright test e2e/upload-precheck.spec.ts`
 
 - [x] T049 [US6] 先写失败测试，扩展 `web/src/pages/TaskListPage.test.tsx`：选择文件后渲染任务 ID 预览、文件大小与校验结论；非法文件禁用提交并显示具体原因（与 T041 同文件须在其后执行；FR-023、SC-007）
 - [x] T050 [US6] 在 `web/src/pages/TaskListPage.tsx` 上传弹窗接入 `deriveTaskIdPreview` 与 `validatePackageFile`：预览区展示 token 样式任务 ID、格式化文件大小、格式 / 空文件 / 超限 / 超长原因，非法时禁用"确定"（依赖 T011；FR-023、data-model §5、R16）
-- [x] T051 [US6] 在 `web/src/pages/TaskListPage.tsx` 完善同名与 checksum 冲突提示：`package_checksum_conflict` 提供"修改文件名 / 查看已有任务"两个动作，checksum 相同提示"将打开已有任务"；不新增接口调用，不改错误码语义（依赖 T050；FR-024、FR-025）
-- [x] T052 [P] [US6] 新增 `web/e2e/upload-precheck.spec.ts`：合法文件 1 秒内出现预览、非法文件禁用提交并给出原因、同名冲突提示包含下一步动作；样例固定使用 `web/e2e/start-backend.sh` 确定性生成的 `.tmp/inventory-e2e.zip` 与 Playwright 内存文件（空文件 / 非法扩展名），冲突由同一文件二次上传复现，不新增巡检数据语义（依赖 T050、T051；SC-007、SC-009、plan 展示效果合规说明）
+- [x] T051 [US6] 在 `web/src/pages/TaskListPage.tsx` 实现同名包覆盖流程：同名任务存在时（列表命中、提交前复用既有任务详情接口探测命中、`package_checksum_conflict` 兜底）弹出二次确认"覆盖同名任务并全量重建？"，确认后先删除旧现场再用当前数据包创建任务，删除成功但创建失败时提示"原任务现场已清除"；弹窗内提供"覆盖并全量重建 / 修改文件名 / 查看已有任务"三个动作；不新增接口端点，不改错误码语义（依赖 T050；FR-024、FR-025；2026-10-12 修订）
+- [x] T052 [P] [US6] 新增 `web/e2e/upload-precheck.spec.ts`：合法文件 1 秒内出现预览、非法文件禁用提交并给出原因、同名任务提交前走覆盖确认（同名同内容与同名不同内容两条路径、取消后既有现场保留、checksum 冲突兜底给出三个动作）；样例固定使用 `web/e2e/start-backend.sh` 确定性生成的 `.tmp/inventory-e2e.zip` 与 Playwright 内存文件（空文件 / 非法扩展名），冲突由同一文件二次上传复现，不新增巡检数据语义（依赖 T050、T051；SC-007、SC-009、plan 展示效果合规说明；2026-10-12 修订）
 
 **检查点**：上传前即可发现绝大多数问题；后端校验语义未变。
 
@@ -262,3 +262,15 @@ python build.py e2e
 - 不得用 CSS 隐藏代替数据层过滤（空值 / 0 值必须在渲染前剔除）
 - 不得把密度偏好写入后端或 URL，避免污染深链
 - 不得删除既有 `data-testid` / `data-status-*` 属性；结构调整用等价断言语义替换
+
+---
+
+## 修订记录
+
+### 2026-10-12 同名包覆盖确认与任务列表操作收敛（修订 033）
+
+- **触发**：用户提出两项优化——（1）支持上传重复包，提示确认覆盖并全量重建；（2）任务列表操作列去掉"重跑"、"全量重建"更名两字"重建"、去掉行展开。
+- **受影响任务**：T016（去掉任务级"重跑"、"全量重建"更名"重建"）、T019（E2E 断言补充无"重跑"与无行展开）、T051（同名包改为二次确认覆盖 + 全量重建，三动作，复用既有接口）、T052（E2E 覆盖同名两条路径与取消保留现场）。
+- **同步产物**：`spec.md`（US6 场景 3、边界情况、FR-008 / FR-024 / FR-025 / FR-026、关键实体、SC-007、修订记录）、`contracts/ui-refinement.md`（§3 TaskRow、§5 单规则重跑、§8 上传预检）、`data-model.md`（§5 UploadPrecheck）、`research.md`（R5、R16）、`plan.md`（约束与行为不变清单）、`quickstart.md`（重点场景、截图、对照检查）、`checklists/requirements.md`（Notes）、`verification.md`（第六节）。
+- **验证**：`cd web && npm run build`、`cd web && npm test`、`npx playwright test e2e/task-actions.spec.ts e2e/task-home.spec.ts e2e/upload-precheck.spec.ts`、`.venv/bin/python build.py lint`、`.venv/bin/python build.py test` 全绿；断言见 `verification.md` 第六节。
+- **说明**：覆盖流程非原子（先删后建），失败路径在界面明示"原任务现场已清除"；未修改 `docs/api/openapi.yaml`，未新增接口端点。

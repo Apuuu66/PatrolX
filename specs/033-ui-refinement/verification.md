@@ -62,7 +62,8 @@ worktree 内 `.venv`、`web/node_modules` 为指向主仓库的符号链接（�
 
 - `e2e/upload-precheck.spec.ts:34`：合法数据包选择后 1 秒内出现任务 ID 预览、文件大小与"校验通过"，提交可用，通过。
 - `e2e/upload-precheck.spec.ts:52`：非法扩展名 / 空文件 / 文件名超长在选择阶段即给出具体原因并禁用提交，通过。
-- `e2e/upload-precheck.spec.ts:84`：同名且 checksum 相同提示"同名数据包已存在，将打开已有任务"；checksum 不同时弹窗内给出"修改文件名 / 查看已有任务"两个动作并跳转既有任务，通过。
+- `e2e/upload-precheck.spec.ts:84`（原文，已被 2026-10-12 修订取代）：同名且 checksum 相同提示"同名数据包已存在，将打开已有任务"；checksum 不同时弹窗内给出"修改文件名 / 查看已有任务"两个动作并跳转既有任务，通过。
+- 2026-10-12 修订后该用例改为"同名数据包提交前确认覆盖，确认后清空旧现场并全量重建"，另行新增"同名任务探测不通过时以 checksum 冲突提示给出覆盖与保留现场动作"；证据见第六节。
 - 单测 `web/src/utils/uploadPrecheck.test.ts`（与后端 `app/cli.py::clean_task_id` 同规则）、`web/src/pages/TaskListPage.test.tsx` 上传预检 / 同名冲突分组（10 passed）。
 - 截图：`5-上传弹窗.png`。
 
@@ -131,7 +132,7 @@ worktree 内 `.venv`、`web/node_modules` 为指向主仓库的符号链接（�
 
 - 未修改 `docs/api/openapi.yaml`、`app/**`、`requirements-lock.txt`、`pyproject.toml`、依赖清单、`web/src/App.tsx` 路由与深链。
 - 未修改 `tests/fixtures/make_real_package.py`：本功能为纯展示层精修，不新增巡检数据语义；展示效果复用既有代表性样例包与 E2E 种子任务，上传预检使用 `web/e2e/start-backend.sh` 确定性生成的 `.tmp/inventory-e2e.zip` 与 Playwright 内存文件。
-- 上传预检与冲突提示复用既有 `POST /api/v3/tasks` 与 `package_checksum_conflict` 错误码，未新增接口调用。
+- 上传预检与冲突提示复用既有 `POST /api/v3/tasks` 与 `package_checksum_conflict` 错误码，未新增接口调用。（2026-10-12 修订：同名判定新增一次既有任务详情接口 `GET /api/v2/tasks/{id}` 探测；覆盖复用既有 `DELETE /api/v2/tasks/{id}` 与 `POST /api/v3/tasks`。仍未修改 `docs/api/openapi.yaml`、未新增接口端点、未改动错误码语义。）
 - `web/e2e/screenshots/`、`web/test-results/`、`web/e2e/.tmp/`、调试用临时 spec 均未提交（`test-results` 已在 `.gitignore`）。
 
 ## 5. 复现命令
@@ -150,3 +151,28 @@ cd ../ && .venv/bin/python build.py e2e
 ```
 
 走查取证（任选一次，截图写入 `web/e2e/screenshots/`，不提交）：按 1440×900 逐页截图，并在 1280 / 1440 / 1920 下检查 `document.documentElement.scrollWidth <= clientWidth` 与 1920 内容宽度 ≤1600px。
+
+## 6. 2026-10-12 修订验证（同名包覆盖确认与任务列表操作收敛）
+
+**修订范围**：FR-008（任务列表去任务级"重跑"、"全量重建"更名"重建"、无行展开）、FR-024 / FR-025（同名任务提交前确认覆盖并全量重建，复用既有接口）、FR-026、SC-007。产物同步见 `spec.md` 与 `tasks.md` 修订记录。
+
+**工作区形态**：本修订为小改动，按 AGENTS.md「小改动不创建 worktree」，在主工作区 `main` 直接完成实现与验证；未触碰 OpenAPI 与后端。
+
+| 命令 | 结果 |
+| --- | --- |
+| `cd web && npm run build` | 通过（`tsc -b` + `vite build`，4.7s，仅既有 chunk 体积提示） |
+| `cd web && npm test` | 通过：24 files / 106 passed |
+| `npx playwright test e2e/task-actions.spec.ts e2e/task-home.spec.ts e2e/upload-precheck.spec.ts` | 通过：14 passed（23.8s） |
+| `.venv/bin/python build.py lint` | `All checks passed!` / `182 files already formatted` |
+| `.venv/bin/python build.py test` | 通过：585 passed（52.1s） |
+
+**修订后断言要点**：
+
+- `e2e/upload-precheck.spec.ts`：同名同内容不再静默打开旧任务，提交前出现"覆盖同名任务并全量重建？"确认，确认后提示"已覆盖同名数据包，开始全量重建"；同名不同内容取消覆盖后既有任务保持可用，弹窗内保留覆盖说明；探测未命中且后端返回 `package_checksum_conflict` 时，弹窗内可及"覆盖并全量重建 / 修改文件名 / 查看已有任务"三个动作。
+- `e2e/task-actions.spec.ts`：操作列不出现"重跑"；"重建"收在 `⋯` 菜单内且为危险样式；"数据准备"摘要就地可见、明细在列内弹层而非行展开。
+- `e2e/task-home.spec.ts`：列表无行展开箭头（`.ant-table-row-expand-icon` 计数为 0）。
+- 单测 `web/src/pages/TaskListPage.test.tsx`："同名任务已在列表中时预览提示覆盖并保留查看已有任务入口"、"同名任务提交时先确认覆盖，确认后清除旧现场并全量重建"、"同名任务不在当前列表时提交前探测命中并提示覆盖"、"操作列去掉重跑且不再有行展开，重建收在更多菜单"、"数据准备摘要就地可见，明细在列内弹层展开"。
+
+**非原子风险与兜底**：覆盖流程为先删除旧现场再创建任务；删除成功但创建失败时界面提示"原任务现场已清除，请重新选择数据包"，避免任务无声消失。后端任务正忙时提示"任务正在排队或执行，请等执行结束后再覆盖重建"。
+
+**例外说明**：E2E 中两字中文按钮（"取消"）经 AntD 处理会插入空格，断言改用 `/取\s*消/` 宽松匹配，与既有 `web/e2e/task-delete-confirm.spec.ts` 惯例一致；属选择器写法调整，未降低行为覆盖。
