@@ -40,8 +40,29 @@ async function uploadPackage(page: import("@playwright/test").Page, file: string
     await expect(page.locator(".ant-form-item").filter({ hasText: "运营商" })).toBeHidden();
   }
 
-  await page.getByRole("button", { name: kind === "inspection" ? "提交巡检" : "提交日志包" }).click();
+  await page
+    .getByRole("button", {
+      name: kind === "inspection" ? /提交巡检|覆盖并重建/ : /提交日志包|覆盖并重建/,
+    })
+    .click();
+
+  // 同名包不再静默打开旧任务：先弹覆盖确认，确认后清空旧现场并全量重建（FR-024）。
+  // 探测请求在提交后才返回，因此用「跳转详情」与「出现确认」两条路径竞速判定分支。
+  const confirm = page.locator(".ant-modal-confirm");
+  const overwritten = await Promise.race([
+    page.waitForURL(/\/tasks\//).then(() => false, () => false),
+    confirm.waitFor({ state: "visible", timeout: 10_000 }).then(() => true, () => false),
+  ]);
+  if (overwritten) {
+    await confirm.getByRole("button", { name: "覆盖并重建" }).click();
+  }
   await page.waitForURL(/\/tasks\//);
+  if (overwritten) {
+    // 覆盖即全量重建：等任务回到终态，避免后续页面读到被清空后的中间态。
+    await expect(
+      page.locator('[data-testid="conclusion-hero"] .ant-tag').filter({ hasText: "已完成" }),
+    ).toBeVisible({ timeout: 20_000 });
+  }
 }
 
 async function loginAdmin(page: import("@playwright/test").Page) {

@@ -9,6 +9,7 @@ import {
   Dropdown,
   Modal,
   Pagination,
+  Popover,
   Segmented,
   Select,
   Space,
@@ -87,28 +88,14 @@ const PREPARATION_STATUS_COLORS: Record<string, string> = {
 function TaskDeletePanel({
   taskId,
   error,
-  collapsed,
   retrying,
-  onToggle,
   onRetry,
 }: {
   taskId: string;
   error: TaskDeleteError;
-  collapsed: boolean;
   retrying: boolean;
-  onToggle: (taskId: string) => void;
   onRetry: (taskId: string) => void;
 }) {
-  if (collapsed) {
-    return (
-      <Button type="text" size="small" danger onClick={() => onToggle(taskId)} style={{ paddingInline: 0 }}>
-        <Flex align="center" gap={6}>
-          删除失败
-          <CaretRightOutlined />
-        </Flex>
-      </Button>
-    );
-  }
   return (
     <Alert
       type="error"
@@ -146,17 +133,7 @@ function TaskDeletePanel({
   );
 }
 
-function PreparationPanel({
-  preparation,
-  taskId,
-  expanded,
-  onToggle,
-}: {
-  preparation: DataPreparation;
-  taskId: string;
-  expanded: boolean;
-  onToggle: (taskId: string) => void;
-}) {
+function PreparationDetails({ preparation }: { preparation: DataPreparation }) {
   const [showAllAbnormal, setShowAllAbnormal] = useState(false);
   const [activeCategories, setActiveCategories] = useState<string[]>([]);
   const display = useMemo(
@@ -173,106 +150,107 @@ function PreparationPanel({
 
   return (
     <div className="preparation-panel">
-      <Button type="text" size="small" onClick={() => onToggle(taskId)} style={{ paddingInline: 0 }}>
-        <Flex align="center" gap={8}>
-          <Typography.Text strong>数据准备</Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {display.summary}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            {expanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
-          </Typography.Text>
-        </Flex>
-      </Button>
-      {expanded && (
-        <div style={{ marginTop: 8 }}>
-          <Flex vertical gap={4}>
-            {display.visibleAbnormalItems.map((item) => {
-              const active = activeCategories.includes(item.category);
-              const firstIssue = item.issues?.[0];
-              return (
-                <div key={item.code}>
-                  <Button
-                    type="text"
-                    block
-                    onClick={() => toggleCategory(item.category)}
-                    style={{
-                      height: "auto",
-                      minHeight: 34,
-                      justifyContent: "flex-start",
-                      paddingInline: 8,
-                      textAlign: "left",
-                    }}
-                  >
-                    <Flex align="center" gap={8} style={{ width: "100%" }}>
-                      <span
-                        aria-hidden
-                        style={{
-                          width: 8,
-                          height: 8,
-                          flex: "0 0 auto",
-                          borderRadius: "50%",
-                          background: PREPARATION_STATUS_COLORS[item.status],
-                        }}
-                      />
-                      <Typography.Text strong style={{ fontSize: 13 }}>
-                        {categoryLabel(item.category)}
-                        {item.total_count > 0 ? ` ${item.extracted_count}/${item.total_count}` : ""}
-                      </Typography.Text>
-                      {firstIssue && (
-                        <Typography.Text
-                          type="secondary"
-                          ellipsis
-                          style={{ fontSize: 12, flex: 1, minWidth: 0 }}
-                        >
-                          {firstIssue.reason}
-                        </Typography.Text>
-                      )}
-                      {active ? <CaretDownOutlined /> : <CaretRightOutlined />}
-                    </Flex>
-                  </Button>
-                  {active && (
-                    <div style={{ padding: "6px 16px 8px" }}>
-                      {(item.issues ?? []).map((issue, index) => (
-                        <div key={`${issue.type}-${index}`} style={{ marginBottom: 6 }}>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            {issue.type} · {issue.reason}
-                          </Typography.Text>
-                          <Typography.Paragraph style={{ margin: 0, fontSize: 12 }} code ellipsis>
-                            {formatPreparationIssuePath(issue)}
-                          </Typography.Paragraph>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {display.hiddenAbnormalCount > 0 && (
+      <Flex vertical gap={2}>
+        <Typography.Text strong>数据准备</Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {display.summary}
+        </Typography.Text>
+      </Flex>
+      <Flex vertical gap={4} style={{ marginTop: 8 }}>
+        {display.visibleAbnormalItems.map((item) => {
+          const active = activeCategories.includes(item.category);
+          const firstIssue = item.issues?.[0];
+          return (
+            <div key={item.code}>
               <Button
-                type="link"
-                size="small"
-                style={{ alignSelf: "flex-start" }}
-                onClick={() => setShowAllAbnormal(true)}
+                type="text"
+                block
+                onClick={() => toggleCategory(item.category)}
+                style={{
+                  height: "auto",
+                  minHeight: 34,
+                  justifyContent: "flex-start",
+                  paddingInline: 8,
+                  textAlign: "left",
+                }}
               >
-                展开全部 {display.abnormalItems.length} 类
+                <Flex align="center" gap={8} style={{ width: "100%" }}>
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 8,
+                      height: 8,
+                      flex: "0 0 auto",
+                      borderRadius: "50%",
+                      background: PREPARATION_STATUS_COLORS[item.status],
+                    }}
+                  />
+                  <Typography.Text strong style={{ fontSize: 13 }}>
+                    {categoryLabel(item.category)}
+                    {item.total_count > 0 ? ` ${item.extracted_count}/${item.total_count}` : ""}
+                  </Typography.Text>
+                  {firstIssue && (
+                    <Typography.Text
+                      type="secondary"
+                      ellipsis
+                      style={{ fontSize: 12, flex: 1, minWidth: 0 }}
+                    >
+                      {firstIssue.reason}
+                    </Typography.Text>
+                  )}
+                  {active ? <CaretDownOutlined /> : <CaretRightOutlined />}
+                </Flex>
               </Button>
-            )}
-            {display.abnormalItems.length === 0 && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                各分类准备正常或暂无来源数据
-              </Typography.Text>
-            )}
-            {display.normalSummary && (
-              <Typography.Text type="secondary" style={{ fontSize: 12, paddingLeft: 8 }}>
-                {display.normalSummary}
-              </Typography.Text>
-            )}
-          </Flex>
-        </div>
-      )}
+              {active && (
+                <div style={{ padding: "6px 16px 8px" }}>
+                  {(item.issues ?? []).map((issue, index) => (
+                    <div key={`${issue.type}-${index}`} style={{ marginBottom: 6 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {issue.type} · {issue.reason}
+                      </Typography.Text>
+                      <Typography.Paragraph style={{ margin: 0, fontSize: 12 }} code ellipsis>
+                        {formatPreparationIssuePath(issue)}
+                      </Typography.Paragraph>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {display.hiddenAbnormalCount > 0 && (
+          <Button
+            type="link"
+            size="small"
+            style={{ alignSelf: "flex-start" }}
+            onClick={() => setShowAllAbnormal(true)}
+          >
+            展开全部 {display.abnormalItems.length} 类
+          </Button>
+        )}
+        {display.abnormalItems.length === 0 && (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            各分类准备正常或暂无来源数据
+          </Typography.Text>
+        )}
+        {display.normalSummary && (
+          <Typography.Text type="secondary" style={{ fontSize: 12, paddingLeft: 8 }}>
+            {display.normalSummary}
+          </Typography.Text>
+        )}
+      </Flex>
     </div>
   );
+}
+
+/** 探测派生任务 ID 是否已存在；未命中与探测异常都留给创建接口兜底，不阻塞新包上传。 */
+async function taskExists(taskId: string): Promise<boolean> {
+  try {
+    await api.getTask(taskId);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function TaskListPage() {
@@ -293,13 +271,12 @@ export function TaskListPage() {
   const packageKind = Form.useWatch("package_kind", form);
   const isInspection = packageKind !== "log_supplement";
   const [file, setFile] = useState<File | null>(null);
-  const [expandedRowKeys, setExpandedRowKeys] = useState<readonly string[]>([]);
   const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
-  const [deleteCollapsed, setDeleteCollapsed] = useState<Record<string, boolean>>({});
   const { density, tableSize, setDensity } = useTableDensity();
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
 
   const [uploadConflict, setUploadConflict] = useState<{ taskId: string; message: string } | null>(null);
+  const [probedDuplicateId, setProbedDuplicateId] = useState<string | null>(null);
 
   // 上传前置校验：与后端同规则派生任务 ID，并前移格式 / 空文件 / 超限 / 超长校验（FR-023、R16）。
   const uploadPrecheck = useMemo(() => {
@@ -317,6 +294,9 @@ export function TaskListPage() {
     () => (uploadPrecheck ? items.find((item) => item.task_id === uploadPrecheck.taskId) ?? null : null),
     [items, uploadPrecheck],
   );
+
+  // 覆盖确认的唯一目标：列表命中、提交前探测命中或 checksum 冲突提示三者取一（FR-024）。
+  const overwriteTargetId = uploadDuplicate?.task_id ?? uploadConflict?.taskId ?? probedDuplicateId;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -355,47 +335,101 @@ export function TaskListPage() {
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
   usePolling(load, 2000, busy);
 
-  const togglePreparation = (taskId: string) =>
-    setExpandedRowKeys((current) =>
-      current.includes(taskId) ? current.filter((value) => value !== taskId) : [...current, taskId],
-    );
+  const buildUploadForm = (): FormData | null => {
+    if (!file) return null;
+    const values = form.getFieldsValue();
+    const packageKindValue = values.package_kind === "log_supplement" ? "log_supplement" : "inspection";
+    const fd = new FormData();
+    fd.append("package_file", file);
+    fd.append("package_kind", packageKindValue);
+    if (packageKindValue === "inspection") {
+      if (values.province) fd.append("province", values.province);
+      if (values.operator) fd.append("operator", values.operator);
+      if (values.product) fd.append("product", values.product);
+    }
+    return fd;
+  };
+
+  const closeUploadModal = () => {
+    setUploadConflict(null);
+    setProbedDuplicateId(null);
+    setOpen(false);
+    setFile(null);
+    form.resetFields();
+  };
+
+  /** 覆盖同名任务：先清空既有现场，再用当前数据包从零全量重建（FR-024）。 */
+  const overwriteAndRebuild = async (duplicateTaskId: string) => {
+    const fd = buildUploadForm();
+    if (!fd) return;
+    setSubmitting(true);
+    let cleared = false;
+    try {
+      try {
+        await api.deleteTask(duplicateTaskId);
+        cleared = true;
+      } catch (err) {
+        // 目标已不存在时继续覆盖，避免陈旧列表阻塞上传。
+        if (!(err instanceof ApiError && err.code === "not_found")) throw err;
+      }
+      const created = await api.createTaskV3(fd);
+      message.success("已覆盖同名数据包，开始全量重建");
+      closeUploadModal();
+      navigate(`/tasks/${created.task_id}`);
+    } catch (err) {
+      const reason =
+        err instanceof ApiError && err.code === "task_busy"
+          ? "任务正在排队或执行，请等执行结束后再覆盖重建"
+          : err instanceof Error
+            ? err.message
+            : "覆盖重建失败";
+      // 旧现场已清除但重建未提交时必须说清楚，避免任务无声消失。
+      message.error(cleared ? `${reason}；原任务现场已清除，请重新选择数据包` : reason);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const confirmOverwrite = (duplicateTaskId: string) => {
+    setProbedDuplicateId(duplicateTaskId);
+    modal.confirm({
+      title: "覆盖同名任务并全量重建？",
+      content: `任务 ${duplicateTaskId} 的原数据包与巡检结果会被清除，随后使用当前数据包重新执行全部解压、数据准备与规则检查；该操作不可撤销。`,
+      okText: "覆盖并重建",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: () => overwriteAndRebuild(duplicateTaskId),
+    });
+  };
 
   const submitUpload = async () => {
     if (!file) {
       message.warning("请选择数据压缩包");
       return;
     }
+    const fd = buildUploadForm();
+    if (!fd) return;
+    const previewTaskId = uploadPrecheck?.taskId ?? deriveTaskIdPreview(file.name);
+    // 已知同名任务：先确认覆盖，不再上传整包后才报 checksum 冲突（FR-024）。
+    if (overwriteTargetId) {
+      confirmOverwrite(overwriteTargetId);
+      return;
+    }
     setSubmitting(true);
     try {
-      const values = form.getFieldsValue();
-      const packageKindValue = values.package_kind === "log_supplement" ? "log_supplement" : "inspection";
-      const fd = new FormData();
-      fd.append("package_file", file);
-      fd.append("package_kind", packageKindValue);
-      if (packageKindValue === "inspection") {
-        if (values.province) fd.append("province", values.province);
-        if (values.operator) fd.append("operator", values.operator);
-        if (values.product) fd.append("product", values.product);
+      // 同名任务可能不在当前页：提交前探测一次，命中即走覆盖确认，避免重复包被静默忽略。
+      if (await taskExists(previewTaskId)) {
+        confirmOverwrite(previewTaskId);
+        return;
       }
-      const knownDuplicate = items.some(
-        (item) => item.task_id === (uploadPrecheck?.taskId ?? deriveTaskIdPreview(file.name)),
-      );
       const created = await api.createTaskV3(fd);
-      message.success(
-        knownDuplicate ? "同名数据包已存在，将打开已有任务" : "任务已创建，开始执行",
-      );
-      setUploadConflict(null);
-      setOpen(false);
-      setFile(null);
-      form.resetFields();
+      message.success("任务已创建，开始执行");
+      closeUploadModal();
       navigate(`/tasks/${created.task_id}`);
     } catch (err) {
       if (err instanceof ApiError && err.code === "package_checksum_conflict") {
-        // 冲突提示落在弹窗内，附带两个明确的下一步动作（FR-024）。
-        setUploadConflict({
-          taskId: uploadPrecheck?.taskId ?? deriveTaskIdPreview(file.name),
-          message: err.message,
-        });
+        // 探测未命中的兜底：冲突提示落在弹窗内，覆盖入口与保留现场的动作并列（FR-024）。
+        setUploadConflict({ taskId: previewTaskId, message: err.message });
       } else {
         message.error(err instanceof Error ? err.message : "创建失败");
       }
@@ -404,37 +438,27 @@ export function TaskListPage() {
     }
   };
 
-  const rerun = async (taskId: string) => {
-    try {
-      await api.rerunTask(taskId);
-      message.success("已受理重跑");
-      await load();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "重跑失败");
-    }
-  };
-
-  const rebuildFull = useCallback(
+  const rebuildTask = useCallback(
     async (taskId: string) => {
       try {
         await api.rebuildTask(taskId, { mode: "full", confirmed: true, trigger_source: "ui" });
-        message.success("已受理全量重建");
+        message.success("已受理重建");
         await load();
       } catch (err) {
-        message.error(err instanceof Error ? err.message : "全量重建失败");
+        message.error(err instanceof Error ? err.message : "重建失败");
       }
     },
     [load, message],
   );
 
-  const confirmRebuildFull = (taskId: string) => {
+  const confirmRebuild = (taskId: string) => {
     modal.confirm({
-      title: "全量重建该任务？",
+      title: "重建该任务？",
       content: "将删除并重建当前任务输出目录，重新解压并重算全部规则和 KPI 快照；该操作不可撤销。",
-      okText: "全量重建",
+      okText: "重建",
       okButtonProps: { danger: true },
       cancelText: "取消",
-      onOk: () => rebuildFull(taskId),
+      onOk: () => rebuildTask(taskId),
     });
   };
 
@@ -444,12 +468,6 @@ export function TaskListPage() {
       try {
         await api.deleteTask(taskId);
         setDeleteErrors((current) => {
-          if (!(taskId in current)) return current;
-          const next = { ...current };
-          delete next[taskId];
-          return next;
-        });
-        setDeleteCollapsed((current) => {
           if (!(taskId in current)) return current;
           const next = { ...current };
           delete next[taskId];
@@ -469,8 +487,6 @@ export function TaskListPage() {
         ) {
           const failure = detail as TaskDeleteError;
           setDeleteErrors((current) => ({ ...current, [taskId]: failure }));
-          setDeleteCollapsed((current) => ({ ...current, [taskId]: false }));
-          setExpandedRowKeys((current) => (current.includes(taskId) ? current : [...current, taskId]));
           return;
         }
         const fallback: TaskDeleteError = {
@@ -480,27 +496,12 @@ export function TaskListPage() {
           reason: err instanceof Error ? err.message : "删除失败",
         };
         setDeleteErrors((current) => ({ ...current, [taskId]: fallback }));
-        setDeleteCollapsed((current) => ({ ...current, [taskId]: false }));
-        setExpandedRowKeys((current) => (current.includes(taskId) ? current : [...current, taskId]));
       } finally {
         setDeleting((current) => ({ ...current, [taskId]: false }));
       }
     },
     [load, message],
   );
-
-  useEffect(() => {
-    const expandedTaskIds = Object.keys(deleteErrors).filter((taskId) => !deleteCollapsed[taskId]);
-    if (expandedTaskIds.length === 0) return;
-    const timer = window.setTimeout(() => {
-      setDeleteCollapsed((current) => {
-        const next = { ...current };
-        for (const taskId of expandedTaskIds) next[taskId] = true;
-        return next;
-      });
-    }, 5000);
-    return () => window.clearTimeout(timer);
-  }, [deleteErrors, deleteCollapsed]);
 
   const showUploadModal = () => {
     const last = sortedItems[0];
@@ -563,6 +564,37 @@ export function TaskListPage() {
       render: (_, record) => <StatusDistribution stats={record.stats} />,
     },
     {
+      // 数据准备状态就地可见，问题摘要与重试收进列内弹层（FR-011）。
+      title: "数据准备",
+      key: "preparation",
+      width: 200,
+      render: (_, record) => {
+        const preparation = record.preparation;
+        if (!preparation) {
+          return <Typography.Text type="secondary">—</Typography.Text>;
+        }
+        const summary = getPreparationDisplay(preparation).summary;
+        return (
+          <Popover
+            trigger="click"
+            placement="left"
+            overlayClassName="task-table-preparation-popover"
+            content={<PreparationDetails preparation={preparation} />}
+          >
+            <Button
+              type="text"
+              size="small"
+              className="task-table-preparation"
+              data-testid="task-preparation-summary"
+              title={summary}
+            >
+              {summary}
+            </Button>
+          </Popover>
+        );
+      },
+    },
+    {
       title: "元数据",
       key: "metadata",
       width: 200,
@@ -614,6 +646,7 @@ export function TaskListPage() {
         const canRebuild = record.status === "completed" || record.status === "failed";
         const openLogs = () => navigate(`/tasks/${record.task_id}/logs`);
         const openReport = () => navigate(`/tasks/${record.task_id}/report`);
+        const deleteError = deleteErrors[record.task_id];
         return (
           <Space size={0} wrap className="task-table-actions">
             {/* 行内常驻操作只有详情；报告在行 hover / 键盘聚焦时显示，其余动作收进 ⋯ 菜单（FR-008、R5） */}
@@ -632,6 +665,25 @@ export function TaskListPage() {
                 报告
               </Button>
             )}
+            {deleteError && (
+              // 删除失败必须就地可见并可重试，不再依赖行展开（FR-011、FR-026）。
+              <Popover
+                trigger="click"
+                placement="topRight"
+                content={
+                  <TaskDeletePanel
+                    taskId={record.task_id}
+                    error={deleteError}
+                    retrying={Boolean(deleting[record.task_id])}
+                    onRetry={(id) => void remove(id)}
+                  />
+                }
+              >
+                <Button type="link" size="small" danger data-testid="task-delete-failed">
+                  删除失败
+                </Button>
+              </Popover>
+            )}
             <Dropdown
               menu={{
                 items: [
@@ -643,9 +695,8 @@ export function TaskListPage() {
                         icon: <FileTextOutlined />,
                         disabled: !canReport,
                       },
-                  { key: "rerun", label: "重跑", icon: <RedoOutlined /> },
                   ...(canRebuild
-                    ? [{ key: "rebuild", label: "全量重建", danger: true, icon: <ClearOutlined /> }]
+                    ? [{ key: "rebuild", label: "重建", danger: true, icon: <ClearOutlined /> }]
                     : []),
                   { type: "divider" as const },
                   { key: "delete", label: "删除", danger: true, icon: <DeleteOutlined /> },
@@ -653,8 +704,7 @@ export function TaskListPage() {
                 onClick: ({ key }) => {
                   if (key === "logs") openLogs();
                   if (key === "report") openReport();
-                  if (key === "rerun") void rerun(record.task_id);
-                  if (key === "rebuild") confirmRebuildFull(record.task_id);
+                  if (key === "rebuild") confirmRebuild(record.task_id);
                   if (key === "delete") {
                     modal.confirm({
                       title: "删除任务（含现场数据）？",
@@ -766,49 +816,6 @@ export function TaskListPage() {
               dataSource={sortedItems}
               loading={loading && items.length > 0}
               pagination={false}
-              expandable={{
-                expandedRowKeys: [...expandedRowKeys],
-                onExpandedRowsChange: (keys) => setExpandedRowKeys(keys.map(String)),
-                expandedRowRender: (record) => (
-                  <Flex vertical gap={12} className="task-table-expanded">
-                    {deleteErrors[record.task_id] && (
-                      <TaskDeletePanel
-                        taskId={record.task_id}
-                        error={deleteErrors[record.task_id]}
-                        collapsed={Boolean(deleteCollapsed[record.task_id])}
-                        retrying={Boolean(deleting[record.task_id])}
-                        onToggle={(id) =>
-                          setDeleteCollapsed((current) => ({ ...current, [id]: !current[id] }))
-                        }
-                        onRetry={(id) => void remove(id)}
-                      />
-                    )}
-                    {record.preparation ? (
-                      <PreparationPanel
-                        preparation={record.preparation}
-                        taskId={record.task_id}
-                        expanded
-                        onToggle={togglePreparation}
-                      />
-                    ) : (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        暂无数据准备记录
-                      </Typography.Text>
-                    )}
-                    {record.status === "failed" && (
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<FileTextOutlined />}
-                        style={{ alignSelf: "flex-start", paddingInline: 0 }}
-                        onClick={() => navigate(`/tasks/${record.task_id}/logs`)}
-                      >
-                        查看失败日志
-                      </Button>
-                    )}
-                  </Flex>
-                ),
-              }}
               locale={{
                 emptyText: (
                   <EmptyState
@@ -821,7 +828,7 @@ export function TaskListPage() {
                   />
                 ),
               }}
-              scroll={{ x: 1098 }}
+              scroll={{ x: 1250 }}
             />
           )}
 
@@ -849,12 +856,8 @@ export function TaskListPage() {
         okButtonProps={{
           disabled: !file || !uploadPrecheck?.validation.valid || submitting,
         }}
-        onCancel={() => {
-          setOpen(false);
-          setFile(null);
-          form.resetFields();
-        }}
-        okText={isInspection ? "提交巡检" : "提交日志包"}
+        onCancel={closeUploadModal}
+        okText={overwriteTargetId ? "覆盖并重建" : isInspection ? "提交巡检" : "提交日志包"}
         cancelText="取消"
       >
         <Form form={form} layout="vertical">
@@ -865,11 +868,13 @@ export function TaskListPage() {
               beforeUpload={(f) => {
                 setFile(f);
                 setUploadConflict(null);
+                setProbedDuplicateId(null);
                 return false;
               }}
               onRemove={() => {
                 setFile(null);
                 setUploadConflict(null);
+                setProbedDuplicateId(null);
               }}
             >
               <p>点击或拖拽压缩包到此处</p>
@@ -885,10 +890,18 @@ export function TaskListPage() {
                 description={
                   <Flex vertical gap={8}>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      任务 {uploadConflict.taskId} 已使用另一个数据包，继续提交不会覆盖已有结果。
-                      请修改本地压缩包文件名后重新选择，或直接查看已有任务。
+                      任务 {uploadConflict.taskId} 已使用另一个数据包。覆盖将清除该任务的原数据包与巡检结果，
+                      并用当前数据包全量重建；也可以修改本地文件名后重新选择，或直接查看已有任务。
                     </Typography.Text>
                     <Space size={8} wrap>
+                      <Button
+                        size="small"
+                        type="primary"
+                        danger
+                        onClick={() => confirmOverwrite(uploadConflict.taskId)}
+                      >
+                        覆盖并全量重建
+                      </Button>
                       <Button
                         size="small"
                         icon={<RedoOutlined />}
@@ -968,24 +981,20 @@ export function TaskListPage() {
               </Flex>
             </div>
           )}
-          {uploadDuplicate && (
+          {overwriteTargetId && (
             <div className="upload-duplicate-hint" data-testid="upload-existing-task-hint">
               <Flex align="center" gap={8} wrap="wrap">
                 <InfoCircleOutlined className="upload-duplicate-icon" role="img" aria-label="同名任务提示" />
                 <Typography.Text style={{ fontSize: 12 }}>
-                  同名任务已存在：checksum 相同时提交将打开已有任务，不同时会提示冲突。
+                  同名任务已存在：提交将覆盖原数据包并全量重建，原任务结果会被清除。
                 </Typography.Text>
                 <Button
                   size="small"
                   type="link"
                   style={{ paddingInline: 0 }}
                   onClick={() => {
-                    const taskId = uploadDuplicate.task_id;
-                    setOpen(false);
-                    setFile(null);
-                    setUploadConflict(null);
-                    form.resetFields();
-                    navigate(`/tasks/${taskId}`);
+                    closeUploadModal();
+                    navigate(`/tasks/${overwriteTargetId}`);
                   }}
                 >
                   查看已有任务

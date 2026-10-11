@@ -67,14 +67,16 @@ test("任务首页行内元数据与操作分层保持可读", async ({ page }) 
   await expect(failedRow.getByRole("button", { name: "详情" })).toBeVisible();
   await expect(failedRow.getByRole("button", { name: "失败日志" })).toHaveCount(0);
   await expect(failedRow.getByRole("button", { name: "报告" })).toHaveCount(0);
-  await expect(failedRow.getByRole("button", { name: /重跑|全量重建|删除/ })).toHaveCount(0);
+  await expect(failedRow.getByRole("button", { name: /重跑|重建|删除/ })).toHaveCount(0);
+  // 去掉收缩：行首不再有展开 / 收起箭头（FR-011 改由数据准备列承载）
+  await expect(page.locator(".ant-table-row-expand-icon")).toHaveCount(0);
 
   // 低频与危险操作收进 ⋯ 菜单，失败日志也在菜单内仍可及（FR-008）
   await failedRow.getByRole("button", { name: "更多操作" }).click();
   await expect(page.getByRole("menuitem", { name: "失败日志" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "重跑" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "全量重建" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "重建" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "删除" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "重跑" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   // 已完成任务：报告按钮默认不抢注意力，行 hover 后显示且在菜单内同样可达（FR-008）
@@ -82,11 +84,15 @@ test("任务首页行内元数据与操作分层保持可读", async ({ page }) 
   const revealButton = completedRow.locator(".task-table-action-reveal");
   await expect(revealButton).toHaveText("报告");
   await expect(revealButton).toHaveCSS("opacity", "0");
-  await completedRow.hover();
-  await expect(revealButton).toHaveCSS("opacity", "1");
+  // 列表在任务执行期间每 2 秒轮询重载，行序变化会把指针从该行移开；
+  // hover 与断言一起重试，直到指针稳定落在目标行上（FR-008）。
+  await expect(async () => {
+    await completedRow.hover();
+    await expect(revealButton).toHaveCSS("opacity", "1", { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await completedRow.getByRole("button", { name: "更多操作" }).click();
   await expect(page.getByRole("menuitem", { name: "报告" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "重跑" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "重建" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "删除" })).toBeVisible();
   await page.keyboard.press("Escape");
 

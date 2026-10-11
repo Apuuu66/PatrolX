@@ -633,8 +633,25 @@
   justify-content: flex-end;
 }
 
-.task-table-expanded {
-  padding: var(--space-1) var(--space-3) var(--space-2);
+/* 数据准备摘要就地可见，明细走列内弹层（FR-011） */
+.task-table-preparation {
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  max-width: 100%;
+  padding: 0;
+  font-size: var(--font-size-caption);
+  text-align: left;
+  white-space: normal;
+}
+
+.task-table-preparation-popover {
+  max-width: 420px;
+}
+
+.task-table-preparation-popover .preparation-panel {
+  border-top: none;
+  padding-top: 0;
 }
 
 .preparation-panel {
