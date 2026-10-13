@@ -128,13 +128,13 @@ export function MainLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider theme="light" width={200} className="app-sider">
+      <Sider theme="dark" width={200} className="app-sider">
         <div className="app-sider-brand">
           <SafetyCertificateOutlined />
           PatrolX
         </div>
         <Menu
-          theme="light"
+          theme="dark"
           mode="inline"
           selectedKeys={[selected]}
           items={menuItems}

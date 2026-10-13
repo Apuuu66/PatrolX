@@ -66,16 +66,17 @@ describe("MainLayout", () => {
     expect(login.classList.contains("ant-btn-default")).toBe(true);
   });
 
-  it("侧边栏使用浅色底与选中态指示，并保留键盘可达的菜单项", () => {
+  it("侧边栏使用深色导航底，并保留键盘可达的菜单项", () => {
     setSession("token-for-test", { username: "admin", role: "admin" });
     const { container } = renderLayout("/inspectors");
 
     const sider = container.querySelector(".app-sider") as HTMLElement;
     expect(sider).not.toBeNull();
+    // 深色导航：侧边栏与菜单都走 dark 主题，与浅色内容区分区。
+    expect(sider.classList.contains("ant-layout-sider-dark")).toBe(true);
+    expect(container.querySelector(".app-sider .ant-menu-dark")).not.toBeNull();
     const item = within(sider).getByText("规则管理").closest("li") as HTMLElement;
     expect(item.classList.contains("ant-menu-item-selected")).toBe(true);
     expect(item.getAttribute("tabindex")).not.toBeNull();
-    // 选中态由淡色底 + 左侧指示条 + 品牌深色文字表达，不使用实心主色块。
-    expect(item.getAttribute("style") ?? "").not.toContain("22, 119, 255");
   });
 });
