@@ -52,6 +52,7 @@ web/smoke.tmp.mjs
 web/test-results/
 web/playwright-report/
 web/e2e/.tmp/
+web/e2e/.tmp-retention/
 .venv
 
 # 本地草稿与包管理器锁文件

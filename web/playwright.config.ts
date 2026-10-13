@@ -2,6 +2,8 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  // 留存治理场景使用独立后端与数据根，由 playwright.retention.config.ts 单独运行。
+  testIgnore: /retention\.spec\.ts/,
   timeout: 30_000,
   use: {
     baseURL: "http://127.0.0.1:5183",

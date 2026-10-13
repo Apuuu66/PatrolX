@@ -161,25 +161,43 @@ test("概览条弱化通过状态并给出计数与占比 Tooltip", async ({ pag
   ).toBeVisible();
 });
 
-test("时间与耗时列以耗时为主并给出完整时间 Tooltip", async ({ page }) => {
+test("列表展示最后运行时间与任务时长，未运行任务显示占位", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
 
+  // 已运行任务：最后运行时间为相对时间，任务时长取最近一次运行耗时（FR-008、FR-009、SC-004）
   const failedRow = rowOf(page, FAILED_TASK_ID);
-  const timeCell = failedRow.locator(".task-table-time");
-  await expect(timeCell).toHaveClass(/tabular-nums/);
-  await expect(failedRow.locator('[data-testid="task-duration"]')).toHaveText(/^耗时 /);
+  const lastRunCell = failedRow.locator('[data-testid="task-last-run"]');
+  await expect(lastRunCell).toHaveClass(/tabular-nums/);
+  await expect(lastRunCell).not.toHaveText("-");
+  await expect(failedRow.locator('[data-testid="task-duration"]')).toHaveText("10 秒");
 
-  // 创建 / 完成为相对时间次要信息，不在列内直接堆叠完整时间戳（FR-006）
-  await expect(timeCell.getByText(/^创建 /)).toBeVisible();
-  await expect(timeCell.getByText(/^完成 /)).toBeVisible();
-  await expect(timeCell).not.toContainText(/\d{4}-\d{2}-\d{2}/);
-
-  // 完整时间通过 Tooltip 提供（FR-007）
-  await timeCell.getByText(/^创建 /).hover();
+  // 列内不堆叠完整时间戳，完整时间通过 Tooltip 提供（FR-007）
+  await expect(failedRow.locator('[data-testid="task-created-at"]')).not.toHaveText("-");
+  await expect(failedRow).not.toContainText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+  await lastRunCell.hover();
   await expect(
     page.locator(".ant-tooltip-inner").filter({ hasText: /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/ }).first(),
   ).toBeVisible();
+
+  // 详情页同步展示两字段（FR-009）
+  await page.goto(`/tasks/${FAILED_TASK_ID}`);
+  await page.getByTestId("technical-collapse").getByText("执行与技术信息").click();
+  const metaPanel = page.getByTestId("task-meta-panel");
+  await expect(metaPanel.getByText("最后运行时间")).toBeVisible();
+  await expect(metaPanel.getByText("任务时长")).toBeVisible();
+  await expect(metaPanel.getByText("10 秒")).toBeVisible();
+
+  // 从未运行/现场无运行字段的历史任务显示占位，不编造 0 秒耗时（SC-004）
+  await page.goto("/tasks/task-legacy-e2e");
+  await page.getByTestId("technical-collapse").getByText("执行与技术信息").click();
+  const legacyPanel = page.getByTestId("task-meta-panel");
+  const legacyValues = await legacyPanel
+    .locator(".ant-descriptions-item")
+    .filter({ hasText: /最后运行时间|任务时长/ })
+    .locator(".ant-descriptions-item-content")
+    .allTextContents();
+  expect(legacyValues).toEqual(["-", "-"]);
 });
 
 test("概览统计加载中不渲染 0 值假分布", async ({ page }) => {

@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "gen-api": "openapi-typescript ../docs/api/openapi.yaml -o src/api/client.ts",
     "test": "node --experimental-strip-types --test src/**/*.test.ts && vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test && playwright test -c playwright.retention.config.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",

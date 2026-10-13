@@ -1,4 +1,56 @@
 import { expect, test } from "@playwright/test";
+import path from "node:path";
+
+import type { Page } from "@playwright/test";
+
+const ledgerZip = path.join(process.cwd(), "e2e", ".tmp", "device-check-e2e.zip");
+const LEDGER_DEVICE_NAME = "E2E-DEV-901";
+
+async function loginAdmin(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^登\s*录$/ }).first().click();
+  await page.getByLabel("用户名").fill("e2e-admin");
+  await page.getByLabel("密码").fill("e2e-admin-123");
+  await page.locator(".ant-modal").getByRole("button", { name: /^登\s*录$/ }).click();
+  await expect(page.getByText("e2e-admin")).toBeVisible();
+}
+
+/** 上传单一设备的巡检包，落到设备台账；返回任务 ID。 */
+async function uploadLedgerPackage(page: Page): Promise<string> {
+  await page.goto("/");
+  await page.getByRole("button", { name: /上传/ }).first().click();
+  await expect(page.getByText("上传数据包（一个压缩包 = 一个任务）")).toBeVisible();
+  await page.setInputFiles('input[type="file"]', ledgerZip);
+  const selectByLabel = (label: string) =>
+    page.locator(".ant-form-item").filter({ hasText: label }).locator(".ant-select");
+  for (const [label, option] of [
+    ["省份", "江苏"],
+    ["运营商", "移动"],
+    ["网元类型", "UMF"],
+  ] as const) {
+    await selectByLabel(label).click();
+    await page
+      .locator(
+        `.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option[title="${option}"]`,
+      )
+      .click();
+  }
+  await page.getByRole("button", { name: "提交巡检" }).click();
+  await page.waitForURL(/\/tasks\/task-/);
+  return new URL(page.url()).pathname.split("/").filter(Boolean).pop() as string;
+}
+
+async function taskStatus(page: Page, taskId: string): Promise<string> {
+  const response = await page.request.get(`/api/v2/tasks/${taskId}`);
+  return ((await response.json()) as { status: string }).status;
+}
+
+function devicePatch(page: Page) {
+  return page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" && response.url().includes("/device-id"),
+  );
+}
 
 const taskId = "task-actions-e2e";
 
@@ -187,4 +239,62 @@ test("数据准备摘要就地可见，明细在列内弹层而不是行展开",
   await expect(popover).toBeVisible();
   await expect(popover).toContainText("来源文件缺失");
   await expect(popover).toContainText("正常：日志");
+});
+
+test("手动设备 ID 必须是台账内设备：不存在被拒绝、存在可保存", async ({ page }) => {
+  // 用例包含真实上传与巡检执行，默认 30s 不够。
+  test.setTimeout(120_000);
+  await loginAdmin(page);
+  const uploadedTaskId = await uploadLedgerPackage(page);
+  await expect
+    .poll(() => taskStatus(page, uploadedTaskId), { timeout: 30_000 })
+    .toBe("completed");
+  await page.reload();
+
+  // 未手工填写时展示台账解析出的网元名称（FR-010 前置状态）
+  await page.getByTestId("technical-collapse").getByText("执行与技术信息").click();
+  const deviceCell = page.locator(".ant-descriptions-item").filter({ hasText: "设备 ID" });
+  await expect(deviceCell).toContainText(LEDGER_DEVICE_NAME);
+  await expect(deviceCell).toContainText("台账解析");
+
+  const devicesBody = (await (
+    await page.request.get("/api/v2/inventory/devices?page=1&page_size=100")
+  ).json()) as { items: { device_id: string; device_name: string }[] };
+  const ledgerDevice = devicesBody.items.find((item) => item.device_name === LEDGER_DEVICE_NAME);
+  expect(ledgerDevice, `台账缺少设备 ${LEDGER_DEVICE_NAME}`).toBeTruthy();
+  const ledgerDeviceId = ledgerDevice!.device_id;
+
+  const modal = page.locator(".ant-modal").filter({ hasText: "修改设备 ID" });
+  const input = modal.getByPlaceholder("输入设备 ID");
+  // antd 按钮在快速 loading 切换后可能残留动画节点污染可访问名（如 "loading 保 存"），
+  // 这里按弹窗底部按钮位置定位，避免 a11y 名称竞态导致的误判。
+  const saveButton = modal.locator(".ant-modal-footer button").last();
+  const cancelButton = modal.locator(".ant-modal-footer button").first();
+
+  // 不存在于台账的 ID：400 拒绝 + 弹窗内明确提示，任务记录保持原值
+  await deviceCell.getByRole("button", { name: "编辑" }).click();
+  await input.fill("NOT-EXIST-E2E");
+  const rejectedPromise = devicePatch(page);
+  await saveButton.click();
+  const rejected = await rejectedPromise;
+  expect(rejected.status()).toBe(400);
+  expect(((await rejected.json()) as { code: string }).code).toBe("device_not_found");
+  await expect(page.getByTestId("device-id-error")).toContainText("设备 ID 不存在于设备台账");
+  await expect(modal).toBeVisible();
+
+  const afterReject = (await (
+    await page.request.get(`/api/v2/tasks/${uploadedTaskId}`)
+  ).json()) as { system: { customer: Record<string, string> } };
+  expect(afterReject.system.customer.device_id ?? "").toBe("");
+  await cancelButton.click();
+
+  // 台账内的 ID：保存成功，任务详情同步展示新值
+  await deviceCell.getByRole("button", { name: "编辑" }).click();
+  await input.fill(ledgerDeviceId);
+  const acceptedPromise = devicePatch(page);
+  await saveButton.click();
+  const accepted = await acceptedPromise;
+  expect(accepted.status()).toBe(200);
+  await expect(page.getByText("设备 ID 已更新")).toBeVisible();
+  await expect(deviceCell).toContainText(ledgerDeviceId);
 });

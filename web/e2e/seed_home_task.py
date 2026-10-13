@@ -69,6 +69,8 @@ def main() -> None:
             trigger="api",
             created_at=datetime(2026, 9, 22, 10, 0, tzinfo=UTC),
             completed_at=datetime(2026, 9, 22, 10, 0, 10, tzinfo=UTC),
+            last_run_at=datetime(2026, 9, 22, 10, 0, tzinfo=UTC),
+            duration_ms=10_000,
             stats=TaskStats.model_validate(
                 {"total": 1, "pass": 0, "warn": 0, "fail": 0, "error": 1, "skip": 0, "systems": 1}
             ),
