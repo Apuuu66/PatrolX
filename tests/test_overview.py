@@ -1,12 +1,14 @@
-"""全局概览 API 测试。"""
+"""全局概览 API 测试：概览统计全部来自 SQLite 任务行与规则结果行。"""
 
 import json
+import shutil
 
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.inspectors.registry import registry
 from app.main import app
+from app.services import task_db
 
 client = TestClient(app)
 
@@ -16,6 +18,7 @@ def _finding(index: int) -> dict:
         "finding_id": f"f-{index}",
         "title": f"问题 {index}",
         "severity": "medium",
+        "source_file": f"alarm/f-{index}.csv",
         "evidence": "evidence",
         "recommendation": "处理建议",
     }
@@ -31,6 +34,7 @@ def _rule(code: str, status: str, findings: list[dict]) -> dict:
         "status": status,
         "severity": "low",
         "summary": "summary",
+        "skip_reason": "无可解析文件" if status == "skip" else None,
         "metrics": [],
         "findings": findings,
         "metadata": {},
@@ -65,9 +69,10 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
     output = settings.output
     output.mkdir(parents=True, exist_ok=True)
 
+    # 隐藏规则（如 pkg.extract.*）必须与既有口径一致地排除在概览统计之外。
     task1 = _task(
         "task-overview-1",
-        {"total": 3, "pass": 2, "warn": 0, "fail": 1, "error": 0, "skip": 0},
+        {"total": 2, "pass": 1, "warn": 0, "fail": 1, "error": 0, "skip": 0},
         [
             _rule("rule.a", "pass", [_finding(1), _finding(2)]),
             _rule("rule.b", "fail", []),
@@ -75,7 +80,7 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
     )
     task2 = _task(
         "task-overview-2",
-        {"total": 2, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 2},
+        {"total": 1, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 1},
         [_rule("rule.c", "skip", [_finding(3)])],
     )
     before = client.get("/api/v2/overview").json()
@@ -83,6 +88,19 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
         task_dir = output / task["task_id"]
         task_dir.mkdir(parents=True, exist_ok=True)
         (task_dir / "task.json").write_text(json.dumps(task, ensure_ascii=False), encoding="utf-8")
+        # 展示数据必须以数据库为准：现场入库后概览才可见。
+        assert task_db.import_task_from_output(task["task_id"], output=output, force=True)
+        # 磁盘现场被清理后概览必须保持不变。
+        shutil.rmtree(task_dir)
+    # 只有现场、未入库的任务不得进入概览统计。
+    scene_only = "task-overview-scene-only"
+    scene_dir = output / scene_only
+    scene_dir.mkdir(parents=True, exist_ok=True)
+    scene_stats = {"total": 1, "pass": 1, "warn": 0, "fail": 0, "error": 0, "skip": 0}
+    (scene_dir / "task.json").write_text(
+        json.dumps(_task(scene_only, scene_stats, [_rule("rule.d", "pass", [])])),
+        encoding="utf-8",
+    )
 
     resp = client.get("/api/v2/overview")
     assert resp.status_code == 200, resp.text
@@ -92,11 +110,11 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
     assert body["task_count"] == before["task_count"] + 2
     assert body["registered_rule_count"] == len(expected_rules)
     assert body["registered_rule_count"] > len(registry.all(include_hidden=False))
-    assert body["rule_result_count"] == before["rule_result_count"] + 5
+    assert body["rule_result_count"] == before["rule_result_count"] + 3
     assert body["finding_count"] == before["finding_count"] + 3
-    assert body["status_counts"]["total"] == before["status_counts"]["total"] + 5
-    assert body["status_counts"]["pass"] == before["status_counts"]["pass"] + 2
+    assert body["status_counts"]["total"] == before["status_counts"]["total"] + 3
+    assert body["status_counts"]["pass"] == before["status_counts"]["pass"] + 1
     assert body["status_counts"]["warn"] == before["status_counts"]["warn"]
     assert body["status_counts"]["fail"] == before["status_counts"]["fail"] + 1
     assert body["status_counts"]["error"] == before["status_counts"]["error"]
-    assert body["status_counts"]["skip"] == before["status_counts"]["skip"] + 2
+    assert body["status_counts"]["skip"] == before["status_counts"]["skip"] + 1

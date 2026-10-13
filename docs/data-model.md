@@ -1,7 +1,8 @@
 # PatrolX 契约数据模型
 
-本文档说明巡检输出的四层契约结构和持久化文件组织。机器可读契约以
-[`docs/api/openapi.yaml`](api/openapi.yaml) 为准。
+本文档说明巡检输出的四层契约结构、SQLite 持久化角色与磁盘现场组织。机器可读契约以
+[`docs/api/openapi.yaml`](api/openapi.yaml) 为准；界面展示数据的唯一来源是 SQLite，
+`output/` 文件是执行期现场（见第 13 节）。
 
 ## 1. 层级结构
 
@@ -31,8 +32,10 @@ InspectionTask
 | `mode` | `local` / `online` |
 | `status` | `pending` / `running` / `completed` / `failed` |
 | `trigger` | `api` / `cli` / `rerun` |
-| `created_at` | 创建时间，UTC |
-| `completed_at` | 完成时间，UTC |
+| `created_at` | 创建时间，UTC；不随重跑/重建变化 |
+| `completed_at` | 最近一次运行的完成时间，UTC |
+| `last_run_at` | 最近一次运行的开始时间，UTC；从未运行为 `null` |
+| `duration_ms` | 最近一次运行的耗时（毫秒）；仅终态写入，运行中与从未运行为 `null` |
 | `stats` | 跨系统状态汇总 |
 | `system` | 单系统巡检结果；当前模型为 1:1 |
 
@@ -201,6 +204,12 @@ output/<task_id>/prepared/<owner_code>/
 
 该目录属于内部运行时数据，不进入公共 API 契约。
 
+现场与数据库的角色边界：
+
+- `output/<task_id>/` 是执行期现场，不是界面查询依据；规则结果、KPI 历史点、任务元数据在任务终态时同步快照到 SQLite。
+- 现场按留存策略只保留最近 50 个任务；被清理后上述数据仍可从 DB 完整读取，规则结果文件缺失不影响规则详情、发现与指标展示。
+- 执行日志（`execution.log`）与报告（`report.html`）只存在于现场，不入库；现场缺失时对应接口返回 410 `scene_cleaned`。
+
 ## 10. 示例
 
 ```json
@@ -317,7 +326,10 @@ base/units.json
 
 快照在主包解压完成后生成，之后不可变。普通 KPI 规则只读取快照；单规则重跑优先复用。快照缺失时从基础资源 + SQLite 原子重建，损坏或当前配置校验失败时抛出错误并让任务失败。
 
-KPI 跨任务历史不新增数据库历史点表。设备 ID 保存在任务元数据（`customer["device_id"]`）；有效趋势点保存在任务输出 `kpi/history/index.jsonl`，索引不保存设备 ID。字段、降级和查询边界见 [025 历史趋势数据模型](../specs/025-kpi-cross-task-trend/data-model.md)。
+KPI 跨任务历史的字段、降级和查询边界见 [025 历史趋势数据模型](../specs/025-kpi-cross-task-trend/data-model.md)。设备 ID 保存在任务元数据（`customer["device_id"]`），历史索引不保存设备 ID。
+
+034 起，趋势与版本对比读取 SQLite 的 `task_kpi_points`（按任务写入的 DB 镜像，随终态发布整批替换，字段与 `kpi/history/index.jsonl` 一一对应，缺失字段以 NULL 保留）；
+`output/<task_id>/kpi/history/index.jsonl` 保留为现场副本，现场被清理后趋势查询仍可用。任务详情中的“台账解析”设备名来自任务台账证据（`inventory_parse_results` 及归档观测），与手动绑定的 `customer["device_id"]` 分开存储；手动绑定必须命中 `inventory_devices`。
 
 全量重建会删除旧快照并按当前基础资源、分类和动态口径生成新快照；增量重建在预检时要求既有快照可解析，重建解压现场后原样保留快照。
 
@@ -378,3 +390,43 @@ inventory_change_audits                    # 覆盖、重建和变更审计
   - 分类规则表。
   - 目录处理逻辑。
   - 测试样例。
+
+## 13. 任务数据持久化与磁盘留存
+
+### 13.1 数据角色
+
+| 数据 | 存储位置 | 生命周期 | 界面读取 |
+| --- | --- | --- | --- |
+| 任务元数据、运行字段、`stats`、准备摘要 | SQLite `tasks` | 长期保留（人工删除除外） | DB |
+| 规则结果（含隐藏规则）、发现、指标 | SQLite `task_rule_results`（契约 JSON）+ `output/<task_id>/rules/*.json`（现场副本） | DB 长期；文件随现场清理 | DB |
+| KPI 历史点 | SQLite `task_kpi_points` + `output/<task_id>/kpi/history/index.jsonl`（现场副本） | DB 长期；文件随现场清理 | DB |
+| 原始上传包 | `uploads/<task_id>/<package_file>` | 最近 50 个任务 | 不展示 |
+| 解压数据、prepared、执行日志、报告、`task.json` / `system.json` | `output/<task_id>/` | 最近 50 个任务 | 仅报告/日志按文件读取，缺失时明确提示 |
+
+### 13.2 `tasks` 增量列
+
+| 列 | 类型 | 可空 | 语义 |
+| --- | --- | --- | --- |
+| `last_run_at` | DateTime(timezone) | 是 | 最近一次运行的开始时刻；每次运行开始时写入 |
+| `duration_ms` | Integer | 是 | 最近一次运行的耗时（毫秒）；仅终态写入 |
+| `package_checksum` | String(64) | 是 | 系统首次接收原始包的 SHA-256，作为恢复现场与冲突判定依据 |
+| `preparation` | JSON | 是 | 任务数据准备摘要（`DataPreparation` 契约快照），终态写入 |
+
+迁移方式沿用 `_ensure_task_columns` 的 `ALTER TABLE ADD COLUMN`；旧行新列全部为 NULL。
+
+### 13.3 两张镜像表
+
+| 表 | 关键列 | 写入语义 |
+| --- | --- | --- |
+| `task_rule_results` | `task_id`、`rule_code`、`priority`、`execution_order`、`status`、`severity`、`executed_at`、`finding_count`、`result`(JSON)、`updated_at`；`UNIQUE(task_id, rule_code)` | 终态发布与单规则重跑均整批替换该任务全部行（同一事务），实现“最新为准、不保留版本” |
+| `task_kpi_points` | `task_id`、`rule_code`、`measurement_unit_id`、`metric_resource_id`、`object_key`、`period_minutes`、`measured_at`、`value`、`source_file`、`line_number` | 与规则结果同批整批替换，缺失字段以 NULL 保留 |
+
+单个损坏的规则结果文件跳过并记录结构化日志、损坏的 KPI 历史行直接跳过，两者都不中断任务发布与启动回填。
+
+### 13.4 留存与恢复
+
+- 保留集合 = 按 `COALESCE(last_run_at, created_at)` 倒序前 50 个任务 ∪ 全部 `pending`/`running` 任务。
+- 触发时机：每次任务终态发布完成后（完成/失败/重跑/重建/单规则重跑）；恢复上传不触发。
+- 清理只删磁盘，不改动 DB；`uploads/` 根目录中可派生已知 task_id 的散包同样纳入清理，未消费散包与未知目录不删除。
+- 重传同名且 checksum 一致的原始包 → `202` + `Location`，只恢复 `uploads/<task_id>/` 现场，不自动重跑；checksum 不一致 → `409 package_checksum_conflict`。
+- 手动设备 ID（`reserve` 与 `PATCH /api/v2/tasks/{task_id}/device-id`）必须命中 `inventory_devices.device_id`，否则 `400 device_not_found` 且不写任务记录。

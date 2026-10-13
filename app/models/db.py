@@ -41,6 +41,10 @@ class TaskRecord(Base):
     stats: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    package_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preparation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 def _sqlite_path() -> Path:
@@ -90,6 +94,10 @@ def init_db() -> None:
     _ensure_task_columns(engine)
     _ensure_kpi_measurement_columns(engine)
     _ensure_inventory_device_columns(engine)
+    # 固定顺序：建表与增量列迁移 → 启动回填 →（此后才允许留存清理）。
+    from app.services.task_db import ensure_backfilled
+
+    ensure_backfilled()
 
 
 def _rebuild_legacy_inventory_tables(engine: Engine) -> None:
@@ -151,18 +159,21 @@ def _ensure_inventory_device_columns(engine: Engine) -> None:
 
 
 def _ensure_task_columns(engine: Engine) -> None:
-    """为旧任务表补充台账包类型字段，旧任务统一视为巡检包。"""
+    """为旧任务表补充台账包类型与运行留存字段；旧行新列保持 NULL。"""
     if not inspect(engine).has_table(TaskRecord.__tablename__):
         return
     existing = {column["name"] for column in inspect(engine).get_columns(TaskRecord.__tablename__)}
-    if "package_kind" not in existing:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    f"ALTER TABLE {TaskRecord.__tablename__} "
-                    "ADD COLUMN package_kind VARCHAR(32) NOT NULL DEFAULT 'inspection'"
-                )
-            )
+    wanted = {
+        "package_kind": "VARCHAR(32) NOT NULL DEFAULT 'inspection'",
+        "last_run_at": "DATETIME",
+        "duration_ms": "INTEGER",
+        "package_checksum": "VARCHAR(64)",
+        "preparation": "JSON",
+    }
+    with engine.begin() as connection:
+        for name, ddl in wanted.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE {TaskRecord.__tablename__} ADD COLUMN {name} {ddl}"))
 
 
 def _ensure_kpi_measurement_columns(engine: Engine) -> None:
@@ -366,6 +377,43 @@ class AuthSession(Base):
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class TaskRuleResult(Base):
+    """任务规则结果的长期镜像；同一任务同一规则只保留最新一次执行。"""
+
+    __tablename__ = "task_rule_results"
+    __table_args__ = (UniqueConstraint("task_id", "rule_code", name="uq_task_rule_result"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    rule_code: Mapped[str] = mapped_column(String(128))
+    priority: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    execution_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    severity: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finding_count: Mapped[int] = mapped_column(Integer, default=0)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class TaskKpiPoint(Base):
+    """任务 KPI 历史点的长期镜像；字段与任务私有 index.jsonl 一一对应。"""
+
+    __tablename__ = "task_kpi_points"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    rule_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    measurement_unit_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    metric_resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    object_key: Mapped[str | None] = mapped_column(String(256), nullable=True, index=True)
+    period_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_file: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    line_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class RuleState(Base):

@@ -124,3 +124,43 @@ def test_terminal_fallback_read_carries_inventory_and_package_kind(monkeypatch, 
     assert fallback.package_kind.value == "inspection"
     assert fallback.inventory is not None, "兜底读不得丢失已归档的台账证据"
     assert fallback.inventory.status.value == "archived"
+
+
+def test_terminal_publish_writes_db_snapshot() -> None:
+    """终态发布必须把任务行、规则结果、KPI 点与准备摘要写入 SQLite（展示唯一来源）。"""
+    import json
+
+    from app.models.db import TaskKpiPoint, TaskRuleResult
+    from app.services import task_db
+
+    client = TestClient(app)
+    task_id = _upload("terminal-db-publish.zip")
+    task = _wait_terminal(client, task_id)
+    assert task["status"] == "completed"
+
+    task_dir = settings.output / task_id
+    scene_rules: dict[str, dict] = {
+        path.stem: json.loads(path.read_text(encoding="utf-8")) for path in (task_dir / "rules").glob("*.json")
+    }
+    assert scene_rules, "现场必须已有规则结果文件"
+
+    with session_factory() as session:
+        record = session.get(TaskRecord, task_id)
+        assert record is not None
+        assert record.status == TaskStatus.COMPLETED.value
+        assert isinstance(record.preparation, dict), "终态发布必须写入准备摘要"
+        rows = {
+            row.rule_code: row for row in session.query(TaskRuleResult).filter(TaskRuleResult.task_id == task_id).all()
+        }
+    assert set(rows) == set(scene_rules), "入库规则集合必须与现场规则结果一致"
+    for code, payload in scene_rules.items():
+        assert rows[code].result == payload, f"规则 {code} 入库 JSON 必须与现场逐字段一致"
+
+    index_path = task_dir / "kpi" / "history" / "index.jsonl"
+    expected_points = 0
+    if index_path.is_file():
+        expected_points = len([line for line in index_path.read_text(encoding="utf-8").splitlines() if line.strip()])
+    with session_factory() as session:
+        point_rows = session.query(TaskKpiPoint).filter(TaskKpiPoint.task_id == task_id).count()
+    assert point_rows == expected_points
+    assert len(task_db.list_kpi_points(task_id)) == expected_points

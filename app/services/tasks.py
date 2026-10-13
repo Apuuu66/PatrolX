@@ -1,6 +1,5 @@
-"""任务服务：output/ 为唯一数据源，SQLite 只保存在线任务元数据。"""
+"""任务服务：SQLite 是界面展示唯一数据源，output/ 为执行期现场。"""
 
-import json
 import os
 import queue
 import shutil
@@ -19,7 +18,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import TASKS_DURATION, TASKS_TOTAL
 from app.inspectors.registry import registry
-from app.models.db import InventoryParseResult, TaskRecord, init_db, session_factory
+from app.models.db import InventoryDevice, InventoryParseResult, TaskRecord, init_db, session_factory
 from app.models.schemas import (
     InspectionTask,
     PackageKind,
@@ -32,13 +31,15 @@ from app.models.schemas import (
     TaskSummary,
     TaskTrigger,
 )
-from app.services import preparation, store
+from app.services import preparation, retention, store, task_db
 from app.services.extraction.layout import PathLimitPolicy
 from app.services.rule_states import RuleStateError, assert_rule_enabled, ensure_rule_states
 from app.services.store import append_log, load_task_meta, write_json_atomic
 
 logger = get_logger("patrolx.tasks")
 NOW = datetime.now
+SCENE_CLEANED_MESSAGE = "任务现场已按留存策略清理，需重新上传同名且校验和一致的原始包恢复现场后执行"
+PACKAGE_MISSING_MESSAGE = "原始上传包缺失或为空，需重新上传同名且校验和一致的原始包恢复现场后执行"
 
 
 class TaskDeleteError(Exception):
@@ -185,16 +186,47 @@ class TaskService:
                 logger.exception("task_failed", task_id=task_id)
                 append_log(settings.output, task_id, "error", "任务执行失败")
                 TASKS_TOTAL.labels(result="failed", mode="online").inc()
-                self._update_status(task_id, TaskStatus.FAILED)
+                self._finish_run(task_id, TaskStatus.FAILED)
 
     def _publish_terminal(self, task: InspectionTask) -> None:
-        """在线任务终态发布：SQLite 记录先收敛，再写 task.json。
+        """在线任务终态发布：SQLite 快照先收敛，再写 task.json。
 
-        ``task.json`` 是读取方的唯一真相源，数据库记录只做文件缺失时的兜底，
-        因此记录必须先于文件进入终态，兜底列表不得回退为运行中。
+        终态发布是任务现场的最后一次写入：读方看到 completed 时，报告、收尾日志、
+        台账归档与 SQLite 快照（任务行 + 规则结果 + KPI 点 + 准备摘要）均已就绪。
+        运行字段以 ``save_run_start`` 写入的本次开始时刻为准，现场旧值不得回退。
         """
-        self._update_status(task.task_id, task.status, completed_at=task.completed_at)
-        store.save_task_meta(settings.output, task)
+        last_run_at, _, _ = task_db.get_run_fields(task.task_id)
+        completed_at = task.completed_at or NOW(UTC)
+        published = task.model_copy(
+            update={
+                "completed_at": completed_at,
+                "last_run_at": last_run_at or task.last_run_at,
+                "duration_ms": task_db.elapsed_ms(last_run_at or task.last_run_at, completed_at),
+            }
+        )
+        # 任务行、规则结果、KPI 点与本次耗时在同一发布事务内收敛，终态一旦可见数据即完整。
+        task_db.publish_from_scene(published, output=settings.output)
+        store.save_task_meta(settings.output, published)
+        # 终态发布完成后执行磁盘留存清理；清理失败只记日志，不改变任务终态。
+        retention.cleanup_safely(output=settings.output, uploads=settings.uploads)
+
+    def _finish_run(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        completed_at: datetime | None = None,
+    ) -> None:
+        """运行终态收口：写终态、结束时刻与本次运行耗时（毫秒）。"""
+        finished_at = completed_at or NOW(UTC)
+        last_run_at, _, _ = task_db.get_run_fields(task_id)
+        task_db.save_run_end(
+            task_id,
+            status=status,
+            completed_at=finished_at,
+            duration_ms=task_db.elapsed_ms(last_run_at, finished_at),
+        )
+        # 失败收尾同样触发留存清理；清理失败只记日志，不改变任务终态。
+        retention.cleanup_safely(output=settings.output, uploads=settings.uploads)
 
     def _update_status(self, task_id: str, status: TaskStatus, completed_at: datetime | None = None) -> None:
         with session_factory() as session:
@@ -202,14 +234,18 @@ class TaskService:
             if record:
                 record.status = status.value
                 record.completed_at = completed_at
+                if status in {TaskStatus.PENDING, TaskStatus.RUNNING}:
+                    # 排队/运行中不展示上一次耗时，终态由 _finish_run 写入本次值。
+                    record.duration_ms = None
                 session.commit()
 
     def _execute(self, task_id: str) -> None:
-        package, customer, version, name, mode, trigger, package_kind = self._task_info(task_id)
+        package, customer, version, name, mode, trigger, package_kind, created_at = self._task_info(task_id)
         if package is None:
             return
-        self._update_status(task_id, TaskStatus.RUNNING)
         started = NOW(UTC)
+        self._update_status(task_id, TaskStatus.RUNNING)
+        task_db.save_run_start(task_id, started)
         try:
             plan = self._rerun_plan.pop(task_id, None)
             rebuild_plan = self._rebuild_plan.pop(task_id, None)
@@ -221,6 +257,7 @@ class TaskService:
                         package=package,
                         task_id=task_id,
                         package_checksum=package_checksum,
+                        trigger_retention=False,
                     )
                 append_log(settings.output, task_id, "info", "重跑完成，报告已更新")
                 current = load_task_meta(settings.output, task_id)
@@ -230,7 +267,7 @@ class TaskService:
                     )
                     self._publish_terminal(completed_task)
                 else:
-                    self._update_status(task_id, TaskStatus.COMPLETED, completed_at=NOW(UTC))
+                    self._finish_run(task_id, TaskStatus.COMPLETED)
             elif rebuild_plan is not None:
                 self._execute_rebuild(
                     task_id,
@@ -252,6 +289,7 @@ class TaskService:
                     task_id=task_id,
                     mode=mode,
                     trigger=trigger,
+                    created_at=created_at,
                     package_kind=package_kind,
                     publish=self._publish_terminal,
                 )
@@ -264,7 +302,7 @@ class TaskService:
         except Exception:  # noqa: BLE001
             failed_task = load_task_meta(settings.output, task_id)
             failed_at = NOW(UTC)
-            self._update_status(task_id, TaskStatus.FAILED, completed_at=failed_at)
+            self._finish_run(task_id, TaskStatus.FAILED, failed_at)
             if failed_task:
                 failed = failed_task.model_copy(update={"status": TaskStatus.FAILED, "completed_at": failed_at})
                 store.save_task_meta(settings.output, failed)
@@ -326,8 +364,12 @@ class TaskService:
 
     def _task_info(
         self, task_id: str
-    ) -> tuple[Path | None, dict, str | None, str | None, TaskMode, TaskTrigger, PackageKind]:
-        """获取任务执行信息；本地任务从 output/ 元数据兜底。"""
+    ) -> tuple[Path | None, dict, str | None, str | None, TaskMode, TaskTrigger, PackageKind, datetime | None]:
+        """获取任务执行信息；本地任务从 output/ 元数据兜底。
+
+        ``created_at`` 是任务创建时刻，执行期只透传、不得覆盖；现场元数据与库内任务行
+        必须记录同一创建时间，回退读才不会出现两套口径。
+        """
         with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record is not None:
@@ -339,29 +381,57 @@ class TaskService:
                     TaskMode(record.mode),
                     TaskTrigger(record.trigger),
                     PackageKind(getattr(record, "package_kind", "inspection")),
+                    record.created_at,
                 )
 
         task = load_task_meta(settings.output, task_id)
         if task is None or task.system is None:
-            return None, {}, None, None, TaskMode.LOCAL, TaskTrigger.CLI, PackageKind.INSPECTION
+            return None, {}, None, None, TaskMode.LOCAL, TaskTrigger.CLI, PackageKind.INSPECTION, None
         package_file = task.system.package_file
         package = settings.uploads / task_id / package_file
         if not package.exists():
             package = settings.uploads / package_file
         package_kind = task.package_kind or PackageKind.INSPECTION
-        return package, task.system.customer, task.system.version, task.name, task.mode, task.trigger, package_kind
+        return (
+            package,
+            task.system.customer,
+            task.system.version,
+            task.name,
+            task.mode,
+            task.trigger,
+            package_kind,
+            task.created_at,
+        )
+
+    def _scene_or_db_task(self, task_id: str) -> InspectionTask | None:
+        """重跑/重建元数据：现场 task.json 优先；现场已清理时使用 SQLite 快照。"""
+        task = load_task_meta(settings.output, task_id)
+        if task is not None and task.system is not None:
+            return task
+        snapshot = task_db.get_task(task_id)
+        if snapshot is not None and snapshot.system is not None:
+            return snapshot
+        return None
+
+    def _resolve_run_package(self, task_id: str, task: InspectionTask) -> Path:
+        """定位原始上传包；包缺失时按现场是否仍在区分「待恢复」与「包缺失」。"""
+        assert task.system is not None
+        package_file = task.system.package_file
+        package = settings.uploads / task_id / package_file
+        if not package.is_file():
+            package = settings.uploads / package_file
+        if not package.is_file() or package.stat().st_size == 0:
+            if (settings.output / task_id).is_dir():
+                raise TaskRebuildError("package_missing", PACKAGE_MISSING_MESSAGE, 409)
+            raise TaskRebuildError("scene_cleaned", SCENE_CLEANED_MESSAGE, 410)
+        return package
 
     def _rebuild_package(self, task_id: str) -> tuple[InspectionTask, Path]:
-        """读取重建请求的既有任务元数据和原始上传包。"""
-        task = load_task_meta(settings.output, task_id)
+        """读取重建请求的既有任务元数据和原始上传包；现场缺失给出恢复提示。"""
+        task = self._scene_or_db_task(task_id)
         if task is None or task.system is None:
             raise TaskRebuildError("not_found", "任务不存在", 404)
-        package = settings.uploads / task_id / task.system.package_file
-        if not package.is_file():
-            package = settings.uploads / task.system.package_file
-        if not package.is_file() or package.stat().st_size == 0:
-            raise TaskRebuildError("package_missing", "原始上传包缺失或为空", 409)
-        return task, package
+        return task, self._resolve_run_package(task_id, task)
 
     # ---- 创建 / 查询 ----
 
@@ -391,7 +461,9 @@ class TaskService:
             customer["operator"] = operator
         if product:
             customer["product"] = product
-        normalized_device_id = device_id.strip() if device_id else ""
+        normalized_device_id = self._validate_device_id(device_id or "")
+        # 手动指定的设备 ID 必须是台账内设备；校验在写库、写现场之前完成（FR-010、SC-005）。
+        self._assert_device_id_in_ledger(normalized_device_id)
         if normalized_device_id:
             customer["device_id"] = normalized_device_id
         with session_factory() as session:
@@ -446,100 +518,31 @@ class TaskService:
             return None
 
     def get(self, task_id: str) -> InspectionTask | None:
-        """读取任务：优先 output/（唯一数据源），SQLite 兜底查状态。"""
+        """读取任务详情：SQLite 快照优先；未回填的历史现场兜底并机会式补齐快照。"""
+        snapshot = task_db.get_task(task_id)
+        if snapshot is not None and snapshot.system is not None:
+            return snapshot
         task = load_task_meta(settings.output, task_id)
-        if task is not None:
-            return task.model_copy(update={"preparation": preparation.load_preparation(settings.output / task_id)})
-        with session_factory() as session:
-            record = session.get(TaskRecord, task_id)
-            if record is None:
-                return None
-            return InspectionTask(
-                task_id=record.task_id,
-                name=record.name,
-                mode=TaskMode(record.mode),
-                status=TaskStatus(record.status),
-                trigger=TaskTrigger(record.trigger),
-                created_at=record.created_at,
-                completed_at=record.completed_at,
-                stats={"total": 0, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 0, "systems": 1},
-                system=None,
-                package_kind=self._record_package_kind(record),
-                inventory=self._fallback_inventory(session, record.task_id),
-            )
+        if task is None:
+            return snapshot
+        # 现场仍在但库里没有快照（历史任务尚未回填）：先按现场补齐快照，之后读取不再依赖文件。
+        if snapshot is None:
+            try:
+                task_db.import_task_from_output(task_id, output=settings.output, force=True)
+            except Exception:  # noqa: BLE001 - 回填失败只降级为现场读取
+                logger.warning("task_scene_backfill_failed", task_id=task_id)
+            repaired = task_db.get_task(task_id)
+            if repaired is not None and repaired.system is not None:
+                return repaired
+        if snapshot is not None and snapshot.preparation is not None:
+            # 库内任务行可能因历史原因缺少规则行，但准备摘要仍以列为准。
+            return task.model_copy(update={"preparation": snapshot.preparation})
+        return task.model_copy(update={"preparation": preparation.load_preparation(settings.output / task_id)})
 
     def list_tasks(self, page: int, page_size: int, status: str | None) -> tuple[list[TaskSummary], int]:
-        """列表：扫描 output/ 下所有 task.json + SQLite 中尚无 task.json 的进行中任务。"""
-        items: list[TaskSummary] = []
-        seen_ids: set[str] = set()
-        if settings.output.exists():
-            for task_file in sorted(settings.output.glob("*/task.json"), reverse=True):
-                try:
-                    task = InspectionTask.model_validate(json.loads(task_file.read_text(encoding="utf-8")))
-                except Exception:  # noqa: BLE001 - 列表扫描不能被坏任务中断
-                    continue
-                if status and task.status.value != status:
-                    continue
-                customer = task.system.customer if task.system else {}
-                items.append(
-                    TaskSummary(
-                        task_id=task.task_id,
-                        name=task.name,
-                        mode=task.mode,
-                        status=task.status,
-                        trigger=task.trigger,
-                        created_at=task.created_at,
-                        completed_at=task.completed_at,
-                        stats=task.stats,
-                        preparation=preparation.load_preparation(task_file.parent),
-                        system=None,
-                        customer_province=customer.get("province"),
-                        customer_operator=customer.get("operator"),
-                        customer_product=customer.get("product"),
-                        customer_version=task.system.version if task.system else None,
-                        device_id=customer.get("device_id"),
-                    )
-                )
-                seen_ids.add(task.task_id)
-        with session_factory() as session:
-            # output/task.json 部分删除失败时，完成态数据库记录仍要兜底返回。
-            query = session.query(TaskRecord)
-            for record in query.all():
-                if record.task_id in seen_ids:
-                    continue
-                if status and record.status != status:
-                    continue
-                items.append(
-                    TaskSummary(
-                        task_id=record.task_id,
-                        name=record.name,
-                        mode=TaskMode(record.mode),
-                        status=TaskStatus(record.status),
-                        trigger=TaskTrigger(record.trigger),
-                        created_at=record.created_at,
-                        completed_at=record.completed_at,
-                        stats={"total": 0, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 0, "systems": 1},
-                        system=None,
-                        customer_province=record.customer.get("province"),
-                        customer_operator=record.customer.get("operator"),
-                        customer_product=record.customer.get("product"),
-                        customer_version=record.version,
-                        device_id=record.customer.get("device_id"),
-                        package_kind=self._record_package_kind(record),
-                        inventory=self._fallback_inventory(session, record.task_id),
-                    )
-                )
-
-        def created_at_key(task: TaskSummary) -> datetime:
-            """SQLite 历史记录可能是 naive UTC；排序前统一为 aware UTC。"""
-            if task.created_at is None:
-                return datetime.min.replace(tzinfo=UTC)
-            return task.created_at if task.created_at.tzinfo else task.created_at.replace(tzinfo=UTC)
-
-        items.sort(key=created_at_key, reverse=True)
-        total = len(items)
+        """列表：全部来自 SQLite 任务行，现场文件不参与展示读取。"""
         start = (page - 1) * page_size
-        return items[start : start + page_size], total
+        return task_db.list_task_summaries(status, limit=page_size, offset=start)
 
     @staticmethod
     def _validate_device_id(device_id: str) -> str:
@@ -547,6 +550,16 @@ class TaskService:
         if normalized and not 1 <= len(normalized) <= 128:
             raise TaskDeviceIdError("invalid_device_id", "设备 ID 长度必须为 1-128", 400)
         return normalized
+
+    @staticmethod
+    def _assert_device_id_in_ledger(device_id: str) -> None:
+        """手动指定的设备 ID 必须已存在于设备台账；空值表示解绑，不做校验（FR-010、R9）。"""
+        if not device_id:
+            return
+        with session_factory() as session:
+            exists = session.get(InventoryDevice, device_id) is not None
+        if not exists:
+            raise TaskDeviceIdError("device_not_found", "设备 ID 不存在于设备台账", 400)
 
     def update_device_id(self, task_id: str, device_id: str) -> TaskSummary:
         """修改任务设备 ID，并同步 SQLite 与任务输出元数据。"""
@@ -558,6 +571,8 @@ class TaskService:
             raise TaskDeviceIdError("task_busy", "任务正在排队或执行，不能修改设备 ID", 409)
         if task.system is None:
             raise TaskDeviceIdError("not_found", "任务不存在", 404)
+        # 存在性与忙碌判断通过后才校验台账，且校验在写库、写现场之前完成（FR-010、SC-005）。
+        self._assert_device_id_in_ledger(normalized)
 
         customer = dict(task.system.customer)
         customer["device_id"] = normalized
@@ -577,6 +592,10 @@ class TaskService:
                 record.customer = {**(record.customer or {}), "device_id": normalized}
                 session.commit()
 
+        # 展示读取一律走库：任务行已同步，直接返回库内摘要，避免现场与库两套口径。
+        summary = task_db.get_task_summary(task_id)
+        if summary is not None:
+            return summary
         customer = updated_task.system.customer if updated_task.system else {}
         return TaskSummary(
             task_id=updated_task.task_id,
@@ -587,7 +606,7 @@ class TaskService:
             created_at=updated_task.created_at,
             completed_at=updated_task.completed_at,
             stats=updated_task.stats,
-            preparation=preparation.load_preparation(settings.output / task_id),
+            preparation=preparation.load_task_preparation(task_id),
             system=None,
             customer_province=customer.get("province"),
             customer_operator=customer.get("operator"),
@@ -597,7 +616,7 @@ class TaskService:
         )
 
     def delete(self, task_id: str) -> DeleteResult:
-        """删除任务；文件现场全部成功后才删除数据库记录。"""
+        """删除任务；文件现场全部成功后才级联删除库内任务行、规则结果与 KPI 点。"""
         with self._state_lock:
             if self._active_task == task_id:
                 return DeleteResult.BUSY
@@ -623,27 +642,22 @@ class TaskService:
                         raise
                 if not found:
                     return DeleteResult.NOT_FOUND
+                # 文件现场全部删除成功后才删除库内数据：任务行 + 规则结果 + KPI 点一次级联。
                 with session_factory() as session:
-                    record = session.get(TaskRecord, task_id)
-                    if record:
-                        session.delete(record)
-                        session.commit()
+                    task_db.delete_task_data(session, task_id)
+                    session.commit()
             return DeleteResult.DELETED
         finally:
             with self._state_lock:
                 self._cancelled.discard(task_id)
 
     def rerun(self, task_id: str, rule_codes: list[str] | None) -> bool:
-        """重跑：从 task.json 获取包信息，兼容在线和离线任务。"""
-        task = load_task_meta(settings.output, task_id)
+        """重跑：元数据现场优先、库快照兜底；包缺失按现场是否仍在区分 410/409。"""
+        task = self._scene_or_db_task(task_id)
         if task is None or task.system is None:
             return False
-        package_file = task.system.package_file
-        package = settings.uploads / task_id / package_file
-        if not package.exists():
-            package = settings.uploads / package_file
-        if not package.exists():
-            return False
+        # 预检原始包：包缺失时按现场是否仍在抛 409/410，不发起重跑。
+        self._resolve_run_package(task_id, task)
         ensure_rule_states()
         for code in rule_codes or []:
             try:

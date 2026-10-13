@@ -226,6 +226,8 @@ class InspectionTask(BaseModel):
     trigger: TaskTrigger
     created_at: datetime
     completed_at: datetime | None = None
+    last_run_at: datetime | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
     stats: TaskStats
     preparation: DataPreparation | None = None
     system: SystemInspection | None = None

@@ -76,6 +76,7 @@ from app.models.schemas import (
     UserRoleRequestV1,
     UserV1,
 )
+from app.services import task_db
 from app.services.auth import (
     AuthError,
     AuthSession,
@@ -109,7 +110,8 @@ from app.services.kpi_measurement_units import (
 from app.services.overview import build_overview
 from app.services.results import find_kpi_metric_detail, summarize_kpi_result
 from app.services.rule_states import RuleStateError, list_rule_states, update_rule_state
-from app.services.store import load_rule_result
+from app.services.store import load_rule_result, summary_system
+from app.services.task_db import get_rule_result as load_rule_result_from_db
 from app.services.tasks import (
     DeleteResult,
     TaskDeleteError,
@@ -134,6 +136,8 @@ router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
 v5_router = APIRouter(prefix="/api/v5")
 DICT_NAMES = ("province", "operator", "product")
+SCENE_CLEANED_REPORT_MESSAGE = "报告已随磁盘现场清理，不可查看；任务详情、规则结果与 KPI 等核心数据仍可在界面查询"
+SCENE_CLEANED_LOG_MESSAGE = "执行日志不入库，已随磁盘现场清理，不可查看"
 
 
 class AppError(Exception):
@@ -170,6 +174,52 @@ async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
 
 
 # ---- /api/v2 契约路由 ----
+
+
+def _resolve_existing_task(
+    *,
+    task_id: str,
+    filename: str,
+    checksum: str,
+    temp_path: Path,
+    response: Response,
+) -> TaskCreated:
+    """同名任务已存在：校验 checksum；现场已清理时写回原始包恢复现场。
+
+    恢复只重建磁盘现场，不重跑、不改任务历史数据、不触发留存清理；内容不一致仍按冲突拒绝。
+    """
+    stored_name = task_db.get_package_file(task_id) or filename
+    scene_package = settings.uploads / task_id / stored_name
+    if scene_package.is_file():
+        if sha256_file(scene_package) != checksum:
+            raise AppError("package_checksum_conflict", "同名任务已存在，但数据包 checksum 不同", 409)
+        # 升级前历史任务缺失 checksum 时机会式回填，作为后续恢复与冲突判定的依据。
+        task_db.set_package_checksum(task_id, checksum)
+        response.headers["Location"] = f"/api/v3/tasks/{task_id}"
+        return TaskCreated(task_id=task_id)
+
+    restore_checksum = task_db.get_run_fields(task_id)[2]
+    if restore_checksum is None:
+        legacy_package = settings.uploads / stored_name
+        if legacy_package.is_file():
+            restore_checksum = sha256_file(legacy_package)
+            task_db.set_package_checksum(task_id, restore_checksum)
+    if restore_checksum is None:
+        raise AppError(
+            "package_checksum_conflict",
+            "同名任务已存在，但系统未记录首次接收的 checksum 且无可读历史包，无法校验原始包，拒绝恢复现场",
+            409,
+        )
+    if restore_checksum != checksum:
+        raise AppError(
+            "package_checksum_conflict",
+            "同名任务已存在，但数据包 checksum 不同，内容不一致，拒绝恢复现场",
+            409,
+        )
+    scene_package.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(temp_path, scene_package)
+    response.headers["Location"] = f"/api/v3/tasks/{task_id}"
+    return TaskCreated(task_id=task_id)
 
 
 @v3_router.post("/tasks", response_model=TaskCreated, status_code=202, operation_id="createTaskV3")
@@ -209,12 +259,13 @@ async def create_task_v3(
         if size > settings.max_upload_mb * 1024 * 1024:
             raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
         if task_service.exists(task_id):
-            existing = settings.uploads / task_id / filename
-            existing_checksum = sha256_file(existing) if existing.exists() else None
-            if existing_checksum != checksum:
-                raise AppError("package_checksum_conflict", "同名任务已存在，但数据包 checksum 不同", 409)
-            response.headers["Location"] = f"/api/v3/tasks/{task_id}"
-            return TaskCreated(task_id=task_id)
+            return _resolve_existing_task(
+                task_id=task_id,
+                filename=filename,
+                checksum=checksum,
+                temp_path=temp_path,
+                response=response,
+            )
         created = task_service.reserve(
             filename,
             name,
@@ -226,6 +277,8 @@ async def create_task_v3(
         )
         task_dir = settings.uploads / created.task_id
         task_dir.mkdir(parents=True, exist_ok=True)
+        # 首次接收的 checksum 是恢复现场与冲突判定的唯一依据，创建即落库。
+        task_db.set_package_checksum(created.task_id, checksum)
         shutil.copyfile(temp_path, task_dir / filename)
         response.headers["Location"] = f"/api/v3/tasks/{created.task_id}"
         task_service.submit(created.task_id)
@@ -396,8 +449,7 @@ def get_measurement_version_candidates_v2(
     """按设备返回系统版本候选；不读取历史点位。"""
     if task_service.get(task_id) is None:
         raise AppError("not_found", "任务不存在", 404)
-    rule_path = settings.output / task_id / "rules" / f"{rule_code}.json"
-    if not rule_path.is_file():
+    if not _rule_exists(task_id, rule_code):
         raise AppError("not_found", "规则不存在", 404)
     try:
         return get_version_candidates(
@@ -429,8 +481,7 @@ def get_measurement_version_compare_v2(
     """按需返回同设备不同版本的单指标任务对比。"""
     if task_service.get(task_id) is None:
         raise AppError("not_found", "任务不存在", 404)
-    rule_path = settings.output / task_id / "rules" / f"{rule_code}.json"
-    if not rule_path.is_file():
+    if not _rule_exists(task_id, rule_code):
         raise AppError("not_found", "规则不存在", 404)
     try:
         return get_version_compare(
@@ -462,8 +513,7 @@ def get_measurement_history_trend_v2(
     """按需返回单指标跨任务历史趋势；历史索引缺失时明确降级。"""
     if task_service.get(task_id) is None:
         raise AppError("not_found", "任务不存在", 404)
-    rule_path = settings.output / task_id / "rules" / f"{rule_code}.json"
-    if not rule_path.is_file():
+    if not _rule_exists(task_id, rule_code):
         raise AppError("not_found", "规则不存在", 404)
     try:
         return get_history_trend(
@@ -569,6 +619,8 @@ def rebuild_task_v2(
 def get_report_v2(task_id: str = PathParam()) -> HTMLResponse:
     report = settings.output / task_id / "report.html"
     if not report.exists():
+        if task_db.task_exists(task_id) and not (settings.output / task_id).is_dir():
+            raise AppError("scene_cleaned", SCENE_CLEANED_REPORT_MESSAGE, 410)
         raise AppError("not_found", "报告未生成", 404)
     return HTMLResponse(report.read_text(encoding="utf-8"))
 
@@ -577,6 +629,8 @@ def get_report_v2(task_id: str = PathParam()) -> HTMLResponse:
 def get_task_logs_v2(task_id: str = PathParam()) -> TaskLogs:
     log_file = settings.output / task_id / "execution.log"
     if not log_file.exists():
+        if task_db.task_exists(task_id) and not (settings.output / task_id).is_dir():
+            raise AppError("scene_cleaned", SCENE_CLEANED_LOG_MESSAGE, 410)
         raise AppError("not_found", "执行日志未生成", 404)
     entries: list[LogEntry] = []
     for line in log_file.read_text(encoding="utf-8").splitlines():
@@ -603,16 +657,46 @@ KPI_SERIES_MAX_POINTS = 200
 
 
 def _load_system_json(task_id: str) -> SystemInspection:
+    """系统结果：SQLite 快照优先；历史现场兜底时保留损坏文件的明确提示。
+
+    对外语义与 ``system.json`` 一致：rules 为摘要（metadata 已清空），
+    完整规则明细由单规则结果接口提供。
+    """
+    task = task_service.get(task_id)
+    if task is not None and task.system is not None:
+        return summary_system(task.system)
     path = settings.output / task_id / "system.json"
     if path.exists():
         try:
             return SystemInspection.model_validate(json.loads(path.read_text(encoding="utf-8")))
         except (json.JSONDecodeError, OSError, ValidationError) as exc:
             raise AppError("corrupt_data", "系统结果文件损坏或不可读，请重跑该任务", 503) from exc
-    task = task_service.get(task_id)
-    if task and task.system:
-        return task.system
     raise AppError("not_found", "系统结果未生成", 404)
+
+
+def _rule_exists(task_id: str, rule_code: str) -> bool:
+    """规则结果存在性：库内规则行优先；历史现场按文件是否存在兜底。
+
+    只做存在性判断，不解析现场占位/损坏文件，保持既有"文件存在即 404 之外"语义。
+    """
+    if load_rule_result_from_db(task_id, rule_code) is not None:
+        return True
+    return (settings.output / task_id / "rules" / f"{rule_code}.json").is_file()
+
+
+def _load_rule(task_id: str, rule_code: str) -> RuleResult | None:
+    """规则结果：库优先，历史现场（尚未回填）兜底。"""
+    rule = load_rule_result_from_db(task_id, rule_code)
+    if rule is not None:
+        return rule
+    rule = load_rule_result(settings.output, task_id, rule_code)
+    if rule is not None:
+        return rule
+    try:
+        system = _load_system_json(task_id)
+    except AppError:
+        return None
+    return next((item for item in system.rules if item.code == rule_code), None)
 
 
 @router.get("/tasks/{task_id}/system", response_model=SystemInspection, operation_id="getSystemV2")
@@ -639,13 +723,7 @@ def get_rule_result_v2(
     registry.load_all()
     if rule_code not in {rule.code for rule in registry.all()}:
         raise AppError("not_found", "规则结果不存在", 404)
-    rule = load_rule_result(settings.output, task_id, rule_code)
-    if rule is None:
-        try:
-            system = _load_system_json(task_id)
-            rule = next((item for item in system.rules if item.code == rule_code), None)
-        except AppError:
-            rule = None
+    rule = _load_rule(task_id, rule_code)
     if rule is None:
         raise AppError("not_found", "规则结果不存在", 404)
     return summarize_kpi_result(rule) if exclude_records else rule
@@ -666,13 +744,7 @@ def get_measurement_metric_detail_v2(
     registry.load_all()
     if rule_code != "kpi.measurement_units" or rule_code not in {rule.code for rule in registry.all()}:
         raise AppError("not_found", "规则结果不存在", 404)
-    rule = load_rule_result(settings.output, task_id, rule_code)
-    if rule is None:
-        try:
-            system = _load_system_json(task_id)
-            rule = next((item for item in system.rules if item.code == rule_code), None)
-        except AppError:
-            rule = None
+    rule = _load_rule(task_id, rule_code)
     if rule is None:
         raise AppError("not_found", "规则结果不存在", 404)
     metric = find_kpi_metric_detail(

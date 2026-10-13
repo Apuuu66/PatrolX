@@ -200,6 +200,20 @@ def _build_preparation(items: list[PreparationItem]) -> DataPreparation:
     )
 
 
+def load_task_preparation(task_id: str, *, data_dir: Path | None = None) -> DataPreparation | None:
+    """任务详情的准备摘要：``tasks.preparation`` 列优先，历史现场兜底现算。
+
+    展示读取以 SQLite 为唯一来源；仅当任务行尚无准备摘要时按现场计算（未回填的历史任务）。
+    """
+    from app.core.config import settings
+    from app.services import task_db
+
+    task = task_db.get_task(task_id)
+    if task is not None and task.preparation is not None:
+        return task.preparation
+    return load_preparation(data_dir if data_dir is not None else settings.output / task_id)
+
+
 def load_preparation(data_dir: Path) -> DataPreparation | None:
     """读取任务数据准备状态；无 manifest 的历史或进行中任务返回 None。"""
     manifest = _manifest(data_dir)

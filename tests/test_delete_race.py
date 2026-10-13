@@ -91,13 +91,16 @@ def test_delete_long_path_failure_includes_limit(monkeypatch) -> None:
 
 
 def test_completed_task_without_task_json_falls_back_to_record(monkeypatch) -> None:
-    """output 元数据被部分删除时，完成态在线任务仍能从数据库记录列出。"""
+    """现场 task.json 被删除时，列表仍从数据库给出与删除前完全一致的任务数据。"""
     client = TestClient(app)
     task_id = _upload("delete-partial-meta.zip")
     _wait(task_id)
+    before = next(task for task in client.get("/api/v2/tasks").json()["items"] if task["task_id"] == task_id)
+
     (settings.output / task_id / "task.json").unlink()
 
     listing = client.get("/api/v2/tasks").json()
     fallback = next(task for task in listing["items"] if task["task_id"] == task_id)
     assert fallback["status"] == "completed"
-    assert fallback["stats"]["total"] == 0
+    assert fallback["stats"]["total"] > 0
+    assert fallback == before

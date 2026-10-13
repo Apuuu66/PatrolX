@@ -1,38 +1,25 @@
-"""全局巡检概览统计。"""
+"""全局巡检概览统计：数据全部来自 SQLite。"""
 
-import json
-
-from app.core.config import settings
 from app.inspectors.registry import registry
 from app.models.schemas import OverviewSummary, Summary
+from app.services import task_db
 
 
 def build_overview() -> OverviewSummary:
-    """汇总任务、注册规则、规则结果、发现问题与状态分布。"""
+    """汇总任务、注册规则、规则结果、发现问题与状态分布。
+
+    展示口径（任务数、可见规则结果数、发现数、状态分布）全部由任务行与规则结果行聚合，
+    不扫描 ``output/``；隐藏规则与既有口径一致地不计入。
+    """
     registry.load_all()
-    task_count = 0
-    rule_result_count = 0
-    finding_count = 0
-    counts = {key: 0 for key in ("pass", "warn", "fail", "error", "skip")}
-
-    for path in settings.output.glob("*/task.json"):
-        task = json.loads(path.read_text(encoding="utf-8"))
-        task_count += 1
-        stats = task.get("stats", {})
-        rule_result_count += int(stats.get("total", 0))
-        for key in counts:
-            counts[key] += int(stats.get(key, 0))
-        system = task.get("system") or {}
-        for rule in system.get("rules") or []:
-            finding_count += len(rule.get("findings") or [])
-
+    counts = task_db.overview_counts()
     return OverviewSummary(
-        task_count=task_count,
+        task_count=counts.task_count,
         registered_rule_count=len(registry.all(include_hidden=True)),
-        rule_result_count=rule_result_count,
-        finding_count=finding_count,
+        rule_result_count=counts.rule_result_count,
+        finding_count=counts.finding_count,
         status_counts=Summary(
-            total=rule_result_count,
-            **counts,
+            total=counts.rule_result_count,
+            **counts.status_counts,
         ),
     )

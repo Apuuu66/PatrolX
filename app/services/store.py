@@ -89,6 +89,14 @@ def save_system(output: Path, task_id: str, system: SystemInspection) -> None:
 def save_task_meta(output: Path, task: InspectionTask) -> None:
     payload = summary_task(task)
     write_json_atomic(task_dir(output, task.task_id) / "task.json", payload.model_dump(by_alias=True, mode="json"))
+    _sync_task_row(payload)
+
+
+def _sync_task_row(task: InspectionTask) -> None:
+    """父进程写 task.json 时同步 SQLite 任务行，保证展示读取不依赖现场文件。"""
+    from app.services import task_db
+
+    task_db.sync_task_row(task)
 
 
 def load_task_meta(output: Path, task_id: str) -> InspectionTask | None:

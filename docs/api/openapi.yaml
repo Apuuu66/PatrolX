@@ -627,6 +627,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskSummary'
+        '400':
+          description: 设备 ID 不存在于设备台账（device_not_found）
         '422':
           description: Validation Error
           content:
@@ -879,6 +881,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskCreated'
+        '410':
+          description: 任务现场已按留存策略清理（scene_cleaned），需重新上传同名且校验和一致的原始包恢复现场后重跑
         '422':
           description: Validation Error
           content:
@@ -909,6 +913,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskCreated'
+        '410':
+          description: 任务现场已按留存策略清理（scene_cleaned），需重新上传同名且校验和一致的原始包恢复现场后重建
         '422':
           description: Validation Error
           content:
@@ -933,6 +939,8 @@ paths:
             text/html:
               schema:
                 type: string
+        '410':
+          description: 任务现场已按留存策略清理（scene_cleaned），报告已随现场清理不可查看
         '422':
           description: Validation Error
           content:
@@ -957,6 +965,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskLogs'
+        '410':
+          description: 任务现场已按留存策略清理（scene_cleaned），执行日志不入库且已随现场清理
         '422':
           description: Validation Error
           content:
@@ -1268,7 +1278,7 @@ paths:
   /api/v3/tasks:
     post:
       summary: Create Task V3
-      description: 创建 v3 任务；版本和设备身份不允许人工输入。
+      description: 创建 v3 任务；版本和设备身份不允许人工输入。同名任务已存在时按校验和幂等处理：现场包存在则与现场文件比对；现场已按留存策略清理则与首次接收记录的校验和比对，一致时写回原始包恢复现场并返回 202（不自动重跑），不一致返回 409 package_checksum_conflict。
       operationId: createTaskV3
       requestBody:
         content:
@@ -1283,6 +1293,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskCreated'
+        '409':
+          description: 同名任务已存在且数据包校验和与首次接收记录不一致（package_checksum_conflict）
         '422':
           description: Validation Error
           content:
@@ -2002,6 +2014,18 @@ components:
           anyOf:
           - $ref: '#/components/schemas/TaskInventory'
           - type: 'null'
+        last_run_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Run At
+        duration_ms:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+          title: Duration Ms
       type: object
       required:
       - task_id
@@ -4525,6 +4549,18 @@ components:
           anyOf:
           - $ref: '#/components/schemas/TaskInventory'
           - type: 'null'
+        last_run_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Run At
+        duration_ms:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+          title: Duration Ms
         device_id:
           anyOf:
           - type: string

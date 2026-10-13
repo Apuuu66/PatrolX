@@ -278,3 +278,66 @@ def test_single_current_entry_per_capability() -> None:
     assert any("/api/v1/legacy" in item for item in _capability_violations(undocumented))
 
     assert _capability_violations(_load_contract()) == []
+
+
+def _is_nullable(prop: dict) -> bool:
+    """判断属性 schema 是否允许 null（anyOf 含 null 分支）。"""
+    return any(item.get("type") == "null" for item in prop.get("anyOf", []))
+
+
+def _non_null_branch(prop: dict) -> dict:
+    """取 anyOf 中的非 null 分支；无 anyOf 时返回原 schema。"""
+    branches = prop.get("anyOf")
+    if branches is None:
+        return prop
+    return next(item for item in branches if item.get("type") != "null")
+
+
+def test_task_run_fields_nullable_in_contract() -> None:
+    """FR-008/FR-009：last_run_at 与 duration_ms 可空，duration_ms >= 0，均非必填。"""
+    schemas = _load_contract()["components"]["schemas"]
+    for name in ("InspectionTask", "TaskSummary"):
+        schema = schemas[name]
+        properties = schema["properties"]
+        last_run_at = properties["last_run_at"]
+        assert _is_nullable(last_run_at), f"{name}.last_run_at 必须可空"
+        branch = _non_null_branch(last_run_at)
+        assert branch.get("type") == "string" and branch.get("format") == "date-time", name
+
+        duration_ms = properties["duration_ms"]
+        assert _is_nullable(duration_ms), f"{name}.duration_ms 必须可空"
+        branch = _non_null_branch(duration_ms)
+        assert branch.get("type") == "integer" and branch.get("minimum") == 0, name
+
+        required = schema.get("required", [])
+        assert "last_run_at" not in required, name
+        assert "duration_ms" not in required, name
+
+
+def test_scene_cleaned_returns_410_in_contract() -> None:
+    """FR-011：报告、日志、重跑、重建在现场清理后返回 410 并说明留存语义。"""
+    paths = _load_contract()["paths"]
+    for path, method in (
+        ("/api/v2/tasks/{task_id}/report", "get"),
+        ("/api/v2/tasks/{task_id}/logs", "get"),
+        ("/api/v2/tasks/{task_id}/rerun", "post"),
+        ("/api/v2/tasks/{task_id}/rebuild", "post"),
+    ):
+        responses = paths[path][method]["responses"]
+        assert "410" in responses, f"{method.upper()} {path} 缺少 410 响应"
+        description = responses["410"]["description"]
+        assert "留存策略" in description, f"{method.upper()} {path} 的 410 描述未说明留存语义"
+
+
+def test_device_id_update_documents_device_not_found() -> None:
+    """FR-013：手动指定设备 ID 必须已存在于设备台账，否则 400 device_not_found。"""
+    responses = _load_contract()["paths"]["/api/v2/tasks/{task_id}/device-id"]["patch"]["responses"]
+    assert "400" in responses, "PATCH /api/v2/tasks/{task_id}/device-id 缺少 400 响应"
+    assert "device_not_found" in responses["400"]["description"]
+
+
+def test_task_create_v3_documents_checksum_conflict() -> None:
+    """FR-008：同名任务数据包校验和不一致时返回 409 package_checksum_conflict。"""
+    responses = _load_contract()["paths"]["/api/v3/tasks"]["post"]["responses"]
+    assert "409" in responses, "POST /api/v3/tasks 缺少 409 响应"
+    assert "package_checksum_conflict" in responses["409"]["description"]

@@ -22,6 +22,34 @@ from app.services.tasks import task_service
 from tests.baseline_helpers import setup_env
 
 
+def _seed_ledger_device(device_id: str) -> None:
+    """台账必须存在该设备，手动设备 ID 才会被接受（034 FR-010）。"""
+    from app.models.db import InventoryDevice
+
+    now = datetime.now(UTC)
+    with session_factory() as session:
+        session.add(
+            InventoryDevice(
+                device_id=device_id,
+                device_key=f"{device_id}-key",
+                province="江苏",
+                current_device_name=device_id,
+                current_site_key="江苏|移动",
+                current_operator="移动",
+                first_seen_at=now,
+                last_seen_at=now,
+                latest_task_id="task-ledger",
+                latest_status="archived",
+                observation_count=1,
+                site_change_count=0,
+                has_site_conflict=False,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+
+
 def _meta(task_id: str, status: str = "completed") -> InspectionTask:
     status_map = {
         "pending": ("pending", 0),
@@ -73,6 +101,7 @@ def _task_with_meta(env, task_id: str, status: str = "completed") -> InspectionT
 def test_reserve_trims_and_exposes_device_id(tmp_path, monkeypatch) -> None:
     setup_env(tmp_path, monkeypatch)
     init_db()
+    _seed_ledger_device("device-01")
     created = task_service.reserve("device.zip", None, None, None, None, device_id="  device-01  ")
     items, total = task_service.list_tasks(1, 10, None)
     assert total == 1
@@ -88,6 +117,7 @@ def test_update_device_id_syncs_metadata_and_checks_auth(tmp_path, monkeypatch) 
     meta = _task_with_meta(env, task_id)
     system_file = env.task_dir(task_id) / "system.json"
     system_file.write_text(json.dumps(meta.system.model_dump(by_alias=True)), encoding="utf-8")
+    _seed_ledger_device("device-new")
 
     client = TestClient(app)
     response = client.patch(
@@ -131,6 +161,7 @@ def test_device_id_change_immediately_changes_history_match(tmp_path, monkeypatc
     init_db()
     task_id = "task-history-device"
     _task_with_meta(env, task_id)
+    _seed_ledger_device("device-b")
 
     candidate_id = "task-history-old"
     candidate = _meta(candidate_id)
@@ -184,21 +215,9 @@ def test_delete_task_removes_output_uploads_and_index(tmp_path, monkeypatch) -> 
     upload_file = env.uploads / task_id / "task-delete.zip"
     upload_file.parent.mkdir(parents=True, exist_ok=True)
     upload_file.write_bytes(b"zip")
+    # 任务行由发布路径（save_task_meta 镜像）写入，这里不再重复插入。
     with session_factory() as session:
-        session.add(
-            TaskRecord(
-                task_id=task_id,
-                name=task_id,
-                mode="local",
-                status="completed",
-                trigger="api",
-                package_file="task-delete.zip",
-                customer={},
-                stats={},
-                created_at=datetime.now(UTC),
-            )
-        )
-        session.commit()
+        assert session.get(TaskRecord, task_id) is not None
 
     response = TestClient(app).delete(f"/api/v2/tasks/{task_id}")
     assert response.status_code == 204, response.text

@@ -1,11 +1,16 @@
 """API 上传、分页与损坏持久化的健壮性测试。"""
 
 import io
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.main import app
+from app.models.db import session_factory
+from app.models.schemas import InspectionTask, TaskMode, TaskStats, TaskStatus, TaskTrigger
+from app.services import task_db
+from app.services.store import save_task_meta
 from tests.baseline_helpers import SAMPLE, setup_env, wait_for_task
 
 client = TestClient(app)
@@ -130,13 +135,45 @@ def test_corrupt_task_json_does_not_break_list(tmp_path, monkeypatch) -> None:
     assert [item["task_id"] for item in response.json()["items"]] == [task_id]
 
 
-def test_corrupt_system_json_returns_actionable_error(tmp_path, monkeypatch) -> None:
+def test_corrupt_scene_system_json_does_not_break_db_backed_display(tmp_path, monkeypatch) -> None:
+    """库内快照优先：现场 system.json 损坏不影响已入库任务的展示。"""
     env = setup_env(tmp_path, monkeypatch)
     task_id = _upload(env).json()["task_id"]
     wait_for_task(client, task_id)
+    before = client.get(f"/api/v2/tasks/{task_id}/system")
+    assert before.status_code == 200
+
     (env.task_dir(task_id) / "system.json").write_text("{broken", encoding="utf-8")
 
-    response = client.get(f"/api/v2/tasks/{task_id}/system")
+    after = client.get(f"/api/v2/tasks/{task_id}/system")
+    assert after.status_code == 200
+    assert after.json() == before.json()
+
+
+def test_legacy_corrupt_system_json_returns_actionable_error(tmp_path, monkeypatch) -> None:
+    """历史现场（库内无快照且 task.json 无内嵌规则）system.json 损坏时给出明确错误。"""
+    env = setup_env(tmp_path, monkeypatch)
+    now = datetime.now(UTC)
+    save_task_meta(
+        env.output,
+        InspectionTask(
+            task_id="task-legacy-corrupt",
+            name="历史任务",
+            mode=TaskMode.LOCAL,
+            status=TaskStatus.COMPLETED,
+            trigger=TaskTrigger.CLI,
+            created_at=now,
+            completed_at=now,
+            stats=TaskStats(total=1, pass_=1, warn=0, fail=0, error=0, skip=0),
+            system=None,
+        ),
+    )
+    with session_factory() as session:
+        task_db.delete_task_data(session, "task-legacy-corrupt")
+        session.commit()
+    (env.output / "task-legacy-corrupt" / "system.json").write_text("{broken", encoding="utf-8")
+
+    response = client.get("/api/v2/tasks/task-legacy-corrupt/system")
     assert response.status_code == 503
     assert response.json()["code"] == "corrupt_data"
     assert "重跑" in response.json()["message"]

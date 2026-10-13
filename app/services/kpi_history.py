@@ -33,6 +33,7 @@ from app.models.schemas import (
     MeasurementVersionComparisonTask,
     MeasurementVersionDirection,
 )
+from app.services import task_db
 from app.services.store import load_task_meta
 
 KPI_RULE_CODE = "kpi.measurement_units"
@@ -44,6 +45,50 @@ IndexRecord = dict[str, Any]
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _load_task_db_first(task_id: str, output: Path) -> object | None:
+    """任务元数据优先读 SQLite；仅旧现场未回填时回退 task.json。"""
+    task = task_db.get_task_summary(task_id)
+    if task is not None:
+        return task
+    return load_task_meta(output, task_id)
+
+
+def _task_status_value(task: object) -> str:
+    status = getattr(task, "status", None)
+    return str(getattr(status, "value", status))
+
+
+def _task_completed_value(task: object) -> datetime | None:
+    return _ensure_utc(getattr(task, "completed_at", None))
+
+
+def _task_device_value(task: object) -> str | None:
+    """从任务详情或任务行视图读取设备 ID。"""
+    device_id = getattr(task, "device_id", None)
+    if device_id is None:
+        system = getattr(task, "system", None)
+        customer = getattr(system, "customer", None) if system is not None else None
+        device_id = customer.get("device_id") if isinstance(customer, dict) else None
+    return str(device_id).strip() if device_id else None
+
+
+def _all_task_views(output: Path) -> dict[str, object]:
+    """DB 任务行优先；仅为尚未回填的旧现场补读 task.json。"""
+    views: dict[str, object] = {record.task_id: record for record in task_db.list_task_records()}
+    if not output.is_dir():
+        return views
+    for path in sorted((item for item in output.iterdir() if item.is_dir()), key=lambda item: item.name):
+        if path.name in views:
+            continue
+        try:
+            task = load_task_meta(output, path.name)
+        except Exception:  # noqa: BLE001 - 单个坏现场不阻断历史读取
+            continue
+        if task is not None:
+            views[path.name] = task
+    return views
 
 
 def index_path(output: Path | None = None, task_id: str | None = None) -> Path:
@@ -173,7 +218,17 @@ def iter_history_index(
     *,
     output: Path | None = None,
 ) -> Iterator[IndexRecord]:
-    """流式逐行读取并校验索引；索引缺失时抛出 FileNotFoundError。"""
+    """读取任务历史点：DB 优先，旧任务现场索引兜底。"""
+    points = task_db.list_kpi_points(task_id)
+    if points:
+        for point in points:
+            measured_at = point.get("measured_at")
+            if isinstance(measured_at, datetime):
+                measured_at = measured_at.isoformat()
+            record = _valid_index_record({**point, "measured_at": measured_at}, task_id)
+            if record is not None:
+                yield record
+        return
     path = index_path(output or settings.output, task_id)
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -189,24 +244,20 @@ def iter_history_index(
 
 
 def _task_completed_at(task_id: str, output: Path) -> datetime:
-    task = load_task_meta(output, task_id)
+    task = _load_task_db_first(task_id, output)
     if task is None:
         raise FileNotFoundError(output / task_id / "task.json")
-    if task.completed_at is None:
+    completed_at = _task_completed_value(task)
+    if completed_at is None:
         raise ValueError(f"任务 {task_id} 未完成")
-    completed_at = task.completed_at
-    if completed_at.tzinfo is None:
-        completed_at = completed_at.replace(tzinfo=UTC)
-    return completed_at.astimezone(UTC)
+    return completed_at
 
 
 def _task_device_id(task_id: str, output: Path) -> str | None:
-    task = load_task_meta(output, task_id)
+    task = _load_task_db_first(task_id, output)
     if task is None:
         return None
-    customer = task.system.customer if task.system else {}
-    device_id = customer.get("device_id")
-    return str(device_id).strip() if device_id else None
+    return _task_device_value(task)
 
 
 def _point_from_record(record: IndexRecord) -> MeasurementHistoryPoint:
@@ -279,10 +330,10 @@ def get_history_trend(
 ) -> MeasurementHistoryTrend:
     """组装单指标、单对象、单周期的 7 天历史趋势。"""
     output = output or settings.output
-    current_task = load_task_meta(output, task_id)
+    current_task = _load_task_db_first(task_id, output)
     if current_task is None:
         raise FileNotFoundError(output / task_id / "task.json")
-    device_id = _task_device_id(task_id, output)
+    device_id = _task_device_value(current_task)
     try:
         all_current = list(iter_history_index(task_id, output=output))
         current_index_available = True
@@ -340,27 +391,21 @@ def get_history_trend(
     outside_window_dates: list[date] = []
     candidate_reason_counts: dict[str, int] = defaultdict(int)
     if current_index_available and device_id and current_records:
-        current_completed_at = _task_completed_at(task_id, output)
+        current_completed_at = _task_completed_value(current_task)
+        if current_completed_at is None:
+            raise ValueError(f"任务 {task_id} 未完成")
         seen_task_ids = {task_id}
-        for candidate_dir in sorted((path for path in output.iterdir() if path.is_dir()), key=lambda path: path.name):
-            candidate_id = candidate_dir.name
+        for candidate in sorted(_all_task_views(output).values(), key=lambda item: item.task_id):
+            candidate_id = candidate.task_id
             if candidate_id in seen_task_ids:
                 continue
-            try:
-                candidate = load_task_meta(output, candidate_id)
-            except Exception:  # noqa: BLE001 - 单个坏任务不阻断历史读取
-                continue
-            if candidate is None:
-                continue
-            candidate_device_id = _task_device_id(candidate_id, output)
+            candidate_device_id = _task_device_value(candidate)
             if candidate_device_id != device_id:
                 continue
-            if candidate.status.value != "completed" or candidate.completed_at is None:
+            candidate_completed_at = _task_completed_value(candidate)
+            if _task_status_value(candidate) != "completed" or candidate_completed_at is None:
                 candidate_reason_counts["not_completed"] += 1
                 continue
-            candidate_completed_at = candidate.completed_at
-            if candidate_completed_at.tzinfo is None:
-                candidate_completed_at = candidate_completed_at.replace(tzinfo=UTC)
             if candidate_completed_at > current_completed_at:
                 candidate_reason_counts["after_current"] += 1
                 continue
@@ -400,8 +445,10 @@ def get_history_trend(
 
     # 跨任务同时间点保留完成时间最新的任务；完成时间相同按 task_id 倒序。
     completed_by_task: dict[str, datetime] = {}
+    task_views = _all_task_views(output)
     for candidate_id in set(record["task_id"] for record in history_records):
-        completed_by_task[candidate_id] = _task_completed_at(candidate_id, output)
+        completed_at = _task_completed_value(task_views.get(candidate_id)) if task_views.get(candidate_id) else None
+        completed_by_task[candidate_id] = completed_at or _task_completed_at(candidate_id, output)
     grouped: dict[datetime, list[IndexRecord]] = defaultdict(list)
     for record in history_records:
         grouped[record["measured_at"]].append(record)
@@ -523,7 +570,11 @@ def get_history_trend(
 
 def _task_version(task: object) -> str | None:
     """读取任务系统版本；空值统一为版本未知。"""
-    version = getattr(getattr(task, "system", None), "version", None)
+    version = getattr(task, "version", None)
+    if version is None:
+        version = getattr(task, "customer_version", None)
+    if version is None:
+        version = getattr(getattr(task, "system", None), "version", None)
     if not isinstance(version, str) or not version.strip():
         return None
     return version.strip()
@@ -569,17 +620,13 @@ def _dimension_records(
 def _candidate_tasks_for_device(task_id: str, device_id: str, output: Path) -> list[tuple[object, str]]:
     """读取同设备已完成候选任务，不读取历史索引。"""
     candidates: list[tuple[object, str]] = []
-    for candidate_dir in sorted((path for path in output.iterdir() if path.is_dir()), key=lambda path: path.name):
-        candidate_id = candidate_dir.name
+    for candidate in sorted(_all_task_views(output).values(), key=lambda item: item.task_id):
+        candidate_id = candidate.task_id
         if candidate_id == task_id:
             continue
-        try:
-            candidate = load_task_meta(output, candidate_id)
-        except Exception:  # noqa: BLE001 - 单个坏任务不阻断候选读取
+        if _task_device_value(candidate) != device_id:
             continue
-        if candidate is None or _task_device_id(candidate_id, output) != device_id:
-            continue
-        if candidate.status.value != "completed" or candidate.completed_at is None:
+        if _task_status_value(candidate) != "completed" or _task_completed_value(candidate) is None:
             continue
         candidates.append((candidate, candidate_id))
     return candidates
@@ -599,10 +646,10 @@ def get_version_candidates(
     output = output or settings.output
     if rule_code != KPI_RULE_CODE:
         raise ValueError(f"不支持的规则: {rule_code}")
-    current_task = load_task_meta(output, task_id)
+    current_task = _load_task_db_first(task_id, output)
     if current_task is None:
         raise FileNotFoundError(output / task_id / "task.json")
-    device_id = _task_device_id(task_id, output)
+    device_id = _task_device_value(current_task)
     grouped: dict[str | None, list[tuple[object, str]]] = defaultdict(list)
     if device_id:
         for candidate, candidate_id in _candidate_tasks_for_device(task_id, device_id, output):
@@ -727,11 +774,11 @@ def get_version_compare(
     output = output or settings.output
     if rule_code != KPI_RULE_CODE:
         raise ValueError(f"不支持的规则: {rule_code}")
-    current_task = load_task_meta(output, task_id)
+    current_task = _load_task_db_first(task_id, output)
     if current_task is None:
         raise FileNotFoundError(output / task_id / "task.json")
 
-    device_id = _task_device_id(task_id, output)
+    device_id = _task_device_value(current_task)
     current_version = _task_version(current_task)
     current_task_model = _version_task(task_id, current_task)
     current_records: list[IndexRecord] = []
@@ -794,14 +841,14 @@ def get_version_compare(
         reason_code = "device_id_missing"
         return finish(MeasurementHistoryMatchStatus.DEGRADED)
 
-    baseline_task = load_task_meta(output, baseline_task_id_safe)
+    baseline_task = _load_task_db_first(baseline_task_id_safe, output)
     if baseline_task is None:
         reason_code = "baseline_task_not_found"
         return finish(MeasurementHistoryMatchStatus.DEGRADED)
-    if _task_device_id(baseline_task_id_safe, output) != device_id:
+    if _task_device_value(baseline_task) != device_id:
         reason_code = "baseline_device_mismatch"
         return finish(MeasurementHistoryMatchStatus.DEGRADED)
-    if baseline_task.status.value != "completed" or baseline_task.completed_at is None:
+    if _task_status_value(baseline_task) != "completed" or _task_completed_value(baseline_task) is None:
         reason_code = "baseline_task_not_completed"
         return finish(MeasurementHistoryMatchStatus.DEGRADED)
 

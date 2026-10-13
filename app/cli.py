@@ -33,7 +33,7 @@ from app.models.schemas import (
     TaskStatus,
     TaskTrigger,
 )
-from app.services import extraction, store
+from app.services import extraction, store, task_db
 from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext
 from app.services.extraction import WORK_CATEGORIES
@@ -144,7 +144,16 @@ def _publish_terminal(task: InspectionTask, publish: Callable[[InspectionTask], 
     if publish is not None:
         publish(task)
     else:
+        # 本地模式与在线模式共用同一发布语义：SQLite 快照（任务行 + 规则结果 + KPI 点 +
+        # 准备摘要）先收敛，再写 task.json，读方看到终态时展示数据已完整。
+        from app.services import task_db
+
+        task_db.publish_from_scene(task, output=settings.output)
         store.save_task_meta(settings.output, task)
+        # 本地模式与在线模式共用留存清理语义：终态发布后清理超期现场。
+        from app.services import retention
+
+        retention.cleanup_safely(output=settings.output, uploads=settings.uploads)
 
 
 def run_task(
@@ -163,6 +172,7 @@ def run_task(
     registry.load_all()
     enabled_rules = get_enabled_rule_codes()
     task_id = task_id or generate_task_id(package.name)
+    run_started_at = _now()
     store.append_log(
         settings.output,
         task_id,
@@ -189,6 +199,7 @@ def run_task(
             version=version,
         )
         stats = TaskStats(total=0, pass_=0, warn=0, fail=0, error=0, skip=0)
+        failed_at = _now()
         task = InspectionTask(
             task_id=task_id,
             name=name or package.name,
@@ -196,13 +207,17 @@ def run_task(
             status=TaskStatus.FAILED,
             trigger=trigger,
             created_at=_now(),
-            completed_at=_now(),
+            completed_at=failed_at,
+            last_run_at=run_started_at,
+            duration_ms=task_db.elapsed_ms(run_started_at, failed_at),
             stats=stats,
             system=system,
             package_kind=package_kind,
         )
         store.save_system(settings.output, task_id, system)
         _publish_terminal(task, publish)
+        # 首次接收的 checksum 是恢复现场与冲突判定的唯一依据，失败任务同样必须落库。
+        task_db.set_package_checksum(task_id, sha256_file(package))
         return task
         store.append_log(
             settings.output,
@@ -240,6 +255,7 @@ def run_task(
         skip=summary.skip,
         systems=1,
     )
+    completed_at = _now()
     task = InspectionTask(
         task_id=task_id,
         name=name or package.name,
@@ -247,7 +263,9 @@ def run_task(
         status=TaskStatus.COMPLETED,
         trigger=trigger,
         created_at=created_at or _now(),
-        completed_at=_now(),
+        completed_at=completed_at,
+        last_run_at=run_started_at,
+        duration_ms=task_db.elapsed_ms(run_started_at, completed_at),
         stats=stats,
         system=system,
         package_kind=package_kind,
@@ -291,6 +309,7 @@ def run_task(
     )
     # 终态发布是任务现场的最后一次写入：读方看到 completed 时，报告、收尾日志与台账均已就绪。
     _publish_terminal(task, publish)
+    task_db.set_package_checksum(task_id, checksum)
     return completed_summary
 
 
@@ -305,6 +324,7 @@ def run_incremental_rebuild(
     """强制重建解压现场后只执行指定普通规则及其私有 prepare。"""
     if not rule_codes:
         raise ValueError("增量重建必须指定至少一条普通规则")
+    run_started_at = _now()
     registry.load_all()
     enabled_rules = get_enabled_rule_codes()
     for code in rule_codes:
@@ -345,10 +365,13 @@ def run_incremental_rebuild(
     if old is not None:
         current_meta = store.load_task_meta(settings.output, task_id)
         base = current_meta or InspectionTask.model_validate(old)
+        completed_at = _now()
         completed = base.model_copy(
             update={
                 "status": TaskStatus.COMPLETED,
-                "completed_at": _now(),
+                "completed_at": completed_at,
+                "last_run_at": run_started_at,
+                "duration_ms": task_db.elapsed_ms(run_started_at, completed_at),
                 "stats": TaskStats(
                     total=system.summary.total,
                     pass_=system.summary.pass_,
@@ -383,7 +406,9 @@ def run_single_rule(
     package: Path | None = None,
     task_id: str | None = None,
     package_checksum: str | None = None,
+    trigger_retention: bool = True,
 ) -> None:
+    run_started_at = _now()
     registry.load_all()
     assert_rule_enabled(code)
     enabled_rules = get_enabled_rule_codes()
@@ -411,7 +436,10 @@ def run_single_rule(
     system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
     store.save_system(settings.output, task_id, system)
     if old:
-        old["completed_at"] = store.now_utc()
+        completed_at = _now()
+        old["completed_at"] = completed_at.isoformat()
+        old["last_run_at"] = run_started_at.isoformat()
+        old["duration_ms"] = task_db.elapsed_ms(run_started_at, completed_at)
         old["stats"] = {
             "total": system.summary.total,
             "pass": system.summary.pass_,
@@ -430,6 +458,11 @@ def run_single_rule(
         f"规则 {code}: {result.status.value} | {result.summary or ''} | "
         f"耗时 {result.duration_ms}ms | 现场: output/{task_id}/ | 报告: {report}"
     )
+    if trigger_retention:
+        # 本地单规则重跑同样按留存策略清理；在线模式由发布回调统一触发。
+        from app.services import retention
+
+        retention.cleanup_safely(output=settings.output, uploads=settings.uploads)
 
 
 def explain_match(
