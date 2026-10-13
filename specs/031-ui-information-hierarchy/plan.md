@@ -82,7 +82,7 @@
 - `StatusDistribution`：分段状态条 + 非零计数 chips；支持点击筛选与 `aria-pressed`；0 值不渲染为独立彩色块。
 - `ConclusionHero`（任务详情用）：结论标签 + 一句话结论 + 状态计数 + 主操作 + 关键元数据网格。
 - `MetadataList`：label（次要）/ value（主要）键值展示，长值截断 + 可复制/提示。
-- `TaskRowActions` 或等价封装：行内"详情 / 报告 / 失败日志"与 `⋯` 菜单（"重建"、删除）；任务列表不提供任务级"重跑"（2026-10-12 修订）。
+- `TaskRowActions` 或等价封装：行内平铺"详情 / 报告（失败为失败日志）/ 重建 / 删除"，不使用 `⋯` 菜单与 hover 隐藏；任务列表不提供任务级"重跑"（2026-10-13 修订）。
 
 ### 3. 任务列表（`web/src/pages/TaskListPage.tsx`）
 

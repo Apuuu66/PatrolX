@@ -65,10 +65,10 @@ description: "界面降噪与一致性精修 — 实现任务清单"
 - [x] T013 [US1] 重构 `web/src/components/StatusDistribution.tsx`：使用 AntD `Tooltip` 替换原生 `title`、`variant="full"` 的概览场景应用弱化色、计数与分段顺序一致、空态不渲染空条；保持 `onStatusClick` 状态筛选与既有 `data-status-*` 属性（依赖 T003、T012；FR-001~FR-003、FR-005、contracts §1）
 - [x] T014 [US1] 在 `web/src/pages/TaskListPage.tsx` 概览指标区（`task-overview-metrics`）接入 `taskOverview` 口径说明 Tooltip 与统计范围；0 值状态不渲染；分布条使用弱化形态（依赖 T007、T013；FR-002、FR-004、FR-005、R3）
 - [x] T015 [US1] 在 `web/src/pages/TaskListPage.tsx` 重排"时间与耗时"列：耗时为主信息、创建 / 完成为相对时间次要信息、Tooltip 提供完整时间、列内不换行（依赖 T005、T014；FR-006、FR-007）
-- [x] T016 [US1] 在 `web/src/pages/TaskListPage.tsx` 收敛行内操作：常驻仅"详情"；报告 / 失败日志 hover 或聚焦显示且保留在 `⋯` 菜单；"重建"（原"全量重建"）与删除仅在菜单，危险操作保留二次确认；不提供任务级"重跑"；失败原因摘要可点击进入日志且不出现第二个失败日志入口（依赖 T015；FR-008、FR-026、R5、contracts §3；2026-10-12 修订）
-- [x] T017 [US1] 在 `web/src/theme.css` 落地概览弱化色、时间列等宽数字（`tabular-nums`）、操作列 hover / focus-visible 显隐与焦点样式，确保 1280px 下固定列不遮挡；超长任务名 / 规则名 / 路径在紧凑密度下截断并提供悬浮完整值与复制（依赖 T015、T016；FR-002、FR-006、FR-007、FR-027、边界情况）
+- [x] T016 [US1] 在 `web/src/pages/TaskListPage.tsx` 平铺行内操作：详情、报告（失败任务为失败日志）、"重建"（原"全量重建"）、删除全部常驻，不使用 `⋯` 菜单与 hover 隐藏，危险操作保留二次确认；不提供任务级"重跑"；失败原因摘要可点击进入日志（依赖 T015；FR-008、FR-026、R5、contracts §3；2026-10-13 修订）
+- [x] T017 [US1] 在 `web/src/theme.css` 落地概览弱化色、时间列等宽数字（`tabular-nums`）、操作列焦点样式（2026-10-13 修订：移除 hover 显隐样式），确保 1280px 下固定列不遮挡；超长任务名 / 规则名 / 路径在紧凑密度下截断并提供悬浮完整值与复制（依赖 T015、T016；FR-002、FR-006、FR-007、FR-027、边界情况）
 - [x] T018 [P] [US1] 扩展 `web/e2e/task-home.spec.ts`：异常优先排序、概览条弱化色、Tooltip 文案与占比、时间列层级、0 值状态不出现、加载中不渲染 0 值分布（依赖 T014~T017；SC-001、SC-002、SC-009、边界情况）
-- [x] T019 [P] [US1] 扩展 `web/e2e/task-actions.spec.ts`、`web/e2e/task-delete-confirm.spec.ts`：报告 / 失败日志 / 重建 / 删除在收敛后仍可及，确认流程行为不变，且断言操作列不出现"重跑"、列表不出现行展开箭头（依赖 T016；FR-008、FR-026、SC-009；2026-10-12 修订）
+- [x] T019 [P] [US1] 扩展 `web/e2e/task-actions.spec.ts`、`web/e2e/task-delete-confirm.spec.ts`：报告 / 失败日志 / 重建 / 删除平铺常驻后仍可一次点击到达，确认流程行为不变，且断言操作列不出现"重跑"、不出现"更多操作"触发器、列表不出现行展开箭头（依赖 T016；FR-008、FR-026、SC-009；2026-10-13 修订）
 
 **检查点**：MVP 可用——列表首屏异常优先、口径可查、操作收敛；`task-home` 与 `task-actions` E2E 通过。
 
@@ -274,3 +274,10 @@ python build.py e2e
 - **同步产物**：`spec.md`（US6 场景 3、边界情况、FR-008 / FR-024 / FR-025 / FR-026、关键实体、SC-007、修订记录）、`contracts/ui-refinement.md`（§3 TaskRow、§5 单规则重跑、§8 上传预检）、`data-model.md`（§5 UploadPrecheck）、`research.md`（R5、R16）、`plan.md`（约束与行为不变清单）、`quickstart.md`（重点场景、截图、对照检查）、`checklists/requirements.md`（Notes）、`verification.md`（第六节）。
 - **验证**：`cd web && npm run build`、`cd web && npm test`、`npx playwright test e2e/task-actions.spec.ts e2e/task-home.spec.ts e2e/upload-precheck.spec.ts`、`.venv/bin/python build.py lint`、`.venv/bin/python build.py test` 全绿；断言见 `verification.md` 第六节。
 - **说明**：覆盖流程非原子（先删后建），失败路径在界面明示"原任务现场已清除"；未修改 `docs/api/openapi.yaml`，未新增接口端点。
+
+### 2026-10-13 任务列表操作列不再收纳（修订 033）
+
+- **触发**：用户提出"每个任务的操作列 把...去掉 不要收缩了"。
+- **受影响任务**：T016（操作列改为详情、报告 / 失败日志、重建、删除全部平铺常驻，移除 `⋯` 更多菜单与报告 hover 显现）、T017（移除 hover 显隐样式，保留焦点样式）、T019（E2E 断言改为平铺可及、无"更多操作"触发器）。
+- **同步产物**：`spec.md`（FR-008、修订记录）、`contracts/ui-refinement.md`（§3 TaskRow）、`research.md`（R5）、`tasks.md`（本记录）、`verification.md`（第七节）、`docs/design/DESIGN.md`（Actions 一节）、031 对应产物（FR-012、`contracts/ui-baseline.md`、`data-model.md`、`quickstart.md`、`plan.md`）。
+- **验证**：`cd web && npm run build`、`cd web && npm test`、`npx playwright test e2e/task-actions.spec.ts e2e/task-home.spec.ts e2e/task-delete-confirm.spec.ts`、`.venv/bin/python build.py e2e`、`.venv/bin/python build.py lint`、`.venv/bin/python build.py test` 全绿。

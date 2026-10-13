@@ -95,6 +95,8 @@ feature/031-ui-information-hierarchy
 
 **修订范围**：FR-006（列顺序新增"数据准备"）、FR-011（固定列 + 列内弹层，不使用行展开；删除失败操作列就地重试）、FR-012（去掉任务级"重跑"、"全量重建"更名"重建"并收进 `⋯` 菜单）。产物同步见 `spec.md` 修订记录与 `tasks.md` 修订记录。
 
+**历史说明**：本节"重建与删除收进 `⋯` 菜单、报告 hover / 聚焦显现"的结论已在 2026-10-13 修订中调整为操作列平铺（FR-012 修订），以第九节为准。
+
 **工作区形态**：本修订为小改动，按 AGENTS.md「小改动不创建 worktree」，在主工作区 `main` 直接完成实现与验证；未触碰 OpenAPI 与后端。
 
 | 命令 | 结果 |
@@ -112,3 +114,27 @@ feature/031-ui-information-hierarchy
 - `web/src/pages/TaskListPage.test.tsx`：删除失败不再依赖行展开区，操作列就地渲染"删除失败"并可重试。
 
 **例外说明**：E2E 中两字中文按钮（"取消"）经 AntD 处理会插入空格，断言改用 `/取\s*消/` 宽松匹配，与既有 `web/e2e/task-delete-confirm.spec.ts` 惯例一致；属选择器写法调整，未降低行为覆盖。
+
+## 九、2026-10-13 修订验证（任务列表操作列不再收纳）
+
+**修订范围**：FR-012（操作列改为详情、报告 / 失败日志、重建、删除全部平铺常驻；移除 `⋯` 更多菜单与"报告"的 hover / 聚焦显现；重建、删除继续二次确认）、US1 验收场景 4。产物同步见 `spec.md` 与 `tasks.md` 修订记录。
+
+**工作区形态**：本修订为小改动，按 AGENTS.md「小改动不创建 worktree」，在主工作区 `main` 直接完成实现与验证；未触碰 OpenAPI 与后端。
+
+| 命令 | 结果 |
+| --- | --- |
+| `cd web && npm run build` | 通过（`tsc -b` + `vite build`，3.7s，仅既有 chunk 体积提示） |
+| `cd web && npm test` | 通过：27 files / 121 passed |
+| `npx playwright test e2e/task-actions.spec.ts e2e/task-home.spec.ts e2e/task-delete-confirm.spec.ts` | 通过：13 passed（18.1s） |
+| `.venv/bin/python build.py e2e` | 通过：默认 57 passed（38.4s）+ 留存 5 passed（14.0s） |
+| `.venv/bin/python build.py lint` | `All checks passed!` / `193 files already formatted` |
+| `.venv/bin/python build.py test` | 通过：635 passed（48.3s） |
+
+**修订后断言要点**：
+
+- `e2e/task-actions.spec.ts`：失败任务行操作列平铺"详情 / 失败日志 / 重建 / 删除"，行内不存在"更多操作"触发器与任务级"重跑"；已完成任务"报告"常驻可见并一次点击进入报告页。
+- `e2e/task-home.spec.ts`：失败行四个操作与已完成行"报告 / 重建 / 删除"均平铺可见；列表仍无 `.ant-table-row-expand-icon`。
+- `e2e/task-delete-confirm.spec.ts`：行内"删除"按钮仍需二次确认，取消后任务仍在列表。
+- `web/src/pages/TaskListPage.test.tsx`：单测断言操作列无"更多操作"按钮，四个操作直接可见。
+
+**例外说明**：操作列宽度由 190px 调整为 280px：实测失败行四操作约 204px，叠加"删除失败"重试入口约 276px；280px 保证任何状态下操作单行平铺不换行、不截断。
