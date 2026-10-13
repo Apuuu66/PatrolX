@@ -622,7 +622,7 @@ describe("TaskListPage 行内信息与操作", () => {
     vi.mocked(api.getTask).mockRejectedValue(new ApiError("not_found", "任务不存在", 404));
   });
 
-  it("操作列去掉重跑且不再有行展开，重建收在更多菜单", async () => {
+  it("操作列平铺全部操作，不再有行展开与更多菜单", async () => {
     vi.mocked(api.listTasks).mockResolvedValue({
       items: [makeTask({ task_id: "task-001" })],
       total: 1,
@@ -637,11 +637,13 @@ describe("TaskListPage 行内信息与操作", () => {
     // 去掉收缩：行首不再渲染展开 / 收起箭头。
     expect(document.querySelector(".ant-table-row-expand-icon")).toBeNull();
 
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "更多操作" }));
-    await waitFor(() => {
-      expect(screen.getByText("重建")).toBeDefined();
-    });
+    // 操作全部平铺常驻：详情、报告、重建、删除直接可见，不再有 ⋯ 更多菜单。
+    const row = screen.getByText("task-001").closest("tr") as HTMLElement;
+    expect(within(row).getByRole("button", { name: "详情" })).toBeDefined();
+    expect(within(row).getByRole("button", { name: "报告" })).toBeDefined();
+    expect(within(row).getByRole("button", { name: "重建" })).toBeDefined();
+    expect(within(row).getByRole("button", { name: "删除" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "更多操作" })).toBeNull();
     expect(screen.queryByText("重跑")).toBeNull();
     expect(screen.queryByText("全量重建")).toBeNull();
   }, 60000);

@@ -65,53 +65,41 @@ const task = {
   stats: { total: 2, pass: 2, warn: 0, fail: 0, error: 0, skip: 0, systems: 1 },
 };
 
-test("任务列表收敛后高频入口与低频操作仍可及", async ({ page }) => {
+test("任务列表操作全部平铺，高频入口一次点击可达", async ({ page }) => {
   await page.goto("/");
   const taskRow = page
     .locator(".task-table .ant-table-tbody > tr.ant-table-row")
     .filter({ hasText: "首页失败任务样例" })
     .first();
 
-  // 常驻行内只有详情；失败原因摘要即唯一日志入口（FR-008、R5）
+  // 操作列不再收缩：详情、失败日志、重建、删除全部平铺常驻（2026-10-13 修订）
   await expect(taskRow.getByRole("button", { name: "详情" })).toBeVisible();
   await expect(taskRow.locator('[data-testid="task-failure-reason"]')).toBeVisible();
-  await expect(taskRow.getByRole("button", { name: "失败日志" })).toHaveCount(0);
-  await expect(taskRow.getByRole("button", { name: /重跑|重建/ })).toHaveCount(0);
-  await expect(taskRow.getByRole("button", { name: "删除" })).toHaveCount(0);
-
-  // 低频操作仍在 ⋯ 菜单内可达（FR-008、FR-026）
-  await taskRow.getByLabel("更多操作").click();
-  await expect(page.getByRole("menuitem", { name: "失败日志" })).toBeVisible();
+  await expect(taskRow.getByRole("button", { name: "失败日志" })).toBeVisible();
+  await expect(taskRow.getByRole("button", { name: "重建" })).toBeVisible();
+  await expect(taskRow.getByRole("button", { name: "删除" })).toBeVisible();
+  await expect(taskRow.getByRole("button", { name: "更多操作" })).toHaveCount(0);
   // 列表只保留"重建"：重跑与更名前的"全量重建"都不再出现
-  await expect(page.getByRole("menuitem", { name: "重建" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "删除" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "重跑" })).toHaveCount(0);
-  await expect(page.getByRole("menuitem", { name: "全量重建" })).toHaveCount(0);
+  await expect(taskRow.getByRole("button", { name: "重跑" })).toHaveCount(0);
+  await expect(taskRow.getByRole("button", { name: "全量重建" })).toHaveCount(0);
 
-  // 菜单里的失败日志仍能一次点击进入日志页（FR-026）
-  await page.getByRole("menuitem", { name: "失败日志" }).click();
+  // 行内失败日志一次点击进入日志页（FR-026）
+  await taskRow.getByRole("button", { name: "失败日志" }).click();
   await expect(page).toHaveURL(/\/tasks\/task-home-failed\/logs$/);
 });
 
-test("已完成任务的报告入口在 hover 时显现且菜单同样可达", async ({ page }) => {
+test("已完成任务的报告入口常驻可见并一次点击进入报告", async ({ page }) => {
   await page.goto("/");
   const completedRow = page
     .locator(".task-table .ant-table-tbody > tr.ant-table-row")
     .filter({ hasText: "task-kpi-history-current" })
     .first();
 
-  const revealButton = completedRow.locator(".task-table-action-reveal");
-  await expect(revealButton).toHaveText("报告");
-
-  // 默认不抢注意力，行 hover 后显现（FR-008）。
-  await expect(revealButton).toHaveCSS("opacity", "0");
-  // 列表在任务执行期间每 2 秒轮询重载，行序变化会把指针从该行移开；
-  // hover 与断言一起重试，直到指针稳定落在目标行上（FR-008）。
-  await expect(async () => {
-    await completedRow.hover();
-    await expect(revealButton).toHaveCSS("opacity", "1", { timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
-  await revealButton.click();
+  // 报告不再 hover 才显现，行内常驻可见且可用（2026-10-13 修订）
+  const reportButton = completedRow.getByRole("button", { name: "报告" });
+  await expect(reportButton).toBeVisible();
+  await expect(reportButton).toBeEnabled();
+  await reportButton.click();
   await expect(page).toHaveURL(/\/tasks\/task-kpi-history-current\/report$/);
 });
 

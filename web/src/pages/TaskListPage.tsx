@@ -6,7 +6,6 @@ import {
   Card,
   Flex,
   Form,
-  Dropdown,
   Modal,
   Pagination,
   Popover,
@@ -22,11 +21,7 @@ import type { ColumnsType } from "antd/es/table";
 import {
   CaretDownOutlined,
   CaretRightOutlined,
-  ClearOutlined,
-  DeleteOutlined,
-  FileTextOutlined,
   InfoCircleOutlined,
-  MoreOutlined,
   PlusOutlined,
   RedoOutlined,
   ReloadOutlined,
@@ -658,7 +653,8 @@ export function TaskListPage() {
     {
       title: "操作",
       key: "actions",
-      width: 190,
+      // 260 容不下删除失败重试入口（约 276px），280 保证任何状态下操作都单行平铺不换行。
+      width: 280,
       align: "right",
       fixed: "right",
       render: (_, record) => {
@@ -670,20 +666,33 @@ export function TaskListPage() {
         const deleteError = deleteErrors[record.task_id];
         return (
           <Space size={0} wrap className="task-table-actions">
-            {/* 行内常驻操作只有详情；报告在行 hover / 键盘聚焦时显示，其余动作收进 ⋯ 菜单（FR-008、R5） */}
+            {/* 行内操作全部平铺常驻，不再收进 ⋯ 菜单（2026-10-13 修订）；重建与删除保留二次确认（FR-012、FR-026）。 */}
             <Button type="link" size="small" onClick={() => navigate(`/tasks/${record.task_id}`)}>
               详情
             </Button>
-            {!isFailed && (
+            {isFailed ? (
+              <Button type="link" size="small" onClick={openLogs}>
+                失败日志
+              </Button>
+            ) : (
               <Button
                 type="link"
                 size="small"
-                className="task-table-action-reveal"
                 disabled={!canReport}
                 title={canReport ? undefined : "任务执行中不可查看报告"}
                 onClick={openReport}
               >
                 报告
+              </Button>
+            )}
+            {canRebuild && (
+              <Button
+                type="link"
+                size="small"
+                danger
+                onClick={() => confirmRebuild(record.task_id)}
+              >
+                重建
               </Button>
             )}
             {deleteError && (
@@ -705,43 +714,23 @@ export function TaskListPage() {
                 </Button>
               </Popover>
             )}
-            <Dropdown
-              menu={{
-                items: [
-                  isFailed
-                    ? { key: "logs", label: "失败日志", icon: <FileTextOutlined /> }
-                    : {
-                        key: "report",
-                        label: "报告",
-                        icon: <FileTextOutlined />,
-                        disabled: !canReport,
-                      },
-                  ...(canRebuild
-                    ? [{ key: "rebuild", label: "重建", danger: true, icon: <ClearOutlined /> }]
-                    : []),
-                  { type: "divider" as const },
-                  { key: "delete", label: "删除", danger: true, icon: <DeleteOutlined /> },
-                ],
-                onClick: ({ key }) => {
-                  if (key === "logs") openLogs();
-                  if (key === "report") openReport();
-                  if (key === "rebuild") confirmRebuild(record.task_id);
-                  if (key === "delete") {
-                    modal.confirm({
-                      title: "删除任务（含现场数据）？",
-                      content: "删除后无法恢复。",
-                      okText: "删除",
-                      okButtonProps: { danger: true },
-                      cancelText: "取消",
-                      onOk: () => remove(record.task_id),
-                    });
-                  }
-                },
+            <Button
+              type="link"
+              size="small"
+              danger
+              onClick={() => {
+                modal.confirm({
+                  title: "删除任务（含现场数据）？",
+                  content: "删除后无法恢复。",
+                  okText: "删除",
+                  okButtonProps: { danger: true },
+                  cancelText: "取消",
+                  onOk: () => remove(record.task_id),
+                });
               }}
-              trigger={["click"]}
             >
-              <Button aria-label="更多操作" type="text" size="small" icon={<MoreOutlined />} />
-            </Dropdown>
+              删除
+            </Button>
           </Space>
         );
       },
@@ -849,7 +838,7 @@ export function TaskListPage() {
                   />
                 ),
               }}
-              scroll={{ x: 1250 }}
+              scroll={{ x: 1530 }}
             />
           )}
 

@@ -609,18 +609,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 操作分层：常驻只有详情，报告在行 hover / 键盘聚焦时显示（FR-008、R5） */
-.task-table-action-reveal {
-  opacity: 0;
-  transition: opacity 0.12s ease-in-out;
-}
-
-.task-table .ant-table-row:hover .task-table-action-reveal,
-.task-table .ant-table-row:focus-within .task-table-action-reveal,
-.task-table-action-reveal:focus-visible {
-  opacity: 1;
-}
-
 /* 超长任务名截断，完整值通过 title / Tooltip 获取（FR-027） */
 .task-table-name {
   display: inline-block;
@@ -955,8 +943,7 @@
 
 /* 键盘可见焦点（FR-015、contracts §7） */
 .copy-text-button-trigger:focus-visible,
-.density-segmented-option:focus-visible,
-.task-table-action-reveal:focus-visible {
+.density-segmented-option:focus-visible {
   outline: 2px solid #1677ff;
   outline-offset: 2px;
 }
