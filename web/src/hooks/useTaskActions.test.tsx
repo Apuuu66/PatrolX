@@ -44,7 +44,7 @@ describe("useTaskActions", () => {
     });
 
     await waitFor(() => expect(screen.getByText(/磁盘现场已清理，无法重跑/)).toBeTruthy());
-    expect(screen.getByText(/重新上传同名且校验和一致的原始包/)).toBeTruthy();
+    expect(screen.getByText(/重新上传同名数据包/)).toBeTruthy();
     expect(screen.getByText(/核心数据仍可在界面查询/)).toBeTruthy();
     expect(reload).not.toHaveBeenCalled();
   });
@@ -64,7 +64,7 @@ describe("useTaskActions", () => {
     });
 
     await waitFor(() => expect(screen.getByText(/磁盘现场已清理，无法重建/)).toBeTruthy());
-    expect(screen.getByText(/重新上传同名且校验和一致的原始包/)).toBeTruthy();
+    expect(screen.getByText(/重新上传同名数据包/)).toBeTruthy();
   });
 
   it("其他错误仍以轻量提示反馈", async () => {
@@ -77,7 +77,7 @@ describe("useTaskActions", () => {
     });
 
     await waitFor(() => expect(screen.getByText("任务正在执行中")).toBeTruthy());
-    expect(screen.queryByText(/重新上传同名且校验和一致的原始包/)).toBeNull();
+    expect(screen.queryByText(/重新上传同名数据包/)).toBeNull();
   });
   it("设备 ID 不在台账时保留服务端拒绝消息且不刷新任务数据", async () => {
     updateTaskDeviceId.mockRejectedValue(

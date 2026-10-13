@@ -8,7 +8,7 @@ import type { Page } from "@playwright/test";
  * 034 磁盘留存治理端到端场景。
  *
  * 由 `playwright.retention.config.ts` 在独立后端（e2e/.tmp-retention、8011/5184）运行，
- * 该后端只播种 51 个留存任务，因此"仅留最近 50 个现场"、清理后仍可查、重传恢复
+ * 该后端只播种 51 个留存任务，因此"仅留最近 50 个现场"、清理后仍可查、重传覆盖重建
  * 三类断言可以精确复现，不受默认套件其他用例触发的全局清理影响。
  */
 
@@ -140,7 +140,7 @@ test("报告与执行日志在磁盘现场缺失时给出明确提示，不静�
   const reportAlert = page.getByTestId("report-scene-cleaned");
   await expect(reportAlert).toBeVisible();
   await expect(reportAlert).toContainText("报告已随磁盘现场清理，不可查看");
-  await expect(reportAlert).toContainText("重新上传同名且校验和一致的原始包可恢复磁盘现场");
+  await expect(reportAlert).toContainText("重新上传同名数据包将提示覆盖并全量重建");
 
   // 独立报告页同样不展示空白报告。
   await page.goto(`/tasks/${CLEANED_TASK_ID}/report`);
@@ -166,7 +166,7 @@ test("重跑与重建在磁盘现场缺失时拒绝执行并给出恢复指引",
     page.locator(".ant-modal-confirm-title", { hasText: "磁盘现场已清理" }),
   ).toBeVisible();
   await expect(page.locator(".ant-modal-confirm-content")).toContainText(
-    "重新上传同名且校验和一致的原始包",
+    "重新上传同名数据包",
   );
 
   // 拒绝后不进入队列：任务状态仍是已完成。
@@ -175,44 +175,46 @@ test("重跑与重建在磁盘现场缺失时拒绝执行并给出恢复指引",
   expect((await statusResponse.json()).status).toBe("completed");
 });
 
-test("重传同名且校验和一致的原始包可恢复现场，内容不一致仍被拒绝", async ({ page }) => {
+test("重传同名包提示覆盖，确认后清空旧任务并全量重建", async ({ page }) => {
+  test.setTimeout(120_000);
   const buffer = readFileSync(SOURCE_PACKAGE);
-  const restoredPackage = path.join(E2E_DIR, "uploads", CLEANED_TASK_ID, report.package_file);
+  const rebuiltPackage = path.join(E2E_DIR, "uploads", CLEANED_TASK_ID, report.package_file);
+  const rebuiltOutput = path.join(E2E_DIR, "output", CLEANED_TASK_ID);
 
-  // 同名同 checksum：写回原始包恢复现场，返回 202 并打开已有任务（不自动重跑）。
+  // 确认前不得删除既有任务，也不得改动磁盘现场。
+  const mutations: string[] = [];
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (request.method() === "DELETE" && pathname === `/api/v2/tasks/${CLEANED_TASK_ID}`) {
+      mutations.push("delete");
+    }
+    if (request.method() === "POST" && pathname === "/api/v3/tasks") {
+      mutations.push("create");
+    }
+  });
+
   const input = await openUpload(page);
   await input.setInputFiles({ name: report.package_file, mimeType: "application/zip", buffer });
   await fillInspectionMetadata(page);
-  const restoreResponsePromise = page.waitForResponse(
+  await page.getByRole("button", { name: /提交巡检|覆盖并重建/ }).click();
+
+  const confirm = page.locator(".ant-modal-confirm");
+  await expect(confirm).toContainText("覆盖同名任务并全量重建？");
+  await expect(confirm).toContainText("原数据包与巡检结果会被清除");
+  expect(mutations).toEqual([]);
+  expect(existsSync(rebuiltPackage)).toBe(false);
+  expect(existsSync(rebuiltOutput)).toBe(false);
+
+  // 确认后先删除旧任务，再用当前数据包从零重建（以本次重建结果为准）。
+  const rebuildResponsePromise = page.waitForResponse(
     (response) => response.request().method() === "POST" && isRequestTo(response, "/api/v3/tasks"),
   );
-  await page.getByRole("button", { name: "提交巡检" }).click();
-  const restoreResponse = await restoreResponsePromise;
-  expect(restoreResponse.status()).toBe(202);
+  await confirm.getByRole("button", { name: "覆盖并重建" }).click();
+  const rebuildResponse = await rebuildResponsePromise;
+  expect(rebuildResponse.status()).toBe(202);
+
+  await expect(page.locator(".ant-message").getByText("已覆盖同名数据包，开始全量重建")).toBeVisible();
   await page.waitForURL(new RegExp(`/tasks/${CLEANED_TASK_ID}$`));
-
-  await expect.poll(() => existsSync(restoredPackage)).toBe(true);
-  // 恢复只写回原始包：输出目录仍需显式重跑/重建。
-  expect(existsSync(path.join(E2E_DIR, "output", CLEANED_TASK_ID))).toBe(false);
-
-  // 同名但 checksum 不同：409 冲突，且不覆盖已恢复的现场。
-  const conflictInput = await openUpload(page);
-  await conflictInput.setInputFiles({
-    name: report.package_file,
-    mimeType: "application/zip",
-    buffer: Buffer.concat([buffer, Buffer.from("x")]),
-  });
-  await fillInspectionMetadata(page);
-  const conflictResponsePromise = page.waitForResponse(
-    (response) => response.request().method() === "POST" && isRequestTo(response, "/api/v3/tasks"),
-  );
-  await page.getByRole("button", { name: "提交巡检" }).click();
-  const conflictResponse = await conflictResponsePromise;
-  expect(conflictResponse.status()).toBe(409);
-  expect((await conflictResponse.json()).code).toBe("package_checksum_conflict");
-
-  const conflict = page.locator('[data-testid="upload-conflict"]');
-  await expect(conflict).toBeVisible();
-  await expect(conflict).toContainText("checksum");
-  expect(readFileSync(restoredPackage)).toEqual(buffer);
+  await expect.poll(() => existsSync(rebuiltPackage), { timeout: 15_000 }).toBe(true);
+  await expect.poll(() => existsSync(rebuiltOutput), { timeout: 60_000 }).toBe(true);
 });

@@ -69,7 +69,7 @@ def test_rerun_returns_scene_cleaned_and_does_not_queue(monkeypatch, tmp_path: P
 
     response = client.post(f"/api/v2/tasks/{task_id}/rerun", json={})
 
-    body = _assert_scene_cleaned(response, "重新上传同名且校验和一致")
+    body = _assert_scene_cleaned(response, "重新上传同名数据包")
     assert body["detail"] is not None or body["message"]
     after = client.get(f"/api/v2/tasks/{task_id}").json()
     assert after["status"] == "completed", "拒绝重跑不得把任务改成排队/运行中"
@@ -85,7 +85,7 @@ def test_rebuild_returns_scene_cleaned_and_does_not_queue(monkeypatch, tmp_path:
 
     response = client.post(f"/api/v2/tasks/{task_id}/rebuild", json=REBUILD_BODY)
 
-    _assert_scene_cleaned(response, "重新上传同名且校验和一致")
+    _assert_scene_cleaned(response, "重新上传同名数据包")
     after = client.get(f"/api/v2/tasks/{task_id}").json()
     assert after["status"] == "completed"
     assert after["last_run_at"] == before["last_run_at"]

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # 场景：default 使用 .tmp/8010 承载既有用例；retention 使用独立数据根、数据库与端口，
-# 只播种 51 个留存任务，保证"仅留最近 50 个现场"与恢复现场断言不受其他用例清理影响。
+# 只播种 51 个留存任务，保证"仅留最近 50 个现场"与重传覆盖重建断言不受其他用例清理影响。
 SCENARIO="${PATROLX_E2E_SCENARIO:-default}"
 if [ "$SCENARIO" = "retention" ]; then
   E2E_DIR="${PATROLX_E2E_DIR:-$ROOT_DIR/web/e2e/.tmp-retention}"

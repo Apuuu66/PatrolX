@@ -39,7 +39,7 @@ from app.services.store import save_rule_result, save_system, save_task_meta
 from tests.fixtures.make_real_package import build_real_package
 
 TASK_COUNT = 51
-# 最旧任务：留存清理的唯一牺牲者，也是恢复现场 E2E 的目标任务。
+# 最旧任务：留存清理的唯一牺牲者，也是重传覆盖重建 E2E 的目标任务。
 CLEANED_INDEX = 1
 BASE_CREATED_AT = datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
 KPI_RULE_CODE = "kpi.measurement_units"
