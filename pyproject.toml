@@ -31,6 +31,9 @@ dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.27"]
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["."]
+# pytest 默认 norecursedirs 含 build，会让 tests/build 静默游离在门禁之外；
+# 这里保留其余默认项，仅放开 build，确保构建器测试进入 python build.py test。
+norecursedirs = ["*.egg", ".*", "_darcs", "CVS", "dist", "node_modules", "venv", "{arch}"]
 
 [tool.ruff]
 line-length = 120

@@ -58,13 +58,24 @@ def test_backend_rejects_invalid_install_marker(tmp_path: Path) -> None:
         build.ensure_backend(context)
 
 
-def test_backend_rejects_stale_lock(tmp_path: Path) -> None:
-    context = make_context(tmp_path)
+def _rewrite_state(tmp_path: Path, **overrides: str) -> None:
     state_path = _venv_dir(tmp_path) / build.VENV_STATE_FILE
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    state["lock_sha256"] = "not-current"
+    state.update(overrides)
     state_path.write_text(json.dumps(state), encoding="utf-8")
-    with pytest.raises(build.BuildError, match="当前锁文件或 Python 版本不匹配"):
+
+
+def test_backend_rejects_stale_lock(tmp_path: Path) -> None:
+    context = make_context(tmp_path)
+    _rewrite_state(tmp_path, lock_sha256="not-current")
+    with pytest.raises(build.BuildError, match="与当前锁文件不匹配"):
+        build.ensure_backend(context)
+
+
+def test_backend_rejects_recorded_python_mismatch(tmp_path: Path) -> None:
+    context = make_context(tmp_path)
+    _rewrite_state(tmp_path, python="3.11")
+    with pytest.raises(build.BuildError, match="与当前 Python 版本不匹配"):
         build.ensure_backend(context)
 
 

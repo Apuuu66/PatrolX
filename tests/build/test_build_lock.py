@@ -82,8 +82,18 @@ def test_strip_extra_marker_keeps_platform_conditions() -> None:
 
 
 def test_lock_can_refresh_after_lock_changes(tmp_path: Path) -> None:
-    runner = FakeRunner(callback=lambda command, cwd: None)
+    def create_report(command: list[str], cwd: Path | None) -> None:
+        report_path = Path(command[command.index("--report") + 1])
+        report_path.write_text(
+            json.dumps({"install": [{"metadata": {"name": "pytest", "version": "9.1.1"}}]}),
+            encoding="utf-8",
+        )
+
+    runner = FakeRunner(callback=create_report)
     context = make_context(tmp_path, runner)
     (tmp_path / "requirements-lock.txt").write_text("pytest==9.1.0\n", encoding="utf-8")
     assert build.cmd_lock(context) == 0
     assert len(runner.commands()) == 3
+    refreshed = (tmp_path / "requirements-lock.txt").read_text(encoding="utf-8")
+    assert "pytest==9.1.1" in refreshed
+    assert "pytest==9.1.0" not in refreshed
