@@ -1,10 +1,10 @@
 import { Alert, Breadcrumb, Button, Card } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { reportUrl } from "../api/http";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { TaskStatusTag } from "../components/StatusBadge";
 import { TaskMetaPanel } from "../components/task-detail/TaskMetaPanel";
+import { TaskReportContent } from "../components/task-detail/TaskReportPanel";
 import { useTaskDetailData } from "../hooks/useTaskDetailData";
 
 export function ReportPage() {
@@ -90,7 +90,7 @@ export function ReportPage() {
         <TaskMetaPanel task={task} system={system} />
       </Card>
       <Card title="巡检报告" styles={{ body: { padding: 0 } }}>
-        <iframe src={reportUrl(taskId)} title="巡检报告" className="report-page-frame" />
+        <TaskReportContent taskId={taskId} frameClassName="report-page-frame" />
       </Card>
     </div>
   );

@@ -594,7 +594,8 @@
   max-width: 100%;
 }
 
-.task-table-time .ant-typography {
+.task-table-time-line.ant-typography,
+.task-table-duration.ant-typography {
   font-size: var(--font-size-caption);
   white-space: nowrap;
 }

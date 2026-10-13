@@ -48,6 +48,27 @@ describe("loadTaskDetailData", () => {
     assert.equal(result.logs.message, "日志不可用");
   });
 
+  it("保留现场已清理错误的错误码与状态码，供界面展示恢复建议", async () => {
+    const sceneCleaned = Object.assign(new Error("执行日志不入库，已随磁盘现场清理，不可查看"), {
+      code: "scene_cleaned",
+      status: 410,
+    });
+
+    const result = await loadTaskDetailData("task-1", {
+      ...dependencies,
+      getLogs: async () => {
+        throw sceneCleaned;
+      },
+    });
+
+    assert.equal(result.logs.status, "error");
+    assert.equal(result.logs.message, "执行日志不入库，已随磁盘现场清理，不可查看");
+    if (result.logs.status === "error") {
+      assert.equal(result.logs.code, "scene_cleaned");
+      assert.equal(result.logs.statusCode, 410);
+    }
+  });
+
   it("任务失败时返回可区分的错误并保留其他请求结果", async () => {
     const result = await loadTaskDetailData("task-1", {
       ...dependencies,

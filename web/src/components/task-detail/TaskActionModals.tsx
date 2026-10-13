@@ -56,12 +56,14 @@ type DeviceModalProps = {
   open: boolean;
   value: string;
   saving: boolean;
+  /** 服务端拒绝原因（例如设备 ID 不在台账）；为空表示无错误。 */
+  error?: string | null;
   onChange: (value: string) => void;
   onCancel: () => void;
   onSave: () => void;
 };
 
-export function DeviceModal({ open, value, saving, onChange, onCancel, onSave }: DeviceModalProps) {
+export function DeviceModal({ open, value, saving, error, onChange, onCancel, onSave }: DeviceModalProps) {
   return (
     <Modal
       title="修改设备 ID"
@@ -77,8 +79,18 @@ export function DeviceModal({ open, value, saving, onChange, onCancel, onSave }:
         maxLength={128}
         allowClear
         placeholder="输入设备 ID"
+        status={error ? "error" : undefined}
         onChange={(event) => onChange(event.target.value)}
       />
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginTop: 12 }}
+          data-testid="device-id-error"
+          message={error}
+        />
+      )}
     </Modal>
   );
 }

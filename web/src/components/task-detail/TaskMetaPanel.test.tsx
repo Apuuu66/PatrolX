@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskSummary } from "../../api/http";
 import { TaskMetaPanel } from "./TaskMetaPanel";
@@ -47,6 +47,51 @@ describe("TaskMetaPanel", () => {
 
     expect(screen.getByText("manual-001")).toBeTruthy();
     expect(screen.queryByText("（台账解析）")).toBeNull();
+  });
+
+  it("展示最后一次运行时间与任务时长，且创建时间独立", () => {
+    render(
+      <TaskMetaPanel
+        task={makeTask({
+          created_at: "2026-10-08T02:00:00Z",
+          last_run_at: "2026-10-09T03:00:00Z",
+          duration_ms: 95_000,
+        })}
+        system={null}
+      />,
+    );
+
+    const panel = screen.getByTestId("task-meta-panel");
+    const value = (label: string) =>
+      within(panel)
+        .getByText(label)
+        .closest(".ant-descriptions-item")
+        ?.querySelector(".ant-descriptions-item-content")?.textContent ?? "";
+
+    expect(value("任务时长")).toBe("1 分 35 秒");
+    // 创建时间与最后运行时间是两个独立字段，均按本地时区完整展示
+    expect(value("创建时间")).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(value("最后运行时间")).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(value("最后运行时间")).not.toBe(value("创建时间"));
+  });
+
+  it("从未运行任务不展示误导性时长数值", () => {
+    render(
+      <TaskMetaPanel
+        task={makeTask({ status: "pending", completed_at: null, last_run_at: null, duration_ms: null })}
+        system={null}
+      />,
+    );
+
+    const panel = screen.getByTestId("task-meta-panel");
+    const value = (label: string) =>
+      within(panel)
+        .getByText(label)
+        .closest(".ant-descriptions-item")
+        ?.querySelector(".ant-descriptions-item-content")?.textContent ?? "";
+
+    expect(value("任务时长")).toBe("-");
+    expect(value("最后运行时间")).toBe("-");
   });
 
   it("管理员编辑设备 ID 时使用手工值而不是台账名称", () => {

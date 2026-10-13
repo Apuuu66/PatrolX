@@ -207,6 +207,69 @@ describe("TaskListPage", () => {
       document.querySelector(".ant-segmented-item-selected")?.textContent,
     ).toBe("失败");
   });
+  it("列表展示最近一次运行时间与任务时长", async () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [
+        makeTask({
+          task_id: "ran",
+          last_run_at: twoHoursAgo,
+          duration_ms: 95_000,
+        }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("ran")).toBeDefined();
+    });
+    const row = document.querySelector<HTMLTableRowElement>(".ant-table-tbody > tr.ant-table-row");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByTestId("task-last-run").textContent).toBe("2 小时前");
+    expect(within(row as HTMLElement).getByTestId("task-duration").textContent).toBe("1 分 35 秒");
+  });
+
+  it("运行中任务只显示运行中，从不运行任务显示占位", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [
+        makeTask({
+          task_id: "running",
+          status: "running",
+          completed_at: null,
+          last_run_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+          duration_ms: null,
+        }),
+        makeTask({
+          task_id: "never-run",
+          status: "pending",
+          completed_at: null,
+          last_run_at: null,
+          duration_ms: null,
+        }),
+      ],
+      total: 2,
+      page: 1,
+      page_size: 10,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("running")).toBeDefined();
+    });
+    const rows = Array.from(
+      document.querySelectorAll<HTMLTableRowElement>(".ant-table-tbody > tr.ant-table-row"),
+    );
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByTestId("task-duration").textContent).toBe("运行中");
+    expect(within(rows[0]).getByTestId("task-last-run").textContent).toBe("5 分钟前");
+    expect(within(rows[1]).getByTestId("task-duration").textContent).toBe("-");
+    expect(within(rows[1]).getByTestId("task-last-run").textContent).toBe("-");
+  });
 });
 
 async function openUploadModal() {

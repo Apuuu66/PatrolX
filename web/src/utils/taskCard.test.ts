@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { DictsResponse, TaskSummary } from "../api/http";
-import { formatTaskDuration, getTaskMetadataTags } from "./taskCard.ts";
+import { formatTaskDuration, getTaskDurationDisplay, getTaskMetadataTags } from "./taskCard.ts";
 
 function makeDicts(): DictsResponse {
   return {
@@ -39,6 +39,27 @@ describe("formatTaskDuration", () => {
   it("returns null for invalid or reversed times", () => {
     assert.equal(formatTaskDuration("invalid", "2026-09-13T00:01:30Z"), null);
     assert.equal(formatTaskDuration("2026-09-13T00:01:30Z", "2026-09-13T00:00:00Z"), null);
+  });
+});
+
+describe("getTaskDurationDisplay", () => {
+  it("已运行任务展示最近一次运行耗时", () => {
+    assert.equal(getTaskDurationDisplay(makeTask({ duration_ms: 95_000 })), "1 分 35 秒");
+  });
+
+  it("运行中任务只表明尚未结束，不展示上一次耗时", () => {
+    assert.equal(
+      getTaskDurationDisplay(makeTask({ status: "running", duration_ms: 95_000, completed_at: null })),
+      "运行中",
+    );
+  });
+
+  it("从未运行或尚未完成的任务返回占位符", () => {
+    assert.equal(
+      getTaskDurationDisplay(makeTask({ status: "pending", duration_ms: null, completed_at: null })),
+      "-",
+    );
+    assert.equal(getTaskDurationDisplay(makeTask({ duration_ms: null })), "-");
   });
 });
 

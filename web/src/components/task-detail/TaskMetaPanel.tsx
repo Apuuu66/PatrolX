@@ -2,6 +2,7 @@ import { Button, Descriptions, Space, Typography } from "antd";
 import dayjs from "dayjs";
 import type { SystemInspection, TaskSummary } from "../../api/http";
 import { getCustomerFields, getDeviceIdDisplay } from "../../utils/taskDisplay";
+import { getTaskDurationDisplay } from "../../utils/taskCard";
 
 type TaskMetaPanelProps = {
   task: TaskSummary;
@@ -17,7 +18,7 @@ export function TaskMetaPanel({ task, system, deviceEditable, onEditDevice }: Ta
   const manualDeviceId = (task.device_id ?? system?.customer?.device_id ?? "").trim();
 
   return (
-    <>
+    <div className="task-meta-panel" data-testid="task-meta-panel">
       <Descriptions
         size="small"
         column={4}
@@ -67,12 +68,24 @@ export function TaskMetaPanel({ task, system, deviceEditable, onEditDevice }: Ta
         items={[
           { key: "created_at", label: "创建时间", children: dayjs(task.created_at).format("YYYY-MM-DD HH:mm:ss") },
           {
+            // 创建时间固定为任务创建时刻，最后一次运行时间随每次运行更新（FR-008）
+            key: "last_run_at",
+            label: "最后运行时间",
+            children: task.last_run_at ? dayjs(task.last_run_at).format("YYYY-MM-DD HH:mm:ss") : "-",
+          },
+          {
+            // 时长取最近一次运行的起止耗时；运行中只表明尚未结束，未运行显示占位（FR-008、FR-009）
+            key: "duration",
+            label: "任务时长",
+            children: getTaskDurationDisplay(task),
+          },
+          {
             key: "completed_at",
             label: "完成时间",
             children: task.completed_at ? dayjs(task.completed_at).format("YYYY-MM-DD HH:mm:ss") : "-",
           },
         ]}
       />
-    </>
+    </div>
   );
 }

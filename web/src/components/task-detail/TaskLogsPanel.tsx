@@ -1,11 +1,12 @@
-import { Card, Empty, List, Space, Tag, Typography } from "antd";
+import { Alert, Card, Empty, List, Space, Tag, Typography } from "antd";
 import { LoadErrorState } from "../PageState";
 import dayjs from "dayjs";
 import type { LogEntry } from "../../api/http";
+import { isSceneCleaned, SCENE_CLEANED_ADVICE, type ResourceErrorState } from "../../utils/sceneError";
 
 type TaskLogsPanelProps = {
   logs: LogEntry[];
-  error: string | null;
+  error: ResourceErrorState | null;
   onRetry: () => void;
   retrying: boolean;
 };
@@ -14,7 +15,17 @@ export function TaskLogsPanel({ logs, error, onRetry, retrying }: TaskLogsPanelP
   return (
     <Card title="执行日志">
       {error ? (
-        <LoadErrorState description={error} onRetry={onRetry} retrying={retrying} />
+        isSceneCleaned(error) ? (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="logs-scene-cleaned"
+            message={error.message}
+            description={SCENE_CLEANED_ADVICE}
+          />
+        ) : (
+          <LoadErrorState description={error.message} onRetry={onRetry} retrying={retrying} />
+        )
       ) : logs.length === 0 ? (
         <Empty description="暂无日志" />
       ) : (

@@ -547,7 +547,7 @@ export interface paths {
         put?: never;
         /**
          * Create Task V3
-         * @description 创建 v3 任务；版本和设备身份不允许人工输入。
+         * @description 创建 v3 任务；版本和设备身份不允许人工输入。同名任务已存在时按校验和幂等处理：现场包存在则与现场文件比对；现场已按留存策略清理则与首次接收记录的校验和比对，一致时写回原始包恢复现场并返回 202（不自动重跑），不一致返回 409 package_checksum_conflict。
          */
         post: operations["createTaskV3"];
         delete?: never;
@@ -868,6 +868,10 @@ export interface components {
             system?: components["schemas"]["SystemInspection"] | null;
             package_kind?: components["schemas"]["PackageKind"] | null;
             inventory?: components["schemas"]["TaskInventory"] | null;
+            /** Last Run At */
+            last_run_at?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
         };
         /** InspectorInfo */
         InspectorInfo: {
@@ -2136,6 +2140,10 @@ export interface components {
             system?: components["schemas"]["SystemInspection"] | null;
             package_kind?: components["schemas"]["PackageKind"] | null;
             inventory?: components["schemas"]["TaskInventory"] | null;
+            /** Last Run At */
+            last_run_at?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
             /** Device Id */
             device_id?: string | null;
             /** Customer Province */
@@ -2793,6 +2801,13 @@ export interface operations {
                     "application/json": components["schemas"]["TaskSummary"];
                 };
             };
+            /** @description 设备 ID 不存在于设备台账（device_not_found） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3000,6 +3015,13 @@ export interface operations {
                     "application/json": components["schemas"]["TaskCreated"];
                 };
             };
+            /** @description 任务现场已按留存策略清理（scene_cleaned），需重新上传同名且校验和一致的原始包恢复现场后重跑 */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3035,6 +3057,13 @@ export interface operations {
                     "application/json": components["schemas"]["TaskCreated"];
                 };
             };
+            /** @description 任务现场已按留存策略清理（scene_cleaned），需重新上传同名且校验和一致的原始包恢复现场后重建 */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3066,6 +3095,13 @@ export interface operations {
                     "text/html": string;
                 };
             };
+            /** @description 任务现场已按留存策略清理（scene_cleaned），报告已随现场清理不可查看 */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3096,6 +3132,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TaskLogs"];
                 };
+            };
+            /** @description 任务现场已按留存策略清理（scene_cleaned），执行日志不入库且已随现场清理 */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3392,6 +3435,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TaskCreated"];
                 };
+            };
+            /** @description 同名任务已存在且数据包校验和与首次接收记录不一致（package_checksum_conflict） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

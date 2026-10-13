@@ -47,7 +47,7 @@ export function TaskDetailPage() {
   const system = data?.system.status === "ready" ? data.system.data : null;
   const systemError = data?.system.status === "error" ? data.system.message : null;
   const logEntries = data?.logs.status === "ready" ? data.logs.data : [];
-  const logError = data?.logs.status === "error" ? data.logs.message : null;
+  const logError = data?.logs.status === "error" ? data.logs : null;
   const hidden = data?.hiddenRuleCodes ?? new Set<string>();
 
   const actions = useTaskActions(taskId, reload);
@@ -297,6 +297,7 @@ export function TaskDetailPage() {
         open={actions.device.open}
         value={actions.device.value}
         saving={actions.device.saving}
+        error={actions.device.error}
         onChange={actions.device.setValue}
         onCancel={actions.device.closeModal}
         onSave={() => void actions.device.save()}

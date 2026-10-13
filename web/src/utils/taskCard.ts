@@ -1,4 +1,5 @@
 import type { DictsResponse, TaskSummary } from "../api/http";
+import { formatDurationMs } from "./timeDisplay.ts";
 
 export interface TaskMetadataTag {
   key: "province" | "operator" | "product" | "version" | "device_id";
@@ -21,19 +22,17 @@ export function formatTaskDuration(created_at: string, completed_at?: string | n
   const start = new Date(created_at).getTime();
   const end = completed_at ? new Date(completed_at).getTime() : Number.NaN;
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return formatDurationMs(end - start);
+}
 
-  const totalSeconds = Math.floor((end - start) / 1000);
-  if (totalSeconds < 1) return "<1 秒";
-  if (totalSeconds < 60) return `${totalSeconds} 秒`;
-
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (days > 0) return `${days} 天 ${hours} 小时`;
-  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`;
-  return `${minutes} 分 ${seconds} 秒`;
+/**
+ * 任务时长展示文案（FR-008、FR-009、SC-004）：
+ * 已运行任务展示最近一次运行的耗时；运行中只表明尚未结束，不回退展示上一次耗时；
+ * 从未运行或尚未完成的任务返回占位符，避免误导性数值。
+ */
+export function getTaskDurationDisplay(task: Pick<TaskSummary, "status" | "duration_ms">): string {
+  if (task.status === "running") return "运行中";
+  return formatDurationMs(task.duration_ms) ?? "-";
 }
 
 export function getTaskMetadataTags(

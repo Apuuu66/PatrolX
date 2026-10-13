@@ -5,10 +5,11 @@ import type {
   TaskSummary,
 } from "../api/http.ts";
 import { api } from "../api/http.ts";
+import { toResourceError, type ResourceErrorState } from "../utils/sceneError.ts";
 
 export type ResourceState<T> =
   | { status: "ready"; data: T }
-  | { status: "error"; message: string };
+  | ({ status: "error" } & ResourceErrorState);
 
 export interface TaskDetailData {
   task: ResourceState<TaskSummary>;
@@ -31,11 +32,8 @@ const defaultDependencies: TaskDetailDataDependencies = {
   getLogs: (taskId) => api.getTaskLogs(taskId),
 };
 
-function toErrorState(error: unknown): { status: "error"; message: string } {
-  return {
-    status: "error",
-    message: error instanceof Error ? error.message : "加载失败",
-  };
+function toErrorState(error: unknown): { status: "error" } & ResourceErrorState {
+  return { status: "error", ...toResourceError(error) };
 }
 
 export type TaskDetailLoadScope = "full" | "refresh";

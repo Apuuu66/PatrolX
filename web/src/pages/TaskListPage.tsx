@@ -51,7 +51,7 @@ import { TaskStatusTag } from "../components/StatusBadge";
 import { StatusDistribution } from "../components/StatusDistribution";
 import { MetadataList } from "../components/MetadataList";
 import { usePolling } from "../hooks/usePolling";
-import { formatTaskDuration, getTaskMetadataTags } from "../utils/taskCard";
+import { getTaskDurationDisplay, getTaskMetadataTags } from "../utils/taskCard";
 import { getTaskFailureReason, sortTasksForList } from "../utils/taskListSort";
 import {
   OVERVIEW_METRICS,
@@ -604,35 +604,56 @@ export function TaskListPage() {
       ),
     },
     {
-      title: "时间与耗时",
-      key: "timeline",
-      width: 190,
+      title: "创建时间",
+      key: "created_at",
+      width: 120,
       render: (_, record) => {
-        // 耗时为主信息，创建 / 完成为相对时间次要信息；完整时间走 Tooltip（FR-006、FR-007）。
-        const duration = formatTaskDuration(record.created_at, record.completed_at);
         const created = getRelativeTimeDisplay(record.created_at);
-        const completed = getRelativeTimeDisplay(record.completed_at);
-        const durationText = duration ?? (record.status === "pending" ? "排队中" : "进行中");
         return (
-          <Flex vertical gap={2} className={`task-table-time ${TABULAR_NUMERIC_CLASS}`}>
-            <Typography.Text className="task-table-duration" data-testid="task-duration">
-              耗时 {durationText}
+          <Tooltip title={created.title || undefined}>
+            <Typography.Text
+              type="secondary"
+              className={`task-table-time-line ${TABULAR_NUMERIC_CLASS}`}
+              data-testid="task-created-at"
+            >
+              {created.text}
             </Typography.Text>
-            <Tooltip title={created.title || undefined}>
-              <Typography.Text type="secondary" className="task-table-time-line">
-                创建 {created.text}
-              </Typography.Text>
-            </Tooltip>
-            {record.completed_at && (
-              <Tooltip title={completed.title || undefined}>
-                <Typography.Text type="secondary" className="task-table-time-line">
-                  完成 {completed.text}
-                </Typography.Text>
-              </Tooltip>
-            )}
-          </Flex>
+          </Tooltip>
         );
       },
+    },
+    {
+      title: "最后运行",
+      key: "last_run_at",
+      width: 130,
+      render: (_, record) => {
+        // 最后运行时间为最近一次运行的开始时刻，与创建时间相互独立；完整时间走 Tooltip（FR-008、FR-009）。
+        const lastRun = getRelativeTimeDisplay(record.last_run_at);
+        return (
+          <Tooltip title={lastRun.title || undefined}>
+            <Typography.Text
+              className={`task-table-time-line ${TABULAR_NUMERIC_CLASS}`}
+              data-testid="task-last-run"
+            >
+              {lastRun.text}
+            </Typography.Text>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: "任务时长",
+      key: "duration",
+      width: 130,
+      render: (_, record) => (
+        // 时长取最近一次运行；运行中不展示上一次耗时，未运行显示占位（FR-009、SC-004）。
+        <Typography.Text
+          className={`task-table-duration ${TABULAR_NUMERIC_CLASS}`}
+          data-testid="task-duration"
+        >
+          {getTaskDurationDisplay(record)}
+        </Typography.Text>
+      ),
     },
     {
       title: "操作",

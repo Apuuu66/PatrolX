@@ -193,7 +193,8 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+/** 统一附加会话头并映射错误响应；调用方只关心成功后的响应体。 */
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const token = getToken();
   if (token) {
@@ -248,8 +249,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       status: resp.status,
       duration_ms: durationMs,
     });
-    if (resp.status === 204) return undefined as T;
-    return (await resp.json()) as T;
+    return resp;
   } catch (error) {
     if (!(error instanceof ApiError)) {
       logger.error("API request network error", {
@@ -261,6 +261,18 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     }
     throw error;
   }
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const resp = await apiFetch(url, init);
+  if (resp.status === 204) return undefined as T;
+  return (await resp.json()) as T;
+}
+
+/** 报告以 HTML 原文返回，需要保留原始标记而不是解析为 JSON。 */
+async function requestText(url: string, init?: RequestInit): Promise<string> {
+  const resp = await apiFetch(url, init);
+  return resp.text();
 }
 
 export interface TaskListQuery {
@@ -580,6 +592,9 @@ export const api = {
 
   deleteUser: (username: string) =>
     request<void>(`${AUTH_BASE}/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
+
+  /** 读取巡检报告 HTML；现场已清理时抛出 410 scene_cleaned（FR-011）。 */
+  getTaskReportHtml: (taskId: string) => requestText(reportUrl(taskId)),
 };
 
 export const reportUrl = (taskId: string) => `${BASE}/tasks/${encodeURIComponent(taskId)}/report`;
