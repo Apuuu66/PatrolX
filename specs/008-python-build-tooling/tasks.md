@@ -154,6 +154,7 @@ description: "统一 Python 构建工具实现任务列表"
 - 2026-09-14：已在 macOS 完成 `install`、`lint`、`test`、`contract`、`gen-web-api`、`web-install`、`web-build`、`verify` 验证。
 - 2026-09-14：根据 Speckit 分析修复 `.venv` 标准安装健康标记；`lock` 改为在 pip 内覆盖目标平台 marker 环境，并从 `pyproject.toml` 重新生成精确锁；同步修正 T025 表述。本次修复后重新执行 macOS `install`、`lock --check`、构建测试、lint。
 - T039 保持未勾选：本次只完成 macOS 实测；Windows 和 Linux 人工验证仍未执行。
+- 2026-10-13：修复门禁盲区——pytest 默认 `norecursedirs` 含 `build`，`tests/build` 的 45 个用例从未进入 `python build.py test`。已在 `pyproject.toml` 覆盖 `norecursedirs`（保留其余默认项），并修复自 `0a6173d` 起失效的 3 个用例：锁文件 / Python 版本文案断言过期、跨平台锁刷新未写 pip 报告、本地残留 `uv.lock` 触发迁移断言（已删除本地残留文件）。`python build.py test` 现收集 681 个用例并全绿。
 
 ### T039 验证记录
 

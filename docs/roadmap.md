@@ -25,12 +25,14 @@ M5 主要能力已部分落地：
 - KPI 按需分类线索、动态口径配置中心、任务快照 v2。
 - 任务数据入库：SQLite 成为界面展示唯一来源（任务快照、规则结果、KPI 历史点），本地与在线模式共用发布路径。
 - 磁盘现场留存治理：`uploads/` 与 `output/` 只保留最近 50 个任务现场，清理后仍可从 DB 完整回溯。
+- 浏览器全流程回归：`python build.py e2e` 覆盖默认 57 个用例与留存治理 5 个用例。
+- 构建器测试进入默认门禁：`python build.py test` 覆盖 `tests/build` 用例。
 
 待补充：
 
-- 浏览器全流程回归。
 - 真实内网包格式持续对齐。
-- Docker 环境实际验证。
+- Docker 环境实际验证：`Dockerfile` 与 `docker-compose.yml` 已提供但无实测记录，待具备 Docker 的环境按 M5 验收执行一键启动验证。
+- Windows / Linux 构建验证：对应 [`specs/008-python-build-tooling/tasks.md`](../specs/008-python-build-tooling/tasks.md) 中 T039 的 `PENDING` 项，需在真实或受控的 Windows、Linux 环境记录 Python 版本与退出码。
 
 ## 迭代原则
 
