@@ -8,9 +8,9 @@ export interface ResourceErrorState {
 
 export const SCENE_CLEANED_CODE = "scene_cleaned";
 
-/** 现场缺失时的后续建议：核心数据可查 + 重传同名包恢复现场。 */
+/** 现场缺失时的后续建议：核心数据可查 + 重传同名包将提示覆盖并全量重建。 */
 export const SCENE_CLEANED_ADVICE =
-  "任务详情、规则结果与 KPI 等核心数据仍可在界面查询；重新上传同名且校验和一致的原始包可恢复磁盘现场。";
+  "任务详情、规则结果与 KPI 等核心数据仍可在界面查询；重新上传同名数据包将提示覆盖并全量重建。";
 
 export function toResourceError(error: unknown, fallback = "加载失败"): ResourceErrorState {
   if (error !== null && typeof error === "object" && "message" in error) {

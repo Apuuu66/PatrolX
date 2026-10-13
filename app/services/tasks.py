@@ -38,8 +38,8 @@ from app.services.store import append_log, load_task_meta, write_json_atomic
 
 logger = get_logger("patrolx.tasks")
 NOW = datetime.now
-SCENE_CLEANED_MESSAGE = "任务现场已按留存策略清理，需重新上传同名且校验和一致的原始包恢复现场后执行"
-PACKAGE_MISSING_MESSAGE = "原始上传包缺失或为空，需重新上传同名且校验和一致的原始包恢复现场后执行"
+SCENE_CLEANED_MESSAGE = "任务现场已按留存策略清理，需重新上传同名数据包，确认覆盖后全量重建"
+PACKAGE_MISSING_MESSAGE = "原始上传包缺失或为空，需重新上传同名数据包，确认覆盖后全量重建"
 
 
 class TaskDeleteError(Exception):
