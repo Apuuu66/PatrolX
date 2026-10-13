@@ -409,7 +409,7 @@ inventory_change_audits                    # 覆盖、重建和变更审计
 | --- | --- | --- | --- |
 | `last_run_at` | DateTime(timezone) | 是 | 最近一次运行的开始时刻；每次运行开始时写入 |
 | `duration_ms` | Integer | 是 | 最近一次运行的耗时（毫秒）；仅终态写入 |
-| `package_checksum` | String(64) | 是 | 系统首次接收原始包的 SHA-256，作为恢复现场与冲突判定依据 |
+| `package_checksum` | String(64) | 是 | 系统首次接收原始包的 SHA-256，作为创建接口同名兜底恢复与冲突判定依据（界面重传走覆盖重建，不依赖该字段） |
 | `preparation` | JSON | 是 | 任务数据准备摘要（`DataPreparation` 契约快照），终态写入 |
 
 迁移方式沿用 `_ensure_task_columns` 的 `ALTER TABLE ADD COLUMN`；旧行新列全部为 NULL。
@@ -426,7 +426,7 @@ inventory_change_audits                    # 覆盖、重建和变更审计
 ### 13.4 留存与恢复
 
 - 保留集合 = 按 `COALESCE(last_run_at, created_at)` 倒序前 50 个任务 ∪ 全部 `pending`/`running` 任务。
-- 触发时机：每次任务终态发布完成后（完成/失败/重跑/重建/单规则重跑）；恢复上传不触发。
+- 触发时机：每次任务终态发布完成后（完成/失败/重跑/重建/单规则重跑）；创建接口的兜底恢复上传不触发。
 - 清理只删磁盘，不改动 DB；`uploads/` 根目录中可派生已知 task_id 的散包同样纳入清理，未消费散包与未知目录不删除。
-- 重传同名且 checksum 一致的原始包 → `202` + `Location`，只恢复 `uploads/<task_id>/` 现场，不自动重跑；checksum 不一致 → `409 package_checksum_conflict`。
+- 界面重传同名包先覆盖确认，确认后清空旧任务并用当前数据包全量重建；创建接口兜底矩阵：同名且 checksum 一致 → `202` + `Location`，只恢复 `uploads/<task_id>/` 现场、不自动重跑；checksum 不一致 → `409 package_checksum_conflict`。
 - 手动设备 ID（`reserve` 与 `PATCH /api/v2/tasks/{task_id}/device-id`）必须命中 `inventory_devices.device_id`，否则 `400 device_not_found` 且不写任务记录。

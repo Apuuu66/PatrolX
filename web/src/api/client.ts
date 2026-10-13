@@ -547,7 +547,7 @@ export interface paths {
         put?: never;
         /**
          * Create Task V3
-         * @description 创建 v3 任务；版本和设备身份不允许人工输入。同名任务已存在时按校验和幂等处理：现场包存在则与现场文件比对；现场已按留存策略清理则与首次接收记录的校验和比对，一致时写回原始包恢复现场并返回 202（不自动重跑），不一致返回 409 package_checksum_conflict。
+         * @description 创建 v3 任务；版本和设备身份不允许人工输入。同名任务已存在时按校验和幂等处理：现场包存在则与现场文件比对；现场已按留存策略清理则与首次接收记录的校验和比对，一致时写回原始包恢复现场并返回 202（不自动重跑），不一致返回 409 package_checksum_conflict。界面重传同名包采用"覆盖确认 + 全量重建"（先删除旧任务再创建），不依赖本接口的幂等恢复路径。
          */
         post: operations["createTaskV3"];
         delete?: never;
@@ -3015,7 +3015,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskCreated"];
                 };
             };
-            /** @description 任务现场已按留存策略清理（scene_cleaned），需重新上传同名且校验和一致的原始包恢复现场后重跑 */
+            /** @description 任务现场已按留存策略清理（scene_cleaned），需重新上传同名数据包，确认覆盖后全量重建 */
             410: {
                 headers: {
                     [name: string]: unknown;
@@ -3057,7 +3057,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskCreated"];
                 };
             };
-            /** @description 任务现场已按留存策略清理（scene_cleaned），需重新上传同名且校验和一致的原始包恢复现场后重建 */
+            /** @description 任务现场已按留存策略清理（scene_cleaned），需重新上传同名数据包，确认覆盖后全量重建 */
             410: {
                 headers: {
                     [name: string]: unknown;

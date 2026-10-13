@@ -87,24 +87,24 @@ description: "任务数据长期留存与磁盘现场治理 — 实现任务清�
 
 ## 阶段 4：用户故事 2 - 磁盘文件按策略自动受控（优先级：P1）
 
-**目标**：任务结束后自动清理，`uploads/` 与 `output/` 各只保留最近 50 个任务现场；现场缺失时给出明确提示；重传同名且校验和一致的包可恢复现场。
+**目标**：任务结束后自动清理，`uploads/` 与 `output/` 各只保留最近 50 个任务现场；现场缺失时给出明确提示；重传同名包先提示覆盖、确认后全量重建（2026-10-13 修订）。
 
-**独立测试**：构造超过 50 个任务（运行时间不同），完成留存清理后核对磁盘仅保留最近 50 个任务对应的文件，且被清理任务的界面数据完整；对被清理任务发起报告/日志/重跑/重建得到明确提示；重传同名同 checksum 包恢复现场、改一字节被拒绝。
+**独立测试**：构造超过 50 个任务（运行时间不同），完成留存清理后核对磁盘仅保留最近 50 个任务对应的文件，且被清理任务的界面数据完整；对被清理任务发起报告/日志/重跑/重建得到明确提示；重传同名包提示覆盖、确认后全量重建且不静默打开旧任务。
 
 ### 用户故事 2 的测试（先写测试并确认失败）
 
 - [x] T024 [P] [US2] 新增 `tests/test_retention.py`：51 个任务清理后仅留最近 50（按 `COALESCE(last_run_at, created_at)` 倒序）、恰好 50 个不清理、`pending`/`running` 全程豁免、从未运行任务按创建时间参与排序、删除失败不影响任务终态并记录日志、未知目录与未消费散包不删除（FR-004、FR-005、FR-006、SC-002、data-model §6）
-- [x] T025 [P] [US2] 新增 `tests/test_task_restore.py`：现场已清理 + 同名同 `package_checksum` 重传 → 写回 `uploads/<task_id>/<package_file>` 且返回 202 + Location、不重跑、不改历史数据；checksum 不一致 → 409 `package_checksum_conflict`；库中无 checksum 且无可读历史包 → 409 且消息说明无法校验（FR-013、SC-007、contracts/api-delta.md）
+- [x] T025 [P] [US2] 新增 `tests/test_task_restore.py`：现场已清理 + 同名同 `package_checksum` 重传 → 写回 `uploads/<task_id>/<package_file>` 且返回 202 + Location、不重跑、不改历史数据；checksum 不一致 → 409 `package_checksum_conflict`；库中无 checksum 且无可读历史包 → 409 且消息说明无法校验（FR-013、SC-007、contracts/api-delta.md；2026-10-13 修订：界面重传改为覆盖确认 + 全量重建，本用例继续覆盖创建接口兜底矩阵）
 - [x] T026 [P] [US2] 新增 `tests/test_tasks_scene_missing.py`：现场缺失时报告 → 410 `scene_cleaned`、日志 → 410 `scene_cleaned`、rerun / rebuild → 410 `scene_cleaned` 且不进入队列；任务不存在仍是 404 `not_found`；输出目录存在但包缺失保持 409 `package_missing`（FR-011、FR-012、SC-006、R8）
 
 ### 用户故事 2 的实现
 
 - [x] T027 [US2] 在 `app/services/tasks.py` 与 `app/cli.py` 的终态收尾（完成/失败/重跑/重建/单规则重跑）调用 `retention.cleanup`；清理失败只记日志、不改变任务终态、不阻塞发布（FR-004、FR-006、data-model §6、R6）
-- [x] T028 [US2] 改造 `app/api/router.py`：报告与日志接口现场缺失返回 410 `scene_cleaned`（消息区分报告已随现场清理 / 执行日志不入库）；rerun / rebuild 前置校验现场目录，缺失时 410 并提示"重新上传同名且校验和一致的原始包恢复现场"（FR-003、FR-011、FR-012、R8）
+- [x] T028 [US2] 改造 `app/api/router.py`：报告与日志接口现场缺失返回 410 `scene_cleaned`（消息区分报告已随现场清理 / 执行日志不入库）；rerun / rebuild 前置校验现场目录，缺失时 410 并提示"重新上传同名数据包、确认覆盖后全量重建"（FR-003、FR-011、FR-012、R8）
 - [x] T029 [US2] 改造 `app/api/router.py::create_task_v3` 同名分支为恢复矩阵：现场包存在 → 与现场文件比对（现状）；现场包缺失 → 与 `tasks.package_checksum` 比对，一致则写回 `uploads/<task_id>/<package_file>` 并返回 202 + Location（不重跑、不改历史数据、不触发清理），不一致 409；库中无 checksum 但有可读历史包 → 以历史包 checksum 为准并回填库；均无 → 409 并说明无法校验（FR-013、R7、R8）
 - [x] T030 [US2] 在 `app/api/router.py::_receive_upload` 与 `app/cli.py` 本地任务执行路径写入首次接收的 `package_checksum`（`sha256_file`），作为恢复与冲突判定的唯一依据（data-model §2、R7）
 - [x] T031 [US2] 前端现场缺失提示：`web/src/components/task-detail/TaskReportPanel.tsx`、`web/src/components/task-detail/TaskLogsPanel.tsx` 在 410 `scene_cleaned` 时展示服务端消息与后续建议（核心数据仍可查）；`web/src/components/task-detail/TaskActionModals.tsx` 在 rerun / rebuild 410 时展示恢复建议；不静默失败、不展示空白（FR-011、SC-006、R10）
-- [x] T032 [US2] 新增 `web/e2e/retention.spec.ts` 与种子脚本 `web/e2e/seed_retention.py`（由 `tests/fixtures/make_real_package.py` 派生 51 个任务）：覆盖 51 任务清理后磁盘仅留最近 50、清理后任务详情/规则/KPI 可查、重传恢复现场、410 提示文案（SC-001、SC-002、SC-006、SC-007、R10；不扩充代表性样例包生成器）
+- [x] T032 [US2] 新增 `web/e2e/retention.spec.ts` 与种子脚本 `web/e2e/seed_retention.py`（由 `tests/fixtures/make_real_package.py` 派生 51 个任务）：覆盖 51 任务清理后磁盘仅留最近 50、清理后任务详情/规则/KPI 可查、重传同名包覆盖确认后全量重建、410 提示文案（SC-001、SC-002、SC-006、SC-007、R10；不扩充代表性样例包生成器）
 
 **检查点**：US1 与 US2 均可独立验证；磁盘占用受控且历史数据不丢。
 
