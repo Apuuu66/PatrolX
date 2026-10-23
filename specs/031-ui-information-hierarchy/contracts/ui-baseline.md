@@ -142,3 +142,4 @@
 - MUST 保持既有交互：状态筛选、搜索、分页、轮询、详情页标签与续跑状态、单规则重跑、报告查看、删除与重建确认。
 - 因结构调整导致的测试选择器变化 MUST 等价替换断言，不得删除既有行为覆盖。
 - 本契约条目在实现完成后 MUST 回写进 `docs/design/DESIGN.md`，作为长期约束。
+- **036 修订（2026-10-23）**：任务列表物理列收敛为 6 列（时间三列合并、元数据平铺上限降为 3 项），列宽与滚动口径见 [`specs/036-task-list-column-compaction/contracts/task-list-compaction.md`](../../036-task-list-column-compaction/contracts/task-list-compaction.md)；本节其余约束（操作平铺常驻、固定右侧、无任务级重跑、删除失败就地重试）保持有效。
