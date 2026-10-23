@@ -44,6 +44,7 @@ const device: InventoryDevice = {
 const versionHistory: InventoryVersionPoint[] = [
   {
     observed_at: "2026-09-27T10:20:31Z",
+    time_source: "lst_me",
     task_id: "task-current",
     version_status: "ok",
     raw_version: "V900R021C10SPC100",
@@ -52,6 +53,7 @@ const versionHistory: InventoryVersionPoint[] = [
   },
   {
     observed_at: "2026-09-26T10:20:31Z",
+    time_source: "task",
     task_id: "task-downgrade",
     version_status: "ok",
     raw_version: "V900R021C10SPC090",
@@ -60,6 +62,7 @@ const versionHistory: InventoryVersionPoint[] = [
   },
   {
     observed_at: "2026-09-25T10:20:31Z",
+    time_source: "lst_me",
     task_id: "task-unchanged",
     version_status: "ok",
     raw_version: "V900R021C10SPC090",
@@ -74,6 +77,8 @@ const observations: InventoryObservation[] = [
     task_id: "task-current",
     task_status: "completed",
     observed_at: "2026-09-27T10:20:31Z",
+    time_source: "lst_me",
+    time_source_reason: null,
     province: "广东省",
     operator: "移动",
     site_key: "广东省|移动",
@@ -133,6 +138,42 @@ describe("InventoryDevicePage", () => {
       page_size: 10,
       order: "desc",
     });
+  });
+
+  it("观测时间与版本历史逐行标注时间来源，兜底时给出可读原因", async () => {
+    vi.mocked(api.listInventoryObservations).mockResolvedValue({
+      total: 2,
+      page: 1,
+      page_size: 10,
+      items: [
+        // 观测列表按观测时间倒序返回，最近一次观测解析不到执行时间。
+        {
+          ...observations[0],
+          observation_id: "obs-002",
+          task_id: "task-fallback",
+          time_source: "task",
+          time_source_reason: "header_time_missing",
+        },
+        { ...observations[0], observed_at: "2026-09-24T10:20:31Z", raw_version: "V900R021C10SPC080" },
+      ],
+    });
+    renderPage();
+
+    // 最近观测来自最新的观测记录，兜底时在详情卡片上直接给出原因（FR-004、SC-004）。
+    const latestItem = (await screen.findByText("最近观测")).closest(".ant-descriptions-item");
+    expect(latestItem).toBeTruthy();
+    if (!latestItem) throw new Error("latest observation item is missing");
+    expect(within(latestItem as HTMLElement).getByText("兜底时间")).toBeTruthy();
+    expect(within(latestItem as HTMLElement).getByText(/头部未找到执行时间行/)).toBeTruthy();
+
+    // 版本历史与观测历史的观测时间列逐行标注来源。
+    expect(screen.getAllByText("执行时间").length).toBeGreaterThan(0);
+    const fallbackTags = screen.getAllByText("兜底时间");
+    expect(fallbackTags.length).toBeGreaterThan(1);
+
+    fireEvent.mouseEnter(fallbackTags[fallbackTags.length - 1]);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.textContent).toContain("头部未找到执行时间行");
   });
 
   it("physically deletes device after explicit confirmation", async () => {

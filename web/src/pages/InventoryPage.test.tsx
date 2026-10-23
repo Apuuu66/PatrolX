@@ -141,6 +141,19 @@ describe("InventoryPage", () => {
     expect(await screen.findByText("设备详情测试")).toBeTruthy();
   });
 
+  it("最近观测列标注时间来源口径，避免把兜底时间当成设备执行时间", async () => {
+    renderPage();
+
+    // 列表接口不返回逐行时间来源，按契约在列上标注口径，悬停给出说明（FR-010、SC-004）。
+    const header = await screen.findByRole("columnheader", { name: /最近观测/ });
+    const marker = within(header).getByTestId("inventory-last-seen-source");
+    expect(marker.textContent).toContain("执行时间口径");
+
+    fireEvent.mouseEnter(marker);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.textContent).toContain("优先取包内 LST ME 设备执行时间，解析不到时回退任务完成时间");
+  });
+
   it("管理员可从设备列表直接物理删除台账", async () => {
     vi.mocked(api.deleteInventoryDevice).mockResolvedValue(undefined);
     renderPage();

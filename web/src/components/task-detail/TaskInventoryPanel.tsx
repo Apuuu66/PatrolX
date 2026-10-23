@@ -41,6 +41,34 @@ const NOT_APPLICABLE_REASONS: Record<string, string> = {
   log_supplement_package: "日志补充包不采集设备信息",
 };
 
+/** 台账证据执行时间段的整体状态（FR-010、SC-004）。 */
+const EXECUTION_TIME_STATUS_LABELS = {
+  ok: "解析成功",
+  partial: "部分来源回退",
+  missing: "未解析到执行时间",
+} as const;
+
+/** 归档实际使用的时间来源。 */
+const EXECUTION_TIME_SOURCE_LABELS = {
+  lst_me: "设备执行时间",
+  task: "任务完成时间兜底",
+} as const;
+
+/** 文件级执行时间解析状态。 */
+const EXECUTION_TIME_ENTRY_LABELS = {
+  ok: "已采用",
+  missing: "未解析",
+  invalid: "格式非法",
+  time_in_future: "时间不可信",
+} as const;
+
+/** 回退任务完成时间时的可读原因（FR-004、FR-009）。 */
+const EXECUTION_TIME_REASON_LABELS = {
+  header_time_missing: "头部未找到执行时间行",
+  header_time_invalid: "执行时间格式非法",
+  time_in_future: "执行时间晚于任务完成时间",
+} as const;
+
 function fieldTag(status?: components["schemas"]["InventoryFieldStatus"]) {
   if (!status) return "-";
   const color = status === "ok" ? "green" : status === "conflict" || status === "error" ? "red" : "orange";
@@ -88,6 +116,86 @@ function deviceColumns(): ColumnsType<MatchedDevice> {
         formatLines(record.source_files ?? [], record.version.source_lines ?? []),
     },
   ];
+}
+
+type TaskInventory = components["schemas"]["TaskInventory"];
+type ExecutionTimeEvidence = NonNullable<TaskInventory["execution_time"]>;
+
+/**
+ * 展示本次归档使用的执行时间证据：来源文件、原文、行号与解析结果（FR-010、FR-012、SC-004）。
+ * 历史证据（schema_version < 3）没有该段时按任务完成时间语义说明，不留空也不报错（FR-011）。
+ */
+function ExecutionTimeEvidenceBlock({ executionTime }: { executionTime?: ExecutionTimeEvidence | null }) {
+  if (!executionTime) {
+    return (
+      <div data-testid="task-inventory-execution-time">
+        <Typography.Title level={5} style={{ marginBottom: 8 }}>
+          执行时间
+        </Typography.Title>
+        <Space direction="vertical" size={4}>
+          <Tag color="orange">{EXECUTION_TIME_SOURCE_LABELS.task}</Tag>
+          <Typography.Text type="secondary">历史证据</Typography.Text>
+          <Typography.Text type="secondary">
+            该任务为旧口径证据，未记录包内执行时间；观测时间按任务完成时间兜底，重跑或重建后按新口径生效。
+          </Typography.Text>
+        </Space>
+      </div>
+    );
+  }
+
+  const perFile = executionTime.per_file ?? [];
+  return (
+    <div data-testid="task-inventory-execution-time">
+      <Typography.Title level={5} style={{ marginBottom: 8 }}>
+        执行时间
+      </Typography.Title>
+      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+        <Space size={8} wrap>
+          <Tag color={executionTime.source === "lst_me" ? "green" : "orange"}>
+            {EXECUTION_TIME_SOURCE_LABELS[executionTime.source]}
+          </Tag>
+          <Typography.Text type="secondary">
+            {EXECUTION_TIME_STATUS_LABELS[executionTime.status]}
+          </Typography.Text>
+        </Space>
+        {perFile.length ? (
+          <List
+            size="small"
+            bordered
+            dataSource={perFile}
+            renderItem={(entry) => (
+              <List.Item>
+                <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                  <Space size={8} wrap>
+                    <Typography.Text strong>{entry.source_file}</Typography.Text>
+                    <Typography.Text type="secondary">
+                      {entry.line ? `第 ${entry.line} 行` : "未命中执行时间行"}
+                    </Typography.Text>
+                    <Tag color={entry.status === "ok" ? "green" : "orange"}>
+                      {EXECUTION_TIME_ENTRY_LABELS[entry.status]}
+                    </Tag>
+                    {entry.reason && (
+                      <Typography.Text type="warning">
+                        {EXECUTION_TIME_REASON_LABELS[entry.reason]}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                  {entry.raw_text && <Typography.Text code>{entry.raw_text}</Typography.Text>}
+                  <Typography.Text type="secondary">
+                    {entry.parsed_at
+                      ? `解析结果：${dayjs(entry.parsed_at).format("YYYY-MM-DD HH:mm:ss")}（北京时间原文，UTC 入库）`
+                      : "未解析出可用时间"}
+                  </Typography.Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Typography.Text type="secondary">该任务没有可解析的台账来源文件。</Typography.Text>
+        )}
+      </Space>
+    </div>
+  );
 }
 
 export function TaskInventoryPanel({ task }: { task: components["schemas"]["TaskSummary"] }) {
@@ -203,6 +311,8 @@ export function TaskInventoryPanel({ task }: { task: components["schemas"]["Task
           { key: "updated_at", label: "任务完成时间", children: dayjs(task.completed_at || task.created_at).format("YYYY-MM-DD HH:mm:ss") },
         ]}
       />
+
+      <ExecutionTimeEvidenceBlock executionTime={inventory.execution_time} />
 
       <div>
         <Typography.Title level={5} style={{ marginBottom: 8 }}>

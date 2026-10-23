@@ -10,7 +10,8 @@ import {
   Space,
   Select,
   Tabs,
-  Tag } from "antd";
+  Tag,
+  Tooltip } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
@@ -43,6 +44,15 @@ function formatTime(value?: string | null) {
   return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-";
 }
 
+/**
+ * 「最近观测」时间口径说明（FR-010、SC-004）。
+ * 设备列表接口按契约不返回逐行时间来源，因此列上标注口径，逐条来源在设备详情核对。
+ */
+const LAST_SEEN_TIME_SOURCE_HINT =
+  "优先取包内 LST ME 设备执行时间，解析不到时回退任务完成时间（兜底）；逐条来源可在设备详情查看。";
+
+const LAST_SEEN_TIME_SOURCE_LABEL = "执行时间口径";
+
 const deviceColumns = [
   {
     title: "设备名称",
@@ -64,10 +74,17 @@ const deviceColumns = [
     width: 170,
     render: (value: string | null) => value || <Tag color="orange">缺失</Tag> },
   {
-    title: "最近观测",
+    title: (
+      <Tooltip title={LAST_SEEN_TIME_SOURCE_HINT}>
+        <Space size={4} data-testid="inventory-last-seen-source">
+          最近观测
+          <Tag style={{ marginInlineEnd: 0 }}>{LAST_SEEN_TIME_SOURCE_LABEL}</Tag>
+        </Space>
+      </Tooltip>
+    ),
     dataIndex: "last_seen_at",
     key: "last_seen_at",
-    width: 170,
+    width: 210,
     render: formatTime },
   {
     title: "观测次数",

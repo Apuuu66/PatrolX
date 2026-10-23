@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, App, Button, Card, Descriptions, Flex, Pagination, Popconfirm, Space, Tag } from "antd";
+import { Alert, App, Button, Card, Descriptions, Flex, Pagination, Popconfirm, Space, Tag, Tooltip, Typography } from "antd";
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -31,8 +31,47 @@ function formatTime(value?: string | null) {
   return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-";
 }
 
+type TimeSource = InventoryObservation["time_source"];
+
+/** 时间来源标识：设备执行时间 / 任务完成时间兜底（FR-010、SC-004）。 */
+const TIME_SOURCE_META = {
+  lst_me: { label: "执行时间", color: "green" },
+  task: { label: "兜底时间", color: "orange" },
+} as const;
+
+/** 回退任务完成时间时的可读原因（FR-004、FR-009）。 */
+const TIME_SOURCE_REASON_LABELS: Record<string, string> = {
+  header_time_missing: "头部未找到执行时间行",
+  header_time_invalid: "执行时间格式非法",
+  time_in_future: "执行时间晚于任务完成时间",
+};
+
+function timeSourceReasonLabel(reason?: string | null) {
+  if (!reason) return "";
+  return TIME_SOURCE_REASON_LABELS[reason] ?? reason;
+}
+
+/** 时间来源标签；有回退原因时通过 Tooltip 补充说明。 */
+function timeSourceTag(source?: TimeSource | null, reason?: string | null) {
+  if (!source) return null;
+  const meta = TIME_SOURCE_META[source];
+  const reasonLabel = timeSourceReasonLabel(reason);
+  const tag = <Tag color={meta.color}>{meta.label}</Tag>;
+  return reasonLabel ? <Tooltip title={reasonLabel}>{tag}</Tooltip> : tag;
+}
+
 const historyColumns = [
-  { title: "观测时间", dataIndex: "observed_at", key: "observed_at", width: 180, render: formatTime },
+  {
+    title: "观测时间",
+    dataIndex: "observed_at",
+    key: "observed_at",
+    width: 200,
+    render: (_: string, record: InventoryVersionPoint) => (
+      <Space direction="vertical" size={2}>
+        <span>{formatTime(record.observed_at)}</span>
+        {timeSourceTag(record.time_source)}
+      </Space>
+    ) },
   { title: "任务", dataIndex: "task_id", key: "task_id", width: 260, render: (value: string) => <Link to={`/tasks/${value}`}>{value}</Link> },
   {
     title: "版本",
@@ -57,7 +96,17 @@ const historyColumns = [
 ];
 
 const observationColumns = [
-  { title: "观测时间", dataIndex: "observed_at", key: "observed_at", width: 180, render: formatTime },
+  {
+    title: "观测时间",
+    dataIndex: "observed_at",
+    key: "observed_at",
+    width: 200,
+    render: (_: string, record: InventoryObservation) => (
+      <Space direction="vertical" size={2}>
+        <span>{formatTime(record.observed_at)}</span>
+        {timeSourceTag(record.time_source, record.time_source_reason)}
+      </Space>
+    ) },
   { title: "任务", dataIndex: "task_id", key: "task_id", width: 260, render: (value: string) => <Link to={`/tasks/${value}`}>{value}</Link> },
   { title: "局点", dataIndex: "site_key", key: "site_key", width: 210, render: (value: string) => <Tag>{value}</Tag> },
   {
@@ -89,6 +138,8 @@ export function InventoryDevicePage() {
   const [history, setHistory] = useState<InventoryVersionPoint[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [device, setDevice] = useState<Awaited<ReturnType<typeof api.getInventoryDevice>> | null>(null);
+  // 观测列表按观测时间倒序返回，首条即设备「最近观测」对应的记录（FR-006）。
+  const latestObservation = observations[0] ?? null;
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -191,7 +242,17 @@ export function InventoryDevicePage() {
               {device.current_version_task_id ? <Link to={`/tasks/${device.current_version_task_id}`}>{device.current_version_task_id}</Link> : "-"}
             </Descriptions.Item>
             <Descriptions.Item label="首次观测">{formatTime(device.first_seen_at)}</Descriptions.Item>
-            <Descriptions.Item label="最近观测">{formatTime(device.last_seen_at)}</Descriptions.Item>
+            <Descriptions.Item label="最近观测">
+              <Space size={8} wrap>
+                <span>{formatTime(device.last_seen_at)}</span>
+                {timeSourceTag(latestObservation?.time_source)}
+              </Space>
+              {latestObservation && timeSourceReasonLabel(latestObservation.time_source_reason) && (
+                <Typography.Text type="secondary">
+                  （{timeSourceReasonLabel(latestObservation.time_source_reason)}）
+                </Typography.Text>
+              )}
+            </Descriptions.Item>
             <Descriptions.Item label="观测次数">{device.observation_count}</Descriptions.Item>
           </Descriptions>
           {(device.has_site_conflict || device.current_version === null) && (
