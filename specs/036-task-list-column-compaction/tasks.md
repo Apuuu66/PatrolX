@@ -28,7 +28,7 @@ description: "任务列表列宽压缩 — 实现任务清单"
 
 ## 阶段 1：设置（实现环境）
 
-- [ ] T001 从已提交规划产物的 `main` 创建实现分支 `feature-036-task-list-column-compaction` 与 worktree `.worktrees/feature-036-task-list-column-compaction`；执行 `git worktree list` 与 `git branch --show-current` 并确认：当前目录是实现 worktree、检出分支正确、Speckit 产物已在 `main` 提交、已有 worktree 时复用；在回合报告记录检查结果（阻塞全部后续任务；AGENTS.md 实现前置检查）
+- [X] T001 从已提交规划产物的 `main` 创建实现分支 `feature-036-task-list-column-compaction` 与 worktree `.worktrees/feature-036-task-list-column-compaction`；执行 `git worktree list` 与 `git branch --show-current` 并确认：当前目录是实现 worktree、检出分支正确、Speckit 产物已在 `main` 提交、已有 worktree 时复用；在回合报告记录检查结果（阻塞全部后续任务；AGENTS.md 实现前置检查）
 
 **检查点**：前置检查四条全部满足。
 
@@ -42,21 +42,21 @@ description: "任务列表列宽压缩 — 实现任务清单"
 
 ## 阶段 3：用户故事 1 - 一屏看全任务行（优先级：P1）🎯 MVP
 
-**目标**：任务列表收敛为 6 列共 1160px，时间三列合一；1440×900 下不出现表格内部横向滚动，1280 / 1440 / 1920 页面级横向滚动为 0。
+**目标**：任务列表收敛为 6 列共 1130px，时间三列合一；1440×900 下不出现表格内部横向滚动，1280 / 1440 / 1920 页面级横向滚动为 0。
 
 **独立测试**：1440 视口打开任务列表，断言 6 个列头与列顺序、`table.scrollWidth <= table.clientWidth`、时间三段同处 `task-time` 单元格且无完整时间戳文本；1280 / 1920 复用页面级滚动断言。
 
 ### 测试先行（必须先失败）
 
-- [ ] T002 [P] [US1] 在 `web/src/pages/TaskListPage.test.tsx` 改写时间相关用例为"合并列"结构：断言 `data-testid="task-time"` 单元格同时包含 `task-duration` / `task-last-run` / `task-created-at`，断言不存在独立的"创建时间 / 最后运行 / 任务时长"列头，保留运行中与从未运行的既有取值覆盖（FR-006、FR-009、FR-010、SC-003；契约 §1、§2）
-- [ ] T003 [P] [US1] 在 `web/e2e/task-home.spec.ts` 新增 1440×900 用例：任务列表列头为 6 个且顺序正确、`.task-table` 不出现内部横向滚动、页面级横向滚动为 0（FR-001、FR-002、FR-004、SC-001、SC-002）
+- [X] T002 [P] [US1] 在 `web/src/pages/TaskListPage.test.tsx` 改写时间相关用例为"合并列"结构：断言 `data-testid="task-time"` 单元格同时包含 `task-duration` / `task-last-run` / `task-created-at`，断言不存在独立的"创建时间 / 最后运行 / 任务时长"列头，保留运行中与从未运行的既有取值覆盖（FR-006、FR-009、FR-010、SC-003；契约 §1、§2）
+- [X] T003 [P] [US1] 在 `web/e2e/task-home.spec.ts` 新增 1440×900 用例：任务列表列头为 6 个且顺序正确、`.task-table` 不出现内部横向滚动、页面级横向滚动为 0（FR-001、FR-002、FR-004、SC-001、SC-002）
 
 ### 实现
 
-- [ ] T004 [US1] 在 `web/src/pages/TaskListPage.tsx` 合并「创建时间 / 最后运行 / 任务时长」三列为单个「时间」列（key `time`，width 160），单元格标记 `data-testid="task-time"`，内部按"耗时 → 最后运行时间 → 创建时间"顺序渲染并保留原有三个 testid（FR-006~FR-010；契约 §2）
-- [ ] T005 [US1] 在 `web/src/pages/TaskListPage.tsx` 收敛其余列宽与 `scroll.x`：任务 240 / 状态摘要 160 / 数据准备 170 / 元数据 150 / 时间 160 / 操作 280，`scroll={{ x: 1160 }}`（FR-001、FR-002、FR-003；契约 §1）
-- [ ] T006 [US1] 在 `web/src/theme.css` 为合并时间列与表格布局补样式：`.task-table table { table-layout: fixed; }`、`[data-testid="task-time"]` 内单列不换行、耗时主色、创建时间弱化色、整列等宽数字（FR-009；契约 §1、§2）
-- [ ] T007 [US1] 运行 `cd web && npx vitest run src/pages/TaskListPage.test.tsx` 与 `npx playwright test e2e/task-home.spec.ts`，确认 1440 无内部滚动；若仍滚动，按 research R2 先降元数据平铺项或数据准备列宽，不得压缩操作列（SC-001）
+- [X] T004 [US1] 在 `web/src/pages/TaskListPage.tsx` 合并「创建时间 / 最后运行 / 任务时长」三列为单个「时间」列（key `time`，width 160），单元格标记 `data-testid="task-time"`，内部按"耗时 → 最后运行时间 → 创建时间"顺序渲染并保留原有三个 testid（FR-006~FR-010；契约 §2）
+- [X] T005 [US1] 在 `web/src/pages/TaskListPage.tsx` 收敛其余列宽与 `scroll.x`：任务 240 / 状态摘要 150 / 数据准备 160 / 元数据 140 / 时间 160 / 操作 280，`scroll={{ x: 1130 }}`（合计按 1440 实测可用宽度 1142px 定，留 12px 余量）（FR-001、FR-002、FR-003；契约 §1）
+- [X] T006 [US1] 在 `web/src/theme.css` 为合并时间列与表格布局补样式：`.task-table table { table-layout: fixed; }`、`[data-testid="task-time"]` 内单列不换行、耗时主色、创建时间弱化色、整列等宽数字（FR-009；契约 §1、§2）
+- [X] T007 [US1] 运行 `cd web && npx vitest run src/pages/TaskListPage.test.tsx` 与 `npx playwright test e2e/task-home.spec.ts`，确认 1440 无内部滚动；若仍滚动，按 research R2 先降元数据平铺项或数据准备列宽，不得压缩操作列（SC-001）
 
 **检查点**：US1 可独立演示——1440×900 一屏看全全部列与时间三段信息。
 
@@ -68,9 +68,9 @@ description: "任务列表列宽压缩 — 实现任务清单"
 
 **独立测试**：1280 与 1440 视口下断言操作列贴右、按钮数量与文案、无换行；沿用既有删除 / 重建确认用例。
 
-- [ ] T008 [P] [US2] 在 `web/e2e/task-home.spec.ts` 补操作列回归断言：1280 视口横向滚动后仍能看到右侧固定操作列、按钮无换行、无"重跑"与 `⋯` 菜单（FR-015、FR-016、SC-004；契约 §4）
-- [ ] T009 [US2] 在 `web/src/pages/TaskListPage.tsx` 复核并为操作列补显式约束（宽度 280、`fixed: "right"`、`white-space: nowrap`），确保列压缩与 `table-layout: fixed` 未影响 sticky 定位（FR-003、FR-015；契约 §1、§4）
-- [ ] T010 [US2] 运行 `cd web && npx playwright test e2e/task-actions.spec.ts e2e/task-delete-confirm.spec.ts e2e/task-home.spec.ts`，确认操作入口、删除失败重试与二次确认未被列压缩破坏（FR-016、SC-005）
+- [X] T008 [P] [US2] 在 `web/e2e/task-home.spec.ts` 补操作列回归断言：1280 视口横向滚动后仍能看到右侧固定操作列、按钮无换行、无"重跑"与 `⋯` 菜单（FR-015、FR-016、SC-004；契约 §4）
+- [X] T009 [US2] 在 `web/src/pages/TaskListPage.tsx` 复核并为操作列补显式约束（宽度 280、`fixed: "right"`、`white-space: nowrap`），确保列压缩与 `table-layout: fixed` 未影响 sticky 定位（FR-003、FR-015；契约 §1、§4）
+- [X] T010 [US2] 运行 `cd web && npx playwright test e2e/task-actions.spec.ts e2e/task-delete-confirm.spec.ts e2e/task-home.spec.ts`，确认操作入口、删除失败重试与二次确认未被列压缩破坏（FR-016、SC-005）
 
 **检查点**：US1 + US2 同时可用——压缩与操作可达性不互相牺牲。
 
@@ -84,14 +84,14 @@ description: "任务列表列宽压缩 — 实现任务清单"
 
 ### 测试先行
 
-- [ ] T011 [P] [US3] 在 `web/src/pages/TaskListPage.test.tsx` 新增用例：5 项元数据平铺 3 项、`metadata-more` 入口文案含 `2`、展开后剩余字段可见；全空元数据不渲染占位（FR-011~FR-013、SC-006）
-- [ ] T012 [P] [US3] 在 `web/src/components/MetadataList.test.tsx`（不存在则新建）补组件默认值回归：不传 `maxVisible` 时仍平铺 4 项，锁定详情页行为不被列表压缩牵连（FR-014；契约 §3）
+- [X] T011 [P] [US3] 在 `web/src/pages/TaskListPage.test.tsx` 新增用例：5 项元数据平铺 3 项、`metadata-more` 入口文案含 `2`、展开后剩余字段可见；全空元数据不渲染占位（FR-011~FR-013、SC-006）
+- [X] T012 [P] [US3] 在 `web/src/components/MetadataList.test.tsx`（不存在则新建）补组件默认值回归：不传 `maxVisible` 时仍平铺 4 项，锁定详情页行为不被列表压缩牵连（FR-014；契约 §3）——**已核实**：该文件既有的“最多平铺 4 项，其余收进更多元数据”“少于等于 4 项时没有更多元数据入口”两条用例已锁定默认值 4，本轮未再重复新增
 
 ### 实现
 
-- [ ] T013 [US3] 在 `web/src/pages/TaskListPage.tsx` 将元数据列 `MetadataList` 的 `maxVisible` 由 5 改为 3，并更新对应注释为当前契约（FR-011、FR-014；契约 §3）
-- [ ] T014 [US3] 在 `web/e2e/task-home.spec.ts` 新增元数据收纳 E2E：平铺项数、更多入口展开后的字段可见性与可复制文案（FR-011、FR-012、SC-006）
-- [ ] T015 [US3] 运行 `cd web && npx vitest run` 与 `npx playwright test e2e/task-home.spec.ts`，确认元数据收纳与行高稳定（FR-013、SC-006）
+- [X] T013 [US3] 在 `web/src/pages/TaskListPage.tsx` 将元数据列 `MetadataList` 的 `maxVisible` 由 5 改为 3，并更新对应注释为当前契约（FR-011、FR-014；契约 §3）
+- [X] T014 [US3] 在 `web/e2e/task-home.spec.ts` 新增元数据收纳 E2E：平铺项数、更多入口展开后的字段可见性与可复制文案（FR-011、FR-012、SC-006）
+- [X] T015 [US3] 运行 `cd web && npx vitest run` 与 `npx playwright test e2e/task-home.spec.ts`，确认元数据收纳与行高稳定（FR-013、SC-006）
 
 **检查点**：三个用户故事全部独立可用。
 
@@ -99,9 +99,9 @@ description: "任务列表列宽压缩 — 实现任务清单"
 
 ## 阶段 6：收尾与横切
 
-- [ ] T016 更新 `docs/design/DESIGN.md`：Task List 章节改为 6 列与固定宽度预算（任务 240 / 状态摘要 160 / 数据准备 170 / 元数据 150 / 时间 160 / 操作 280）、时间列三段式层级、元数据任务列表平铺 3 项、1440 无内部横向滚动与 1280 允许内部滚动的口径；在 2026-10-23 修订记录中说明本次变更（FR-021；契约 §1~§3）
-- [ ] T017 [P] 复核 `specs/031-ui-information-hierarchy/contracts/ui-baseline.md` §4.1 与 `specs/033-ui-refinement/contracts/ui-refinement.md` §3：以 036 契约为准的列定义处补注"036 修订了任务列表物理列与宽度，见 `specs/036-task-list-column-compaction/contracts/task-list-compaction.md`"，避免文档分叉（FR-021）
-- [ ] T018 执行完整门禁：`.venv/bin/python build.py lint`、`.venv/bin/python build.py test`、`.venv/bin/python build.py web-build`、`.venv/bin/python build.py e2e`；在实现 worktree 内补 `specs/036-task-list-column-compaction/verification.md` 记录命令、结果与截图路径（SC-007、SC-008）
+- [X] T016 更新 `docs/design/DESIGN.md`：Task List 章节改为 6 列与固定宽度预算（任务 240 / 状态摘要 160 / 数据准备 170 / 元数据 150 / 时间 160 / 操作 280）、时间列三段式层级、元数据任务列表平铺 3 项、1440 无内部横向滚动与 1280 允许内部滚动的口径；在 2026-10-23 修订记录中说明本次变更（FR-021；契约 §1~§3）
+- [X] T017 [P] 复核 `specs/031-ui-information-hierarchy/contracts/ui-baseline.md` §4.1 与 `specs/033-ui-refinement/contracts/ui-refinement.md` §3：以 036 契约为准的列定义处补注"036 修订了任务列表物理列与宽度，见 `specs/036-task-list-column-compaction/contracts/task-list-compaction.md`"，避免文档分叉（FR-021）
+- [X] T018 执行完整门禁：`.venv/bin/python build.py lint`、`.venv/bin/python build.py test`、`.venv/bin/python build.py web-build`、`.venv/bin/python build.py e2e`；在实现 worktree 内补 `specs/036-task-list-column-compaction/verification.md` 记录命令、结果与截图路径（SC-007、SC-008）
 
 ---
 

@@ -40,10 +40,10 @@ cd web && npx playwright test
 cd web && npx playwright test e2e/task-home.spec.ts
 ```
 
-按 1440×900 与 1280×900 各留存 1 张任务列表截图到 `web/e2e/screenshots/`（本地证据，不提交）：
+`task-home.spec.ts` 的 1440 与 1280 用例各自留存 1 张全页截图到 `web/e2e/.tmp/`（已在 `.gitignore` 中；注意 `web/test-results/` 会被每次 Playwright 运行清空，不能存放证据）：
 
-1. 1440×900：全部 6 列一屏可见，无内部滚动条。
-2. 1280×900：出现表格内部滚动条，操作列仍固定右下，页面本身无横向滚动。
+1. `036-task-list-1440.png`：全部 6 列一屏可见，无内部滚动条。
+2. `036-task-list-1280.png`：出现表格内部滚动条（已滚到底），操作列仍固定右下，页面本身无横向滚动。
 
 ## 4. 对照检查
 
