@@ -515,7 +515,7 @@ export function TaskListPage() {
     {
       title: "任务",
       key: "task",
-      width: 280,
+      width: 240,
       render: (_, record) => {
         const failureReason = getTaskFailureReason(record);
         return (
@@ -555,14 +555,14 @@ export function TaskListPage() {
     {
       title: "状态摘要",
       key: "stats",
-      width: 190,
+      width: 150,
       render: (_, record) => <StatusDistribution stats={record.stats} />,
     },
     {
       // 数据准备状态就地可见，问题摘要与重试收进列内弹层（FR-011）。
       title: "数据准备",
       key: "preparation",
-      width: 200,
+      width: 160,
       render: (_, record) => {
         const preparation = record.preparation;
         if (!preparation) {
@@ -592,63 +592,50 @@ export function TaskListPage() {
     {
       title: "元数据",
       key: "metadata",
-      width: 200,
+      width: 140,
       render: (_, record) => (
-        // 列表行保留全部 5 项元数据平铺，详情 Hero 才做 4 项收纳（FR-010）。
-        <MetadataList items={getTaskMetadataTags(record, dicts)} maxVisible={5} />
+        // 列表行平铺前 3 项有值元数据，其余进"更多元数据"；详情 Hero 仍为 4 项（FR-011、FR-014）。
+        <MetadataList items={getTaskMetadataTags(record, dicts)} maxVisible={3} />
       ),
     },
     {
-      title: "创建时间",
-      key: "created_at",
-      width: 120,
+      // 创建时间 / 最后运行 / 任务时长合并为单列，层级为 耗时 → 最后运行 → 创建（FR-006、FR-007）。
+      title: "时间",
+      key: "time",
+      width: 160,
       render: (_, record) => {
         const created = getRelativeTimeDisplay(record.created_at);
-        return (
-          <Tooltip title={created.title || undefined}>
-            <Typography.Text
-              type="secondary"
-              className={`task-table-time-line ${TABULAR_NUMERIC_CLASS}`}
-              data-testid="task-created-at"
-            >
-              {created.text}
-            </Typography.Text>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: "最后运行",
-      key: "last_run_at",
-      width: 130,
-      render: (_, record) => {
-        // 最后运行时间为最近一次运行的开始时刻，与创建时间相互独立；完整时间走 Tooltip（FR-008、FR-009）。
         const lastRun = getRelativeTimeDisplay(record.last_run_at);
         return (
-          <Tooltip title={lastRun.title || undefined}>
+          <div className="task-table-time" data-testid="task-time">
+            {/* 时长取最近一次运行；运行中不展示上一次耗时，未运行显示占位（FR-008、SC-004）。 */}
             <Typography.Text
-              className={`task-table-time-line ${TABULAR_NUMERIC_CLASS}`}
-              data-testid="task-last-run"
+              strong
+              className={`task-table-duration ${TABULAR_NUMERIC_CLASS}`}
+              data-testid="task-duration"
             >
-              {lastRun.text}
+              {getTaskDurationDisplay(record)}
             </Typography.Text>
-          </Tooltip>
+            <Tooltip title={lastRun.title || undefined}>
+              <Typography.Text
+                className={`task-table-time-line ${TABULAR_NUMERIC_CLASS}`}
+                data-testid="task-last-run"
+              >
+                {lastRun.text}
+              </Typography.Text>
+            </Tooltip>
+            <Tooltip title={created.title || undefined}>
+              <Typography.Text
+                type="secondary"
+                className={`task-table-time-created ${TABULAR_NUMERIC_CLASS}`}
+                data-testid="task-created-at"
+              >
+                {created.text}
+              </Typography.Text>
+            </Tooltip>
+          </div>
         );
       },
-    },
-    {
-      title: "任务时长",
-      key: "duration",
-      width: 130,
-      render: (_, record) => (
-        // 时长取最近一次运行；运行中不展示上一次耗时，未运行显示占位（FR-009、SC-004）。
-        <Typography.Text
-          className={`task-table-duration ${TABULAR_NUMERIC_CLASS}`}
-          data-testid="task-duration"
-        >
-          {getTaskDurationDisplay(record)}
-        </Typography.Text>
-      ),
     },
     {
       title: "操作",
@@ -665,7 +652,8 @@ export function TaskListPage() {
         const openReport = () => navigate(`/tasks/${record.task_id}/report`);
         const deleteError = deleteErrors[record.task_id];
         return (
-          <Space size={0} wrap className="task-table-actions">
+          // 不换行约束显式落到 DOM（Space 默认不换行）与样式（.task-table-actions）（FR-015、契约 §4）。
+          <Space size={0} className="task-table-actions">
             {/* 行内操作全部平铺常驻，不再收进 ⋯ 菜单（2026-10-13 修订）；重建与删除保留二次确认（FR-012、FR-026）。 */}
             <Button type="link" size="small" onClick={() => navigate(`/tasks/${record.task_id}`)}>
               详情
@@ -838,7 +826,8 @@ export function TaskListPage() {
                   />
                 ),
               }}
-              scroll={{ x: 1530 }}
+              // 6 列合计 1130px：1440 视口实测可用 1142px（与 031/033 verification 同口径），不出现表格内部横向滚动（FR-002）。
+              scroll={{ x: 1130 }}
             />
           )}
 

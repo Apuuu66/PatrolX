@@ -270,6 +270,97 @@ describe("TaskListPage", () => {
     expect(within(rows[1]).getByTestId("task-duration").textContent).toBe("-");
     expect(within(rows[1]).getByTestId("task-last-run").textContent).toBe("-");
   });
+
+  it("任务列表收敛为 6 列，时间三段合并进同一单元格", async () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const createdAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [
+        makeTask({
+          task_id: "merged-time",
+          created_at: createdAt,
+          last_run_at: twoHoursAgo,
+          duration_ms: 95_000,
+        }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("merged-time")).toBeDefined();
+    });
+
+    // 6 个物理列，固定顺序（FR-001、契约 §1）
+    const headers = Array.from(document.querySelectorAll(".task-table thead th")).map((node) =>
+      (node.textContent ?? "").trim(),
+    );
+    expect(headers).toEqual(["任务", "状态摘要", "数据准备", "元数据", "时间", "操作"]);
+    expect(headers).not.toContain("创建时间");
+    expect(headers).not.toContain("最后运行");
+    expect(headers).not.toContain("任务时长");
+
+    // 时间三段同处一个单元格，且顺序为 耗时 → 最后运行 → 创建时间（FR-006、FR-007）
+    const timeCell = screen.getByTestId("task-time");
+    const duration = within(timeCell).getByTestId("task-duration");
+    const lastRun = within(timeCell).getByTestId("task-last-run");
+    const created = within(timeCell).getByTestId("task-created-at");
+    expect(duration.textContent).toBe("1 分 35 秒");
+    expect(lastRun.textContent).toBe("2 小时前");
+    expect(created.textContent).toBe("5 小时前");
+    expect(
+      Array.from(timeCell.querySelectorAll("[data-testid]")).map((node) =>
+        node.getAttribute("data-testid"),
+      ),
+    ).toEqual(["task-duration", "task-last-run", "task-created-at"]);
+
+    // 单元格内不出现完整时间戳，完整值只能通过 Tooltip 获取（FR-007）
+    expect(timeCell.textContent ?? "").not.toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+  });
+
+  it("元数据平铺 3 项，其余进入更多元数据且空值不渲染", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [
+        makeTask({
+          task_id: "metadata-fold",
+          customer_province: "JS",
+          customer_operator: "CMCC",
+          customer_product: "UMF",
+          customer_version: "V1",
+          device_id: "DEV-901",
+        }),
+        makeTask({ task_id: "metadata-empty" }),
+      ],
+      total: 2,
+      page: 1,
+      page_size: 10,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("metadata-fold")).toBeDefined();
+    });
+    const rows = Array.from(
+      document.querySelectorAll<HTMLTableRowElement>(".ant-table-tbody > tr.ant-table-row"),
+    );
+    const foldRow = rows.find((row) => row.textContent?.includes("metadata-fold")) as HTMLElement;
+    const emptyRow = rows.find((row) => row.textContent?.includes("metadata-empty")) as HTMLElement;
+
+    expect(foldRow.querySelectorAll("[data-metadata-key]")).toHaveLength(3);
+    expect(within(foldRow).getByTestId("metadata-more").textContent).toContain("2");
+    expect(emptyRow.querySelectorAll("[data-metadata-key]")).toHaveLength(0);
+
+    const user = userEvent.setup();
+    await user.click(within(foldRow).getByTestId("metadata-more"));
+    await waitFor(() => {
+      const panel = document.querySelector('[data-testid="metadata-more-panel"]');
+      expect(panel?.querySelectorAll("[data-metadata-key]")).toHaveLength(2);
+    });
+  });
 });
 
 async function openUploadModal() {

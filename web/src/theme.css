@@ -573,6 +573,11 @@
   gap: var(--space-2);
 }
 
+/* 固定列布局 + 列宽预算，保证 1440 视口（实测可用 1142px）一次看全 6 列（FR-001、FR-002） */
+.task-table table {
+  table-layout: fixed;
+}
+
 .task-table .ant-table-cell {
   vertical-align: top;
 }
@@ -594,14 +599,30 @@
   max-width: 100%;
 }
 
+/* 时间列：耗时 → 最后运行 → 创建，单列不换行（FR-009、契约 §2） */
+.task-table-time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .task-table-time-line.ant-typography,
+.task-table-time-created.ant-typography,
 .task-table-duration.ant-typography {
   font-size: var(--font-size-caption);
+  line-height: 20px;
   white-space: nowrap;
 }
 
 .task-table-duration.ant-typography {
+  font-size: 14px;
   color: var(--text-primary);
+}
+
+.task-table-time-created.ant-typography {
+  font-size: var(--font-size-caption);
+  color: var(--text-tertiary);
 }
 
 /* 等宽数字：时间、耗时、计数共用（FR-007、R4） */
@@ -626,6 +647,9 @@
 
 .task-table-actions {
   justify-content: flex-end;
+  /* 操作平铺常驻且不换行；280px 保证删除失败重试入口也单行可见（FR-003、FR-015） */
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 /* 数据准备摘要就地可见，明细走列内弹层（FR-011） */
