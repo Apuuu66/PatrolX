@@ -751,6 +751,21 @@ class InventoryObservationStatus(StrEnum):
     RETIRED = "retired"
 
 
+class InventoryTimeSource(StrEnum):
+    """观测时间来源：设备执行时间或任务完成时间兜底。"""
+
+    LST_ME = "lst_me"
+    TASK = "task"
+
+
+class InventoryTimeSourceReason(StrEnum):
+    """回退任务完成时间的原因。"""
+
+    HEADER_TIME_MISSING = "header_time_missing"
+    HEADER_TIME_INVALID = "header_time_invalid"
+    TIME_IN_FUTURE = "time_in_future"
+
+
 class VersionDirection(StrEnum):
     UPGRADE = "upgrade"
     DOWNGRADE = "downgrade"
@@ -830,6 +845,21 @@ class TaskInventoryDevice(BaseModel):
     source_lines: list[int] = Field(default_factory=list)
 
 
+class TaskInventoryExecutionTimeEntry(BaseModel):
+    source_file: str = Field(description="来源文件相对路径。")
+    raw_text: str | None = Field(default=None, description="命中的头部原文；未命中为 null。")
+    line: int | None = Field(description="命中行号；未命中为 null。")
+    parsed_at: datetime | None = Field(default=None, description="解析出的 UTC 时间；未解析成功为 null。")
+    status: Literal["ok", "missing", "invalid", "time_in_future"] = Field(description="文件级执行时间解析状态。")
+    reason: InventoryTimeSourceReason | None = Field(default=None, description="未采用该时间时的原因。")
+
+
+class TaskInventoryExecutionTime(BaseModel):
+    status: Literal["ok", "partial", "missing"] = Field(description="全部来源文件的整体解析状态。")
+    source: InventoryTimeSource = Field(description="本次归档实际使用的时间来源。")
+    per_file: list[TaskInventoryExecutionTimeEntry] = Field(description="按来源文件记录的解析结果。")
+
+
 class TaskInventoryArchive(BaseModel):
     archived: bool
     device_id: str | None = None
@@ -856,6 +886,10 @@ class TaskInventory(BaseModel):
     )
     devices: list[TaskInventoryMatchedDevice] = Field(default_factory=list)
     source_files: list[str] = Field(default_factory=list)
+    execution_time: TaskInventoryExecutionTime | None = Field(
+        default=None,
+        description="本次归档使用的执行时间证据；历史证据（schema_version < 3）为 null。",
+    )
     conflicts: list[dict[str, Any]] = Field(default_factory=list)
     errors: list[dict[str, Any]] = Field(default_factory=list)
     archived: TaskInventoryArchive
@@ -868,10 +902,13 @@ class InventoryDevice(BaseModel):
     site_key: str
     operator: str
     current_version: str | None = None
-    current_version_observed_at: datetime | None = None
+    current_version_observed_at: datetime | None = Field(
+        default=None,
+        description="当前版本所在观测的执行时间（UTC）；不可解析时为任务完成时间兜底。",
+    )
     current_version_task_id: str | None = None
-    first_seen_at: datetime
-    last_seen_at: datetime
+    first_seen_at: datetime = Field(description="该设备最早观测的执行时间（UTC）；不可解析时为任务完成时间兜底。")
+    last_seen_at: datetime = Field(description="该设备最近观测的执行时间（UTC）；不可解析时为任务完成时间兜底。")
     observation_count: int = Field(ge=0)
     site_change_count: int = Field(ge=0)
     has_site_conflict: bool
@@ -895,7 +932,13 @@ class InventoryObservation(BaseModel):
     observation_id: str
     task_id: str
     task_status: Literal["completed"]
-    observed_at: datetime
+    observed_at: datetime = Field(
+        description="观测时间（UTC）：优先取包内 LST ME.txt 头部记录的执行时间，不可用时回退任务完成时间。",
+    )
+    time_source: InventoryTimeSource = Field(
+        description="观测时间来源：lst_me 为设备执行时间，task 为任务完成时间兜底。"
+    )
+    time_source_reason: InventoryTimeSourceReason | None = Field(default=None, description="回退任务完成时间时的原因。")
     province: str
     operator: str
     site_key: str
@@ -913,7 +956,10 @@ class InventoryObservationList(PagedMeta):
 
 
 class InventoryVersionPoint(BaseModel):
-    observed_at: datetime
+    observed_at: datetime = Field(description="该版本观测的执行时间（UTC）。")
+    time_source: InventoryTimeSource = Field(
+        description="观测时间来源：lst_me 为设备执行时间，task 为任务完成时间兜底。"
+    )
     task_id: str
     version_status: InventoryFieldStatus
     raw_version: str | None = None
@@ -933,7 +979,9 @@ class InventoryQualityIssue(BaseModel):
     device_id: str | None = None
     province: str | None = None
     operator: str | None = None
-    detected_at: datetime
+    detected_at: datetime = Field(
+        description="问题检测时间；观测类问题取该观测的执行时间（UTC），不可解析时为任务完成时间兜底。",
+    )
     detail: dict[str, Any] = Field(default_factory=dict)
 
 

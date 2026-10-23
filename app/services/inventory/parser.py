@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -16,9 +16,23 @@ from app.core.encoding import decode_text_with_fallback
 from app.models.schemas import PackageKind
 
 PARSER_ID = "site_device_lst_me"
-PARSER_VERSION = "3"
-SCHEMA_VERSION = 2
+PARSER_VERSION = "4"
+SCHEMA_VERSION = 3
 SOURCE_PATTERN = re.compile(r"^config/(?:.*/)?LST ME\.txt$", re.IGNORECASE)
+HEADER_TIME_PATTERN = re.compile(r"(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>\d{2}:\d{2}:\d{2})\s*$")
+BEIJING_TZ = timezone(timedelta(hours=8))
+TIME_FUTURE_TOLERANCE = timedelta(minutes=5)
+TIME_SOURCE_LST_ME = "lst_me"
+TIME_SOURCE_TASK = "task"
+REASON_HEADER_TIME_MISSING = "header_time_missing"
+REASON_HEADER_TIME_INVALID = "header_time_invalid"
+REASON_TIME_IN_FUTURE = "time_in_future"
+REASON_BY_STATUS = {
+    "missing": REASON_HEADER_TIME_MISSING,
+    "invalid": REASON_HEADER_TIME_INVALID,
+    "time_in_future": REASON_TIME_IN_FUTURE,
+}
+EMPTY_EXECUTION_TIME: dict[str, Any] = {"status": "missing", "source": TIME_SOURCE_TASK, "per_file": []}
 DEVICE_ALIASES = {"ne name", "me name", "网元名称", "设备名称"}
 NETWORK_ELEMENT_TYPE_ALIASES = {"me type", "ne type", "网元类型"}
 VERSION_ALIASES = {"software version", "sw version", "软件版本"}
@@ -86,12 +100,133 @@ def _empty_evidence(task_id: str, package_kind: PackageKind, *, now: datetime) -
         "records": [],
         "devices": [],
         "source_files": [],
+        "execution_time": {"status": "missing", "source": TIME_SOURCE_TASK, "per_file": []},
         "conflicts": [],
         "errors": [],
         "archived": _archive(),
         "created_at": timestamp,
         "updated_at": timestamp,
     }
+
+
+def _as_utc(value: datetime) -> datetime:
+    """把可能为 naive 的时间按 UTC 归一，便于比较。"""
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _parse_header_time(raw_line: str) -> dict[str, Any] | None:
+    """解析头部行尾的 ``YYYY-MM-DD  HH:MM:SS``；未命中返回 None。"""
+    match = HEADER_TIME_PATTERN.search(raw_line)
+    if match is None:
+        return None
+    raw_text = raw_line.strip()
+    try:
+        parsed = datetime.strptime(f"{match.group('date')} {match.group('time')}", "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return {
+            "raw_text": raw_text,
+            "parsed_at": None,
+            "status": "invalid",
+            "reason": REASON_HEADER_TIME_INVALID,
+        }
+    return {
+        "raw_text": raw_text,
+        "parsed_at": parsed.replace(tzinfo=BEIJING_TZ).astimezone(UTC).replace(microsecond=0),
+        "status": "ok",
+        "reason": None,
+    }
+
+
+def _missing_header_time() -> dict[str, Any]:
+    return {
+        "raw_text": None,
+        "line": None,
+        "parsed_at": None,
+        "status": "missing",
+        "reason": REASON_HEADER_TIME_MISSING,
+    }
+
+
+def _execution_time_evidence(
+    file_times: list[dict[str, Any]],
+    *,
+    completed_at: datetime | None,
+) -> dict[str, Any]:
+    """构造 ``execution_time`` 证据段，并按任务完成时间校验上界。"""
+    boundary = _as_utc(completed_at) + TIME_FUTURE_TOLERANCE if completed_at is not None else None
+    entries: list[dict[str, Any]] = []
+    for item in file_times:
+        parsed_at = item.get("parsed_at")
+        status = str(item.get("status") or "missing")
+        reason = item.get("reason")
+        if status == "ok" and isinstance(parsed_at, datetime) and boundary is not None:
+            if _as_utc(parsed_at) > boundary:
+                status = "time_in_future"
+                reason = REASON_TIME_IN_FUTURE
+        entries.append(
+            {
+                "source_file": str(item["source_file"]),
+                "raw_text": item.get("raw_text"),
+                "line": item.get("line"),
+                "parsed_at": iso_utc(parsed_at) if isinstance(parsed_at, datetime) else None,
+                "status": status,
+                "reason": reason,
+            }
+        )
+    statuses = [str(entry["status"]) for entry in entries]
+    if entries and all(item == "ok" for item in statuses):
+        overall, source = "ok", TIME_SOURCE_LST_ME
+    elif any(item == "ok" for item in statuses):
+        overall, source = "partial", TIME_SOURCE_TASK
+    else:
+        overall, source = "missing", TIME_SOURCE_TASK
+    return {"status": overall, "source": source, "per_file": entries}
+
+
+def _parse_iso(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return _as_utc(datetime.fromisoformat(value))
+    except ValueError:
+        return None
+
+
+def resolve_observation_time(
+    *,
+    source_files: list[str],
+    execution_time: object,
+    completed_at: datetime,
+) -> tuple[datetime, str, str | None]:
+    """按设备命中的来源文件解析观测时间。
+
+    返回 ``(观测时间, 时间来源, 回退原因)``：命中可用的执行时间时取其中最近的一个；
+    否则回退任务完成时间并给出原因；历史证据（无 ``execution_time``）回退且不带原因。
+    """
+    wanted = [str(item) for item in source_files]
+    entries = execution_time.get("per_file") if isinstance(execution_time, dict) else None
+    if not wanted or not isinstance(entries, list) or not entries:
+        return completed_at, TIME_SOURCE_TASK, None
+    boundary = _as_utc(completed_at) + TIME_FUTURE_TOLERANCE
+    candidates: list[datetime] = []
+    reasons: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or str(entry.get("source_file")) not in wanted:
+            continue
+        status = str(entry.get("status") or "missing")
+        parsed_at = _parse_iso(entry.get("parsed_at"))
+        if status == "ok" and parsed_at is not None:
+            if parsed_at > boundary:
+                reasons.append(REASON_TIME_IN_FUTURE)
+                continue
+            candidates.append(parsed_at)
+            continue
+        reason = entry.get("reason") or REASON_BY_STATUS.get(status)
+        if reason:
+            reasons.append(str(reason))
+    if candidates:
+        return max(candidates), TIME_SOURCE_LST_ME, None
+    return completed_at, TIME_SOURCE_TASK, reasons[0] if reasons else REASON_HEADER_TIME_MISSING
 
 
 def _upsert_conflict(
@@ -121,17 +256,27 @@ def _new_record(relative: str) -> dict[str, Any]:
     }
 
 
-def _parse_file(path: Path, relative: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """解析一个来源文件，返回记录列表和解码/游离字段错误。"""
+def _parse_file(
+    path: Path,
+    relative: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """解析一个来源文件，返回记录列表、解码/游离字段错误和头部执行时间。"""
     records: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
+    header_time = _missing_header_time()
     try:
         text = decode_text_with_fallback(path.read_bytes())[0]
     except (OSError, UnicodeDecodeError) as exc:
-        return [], [{"reason_code": "decode_failed", "message": str(exc), "source_file": relative}]
+        return [], [{"reason_code": "decode_failed", "message": str(exc), "source_file": relative}], header_time
 
     for line_no, raw_line in enumerate(text.splitlines(), start=1):
+        # 头部区域：第一条设备记录之前，命中即锁定并停止扫描，且不参与键值字段解析。
+        if current is None and header_time["line"] is None:
+            matched_time = _parse_header_time(raw_line)
+            if matched_time is not None:
+                header_time = {**matched_time, "line": line_no}
+                continue
         line = raw_line.strip()
         if not line or ":" not in line and "=" not in line:
             continue
@@ -164,7 +309,7 @@ def _parse_file(path: Path, relative: str) -> tuple[list[dict[str, Any]], list[d
                 continue
             key_name = "types" if normalized_key in NETWORK_ELEMENT_TYPE_ALIASES else "versions"
             current[key_name].append((value, line_no))
-    return records, errors
+    return records, errors, header_time
 
 
 def _record_output(
@@ -221,8 +366,12 @@ def parse_inventory(
     operator: str | None,
     product: str | None = None,
     package_kind: PackageKind | str = PackageKind.INSPECTION,
+    completed_at: datetime | None = None,
 ) -> dict[str, Any]:
-    """解析任务解压现场并返回可写入 ``inventory.json`` 的证据。"""
+    """解析任务解压现场并返回可写入 ``inventory.json`` 的证据。
+
+    ``completed_at`` 用于执行时间的可信性上界校验；缺省时不做上界校验。
+    """
     kind = PackageKind(package_kind)
     now = utc_now()
     evidence = _empty_evidence(task_id, kind, now=now)
@@ -293,10 +442,14 @@ def parse_inventory(
     raw_records: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
+    file_times: list[dict[str, Any]] = []
     for path, relative in sources:
-        parsed_records, parsed_errors = _parse_file(path, relative)
+        parsed_records, parsed_errors, header_time = _parse_file(path, relative)
         raw_records.extend(parsed_records)
         errors.extend(parsed_errors)
+        file_times.append({"source_file": relative, **header_time})
+
+    evidence["execution_time"] = _execution_time_evidence(file_times, completed_at=completed_at)
 
     all_records = [_record_output(record, normalized_product=normalized_product) for record in raw_records]
     # 只识别所选网元类型：其它类型的记录仅保留数量，不进入任务证据明细。

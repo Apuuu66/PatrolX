@@ -12,6 +12,7 @@ from app.cli import run_task
 from app.main import app
 from app.models.schemas import TaskMode, TaskTrigger
 from tests.fixtures.inventory.builder import (
+    HEADER_TIME_SAMPLE,
     lst_me_content,
     make_inventory_zip,
     make_log_supplement_zip,
@@ -58,7 +59,7 @@ def _create_v3(path: Path, **data: str) -> str:
 
 def test_v3_inspection_and_inventory_endpoints(tmp_path: Path) -> None:
     package = tmp_path / "inventory-api.zip"
-    make_inventory_zip(package)
+    make_inventory_zip(package, content=lst_me_content(header_time=HEADER_TIME_SAMPLE))
     task_id = _create_v3(
         package,
         package_kind="inspection",
@@ -71,6 +72,9 @@ def test_v3_inspection_and_inventory_endpoints(tmp_path: Path) -> None:
     assert task["status"] == "completed"
     assert task["package_kind"] == "inspection"
     assert task["inventory"]["status"] == "archived"
+    assert task["inventory"]["execution_time"]["status"] == "ok"
+    assert task["inventory"]["execution_time"]["source"] == "lst_me"
+    assert task["inventory"]["execution_time"]["per_file"][0]["parsed_at"] == "2025-05-26T06:40:36Z"
 
     devices = client.get("/api/v2/inventory/devices", params={"province": "江苏", "operator": "移动"}).json()
     assert devices["total"] == 1
@@ -78,13 +82,23 @@ def test_v3_inspection_and_inventory_endpoints(tmp_path: Path) -> None:
     assert device["device_name"] == "NJ-AGG-001"
     assert device["current_version"] == "V900R016C10SPC200"
     assert device["site_key"] == "江苏:移动"
+    assert device["current_version_observed_at"] == "2025-05-26T06:40:36Z"
+    assert device["first_seen_at"] == "2025-05-26T06:40:36Z"
+    assert device["last_seen_at"] == "2025-05-26T06:40:36Z"
 
     detail = client.get(f"/api/v2/inventory/devices/{device['device_id']}").json()
     assert detail["device_id"] == device["device_id"]
+    assert detail["current_version_observed_at"] == "2025-05-26T06:40:36Z"
+    assert detail["last_seen_at"] == "2025-05-26T06:40:36Z"
     observations = client.get(f"/api/v2/inventory/devices/{device['device_id']}/observations").json()
     assert observations["total"] == 1
+    observation = observations["items"][0]
+    assert observation["observed_at"] == "2025-05-26T06:40:36Z"
+    assert observation["time_source"] == "lst_me"
+    assert observation["time_source_reason"] is None
     history = client.get(f"/api/v2/inventory/devices/{device['device_id']}/version-history").json()
     assert history["items"][0]["direction"] is None
+    assert history["items"][0]["time_source"] == "lst_me"
 
 
 def test_v3_log_supplement_validation_and_not_applicable(tmp_path: Path) -> None:

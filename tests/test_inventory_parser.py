@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from app.services.inventory.parser import parse_inventory
-from tests.fixtures.inventory.builder import LST_ME_FILENAME, lst_me_content, make_inventory_zip
+from tests.fixtures.inventory.builder import (
+    HEADER_TIME_FUTURE,
+    HEADER_TIME_INVALID,
+    HEADER_TIME_SAMPLE,
+    LST_ME_FILENAME,
+    header_time_line,
+    lst_me_content,
+    make_inventory_zip,
+    multi_device_lst_me_content,
+)
 
 
 @pytest.fixture()
@@ -178,8 +188,8 @@ def test_parse_multiple_devices_filters_by_network_element_type(tmp_path: Path) 
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / LST_ME_FILENAME).write_bytes(_multi_content())
     evidence = parse_inventory(tmp_path, task_id="task-multi", province="江苏", operator="移动", product=" UMF2020 ")
-    assert evidence["parser_version"] == "3"
-    assert evidence["schema_version"] == 2
+    assert evidence["parser_version"] == "4"
+    assert evidence["schema_version"] == 3
     assert evidence["status"] == "archived"
     assert evidence["network_element_type_filter"] == {
         "requested": "UMF2020",
@@ -277,3 +287,260 @@ def test_parse_orphan_fields_do_not_stop_valid_records(tmp_path: Path) -> None:
     assert any(
         item.get("reason_code") == "orphan_record_field" and item.get("recoverable") for item in evidence["errors"]
     )
+
+
+def _write_source(task_dir: Path, payload: bytes, *, name: str = LST_ME_FILENAME, sub: str = "config") -> None:
+    directory = task_dir / sub
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_bytes(payload)
+
+
+def _completed_at() -> datetime:
+    return datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC)
+
+
+def test_parse_header_time_is_converted_to_utc(tmp_path: Path) -> None:
+    _write_source(tmp_path, lst_me_content(header_time=HEADER_TIME_SAMPLE))
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    execution = evidence["execution_time"]
+    assert execution["status"] == "ok"
+    assert execution["source"] == "lst_me"
+    assert execution["per_file"] == [
+        {
+            "source_file": f"config/{LST_ME_FILENAME}",
+            "raw_text": header_time_line(HEADER_TIME_SAMPLE),
+            "line": 1,
+            "parsed_at": "2025-05-26T06:40:36+00:00",
+            "status": "ok",
+            "reason": None,
+        }
+    ]
+    assert evidence["schema_version"] == 3
+    assert evidence["parser_version"] == "4"
+
+
+def test_parse_header_time_after_noise_line_and_tabs(tmp_path: Path) -> None:
+    payload = lst_me_content(
+        header_lines=["%%LST ME:;%%", "RETCODE = 0  操作成功"],
+        header_time="2025-05-26\t14:40:36",
+    )
+    _write_source(tmp_path, payload)
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-noise",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    entry = evidence["execution_time"]["per_file"][0]
+    assert entry["line"] == 3
+    assert entry["status"] == "ok"
+    assert entry["parsed_at"] == "2025-05-26T06:40:36+00:00"
+    assert evidence["device"]["status"] == "ok"
+
+
+def test_parse_header_time_missing_falls_back(tmp_path: Path) -> None:
+    _write_source(tmp_path, lst_me_content())
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-missing",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    execution = evidence["execution_time"]
+    assert execution["status"] == "missing"
+    assert execution["source"] == "task"
+    assert execution["per_file"][0]["raw_text"] is None
+    assert execution["per_file"][0]["line"] is None
+    assert execution["per_file"][0]["parsed_at"] is None
+    assert execution["per_file"][0]["status"] == "missing"
+    assert execution["per_file"][0]["reason"] == "header_time_missing"
+    assert evidence["status"] == "archived"
+
+
+def test_parse_header_time_invalid_date_falls_back(tmp_path: Path) -> None:
+    _write_source(tmp_path, lst_me_content(header_time=HEADER_TIME_INVALID))
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-invalid",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    entry = evidence["execution_time"]["per_file"][0]
+    assert entry["status"] == "invalid"
+    assert entry["reason"] == "header_time_invalid"
+    assert entry["parsed_at"] is None
+    assert entry["raw_text"] == header_time_line(HEADER_TIME_INVALID)
+    assert evidence["status"] == "archived"
+
+
+def test_parse_header_time_in_future_falls_back(tmp_path: Path) -> None:
+    _write_source(tmp_path, lst_me_content(header_time=HEADER_TIME_FUTURE))
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-future",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    execution = evidence["execution_time"]
+    assert execution["status"] == "missing"
+    assert execution["source"] == "task"
+    entry = execution["per_file"][0]
+    assert entry["status"] == "time_in_future"
+    assert entry["reason"] == "time_in_future"
+    assert entry["parsed_at"] == "2098-12-31T16:00:00+00:00"
+
+
+def test_parse_header_time_within_five_minutes_is_accepted(tmp_path: Path) -> None:
+    _write_source(tmp_path, lst_me_content(header_time="2025-06-01  20:04:00"))
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-tolerance",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    entry = evidence["execution_time"]["per_file"][0]
+    assert entry["status"] == "ok"
+    assert entry["parsed_at"] == "2025-06-01T12:04:00+00:00"
+
+
+def test_parse_multi_device_shares_header_time(tmp_path: Path) -> None:
+    payload = multi_device_lst_me_content(
+        [
+            {"device_name": "Device-A", "network_element_type": "UMF2020", "version": "V1"},
+            {"device_name": "Device-B", "network_element_type": "UMF2020", "version": "V2"},
+        ],
+        header_time=HEADER_TIME_SAMPLE,
+    )
+    _write_source(tmp_path, payload)
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-multi",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    assert len(evidence["execution_time"]["per_file"]) == 1
+    assert [device["normalized_name"] for device in evidence["devices"]] == ["Device-A", "Device-B"]
+    assert all(device["source_files"] == [f"config/{LST_ME_FILENAME}"] for device in evidence["devices"])
+
+
+def test_parse_multiple_source_files_keep_own_times(tmp_path: Path) -> None:
+    _write_source(
+        tmp_path,
+        lst_me_content(device_name="Device-A", header_time=HEADER_TIME_SAMPLE),
+        name="LST ME.txt",
+        sub="config/site-a",
+    )
+    _write_source(
+        tmp_path,
+        lst_me_content(device_name="Device-B", header_time="2025-05-27  09:00:00"),
+        name="LST ME.txt",
+        sub="config/site-b",
+    )
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-sources",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    execution = evidence["execution_time"]
+    assert execution["status"] == "ok"
+    by_file = {entry["source_file"]: entry for entry in execution["per_file"]}
+    assert by_file["config/site-a/LST ME.txt"]["parsed_at"] == "2025-05-26T06:40:36+00:00"
+    assert by_file["config/site-b/LST ME.txt"]["parsed_at"] == "2025-05-27T01:00:00+00:00"
+
+
+def test_parse_partial_header_times_marks_partial(tmp_path: Path) -> None:
+    _write_source(
+        tmp_path,
+        lst_me_content(device_name="Device-A", header_time=HEADER_TIME_SAMPLE),
+        name="LST ME.txt",
+        sub="config/site-a",
+    )
+    _write_source(
+        tmp_path,
+        lst_me_content(device_name="Device-B"),
+        name="LST ME.txt",
+        sub="config/site-b",
+    )
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-partial",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    assert evidence["execution_time"]["status"] == "partial"
+    assert evidence["execution_time"]["source"] == "task"
+    assert [entry["status"] for entry in evidence["execution_time"]["per_file"]] == ["ok", "missing"]
+
+
+def test_parse_time_line_does_not_become_record_field(tmp_path: Path) -> None:
+    _write_source(tmp_path, lst_me_content(header_time=HEADER_TIME_SAMPLE))
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-field",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+        completed_at=_completed_at(),
+    )
+    assert evidence["errors"] == []
+    assert evidence["records"][0]["name_source_lines"] == [2]
+    assert evidence["records"][0]["version_source_lines"] == [4]
+
+
+def test_parse_without_completed_at_keeps_header_time(tmp_path: Path) -> None:
+    _write_source(tmp_path, lst_me_content(header_time=HEADER_TIME_FUTURE))
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-no-completed",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+    )
+    assert evidence["execution_time"]["per_file"][0]["status"] == "ok"
+
+
+def test_source_file_missing_evidence_has_empty_execution_time(tmp_path: Path) -> None:
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-nofile",
+        province="江苏",
+        operator="移动",
+        product="UMF2020",
+    )
+    assert evidence["execution_time"] == {"status": "missing", "source": "task", "per_file": []}
+    assert evidence["not_archived_reason"] == "source_file_missing"
+
+
+def test_log_supplement_evidence_has_empty_execution_time(tmp_path: Path) -> None:
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-time-log",
+        province=None,
+        operator=None,
+        package_kind="log_supplement",
+    )
+    assert evidence["execution_time"] == {"status": "missing", "source": "task", "per_file": []}

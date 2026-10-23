@@ -2176,6 +2176,7 @@ components:
             format: date-time
           - type: 'null'
           title: Current Version Observed At
+          description: 当前版本所在观测的执行时间（UTC）；不可解析时为任务完成时间兜底。
         current_version_task_id:
           anyOf:
           - type: string
@@ -2185,10 +2186,12 @@ components:
           type: string
           format: date-time
           title: First Seen At
+          description: 该设备最早观测的执行时间（UTC）；不可解析时为任务完成时间兜底。
         last_seen_at:
           type: string
           format: date-time
           title: Last Seen At
+          description: 该设备最近观测的执行时间（UTC）；不可解析时为任务完成时间兜底。
         observation_count:
           type: integer
           minimum: 0.0
@@ -2287,6 +2290,15 @@ components:
           type: string
           format: date-time
           title: Observed At
+          description: 观测时间（UTC）：优先取包内 LST ME.txt 头部记录的执行时间，不可用时回退任务完成时间。
+        time_source:
+          $ref: '#/components/schemas/InventoryTimeSource'
+          description: 观测时间来源：lst_me 为设备执行时间，task 为任务完成时间兜底。
+        time_source_reason:
+          anyOf:
+          - $ref: '#/components/schemas/InventoryTimeSourceReason'
+          - type: 'null'
+          description: 回退任务完成时间时的原因。
         province:
           type: string
           title: Province
@@ -2331,6 +2343,7 @@ components:
       - task_id
       - task_status
       - observed_at
+      - time_source
       - province
       - operator
       - site_key
@@ -2407,6 +2420,7 @@ components:
           type: string
           format: date-time
           title: Detected At
+          description: 问题检测时间；观测类问题取该观测的执行时间（UTC），不可解析时为任务完成时间兜底。
         detail:
           additionalProperties: true
           type: object
@@ -2455,6 +2469,21 @@ components:
       - device_identity_conflict
       - site_ownership_change
       title: InventoryQualityIssueType
+    InventoryTimeSource:
+      type: string
+      enum:
+      - lst_me
+      - task
+      title: InventoryTimeSource
+      description: 观测时间来源：设备执行时间或任务完成时间兜底。
+    InventoryTimeSourceReason:
+      type: string
+      enum:
+      - header_time_missing
+      - header_time_invalid
+      - time_in_future
+      title: InventoryTimeSourceReason
+      description: 回退任务完成时间的原因。
     InventoryVersionHistory:
       properties:
         total:
@@ -2488,6 +2517,10 @@ components:
           type: string
           format: date-time
           title: Observed At
+          description: 该版本观测的执行时间（UTC）。
+        time_source:
+          $ref: '#/components/schemas/InventoryTimeSource'
+          description: 观测时间来源：lst_me 为设备执行时间，task 为任务完成时间兜底。
         task_id:
           type: string
           title: Task Id
@@ -2509,6 +2542,7 @@ components:
       type: object
       required:
       - observed_at
+      - time_source
       - task_id
       - version_status
       title: InventoryVersionPoint
@@ -4127,6 +4161,11 @@ components:
             type: string
           type: array
           title: Source Files
+        execution_time:
+          anyOf:
+          - $ref: '#/components/schemas/TaskInventoryExecutionTime'
+          - type: 'null'
+          description: 本次归档使用的执行时间证据；历史证据（schema_version < 3）为 null。
         conflicts:
           items:
             additionalProperties: true
@@ -4228,6 +4267,76 @@ components:
       required:
       - status
       title: TaskInventoryDevice
+    TaskInventoryExecutionTime:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - partial
+          - missing
+          title: Status
+          description: 全部来源文件的整体解析状态。
+        source:
+          $ref: '#/components/schemas/InventoryTimeSource'
+          description: 本次归档实际使用的时间来源。
+        per_file:
+          items:
+            $ref: '#/components/schemas/TaskInventoryExecutionTimeEntry'
+          type: array
+          title: Per File
+          description: 按来源文件记录的解析结果。
+      type: object
+      required:
+      - status
+      - source
+      - per_file
+      title: TaskInventoryExecutionTime
+    TaskInventoryExecutionTimeEntry:
+      properties:
+        source_file:
+          type: string
+          title: Source File
+          description: 来源文件相对路径。
+        raw_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Text
+          description: 命中的头部原文；未命中为 null。
+        line:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Line
+          description: 命中行号；未命中为 null。
+        parsed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Parsed At
+          description: 解析出的 UTC 时间；未解析成功为 null。
+        status:
+          type: string
+          enum:
+          - ok
+          - missing
+          - invalid
+          - time_in_future
+          title: Status
+          description: 文件级执行时间解析状态。
+        reason:
+          anyOf:
+          - $ref: '#/components/schemas/InventoryTimeSourceReason'
+          - type: 'null'
+          description: 未采用该时间时的原因。
+      type: object
+      required:
+      - source_file
+      - line
+      - status
+      title: TaskInventoryExecutionTimeEntry
     TaskInventoryMatchedDevice:
       properties:
         status:

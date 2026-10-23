@@ -94,6 +94,7 @@ def init_db() -> None:
     _ensure_task_columns(engine)
     _ensure_kpi_measurement_columns(engine)
     _ensure_inventory_device_columns(engine)
+    _ensure_inventory_observation_columns(engine)
     # 固定顺序：建表与增量列迁移 → 启动回填 →（此后才允许留存清理）。
     from app.services.task_db import ensure_backfilled
 
@@ -151,6 +152,22 @@ def _ensure_inventory_device_columns(engine: Engine) -> None:
         "remark": "TEXT",
         "created_by": "VARCHAR(64)",
         "updated_by": "VARCHAR(64)",
+    }
+    with engine.begin() as connection:
+        for name, ddl in wanted.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+def _ensure_inventory_observation_columns(engine: Engine) -> None:
+    """为旧观测表补充执行时间来源列；旧行按任务完成时间语义取值。"""
+    table = InventoryObservation.__tablename__
+    if not inspect(engine).has_table(table):
+        return
+    existing = {column["name"] for column in inspect(engine).get_columns(table)}
+    wanted = {
+        "time_source": "VARCHAR(16) NOT NULL DEFAULT 'task'",
+        "time_source_reason": "VARCHAR(32)",
     }
     with engine.begin() as connection:
         for name, ddl in wanted.items():
@@ -241,6 +258,8 @@ class InventoryObservation(Base):
     operator: Mapped[str] = mapped_column(String(64), index=True)
     site_key: Mapped[str] = mapped_column(String(160), index=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    time_source: Mapped[str] = mapped_column(String(16), default="task", index=True)
+    time_source_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     task_status: Mapped[str] = mapped_column(String(32), default="completed")
     device_name: Mapped[str] = mapped_column(String(256))
     identity_status: Mapped[str] = mapped_column(String(32), default="ok")

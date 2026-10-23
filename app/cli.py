@@ -281,6 +281,7 @@ def run_task(
             operator=operator,
             product=customer_values.get("product"),
             package_kind=package_kind,
+            completed_at=task.completed_at,
         )
         archive_inventory(
             evidence,

@@ -15,6 +15,8 @@ from app.models.schemas import (
     InventoryFieldStatus,
     InventoryQualityIssue,
     InventoryQualityIssueType,
+    InventoryTimeSource,
+    InventoryTimeSourceReason,
     InventoryVersionPoint,
     VersionDirection,
 )
@@ -93,12 +95,30 @@ def get_device(session: Session, device_id: str) -> InventoryDeviceModel | None:
     return _device_model(device, _device_issue_types(device)) if device else None
 
 
+def _time_source(observation: InventoryObservation) -> InventoryTimeSource:
+    try:
+        return InventoryTimeSource(observation.time_source or InventoryTimeSource.TASK)
+    except ValueError:  # pragma: no cover - 列约束保证取值域
+        return InventoryTimeSource.TASK
+
+
+def _time_source_reason(observation: InventoryObservation) -> InventoryTimeSourceReason | None:
+    if not observation.time_source_reason:
+        return None
+    try:
+        return InventoryTimeSourceReason(observation.time_source_reason)
+    except ValueError:  # pragma: no cover - 列约束保证取值域
+        return None
+
+
 def _observation_model(observation: InventoryObservation) -> InventoryObservationModel:
     return InventoryObservationModel(
         observation_id=observation.observation_id,
         task_id=observation.task_id,
         task_status="completed",
         observed_at=_ensure_utc(observation.observed_at),
+        time_source=_time_source(observation),
+        time_source_reason=_time_source_reason(observation),
         province=observation.province,
         operator=observation.operator,
         site_key=observation.site_key,
@@ -163,6 +183,7 @@ def _version_history_points(observations: list[InventoryObservation]) -> list[In
         points.append(
             InventoryVersionPoint(
                 observed_at=_ensure_utc(observation.observed_at),
+                time_source=_time_source(observation),
                 task_id=observation.task_id,
                 version_status=status,
                 raw_version=observation.raw_version,

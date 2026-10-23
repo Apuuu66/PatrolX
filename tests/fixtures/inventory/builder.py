@@ -7,6 +7,15 @@ import zipfile
 from pathlib import Path
 
 LST_ME_FILENAME = "LST ME.txt"
+HEADER_TIME_PREFIX = "+++    CSP/*××××××××××××*/     "
+HEADER_TIME_SAMPLE = "2025-05-26  14:40:36"
+HEADER_TIME_INVALID = "2025-02-30  14:40:36"
+HEADER_TIME_FUTURE = "2099-01-01  00:00:00"
+
+
+def header_time_line(value: str) -> str:
+    """返回携带执行时间的头部行原文。"""
+    return f"{HEADER_TIME_PREFIX}{value}"
 
 
 def lst_me_content(
@@ -18,9 +27,18 @@ def lst_me_content(
     network_element_type: str = "UMF2020",
     type_key: str = "ME type",
     encoding: str = "utf-8",
+    header_time: str | None = None,
+    header_lines: list[str] | None = None,
 ) -> bytes:
-    """生成键值风格的 LST ME.txt 内容。"""
-    lines = [f"{device_key}: {device_name}", f"{type_key}: {network_element_type}"]
+    """生成键值风格的 LST ME.txt 内容。
+
+    ``header_time`` 为 ``None`` 时不输出执行时间行，输出与既有样例完全一致；
+    传入原文（``YYYY-MM-DD  HH:MM:SS``）时在文件顶部写入携带执行时间的头部行。
+    """
+    lines = [*header_lines] if header_lines else []
+    if header_time is not None:
+        lines.append(header_time_line(header_time))
+    lines.extend([f"{device_key}: {device_name}", f"{type_key}: {network_element_type}"])
     if version is not None:
         lines.append(f"{version_key}: {version}")
     return ("\n".join(lines) + "\n").encode(encoding)
@@ -30,9 +48,16 @@ def multi_device_lst_me_content(
     records: list[dict[str, str | None]],
     *,
     encoding: str = "utf-8",
+    header_time: str | None = None,
+    header_lines: list[str] | None = None,
 ) -> bytes:
-    """生成包含多台设备的 LST ME.txt；None 字段表示该行缺失。"""
-    lines: list[str] = []
+    """生成包含多台设备的 LST ME.txt；None 字段表示该行缺失。
+
+    ``header_time`` / ``header_lines`` 与 :func:`lst_me_content` 同义，默认不输出头部行。
+    """
+    lines: list[str] = [*header_lines] if header_lines else []
+    if header_time is not None:
+        lines.append(header_time_line(header_time))
     for record in records:
         if record.get("device_name") is not None:
             lines.append(f"NE name: {record['device_name']}")

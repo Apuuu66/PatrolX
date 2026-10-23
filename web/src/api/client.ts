@@ -951,18 +951,23 @@ export interface components {
             operator: string;
             /** Current Version */
             current_version?: string | null;
-            /** Current Version Observed At */
+            /**
+             * Current Version Observed At
+             * @description 当前版本所在观测的执行时间（UTC）；不可解析时为任务完成时间兜底。
+             */
             current_version_observed_at?: string | null;
             /** Current Version Task Id */
             current_version_task_id?: string | null;
             /**
              * First Seen At
              * Format: date-time
+             * @description 该设备最早观测的执行时间（UTC）；不可解析时为任务完成时间兜底。
              */
             first_seen_at: string;
             /**
              * Last Seen At
              * Format: date-time
+             * @description 该设备最近观测的执行时间（UTC）；不可解析时为任务完成时间兜底。
              */
             last_seen_at: string;
             /** Observation Count */
@@ -1010,8 +1015,13 @@ export interface components {
             /**
              * Observed At
              * Format: date-time
+             * @description 观测时间（UTC）：优先取包内 LST ME.txt 头部记录的执行时间，不可用时回退任务完成时间。
              */
             observed_at: string;
+            /** @description 观测时间来源：lst_me 为设备执行时间，task 为任务完成时间兜底。 */
+            time_source: components["schemas"]["InventoryTimeSource"];
+            /** @description 回退任务完成时间时的原因。 */
+            time_source_reason?: components["schemas"]["InventoryTimeSourceReason"] | null;
             /** Province */
             province: string;
             /** Operator */
@@ -1073,6 +1083,7 @@ export interface components {
             /**
              * Detected At
              * Format: date-time
+             * @description 问题检测时间；观测类问题取该观测的执行时间（UTC），不可解析时为任务完成时间兜底。
              */
             detected_at: string;
             /** Detail */
@@ -1096,6 +1107,18 @@ export interface components {
          * @enum {string}
          */
         InventoryQualityIssueType: "missing_site" | "missing_device_identity" | "missing_version" | "version_conflict" | "device_identity_conflict" | "site_ownership_change";
+        /**
+         * InventoryTimeSource
+         * @description 观测时间来源：设备执行时间或任务完成时间兜底。
+         * @enum {string}
+         */
+        InventoryTimeSource: "lst_me" | "task";
+        /**
+         * InventoryTimeSourceReason
+         * @description 回退任务完成时间的原因。
+         * @enum {string}
+         */
+        InventoryTimeSourceReason: "header_time_missing" | "header_time_invalid" | "time_in_future";
         /** InventoryVersionHistory */
         InventoryVersionHistory: {
             /** Total */
@@ -1112,8 +1135,11 @@ export interface components {
             /**
              * Observed At
              * Format: date-time
+             * @description 该版本观测的执行时间（UTC）。
              */
             observed_at: string;
+            /** @description 观测时间来源：lst_me 为设备执行时间，task 为任务完成时间兜底。 */
+            time_source: components["schemas"]["InventoryTimeSource"];
             /** Task Id */
             task_id: string;
             version_status: components["schemas"]["InventoryFieldStatus"];
@@ -1936,6 +1962,8 @@ export interface components {
             devices?: components["schemas"]["TaskInventoryMatchedDevice"][];
             /** Source Files */
             source_files?: string[];
+            /** @description 本次归档使用的执行时间证据；历史证据（schema_version < 3）为 null。 */
+            execution_time?: components["schemas"]["TaskInventoryExecutionTime"] | null;
             /** Conflicts */
             conflicts?: {
                 [key: string]: unknown;
@@ -1981,6 +2009,53 @@ export interface components {
             reason_code?: string | null;
             /** Source Lines */
             source_lines?: number[];
+        };
+        /** TaskInventoryExecutionTime */
+        TaskInventoryExecutionTime: {
+            /**
+             * Status
+             * @description 全部来源文件的整体解析状态。
+             * @enum {string}
+             */
+            status: "ok" | "partial" | "missing";
+            /** @description 本次归档实际使用的时间来源。 */
+            source: components["schemas"]["InventoryTimeSource"];
+            /**
+             * Per File
+             * @description 按来源文件记录的解析结果。
+             */
+            per_file: components["schemas"]["TaskInventoryExecutionTimeEntry"][];
+        };
+        /** TaskInventoryExecutionTimeEntry */
+        TaskInventoryExecutionTimeEntry: {
+            /**
+             * Source File
+             * @description 来源文件相对路径。
+             */
+            source_file: string;
+            /**
+             * Raw Text
+             * @description 命中的头部原文；未命中为 null。
+             */
+            raw_text?: string | null;
+            /**
+             * Line
+             * @description 命中行号；未命中为 null。
+             */
+            line: number | null;
+            /**
+             * Parsed At
+             * @description 解析出的 UTC 时间；未解析成功为 null。
+             */
+            parsed_at?: string | null;
+            /**
+             * Status
+             * @description 文件级执行时间解析状态。
+             * @enum {string}
+             */
+            status: "ok" | "missing" | "invalid" | "time_in_future";
+            /** @description 未采用该时间时的原因。 */
+            reason?: components["schemas"]["InventoryTimeSourceReason"] | null;
         };
         /** TaskInventoryMatchedDevice */
         TaskInventoryMatchedDevice: {

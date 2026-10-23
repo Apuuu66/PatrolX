@@ -16,7 +16,7 @@ from app.models.db import (
     session_factory,
 )
 from app.models.schemas import InventoryParseStatus, PackageKind
-from app.services.inventory.parser import iso_utc, utc_now
+from app.services.inventory.parser import iso_utc, resolve_observation_time, utc_now
 from app.services.store import write_json_atomic
 
 
@@ -42,6 +42,8 @@ def _observation_snapshot(observation: InventoryObservation) -> dict[str, object
         "operator": observation.operator,
         "site_key": observation.site_key,
         "observed_at": iso_utc(_ensure_utc(observation.observed_at)),
+        "time_source": observation.time_source,
+        "time_source_reason": observation.time_source_reason,
         "task_status": observation.task_status,
         "device_name": observation.device_name,
         "identity_status": observation.identity_status,
@@ -150,6 +152,7 @@ def _observation_values(
     device_info: dict[str, object],
     site: dict[str, object],
     source_files: list[str],
+    execution_time: object,
     conflicts: list[object],
     errors: list[object],
     completed_at: datetime,
@@ -159,11 +162,18 @@ def _observation_values(
     version = device_info.get("version") if isinstance(device_info.get("version"), dict) else {}
     raw_version = version.get("raw_version")
     version_source_files = device_info.get("source_files") or source_files
+    observed_at, time_source, time_source_reason = resolve_observation_time(
+        source_files=[str(item) for item in (device_info.get("source_files") or [])],
+        execution_time=execution_time,
+        completed_at=completed_at,
+    )
     return {
         "province": str(site["province"]),
         "operator": str(site["operator"]),
         "site_key": str(site["site_key"]),
-        "observed_at": completed_at,
+        "observed_at": observed_at,
+        "time_source": time_source,
+        "time_source_reason": time_source_reason,
         "task_status": "completed",
         "device_name": str(device_info["normalized_name"]),
         "identity_status": "ok",
@@ -258,6 +268,7 @@ def archive_inventory(
         if can_archive:
             site = evidence.get("site") or {}
             source_files = [str(item) for item in evidence.get("source_files", [])]
+            execution_time = evidence.get("execution_time")
             conflicts = list(evidence.get("conflicts", []))
             errors = list(evidence.get("errors", []))
             for archived_device in archived_devices:
@@ -269,6 +280,7 @@ def archive_inventory(
                     device_info=device_info,
                     site=site,
                     source_files=source_files,
+                    execution_time=execution_time,
                     conflicts=conflicts,
                     errors=errors,
                     completed_at=completed_at,

@@ -11,6 +11,7 @@ from fastapi import APIRouter
 
 from app.api import router as router_module
 from app.contract.export import CONTRACT_PATH, diff_contracts, generate_openapi
+from app.services.inventory import parser as inventory_parser
 
 
 def _load_contract() -> dict:
@@ -291,6 +292,60 @@ def _non_null_branch(prop: dict) -> dict:
     if branches is None:
         return prop
     return next(item for item in branches if item.get("type") != "null")
+
+
+def _schema_enum(prop: dict, schemas: dict) -> list[str]:
+    """读取属性枚举；属性通过 $ref 引用枚举 schema 时继续解析。"""
+    if "$ref" in prop:
+        prop = schemas[prop["$ref"].split("/")[-1]]
+    if "enum" in prop:
+        return list(prop["enum"])
+    return []
+
+
+def test_inventory_execution_time_contract_delta() -> None:
+    """FR-004/FR-010：观测与版本历史暴露时间来源，任务证据暴露文件级执行时间。"""
+    assert inventory_parser.PARSER_VERSION == "4"
+    assert inventory_parser.SCHEMA_VERSION == 3
+
+    schemas = _load_contract()["components"]["schemas"]
+    time_sources = {"lst_me", "task"}
+    reasons = {"header_time_missing", "header_time_invalid", "time_in_future"}
+
+    observation = schemas["InventoryObservation"]
+    observation_props = observation["properties"]
+    assert "time_source" in observation.get("required", [])
+    assert set(_schema_enum(observation_props["time_source"], schemas)) == time_sources
+    assert _is_nullable(observation_props["time_source_reason"])
+    assert set(_schema_enum(_non_null_branch(observation_props["time_source_reason"]), schemas)) == reasons
+    assert "执行时间" in observation_props["observed_at"]["description"]
+
+    version_point = schemas["InventoryVersionPoint"]
+    assert "time_source" in version_point.get("required", [])
+    assert set(_schema_enum(version_point["properties"]["time_source"], schemas)) == time_sources
+
+    task_inventory = schemas["TaskInventory"]
+    execution_time = task_inventory["properties"]["execution_time"]
+    assert _is_nullable(execution_time)
+    assert _non_null_branch(execution_time)["$ref"].endswith("/TaskInventoryExecutionTime")
+    assert "execution_time" not in task_inventory.get("required", [])
+
+    execution_schema = schemas["TaskInventoryExecutionTime"]
+    assert set(execution_schema.get("required", [])) >= {"status", "source", "per_file"}
+    assert set(execution_schema["properties"]["status"]["enum"]) == {"ok", "partial", "missing"}
+    assert set(_schema_enum(execution_schema["properties"]["source"], schemas)) == time_sources
+    assert execution_schema["properties"]["per_file"]["items"]["$ref"].endswith("/TaskInventoryExecutionTimeEntry")
+
+    entry_schema = schemas["TaskInventoryExecutionTimeEntry"]
+    assert set(entry_schema.get("required", [])) >= {"source_file", "line", "status"}
+    assert set(entry_schema["properties"]["status"]["enum"]) == {"ok", "missing", "invalid", "time_in_future"}
+    assert _is_nullable(entry_schema["properties"]["reason"])
+    assert set(_schema_enum(_non_null_branch(entry_schema["properties"]["reason"]), schemas)) == reasons
+
+    device_props = schemas["InventoryDevice"]["properties"]
+    for name in ("current_version_observed_at", "first_seen_at", "last_seen_at"):
+        assert "执行时间" in device_props[name]["description"], name
+    assert "执行时间" in schemas["InventoryQualityIssue"]["properties"]["detected_at"]["description"]
 
 
 def test_task_run_fields_nullable_in_contract() -> None:
