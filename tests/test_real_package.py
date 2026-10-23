@@ -156,6 +156,9 @@ def test_real_package_lst_me_feeds_device_ledger(tmp_path: Path) -> None:
     data_dir, _ = _extract(tmp_path)
     csp = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="csp")
     assert csp["status"] == "archived"
+    assert csp["execution_time"]["status"] == "ok"
+    assert csp["execution_time"]["source"] == "lst_me"
+    assert csp["execution_time"]["per_file"][0]["parsed_at"] == "2026-09-01T02:00:00+00:00"
     assert [device["normalized_name"] for device in csp["devices"]] == ["CSP-SZ-01", "CSP-SZ-02"]
     assert [record["normalized_name"] for record in csp["records"]] == ["CSP-SZ-01", "CSP-SZ-02"]
     assert [device["version"]["status"] for device in csp["devices"]] == ["ok", "missing"]

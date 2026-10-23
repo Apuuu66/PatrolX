@@ -22,7 +22,10 @@ FIXED_DATE = (2026, 9, 18, 9, 0, 0)
 NETWORK_ELEMENT_TYPE_UMF = "umf"
 NETWORK_ELEMENT_TYPE_CSP = "csp"
 
+LST_ME_EXECUTION_TIME = "2026-09-01  10:00:00"
+
 LST_ME_TXT = (
+    f"+++    CSP/*xx*/     {LST_ME_EXECUTION_TIME}\n"
     "%%LST ME:;%%\n"
     "RETCODE = 0  操作成功\n"
     "\n"

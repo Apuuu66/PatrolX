@@ -50,12 +50,18 @@ else
   touch "$E2E_DIR/uploads/$LEGACY_TASK_ID/legacy.zip"
 
   "$VENV_PYTHON" - <<'PYCODE'
+from pathlib import Path
+
 from tests.fixtures.inventory.builder import (
     make_inventory_zip,
     make_log_supplement_zip,
     multi_device_lst_me_content,
 )
-from pathlib import Path
+
+# 035 执行时间口径：较晚 / 较早 / 缺失三种头部时间，均早于任务完成时间以免被判为未来时间。
+LATE_TIME = "2026-03-10  12:00:00"
+EARLIER_TIME = "2026-03-05  12:00:00"
+LEDGER_TIME = "2026-03-08  12:00:00"
 base = Path("web/e2e/.tmp")
 base.mkdir(parents=True, exist_ok=True)
 make_inventory_zip(
@@ -64,7 +70,8 @@ make_inventory_zip(
         [
             {"device_name": "NJ-AGG-001", "network_element_type": "umf", "version": "V900R016C10SPC200"},
             {"device_name": "NJ-CSP-001", "network_element_type": "csp", "version": "V900R016C10SPC100"},
-        ]
+        ],
+        header_time=LEDGER_TIME,
     ),
 )
 make_inventory_zip(
@@ -73,7 +80,8 @@ make_inventory_zip(
         [
             {"device_name": "NJ-AGG-001", "network_element_type": "umf", "version": "V900R016C10SPC200"},
             {"device_name": "NJ-CSP-001", "network_element_type": "csp", "version": "V900R016C10SPC100"},
-        ]
+        ],
+        header_time=LEDGER_TIME,
     ),
 )
 # 设备 ID 台账校验用例使用独立包与独立设备，避免与其他用例的台账增删互相干扰。
@@ -85,6 +93,47 @@ make_inventory_zip(
                 "device_name": "E2E-DEV-901",
                 "network_element_type": "umf",
                 "version": "V900R016C10SPC200",
+            }
+        ],
+        header_time=LEDGER_TIME,
+    ),
+)
+# 035：先上传执行时间较晚的包、再上传较早的包，设备当前版本与最近观测都不应回退。
+make_inventory_zip(
+    base / "inventory-e2e-time-late.zip",
+    content=multi_device_lst_me_content(
+        [
+            {
+                "device_name": "E2E-TIME-901",
+                "network_element_type": "umf",
+                "version": "V900R016C10SPC200",
+            }
+        ],
+        header_time=LATE_TIME,
+    ),
+)
+make_inventory_zip(
+    base / "inventory-e2e-time-earlier.zip",
+    content=multi_device_lst_me_content(
+        [
+            {
+                "device_name": "E2E-TIME-901",
+                "network_element_type": "umf",
+                "version": "V900R016C10SPC090",
+            }
+        ],
+        header_time=EARLIER_TIME,
+    ),
+)
+# 头部无执行时间的包：观测时间回退任务完成时间并标注原因。
+make_inventory_zip(
+    base / "inventory-e2e-time-missing.zip",
+    content=multi_device_lst_me_content(
+        [
+            {
+                "device_name": "E2E-TIME-NONE-901",
+                "network_element_type": "umf",
+                "version": "V900R016C10SPC100",
             }
         ]
     ),
