@@ -13,14 +13,31 @@ function rowOf(page: Page, taskId: string): Locator {
   return taskRows(page).filter({ has: page.locator(`code:text-is("${taskId}")`) }).first();
 }
 
+/**
+ * 全量套件会在同一后端上创建额外任务，种子任务可能被挤出默认分页；
+ * 断言首页种子任务前把每页条数放大到 100，避免用例耦合其它规格产生的任务数。
+ */
+async function showAllTasks(page: Page): Promise<void> {
+  await page.locator(".ant-pagination-options .ant-select-selector").click();
+  const option = page
+    .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option")
+    .filter({ hasText: /^100\s*条\/页$/ });
+  await expect(option).toBeVisible();
+  await option.click();
+  await expect(page.locator(".ant-pagination-options .ant-select-selection-item")).toHaveText(
+    /100\s*条\/页/,
+  );
+}
+
 test("任务首页以行式列表呈现并让失败任务置顶", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await showAllTasks(page);
 
   // 首屏可见概览条与种子任务（SC-001）
   await expect(page.locator('[data-testid="task-overview"]')).toBeVisible();
   const rows = taskRows(page);
-  // 全量套件并行运行时会创建额外任务，这里只要求 5 条种子任务都在首屏（SC-001）。
+  // 全量套件会在同一后端创建额外任务（已放大分页），这里仍只要求种子任务都出现在首页数据里（SC-001）。
   await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(5);
   for (const taskId of [
     "task-home-failed",
@@ -58,6 +75,7 @@ test("任务首页以行式列表呈现并让失败任务置顶", async ({ page 
 test("任务首页行内元数据与操作分层保持可读", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await showAllTasks(page);
 
   const failedRow = rowOf(page, FAILED_TASK_ID);
   // 元数据列平铺 3 项，其余收进"更多元数据"，行内不再堆叠全部字段（FR-011、契约 §3）

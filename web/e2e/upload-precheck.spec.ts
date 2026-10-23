@@ -27,10 +27,19 @@ async function fillInspectionMetadata(page: Page) {
     ["运营商", "移动"],
     ["网元类型", "UMF"],
   ] as const) {
-    await selectByLabel(label).click();
-    await page
-      .locator(`.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option[title="${option}"]`)
-      .click();
+    const select = selectByLabel(label);
+    const optionLocator = page.locator(
+      `.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option[title="${option}"]`,
+    );
+    // 上传预览响应会使弹窗重渲染并替换下拉选项，被替换的元素点击会报 detached；
+    // 用 toPass 重试“打开下拉 + 选中选项”，并在选中后等下拉收起，避免下一步点错浮层。
+    await expect(async () => {
+      if ((await optionLocator.count()) === 0) {
+        await select.click();
+      }
+      await optionLocator.click({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    await expect(page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")).toHaveCount(0);
   }
 }
 
