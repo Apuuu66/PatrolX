@@ -31,6 +31,14 @@ ZZapp01BCN_app_Problem_scene_333.zip
 
 `Basic Information/LST ME.txt` 是网元清单，包含 UMF 与 CSP 两类网元：`UMF-SZ-01`、`CSP-SZ-01`（含软件版本）和 `CSP-SZ-02`（缺软件版本）。网元类型取值是小写 `umf` / `csp`，与 `deploy/config/dicts.yaml` 的 `product` 字典 code 全等，台账筛选才能命中。
 
+文件头部在第一条网元记录之前携带一行执行时间，行尾格式为 `YYYY-MM-DD  HH:MM:SS`：
+
+```text
++++    CSP/*xx*/     2026-09-01  10:00:00
+```
+
+样例生成器使用固定时间戳 `2026-09-01  10:00:00`。解析器只扫描第一条设备记录之前的头部区域，取首个行尾匹配行；该行不参与设备键值解析，文件内全部设备共用这一执行时间。时间按北京时间（UTC+8）解释并存为 UTC。
+
 ## 嵌套子包结构
 
 ### 告警包
