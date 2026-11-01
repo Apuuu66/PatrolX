@@ -10,7 +10,9 @@ from app.models.schemas import (
     InspectorInfo,
     LogEntry,
     Metric,
+    PackageKind,
     Priority,
+    Product,
     RerunRequest,
     RuleCategory,
     RuleResult,
@@ -19,7 +21,9 @@ from app.models.schemas import (
     Summary,
     SystemInspection,
     SystemStatus,
+    TaskConflictCode,
     TaskCreated,
+    TaskCreateErrorCode,
     TaskListResponse,
     TaskLogs,
     TaskMode,
@@ -27,6 +31,7 @@ from app.models.schemas import (
     TaskStatus,
     TaskSummary,
     TaskTrigger,
+    TaskUploadMetadata,
 )
 
 __all__ = [
@@ -39,7 +44,9 @@ __all__ = [
     "InspectionTask",
     "LogEntry",
     "Metric",
+    "PackageKind",
     "Priority",
+    "Product",
     "RerunRequest",
     "RuleCategory",
     "RuleResult",
@@ -49,6 +56,8 @@ __all__ = [
     "SystemStatus",
     "SystemInspection",
     "TaskCreated",
+    "TaskConflictCode",
+    "TaskCreateErrorCode",
     "TaskListResponse",
     "TaskLogs",
     "TaskMode",
@@ -56,4 +65,5 @@ __all__ = [
     "TaskStatus",
     "TaskSummary",
     "TaskTrigger",
+    "TaskUploadMetadata",
 ]

@@ -76,7 +76,7 @@ operator:
   - code: ctcc
     name: 电信
 product:
-  - code: umf
+  - code: UMF
     name: UMF
-  - code: csp
+  - code: CSP
     name: CSP

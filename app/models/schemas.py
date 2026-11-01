@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, StrictBool, model_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator, model_validator
 
 
 class TaskStatus(StrEnum):
@@ -728,6 +728,83 @@ class PackageKind(StrEnum):
 
     INSPECTION = "inspection"
     LOG_SUPPLEMENT = "log_supplement"
+
+
+class Product(StrEnum):
+    """巡检包网元类型；输入在匹配前执行 trim + upper 规范化。"""
+
+    UMF = "UMF"
+    CSP = "CSP"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "Product | None":
+        normalized = value.strip().upper() if isinstance(value, str) else None
+        return cls._value2member_map_.get(normalized) if normalized else None
+
+
+class TaskCreateErrorCode(StrEnum):
+    """创建任务的稳定元数据校验错误码。"""
+
+    MISSING_PROVINCE = "missing_province"
+    MISSING_OPERATOR = "missing_operator"
+    MISSING_PRODUCT = "missing_product"
+    INVALID_PRODUCT = "invalid_product"
+    METADATA_NOT_APPLICABLE = "metadata_not_applicable"
+
+
+class TaskConflictCode(StrEnum):
+    """同名任务恢复矩阵的稳定冲突错误码。"""
+
+    PACKAGE_CHECKSUM_CONFLICT = "package_checksum_conflict"
+    PACKAGE_KIND_CONFLICT = "package_kind_conflict"
+    PACKAGE_PRODUCT_CONFLICT = "package_product_conflict"
+
+
+class TaskUploadMetadata(BaseModel):
+    """创建任务时的条件元数据；日志补充包禁止携带巡检元数据。"""
+
+    package_kind: PackageKind
+    province: str | None = None
+    operator: str | None = None
+    product: Product | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_log_supplement_metadata(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        package_kind = data.get("package_kind")
+        if package_kind not in (PackageKind.LOG_SUPPLEMENT, PackageKind.LOG_SUPPLEMENT.value):
+            return data
+        for field in ("province", "operator", "product"):
+            value = data.get(field)
+            if isinstance(value, str) and not value.strip():
+                continue
+            if value is not None:
+                raise ValueError("metadata_not_applicable: 日志补充包禁止携带省份、运营商或网元类型")
+        return data
+
+    @field_validator("province", "operator", "product", mode="before")
+    @classmethod
+    def normalize_blank_metadata(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        return value
+
+    @model_validator(mode="after")
+    def validate_package_kind_metadata(self) -> "TaskUploadMetadata":
+        if self.package_kind == PackageKind.INSPECTION:
+            if self.province is None:
+                raise ValueError("missing_province: 巡检包必须提供省份")
+            if self.operator is None:
+                raise ValueError("missing_operator: 巡检包必须提供运营商")
+            if self.product is None:
+                raise ValueError("missing_product: 巡检包必须提供网元类型")
+            return self
+        if self.province is not None or self.operator is not None or self.product is not None:
+            raise ValueError("metadata_not_applicable: 日志补充包禁止携带省份、运营商或网元类型")
+        return self
 
 
 class InventoryParseStatus(StrEnum):

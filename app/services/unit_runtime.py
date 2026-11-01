@@ -14,7 +14,7 @@ from typing import Any
 from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
 from app.inspectors.registry import registry as runtime_registry
-from app.models.schemas import RuleResult, RuleStatus
+from app.models.schemas import PackageKind, Product, RuleResult, RuleStatus
 from app.services.scanning import TaskFileCatalog
 
 LogFn = Callable[..., None]
@@ -40,6 +40,8 @@ class RuleContext:
         package_checksum: str | None = None,
         result_dir: Path | None = None,
         prepared_dir: Path | None = None,
+        product: Product | str | None = None,
+        package_kind: PackageKind | str = PackageKind.INSPECTION,
     ) -> None:
         self.task_id = task_id
         self.data_dir = data_dir
@@ -48,6 +50,8 @@ class RuleContext:
         self.package_checksum = package_checksum
         self.result_dir = result_dir
         self.prepared_dir = prepared_dir or data_dir / "prepared"
+        self.product = Product(product) if product is not None else None
+        self.package_kind = PackageKind(package_kind)
         self.files: list[Path] = []
         self.catalog: TaskFileCatalog | None = None
         self.prepare_states: dict[str, str] = {}
@@ -113,6 +117,8 @@ class UnitRequest:
     prepared_dir: str
     files: tuple[str, ...] = ()
     prepare_state: str | None = None
+    product: str | None = None
+    package_kind: str = PackageKind.INSPECTION.value
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,6 +323,8 @@ def _build_context(request: UnitRequest, logs: list[dict[str, Any]]) -> RuleCont
         data_dir=Path(request.data_dir),
         log=collect,
         prepared_dir=Path(request.prepared_dir),
+        product=request.product,
+        package_kind=request.package_kind,
     )
     ctx.files = [Path(item) for item in request.files]
     if request.prepare_state is not None:

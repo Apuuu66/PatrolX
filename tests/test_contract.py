@@ -5,12 +5,14 @@ G-04（生成客户端零漂移）由 CI 门禁以 git diff 校验，不在 pyte
 """
 
 import re
+from pathlib import Path
 
 import yaml
 from fastapi import APIRouter
 
 from app.api import router as router_module
 from app.contract.export import CONTRACT_PATH, diff_contracts, generate_openapi
+from app.models.schemas import PackageKind, Product, TaskConflictCode, TaskCreateErrorCode
 from app.services.inventory import parser as inventory_parser
 
 
@@ -396,3 +398,63 @@ def test_task_create_v3_documents_checksum_conflict() -> None:
     responses = _load_contract()["paths"]["/api/v3/tasks"]["post"]["responses"]
     assert "409" in responses, "POST /api/v3/tasks 缺少 409 响应"
     assert "package_checksum_conflict" in responses["409"]["description"]
+
+
+def _client_enum_values(source: str, name: str) -> set[str]:
+    """读取 openapi-typescript 生成客户端中的字符串枚举。"""
+    match = re.search(rf"{re.escape(name)}:\s*((?:\"[^\"]+\"\s*\|\s*)*\"[^\"]+\");", source)
+    assert match is not None, f"生成客户端缺少枚举 {name}"
+    return set(re.findall(r'"([^"]+)"', match.group(1)))
+
+
+def test_task_product_package_kind_contract_matches_schema_and_client() -> None:
+    """FR-001/002/051：冻结 product、package kind 与稳定错误码的跨层契约。"""
+    contract = _load_contract()
+    schemas = contract["components"]["schemas"]
+    expected_products = {"UMF", "CSP"}
+    expected_create_errors = {
+        "missing_province",
+        "missing_operator",
+        "missing_product",
+        "invalid_product",
+        "metadata_not_applicable",
+    }
+    expected_conflicts = {
+        "package_checksum_conflict",
+        "package_kind_conflict",
+        "package_product_conflict",
+    }
+
+    assert set(_schema_enum({"$ref": "#/components/schemas/Product"}, schemas)) == expected_products
+    assert {item.value for item in Product} == expected_products
+    assert set(_schema_enum({"$ref": "#/components/schemas/PackageKind"}, schemas)) == {
+        item.value for item in PackageKind
+    }
+    assert set(_schema_enum({"$ref": "#/components/schemas/TaskCreateErrorCode"}, schemas)) == expected_create_errors
+    assert {item.value for item in TaskCreateErrorCode} == expected_create_errors
+    assert set(_schema_enum({"$ref": "#/components/schemas/TaskConflictCode"}, schemas)) == expected_conflicts
+    assert {item.value for item in TaskConflictCode} == expected_conflicts
+
+    body = schemas["Body_createTaskV3"]
+    product = body["properties"]["product"]
+    assert _is_nullable(product)
+    assert _non_null_branch(product).get("type") == "string"
+    assert "trim().upper()" in product["description"]
+    assert "inspection" in product["description"] and "log_supplement" in product["description"]
+    assert "product" not in body.get("required", [])
+    assert body["properties"]["package_kind"]["$ref"].endswith("/PackageKind")
+    assert "package_kind" in body.get("required", [])
+
+    responses = contract["paths"]["/api/v3/tasks"]["post"]["responses"]
+    assert set(responses["400"]["x-error-codes"]) == expected_create_errors
+    assert responses["400"]["content"]["application/json"]["schema"]["$ref"].endswith("/Error")
+    assert set(responses["409"]["x-error-codes"]) == expected_conflicts
+    assert responses["409"]["content"]["application/json"]["schema"]["$ref"].endswith("/Error")
+    assert "checksum → kind → product" in responses["409"]["description"]
+
+    client_path = Path(__file__).resolve().parents[1] / "web" / "src" / "api" / "client.ts"
+    client = client_path.read_text(encoding="utf-8")
+    assert _client_enum_values(client, "Product") == expected_products
+    assert _client_enum_values(client, "TaskCreateErrorCode") == expected_create_errors
+    assert _client_enum_values(client, "TaskConflictCode") == expected_conflicts
+    assert re.search(r"product\?: string \| null;", client)

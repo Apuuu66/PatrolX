@@ -559,7 +559,7 @@ export interface paths {
         put?: never;
         /**
          * Create Task V3
-         * @description 创建 v3 任务；版本和设备身份不允许人工输入。同名任务已存在时按校验和幂等处理：现场包存在则与现场文件比对；现场已按留存策略清理则与首次接收记录的校验和比对，一致时写回原始包恢复现场并返回 202（不自动重跑），不一致返回 409 package_checksum_conflict。界面重传同名包采用"覆盖确认 + 全量重建"（先删除旧任务再创建），不依赖本接口的幂等恢复路径。
+         * @description 创建 v3 任务；版本和设备身份不允许人工输入。inspection 包必须携带非空 province、operator 和 product，product 按 trim().upper() 规范化后只允许 UMF 或 CSP。log_supplement 包不包含网元类型， product 为 null，且禁止携带非空 province、operator、product。同名任务固定按 checksum → kind → product 顺序校验并恢复现场，一致时返回 202 且不自动重跑。界面重传同名包采用 “覆盖确认 + 全量重建”，不依赖本接口的幂等恢复路径。
          */
         post: operations["createTaskV3"];
         delete?: never;
@@ -780,14 +780,24 @@ export interface components {
         Body_createTaskV3: {
             /** Package File */
             package_file: string;
+            /** @description inspection 表示巡检包；log_supplement 表示不参与设备台账和 UMF/CSP 精细分类的日志补充包。 */
             package_kind: components["schemas"]["PackageKind"];
             /** Name */
             name?: string | null;
-            /** Province */
+            /**
+             * Province
+             * @description inspection 必填且去空白后不得为空；log_supplement 禁止非空值。
+             */
             province?: string | null;
-            /** Operator */
+            /**
+             * Operator
+             * @description inspection 必填且去空白后不得为空；log_supplement 禁止非空值。
+             */
             operator?: string | null;
-            /** Product */
+            /**
+             * Product
+             * @description inspection 条件必填；值执行 trim().upper() 后只允许 UMF 或 CSP，并统一以大写保存和传播。 log_supplement 必须为空或 null，禁止携带网元类型。该字段保持 optional nullable string， 以兼容 OpenAPI 3.1 multipart 客户端生成；条件必填由服务端运行时校验。
+             */
             product?: string | null;
         };
         /** Body_importKpiMeasurementUnitsV5 */
@@ -835,6 +845,17 @@ export interface components {
             product: components["schemas"]["DictItem"][];
             /** Version */
             version: components["schemas"]["DictItem"][];
+        };
+        /** Error */
+        Error: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Detail */
+            detail?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** Finding */
         Finding: {
@@ -1813,6 +1834,12 @@ export interface components {
          */
         PreparationStatus: "pass" | "warn" | "fail" | "skip" | "error";
         /**
+         * Product
+         * @description 巡检包网元类型；输入执行 trim().upper()，只接受 UMF 或 CSP。日志补充包中为 null。
+         * @enum {string}
+         */
+        Product: "UMF" | "CSP";
+        /**
          * Priority
          * @enum {integer}
          */
@@ -1931,6 +1958,18 @@ export interface components {
          * @enum {string}
          */
         SystemStatus: "completed" | "failed";
+        /**
+         * TaskConflictCode
+         * @description 同名任务冲突稳定错误码；判定顺序固定为 checksum → kind → product。
+         * @enum {string}
+         */
+        TaskConflictCode: "package_checksum_conflict" | "package_kind_conflict" | "package_product_conflict";
+        /**
+         * TaskCreateErrorCode
+         * @description POST /api/v3/tasks 上传元数据校验稳定错误码。
+         * @enum {string}
+         */
+        TaskCreateErrorCode: "missing_province" | "missing_operator" | "missing_product" | "invalid_product" | "metadata_not_applicable";
         /** TaskCreated */
         TaskCreated: {
             /** Task Id */
@@ -3523,12 +3562,23 @@ export interface operations {
                     "application/json": components["schemas"]["TaskCreated"];
                 };
             };
-            /** @description 同名任务已存在且数据包校验和与首次接收记录不一致（package_checksum_conflict） */
+            /** @description 上传任务元数据不合法：巡检包缺失省份、运营商或 product，product 非法，或日志补充包携带 province、operator、product 时拒绝创建。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 同名任务冲突，固定按 checksum → kind → product 顺序判定：checksum 不同返回 package_checksum_conflict；checksum 相同但 package_kind 不同返回 package_kind_conflict； 巡检包 checksum 与 kind 均相同但 product 不同或历史 product 缺失返回 package_product_conflict。 */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description Validation Error */
             422: {

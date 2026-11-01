@@ -1,12 +1,18 @@
 """契约模型可实例化与字段对齐测试。"""
 
+import pytest
+from pydantic import ValidationError
+
 from app.models.schemas import (
     InspectionTask,
     Metric,
+    PackageKind,
+    Product,
     RuleResult,
     Summary,
     SystemInspection,
     TaskStats,
+    TaskUploadMetadata,
 )
 
 
@@ -57,3 +63,77 @@ def test_legacy_contract_fields_removed() -> None:
     assert "artifacts" not in RuleResult.model_fields
     assert "system_id" not in SystemInspection.model_fields
     assert "system_name" not in SystemInspection.model_fields
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("UMF", Product.UMF),
+        ("umf", Product.UMF),
+        ("  UmF  ", Product.UMF),
+        ("CSP", Product.CSP),
+        (" cSp ", Product.CSP),
+    ],
+)
+def test_product_normalizes_trim_and_uppercase(raw: str, expected: Product) -> None:
+    assert Product(raw) == expected
+
+
+def test_product_rejects_unsupported_value() -> None:
+    with pytest.raises(ValidationError):
+        TaskUploadMetadata(
+            package_kind=PackageKind.INSPECTION,
+            province="江苏",
+            operator="移动",
+            product="MME",
+        )
+
+
+def test_inspection_requires_normalized_product() -> None:
+    with pytest.raises(ValidationError, match="missing_product"):
+        TaskUploadMetadata(
+            package_kind=PackageKind.INSPECTION,
+            province="江苏",
+            operator="移动",
+            product="   ",
+        )
+
+    metadata = TaskUploadMetadata(
+        package_kind=PackageKind.INSPECTION,
+        province="江苏",
+        operator="移动",
+        product=" umf ",
+    )
+    assert metadata.product == Product.UMF
+    assert metadata.model_dump(mode="json")["product"] == "UMF"
+
+
+@pytest.mark.parametrize("missing_field", ["province", "operator"])
+def test_inspection_requires_province_and_operator(missing_field: str) -> None:
+    values = {"province": "江苏", "operator": "移动", "product": "umf"}
+    values.pop(missing_field)
+
+    with pytest.raises(ValidationError, match=f"missing_{missing_field}"):
+        TaskUploadMetadata(package_kind=PackageKind.INSPECTION, **values)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("province", "江苏"), ("operator", "移动"), ("product", "umf"), ("product", "XYZ")],
+)
+def test_log_supplement_forbids_nonblank_metadata(field: str, value: str) -> None:
+    values = {field: value}
+    with pytest.raises(ValidationError, match="metadata_not_applicable"):
+        TaskUploadMetadata(package_kind=PackageKind.LOG_SUPPLEMENT, **values)
+
+
+def test_log_supplement_whitespace_metadata_is_absent() -> None:
+    metadata = TaskUploadMetadata(
+        package_kind=PackageKind.LOG_SUPPLEMENT,
+        province="  ",
+        operator="\t",
+        product="   ",
+    )
+    assert metadata.province is None
+    assert metadata.operator is None
+    assert metadata.product is None

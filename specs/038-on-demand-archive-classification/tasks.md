@@ -18,11 +18,11 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **目的**：先冻结公共契约和测试入口，避免后续实现反向决定接口。
 
-- [ ] T001 更新 `docs/api/openapi.yaml`，冻结巡检包 `product` 条件必填、`trim().upper()` 语义、`missing_product`、`invalid_product`、`metadata_not_applicable` 和三类同名任务冲突响应，并明确日志补充包禁止携带省份、运营商和网元类型（FR-001、FR-002、FR-050）
-- [ ] T002 [P] 在 `tests/test_contract.py` 增加 OpenAPI 契约测试，断言 `docs/api/openapi.yaml` 与 `app/models/schemas.py`、生成前端客户端对 product/package kind 字段和错误码保持一致（FR-001、FR-002、FR-051）
-- [ ] T003 [P] 在 `tests/test_dicts.py` 增加 product 字典测试，要求 `deploy/config/dicts.yaml` 的 code 严格为 `UMF`、`CSP`，输入仅大小写不同也能匹配（FR-001）
-- [ ] T004 [P] 在 `tests/test_schemas.py` 增加 schema 测试，覆盖 product 的 `trim().upper()`、非法值、`package_kind=inspection` 条件必填和 `log_supplement` 禁止元数据（FR-001、FR-002、FR-050）
-- [ ] T005 [P] 新建 `tests/test_unit_runtime.py`，先写 `RuleContext` 与 `UnitRequest` 可序列化传递 product/package kind 的失败测试，并断言 worker 不从路径或包名推断（FR-040、FR-051）
+- [x] T001 更新 `docs/api/openapi.yaml`，冻结巡检包 `product` 条件必填、`trim().upper()` 语义、`missing_product`、`invalid_product`、`metadata_not_applicable` 和三类同名任务冲突响应，并明确日志补充包禁止携带省份、运营商和网元类型（FR-001、FR-002、FR-050）
+- [x] T002 [P] 在 `tests/test_contract.py` 增加 OpenAPI 契约测试，断言 `docs/api/openapi.yaml` 与 `app/models/schemas.py`、生成前端客户端对 product/package kind 字段和错误码保持一致（FR-001、FR-002、FR-051）
+- [x] T003 [P] 在 `tests/test_dicts.py` 增加 product 字典测试，要求 `deploy/config/dicts.yaml` 的 code 严格为 `UMF`、`CSP`，输入仅大小写不同也能匹配（FR-001）
+- [x] T004 [P] 在 `tests/test_schemas.py` 增加 schema 测试，覆盖 product 的 `trim().upper()`、非法值、`package_kind=inspection` 条件必填和 `log_supplement` 禁止元数据（FR-001、FR-002、FR-050）
+- [x] T005 [P] 新建 `tests/test_unit_runtime.py`，先写 `RuleContext` 与 `UnitRequest` 可序列化传递 product/package kind 的失败测试，并断言 worker 不从路径或包名推断（FR-040、FR-051）
 
 ---
 
@@ -32,9 +32,9 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **⚠️ 关键**：本阶段完成前不得开始用户故事实现。
 
-- [ ] T006 实现 `app/models/schemas.py` 的 Product/PackageKind 规范化规则，巡检包只接受 `UMF`/`CSP`，日志补充包 product 为 `null`，并保持 `TaskRecord.customer["product"]` 为唯一持久化位置（FR-001、FR-002）
-- [ ] T007 更新 `deploy/config/dicts.yaml` 和 `app/core/dicts.py`，统一 product code 为大写 `UMF`/`CSP`，移除依赖展示层大小写转换的业务判断（FR-001）
-- [ ] T008 更新 `app/services/unit_runtime.py`，为 `RuleContext` 增加 `product`/`package_kind`，为可序列化 `UnitRequest` 增加同名字段，并让 worker 只使用请求值（FR-040、FR-051）
+- [x] T006 实现 `app/models/schemas.py` 的 Product/PackageKind 规范化规则，巡检包只接受 `UMF`/`CSP`，日志补充包 product 为 `null`，并保持 `TaskRecord.customer["product"]` 为唯一持久化位置（FR-001、FR-002）
+- [x] T007 更新 `deploy/config/dicts.yaml` 和 `app/core/dicts.py`，统一 product code 为大写 `UMF`/`CSP`，移除依赖展示层大小写转换的业务判断（FR-001）
+- [x] T008 更新 `app/services/unit_runtime.py`，为 `RuleContext` 增加 `product`/`package_kind`，为可序列化 `UnitRequest` 增加同名字段，并让 worker 只使用请求值（FR-040、FR-051）
 - [ ] T009 在 `tests/test_classification_config.py` 先写严格 schema 测试，覆盖顶层键 `{version, profiles, routes}`、重复 YAML key、未知动作、非法 category/target、不可达 fallback、未知 profile 和错误详情（FR-037、FR-038）
 - [ ] T010 新建 `app/services/extraction/config.py`，实现分类配置读取、严格键校验、profile/anchor 校验、route/selection/target 校验、规范化和稳定错误码 `invalid_classification_config`（FR-037、FR-038）
 - [ ] T011 在 `tests/test_classification_config.py` 增加同 phase、同 priority、profile 交集 pattern 重叠的 ε-NFA 测试，覆盖 `*`、`?`、`**/`、scene/evidence 等价前缀和告警优先于 ignore（FR-009、FR-023、FR-024、FR-026）

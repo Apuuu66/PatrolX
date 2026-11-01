@@ -208,6 +208,8 @@ class Executor:
             data_dir=str(ctx.data_dir),
             prepared_dir=str(ctx.prepared_dir),
             files=tuple(path.as_posix() for path in matched),
+            product=ctx.product.value if ctx.product is not None else None,
+            package_kind=ctx.package_kind.value,
         )
         return plan
 
@@ -311,6 +313,8 @@ class Executor:
             prepared_dir=str(ctx.prepared_dir),
             files=tuple(path.as_posix() for path in matched),
             prepare_state=prepare_state,
+            product=ctx.product.value if ctx.product is not None else None,
+            package_kind=ctx.package_kind.value,
         )
         return plan
 
