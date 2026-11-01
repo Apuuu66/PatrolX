@@ -17,6 +17,7 @@ from tests.fixtures.inventory.builder import (
     lst_me_content,
     make_inventory_zip,
     multi_device_lst_me_content,
+    tabular_lst_me_content,
 )
 
 
@@ -188,7 +189,7 @@ def test_parse_multiple_devices_filters_by_network_element_type(tmp_path: Path) 
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / LST_ME_FILENAME).write_bytes(_multi_content())
     evidence = parse_inventory(tmp_path, task_id="task-multi", province="江苏", operator="移动", product=" UMF2020 ")
-    assert evidence["parser_version"] == "4"
+    assert evidence["parser_version"] == "5"
     assert evidence["schema_version"] == 3
     assert evidence["status"] == "archived"
     assert evidence["network_element_type_filter"] == {
@@ -204,6 +205,67 @@ def test_parse_multiple_devices_filters_by_network_element_type(tmp_path: Path) 
     assert [item["matched"] for item in evidence["records"]] == [True, True]
     assert len(evidence["archived"]["devices"]) == 2
     assert evidence["archived"]["device_id"] is None
+
+
+def test_parse_tabular_lst_me_uses_uploaded_product_and_patch_version(tmp_path: Path) -> None:
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / LST_ME_FILENAME).write_bytes(tabular_lst_me_content())
+
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-tabular",
+        province="江苏",
+        operator="移动",
+        product="CSP",
+    )
+
+    assert evidence["status"] == "archived"
+    assert evidence["network_element_type_filter"] == {
+        "requested": "CSP",
+        "normalized": "CSP",
+        "status": "ok",
+        "matched_count": 1,
+        "unmatched_count": 1,
+    }
+    assert [device["normalized_name"] for device in evidence["devices"]] == ["CSP-NE-001"]
+    assert evidence["devices"][0]["version"]["raw_version"] == "27.0.0.13"
+
+
+def test_parse_network_element_type_comparison_is_uppercase(tmp_path: Path) -> None:
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / LST_ME_FILENAME).write_bytes(tabular_lst_me_content())
+
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-uppercase",
+        province="江苏",
+        operator="移动",
+        product="csp",
+    )
+
+    assert evidence["status"] == "archived"
+    assert evidence["network_element_type_filter"]["requested"] == "csp"
+    assert evidence["network_element_type_filter"]["normalized"] == "CSP"
+    assert evidence["devices"][0]["network_element_type"] == "CSP"
+
+
+def test_parse_repeated_network_element_type_ignores_case_differences(tmp_path: Path) -> None:
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / LST_ME_FILENAME).write_bytes(
+        b"NE name: Device-A\nME type: CSP\nME type: csp\nSoftware version: V1\n"
+    )
+
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-uppercase-repeat",
+        province="江苏",
+        operator="移动",
+        product="csp",
+    )
+
+    assert evidence["status"] == "archived"
+    assert evidence["records"][0]["network_element_type_status"] == "ok"
+    assert evidence["devices"][0]["network_element_type"] == "CSP"
 
 
 def test_parse_missing_network_element_type_filter_does_not_archive(tmp_path: Path) -> None:
@@ -323,7 +385,7 @@ def test_parse_header_time_is_converted_to_utc(tmp_path: Path) -> None:
         }
     ]
     assert evidence["schema_version"] == 3
-    assert evidence["parser_version"] == "4"
+    assert evidence["parser_version"] == "5"
 
 
 def test_parse_header_time_after_noise_line_and_tabs(tmp_path: Path) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from app.core.checksum import sha256_file
@@ -141,38 +142,57 @@ def test_real_container_resource_and_alarm_rule_results(tmp_path: Path) -> None:
 
 
 def test_real_package_network_element_types_match_product_dict() -> None:
-    """主样例包的网元类型必须与产品字典 code 一致，保证台账筛选能命中。"""
-    product_codes = {item.code for item in load_dicts().product}
-    assert product_codes == {"umf", "csp"}
+    """样例包的键值与表格式网元类型均能归一化到产品字典 code。"""
+    product_codes = {item.code.upper() for item in load_dicts().product}
+    assert product_codes == {"UMF", "CSP"}
     types_in_package = set()
     for line in LST_ME_TXT.splitlines():
         if line.startswith("网元类型: "):
             types_in_package.add(line.removeprefix("网元类型: ").strip())
-    assert types_in_package == product_codes
+            continue
+        cells = re.split(r"\s{2,}", line.strip())
+        if len(cells) >= 5 and cells[0] == "1":
+            types_in_package.add(cells[4])
+    assert {item.upper() for item in types_in_package} == product_codes
 
 
 def test_real_package_lst_me_feeds_device_ledger(tmp_path: Path) -> None:
-    """真实样例包解压现场可直接归档设备台账，且按网元类型筛选。"""
+    """样例包同时覆盖键值与表格式清单，并统一按上传网元类型筛选。"""
     data_dir, _ = _extract(tmp_path)
     csp = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="csp")
     assert csp["status"] == "archived"
     assert csp["execution_time"]["status"] == "ok"
     assert csp["execution_time"]["source"] == "lst_me"
     assert csp["execution_time"]["per_file"][0]["parsed_at"] == "2026-09-01T02:00:00+00:00"
-    assert [device["normalized_name"] for device in csp["devices"]] == ["CSP-SZ-01", "CSP-SZ-02"]
-    assert [record["normalized_name"] for record in csp["records"]] == ["CSP-SZ-01", "CSP-SZ-02"]
-    assert [device["version"]["status"] for device in csp["devices"]] == ["ok", "missing"]
-    assert csp["network_element_type_filter"]["matched_count"] == 2
-    assert csp["network_element_type_filter"]["unmatched_count"] == 1
+    assert csp["network_element_type_filter"]["normalized"] == "CSP"
+    assert [device["normalized_name"] for device in csp["devices"]] == [
+        "CSP-SZ-01",
+        "CSP-SZ-02",
+        "TABLE-CSP-01",
+    ]
+    assert [record["normalized_name"] for record in csp["records"]] == [
+        "CSP-SZ-01",
+        "CSP-SZ-02",
+        "TABLE-CSP-01",
+    ]
+    assert [device["version"]["status"] for device in csp["devices"]] == ["ok", "missing", "ok"]
+    assert csp["devices"][-1]["version"]["raw_version"] == "27.0.0.13"
+    assert csp["network_element_type_filter"]["matched_count"] == 3
+    assert csp["network_element_type_filter"]["unmatched_count"] == 2
 
     umf = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="umf")
     assert umf["status"] == "archived"
-    assert [device["normalized_name"] for device in umf["devices"]] == ["UMF-SZ-01"]
-    assert [record["normalized_name"] for record in umf["records"]] == ["UMF-SZ-01"]
+    assert umf["network_element_type_filter"]["normalized"] == "UMF"
+    assert [device["normalized_name"] for device in umf["devices"]] == ["UMF-SZ-01", "TABLE-UMF-01"]
+    assert [record["normalized_name"] for record in umf["records"]] == ["UMF-SZ-01", "TABLE-UMF-01"]
+    assert umf["devices"][-1]["version"]["raw_version"] == "27.0.0"
+    assert umf["network_element_type_filter"]["matched_count"] == 2
+    assert umf["network_element_type_filter"]["unmatched_count"] == 3
 
     mme = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="mme")
     assert mme["status"] == "not_archived"
     assert mme["not_archived_reason"] == "network_element_type_no_match"
+    assert mme["network_element_type_filter"]["unmatched_count"] == 5
 
 
 def test_real_alarm_flapping_contract_snapshot(tmp_path: Path) -> None:

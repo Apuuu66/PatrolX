@@ -29,7 +29,7 @@ ZZapp01BCN_app_Problem_scene_333.zip
 
 `alarm_history_*.zip` 内部只有多个告警 CSV，没有 `alarm_summary.json`。`PerfResult_*.zip` 内部都是测量单元 CSV；展开时按压缩包成员归组统一进入 `kpi/`。
 
-`Basic Information/LST ME.txt` 是网元清单，包含 UMF 与 CSP 两类网元：`UMF-SZ-01`、`CSP-SZ-01`（含软件版本）和 `CSP-SZ-02`（缺软件版本）。网元类型取值是小写 `umf` / `csp`，与 `deploy/config/dicts.yaml` 的 `product` 字典 code 全等，台账筛选才能命中。
+`Basic Information/LST ME.txt` 是网元清单，样例同时保留键值记录和真实导出的表头加数据行格式。键值记录包含 `UMF-SZ-01`、`CSP-SZ-01`（含软件版本）和 `CSP-SZ-02`（缺软件版本）；表格式记录追加 `TABLE-CSP-01`（使用补丁版本）和 `TABLE-UMF-01`（补丁版本为 `null`，回退基础版本）。文件中的网元类型可使用 `umf` / `csp` 或 `UMF` / `CSP`，解析器会把上传 `product` 与清单值统一转为大写后比较，上传值始终是唯一筛选依据。
 
 文件头部在第一条网元记录之前携带一行执行时间，行尾格式为 `YYYY-MM-DD  HH:MM:SS`：
 
@@ -37,7 +37,7 @@ ZZapp01BCN_app_Problem_scene_333.zip
 +++    CSP/*xx*/     2026-09-01  10:00:00
 ```
 
-样例生成器使用固定时间戳 `2026-09-01  10:00:00`。解析器只扫描第一条设备记录之前的头部区域，取首个行尾匹配行；该行不参与设备键值解析，文件内全部设备共用这一执行时间。时间按北京时间（UTC+8）解释并存为 UTC。
+样例生成器使用固定时间戳 `2026-09-01  10:00:00`。解析器只扫描第一条设备记录之前的头部区域，取首个行尾匹配行；该行不参与设备记录解析，文件内全部设备共用这一执行时间。时间按北京时间（UTC+8）解释并存为 UTC。
 
 ## 嵌套子包结构
 
@@ -173,10 +173,10 @@ logs/UMFAcc/logs/paas-192.168.2.3/UMFAcc.log
 - `log.umf_acc`：检查连接池耗尽和 SCTP 链路错误。
 - `CspService` 暂无专属规则，日志由通用日志规则读取，保持多服务展示效果。
 
-台账基准（`product` 取字典 code）：
+台账基准（`product` 取字典 code，比较时统一转为大写）：
 
 | 上传 `product` | 命中记录 | 归档结果 |
 | --- | --- | --- |
-| `umf` | `UMF-SZ-01` | 归档 1 台设备 |
-| `csp` | `CSP-SZ-01`、`CSP-SZ-02` | 归档 2 台设备（`CSP-SZ-02` 版本缺失） |
+| `umf` | `UMF-SZ-01`、`TABLE-UMF-01` | 归档 2 台设备（表格式设备回退使用 `27.0.0`） |
+| `csp` | `CSP-SZ-01`、`CSP-SZ-02`、`TABLE-CSP-01` | 归档 3 台设备（`CSP-SZ-02` 版本缺失，表格式设备使用 `27.0.0.13`） |
 | 其他 | 无 | `not_archived`，原因 `network_element_type_no_match` |

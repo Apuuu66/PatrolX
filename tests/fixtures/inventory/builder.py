@@ -11,6 +11,42 @@ HEADER_TIME_PREFIX = "+++    CSP/*××××××××××××*/     "
 HEADER_TIME_SAMPLE = "2025-05-26  14:40:36"
 HEADER_TIME_INVALID = "2025-02-30  14:40:36"
 HEADER_TIME_FUTURE = "2099-01-01  00:00:00"
+TABULAR_COLUMNS = (
+    "Domain ID",
+    "Subnet ID",
+    "ME ID",
+    "ME name",
+    "ME type",
+    "ME version",
+    "ME vendor",
+    "ME user-defined state",
+    "Location name",
+    "ME lock status",
+    "ME Country(Region) Code",
+    "ME Interface ID",
+    "ME Language",
+    "ME patch version",
+    "ME mode",
+    "Architecture Type",
+)
+TABULAR_DEFAULTS = {
+    "Domain ID": "1",
+    "Subnet ID": "0",
+    "ME ID": "0",
+    "ME name": "CSP-NE-001",
+    "ME type": "CSP",
+    "ME version": "27.0.0",
+    "ME vendor": "HUAWEI",
+    "ME user-defined state": "Normal",
+    "Location name": "null",
+    "ME lock status": "Unlocked",
+    "ME Country(Region) Code": "NULL",
+    "ME Interface ID": "CSPEdge27.0.0.13",
+    "ME Language": "ENG",
+    "ME patch version": "27.0.0.13",
+    "ME mode": "All-in-one mode",
+    "Architecture Type": "ARM",
+}
 
 
 def header_time_line(value: str) -> str:
@@ -66,6 +102,42 @@ def multi_device_lst_me_content(
         if record.get("version") is not None:
             lines.append(f"Software version: {record['version']}")
         lines.append("")
+    return ("\n".join(lines) + "\n").encode(encoding)
+
+
+def tabular_lst_me_content(
+    rows: list[dict[str, str]] | None = None,
+    *,
+    encoding: str = "utf-8",
+    header_time: str | None = None,
+) -> bytes:
+    """生成与真实 ``LST ME`` 导出一致的表头加数据行格式。
+
+    行字段以两个及以上空格分隔；未提供的列使用代表性的固定默认值。
+    """
+    effective_rows = rows or [
+        {"ME name": "CSP-NE-001", "ME type": "CSP", "ME version": "27.0.0", "ME patch version": "27.0.0.13"},
+        {"ME name": "UMF-NE-001", "ME type": "UMF", "ME version": "27.0.0", "ME patch version": "27.0.0.16"},
+    ]
+    lines: list[str] = []
+    if header_time is not None:
+        lines.append(header_time_line(header_time))
+    lines.extend(
+        [
+            "O&M    #304",
+            "%%/*MEID=0*/LST ME:;%%",
+            "RETCODE = 0  Operation succeeded",
+            "",
+            "The result is as follows",
+            "------------------------",
+            "  ".join(TABULAR_COLUMNS),
+            "",
+        ]
+    )
+    for row in effective_rows:
+        values = [row.get(column, TABULAR_DEFAULTS[column]) for column in TABULAR_COLUMNS]
+        lines.append("  ".join(values))
+    lines.extend(["", f"(Number of results = {len(effective_rows)})", "", "---    END"])
     return ("\n".join(lines) + "\n").encode(encoding)
 
 

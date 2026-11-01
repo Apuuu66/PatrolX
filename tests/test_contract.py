@@ -305,7 +305,7 @@ def _schema_enum(prop: dict, schemas: dict) -> list[str]:
 
 def test_inventory_execution_time_contract_delta() -> None:
     """FR-004/FR-010：观测与版本历史暴露时间来源，任务证据暴露文件级执行时间。"""
-    assert inventory_parser.PARSER_VERSION == "4"
+    assert inventory_parser.PARSER_VERSION == "5"
     assert inventory_parser.SCHEMA_VERSION == 3
 
     schemas = _load_contract()["components"]["schemas"]

@@ -17,8 +17,7 @@ PACKAGE_NAME = "ZZapp01BCN_app_Problem_scene_333.zip"
 BASE = "ZZapp01BCN_app Problem scene_333/333/app Problem scene"
 FIXED_DATE = (2026, 9, 18, 9, 0, 0)
 
-# 网元类型取值必须与 deploy/config/dicts.yaml 的 product 字典 code 一致：
-# 台账筛选是规范化后的全等比较，不做大小写转换。
+# 网元类型取值来自 product 字典 code；台账筛选会先把上传值和清单值统一转为大写。
 NETWORK_ELEMENT_TYPE_UMF = "umf"
 NETWORK_ELEMENT_TYPE_CSP = "csp"
 
@@ -43,6 +42,18 @@ LST_ME_TXT = (
     f"网元类型: {NETWORK_ELEMENT_TYPE_CSP}\n"
     "\n"
     "(结果个数 = 3)\n"
+    "---    END\n"
+    "\n"
+    "Domain ID  Subnet ID  ME ID  ME name       ME type  ME version  ME vendor  ME user-defined state  "
+    "Location name  ME lock status  ME Country(Region) Code  ME Interface ID  ME Language  ME patch version  "
+    "ME mode          Architecture Type\n"
+    "1          0          0      TABLE-CSP-01  CSP      27.0.0      HUAWEI     Normal                 "
+    "null           Unlocked        NULL                     CSPEdge27.0.0.13  ENG          27.0.0.13         "
+    "All-in-one mode  ARM\n"
+    "1          0          1      TABLE-UMF-01  umf      27.0.0      HUAWEI     Normal                 "
+    "null           Unlocked        NULL                     UMF27.0.0.16      ENG          null              "
+    "All-in-one mode  ARM\n"
+    "(Number of results = 2)\n"
     "---    END\n"
 )
 

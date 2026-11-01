@@ -16,10 +16,11 @@ from app.core.encoding import decode_text_with_fallback
 from app.models.schemas import PackageKind
 
 PARSER_ID = "site_device_lst_me"
-PARSER_VERSION = "4"
+PARSER_VERSION = "5"
 SCHEMA_VERSION = 3
 SOURCE_PATTERN = re.compile(r"^config/(?:.*/)?LST ME\.txt$", re.IGNORECASE)
 HEADER_TIME_PATTERN = re.compile(r"(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>\d{2}:\d{2}:\d{2})\s*$")
+TABLE_COLUMN_SEPARATOR = re.compile(r"\s{2,}")
 BEIJING_TZ = timezone(timedelta(hours=8))
 TIME_FUTURE_TOLERANCE = timedelta(minutes=5)
 TIME_SOURCE_LST_ME = "lst_me"
@@ -36,6 +37,9 @@ EMPTY_EXECUTION_TIME: dict[str, Any] = {"status": "missing", "source": TIME_SOUR
 DEVICE_ALIASES = {"ne name", "me name", "网元名称", "设备名称"}
 NETWORK_ELEMENT_TYPE_ALIASES = {"me type", "ne type", "网元类型"}
 VERSION_ALIASES = {"software version", "sw version", "软件版本"}
+TABLE_VERSION_ALIASES = VERSION_ALIASES | {"me version"}
+TABLE_PATCH_VERSION_ALIASES = {"me patch version", "patch version"}
+TABLE_MISSING_VALUES = {"", "-", "n/a", "none", "null"}
 
 
 def utc_now() -> datetime:
@@ -51,6 +55,11 @@ def iso_utc(value: datetime | None = None) -> str:
 def normalize_device_name(value: str) -> str:
     """按契约规范化设备名和网元类型：NFC、去首尾空白、合并空白。"""
     return re.sub(r"\s+", " ", normalize("NFC", value)).strip()
+
+
+def normalize_network_element_type(value: str) -> str:
+    """规范化网元类型：空白归一后统一转为大写。"""
+    return normalize_device_name(value).upper()
 
 
 def device_identity(province: str, normalized_name: str) -> tuple[str, str]:
@@ -256,6 +265,50 @@ def _new_record(relative: str) -> dict[str, Any]:
     }
 
 
+def _table_cells(line: str) -> list[str]:
+    """按真实 ``LST ME`` 导出中的两个及以上空白切分表格列。"""
+    return [cell.strip() for cell in TABLE_COLUMN_SEPARATOR.split(line.strip()) if cell.strip()]
+
+
+def _table_layout(line: str) -> dict[str, int] | None:
+    """识别表格表头，并返回名称、类型和版本列的位置。"""
+    columns = [normalize_device_name(cell).casefold() for cell in _table_cells(line)]
+    if len(columns) < 2:
+        return None
+    name_index = next((index for index, value in enumerate(columns) if value in DEVICE_ALIASES), None)
+    type_index = next((index for index, value in enumerate(columns) if value in NETWORK_ELEMENT_TYPE_ALIASES), None)
+    if name_index is None or type_index is None:
+        return None
+    patch_version_index = next(
+        (index for index, value in enumerate(columns) if value in TABLE_PATCH_VERSION_ALIASES),
+        None,
+    )
+    version_index = next((index for index, value in enumerate(columns) if value in TABLE_VERSION_ALIASES), None)
+    required_index = max(name_index, type_index)
+    if patch_version_index is not None:
+        required_index = max(required_index, patch_version_index)
+    elif version_index is not None:
+        required_index = max(required_index, version_index)
+    return {
+        "name_index": name_index,
+        "type_index": type_index,
+        "version_index": version_index if version_index is not None else -1,
+        "patch_version_index": patch_version_index if patch_version_index is not None else -1,
+        "required_index": required_index,
+    }
+
+
+def _table_version(cells: list[str], layout: dict[str, int]) -> str | None:
+    """优先读取补丁版本；补丁为空时回退到基础版本。"""
+    for key in ("patch_version_index", "version_index"):
+        index = layout[key]
+        if 0 <= index < len(cells):
+            value = cells[index].strip()
+            if value.casefold() not in TABLE_MISSING_VALUES:
+                return value
+    return None
+
+
 def _parse_file(
     path: Path,
     relative: str,
@@ -264,6 +317,7 @@ def _parse_file(
     records: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
+    table_layout: dict[str, int] | None = None
     header_time = _missing_header_time()
     try:
         text = decode_text_with_fallback(path.read_bytes())[0]
@@ -272,13 +326,35 @@ def _parse_file(
 
     for line_no, raw_line in enumerate(text.splitlines(), start=1):
         # 头部区域：第一条设备记录之前，命中即锁定并停止扫描，且不参与键值字段解析。
-        if current is None and header_time["line"] is None:
+        if not records and header_time["line"] is None:
             matched_time = _parse_header_time(raw_line)
             if matched_time is not None:
                 header_time = {**matched_time, "line": line_no}
                 continue
         line = raw_line.strip()
-        if not line or ":" not in line and "=" not in line:
+        if not line:
+            continue
+        if table_layout is not None:
+            cells = _table_cells(line)
+            if len(cells) > table_layout["required_index"]:
+                name = cells[table_layout["name_index"]].strip()
+                if name.casefold() not in TABLE_MISSING_VALUES:
+                    current = _new_record(relative)
+                    current["names"].append((name, line_no))
+                    network_element_type = cells[table_layout["type_index"]].strip()
+                    if network_element_type.casefold() not in TABLE_MISSING_VALUES:
+                        current["types"].append((network_element_type, line_no))
+                    version = _table_version(cells, table_layout)
+                    if version is not None:
+                        current["versions"].append((version, line_no))
+                    records.append(current)
+                    continue
+            table_layout = None
+        detected_layout = _table_layout(line)
+        if detected_layout is not None:
+            table_layout = detected_layout
+            continue
+        if ":" not in line and "=" not in line:
             continue
         separator = ":" if ":" in line else "="
         key, value = line.split(separator, 1)
@@ -323,9 +399,10 @@ def _record_output(
 
     type_values = [value for value, _ in record["types"]]
     unique_type_values = list(dict.fromkeys(type_values))
-    if not unique_type_values:
+    normalized_type_values = list(dict.fromkeys(normalize_network_element_type(value) for value in type_values))
+    if not normalized_type_values:
         type_status = "missing"
-    elif len(unique_type_values) == 1:
+    elif len(normalized_type_values) == 1:
         type_status = "ok"
     else:
         type_status = "conflict"
@@ -339,7 +416,7 @@ def _record_output(
     else:
         version_status = "conflict"
 
-    normalized_type = normalize_device_name(unique_type_values[0]) if type_status == "ok" else None
+    normalized_type = normalized_type_values[0] if type_status == "ok" else None
     matched = bool(normalized_name and normalized_product and normalized_type and normalized_type == normalized_product)
     return {
         "raw_name": name,
@@ -407,7 +484,7 @@ def parse_inventory(
     }
 
     requested_product = product.strip() if product and product.strip() else None
-    normalized_product = normalize_device_name(requested_product) if requested_product else None
+    normalized_product = normalize_network_element_type(requested_product) if requested_product else None
 
     sources: list[tuple[Path, str]] = []
     for path in sorted(task_dir.rglob("*")):

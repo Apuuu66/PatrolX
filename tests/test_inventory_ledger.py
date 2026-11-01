@@ -23,6 +23,7 @@ from tests.fixtures.inventory.builder import (
     HEADER_TIME_SAMPLE,
     lst_me_content,
     multi_device_lst_me_content,
+    tabular_lst_me_content,
 )
 
 
@@ -53,6 +54,24 @@ def test_archive_creates_unique_observation_and_device(task_dir: Path) -> None:
         assert len(observations) == 1
         assert observations[0].version_status == "ok"
         assert observations[0].device_name == "Device-A"
+
+
+def test_archive_tabular_lst_me_creates_observation_for_uploaded_product(task_dir: Path) -> None:
+    _write_source(task_dir, tabular_lst_me_content().decode())
+    evidence = parse_inventory(task_dir, task_id="task-tabular", province="江苏", operator="移动", product="csp")
+
+    archived = archive_inventory(
+        evidence,
+        task_id="task-tabular",
+        package_kind="inspection",
+        completed_at=datetime.now(UTC),
+    )
+
+    assert archived["status"] == "archived"
+    with session_factory() as session:
+        observation = session.query(InventoryObservation).one()
+        assert observation.device_name == "CSP-NE-001"
+        assert observation.raw_version == "27.0.0.13"
 
 
 def test_archive_rerun_overwrites_and_audits_once(task_dir: Path) -> None:
