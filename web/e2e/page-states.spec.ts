@@ -148,8 +148,8 @@ test("密度切换、复制与展开可键盘触发且有可见焦点", async ({
   await page.keyboard.press("Enter");
   await expect(page.locator(".task-table")).toHaveClass(/density-comfortable/);
 
-  // 复制与展开 / 收起：进入规则详情继续用键盘操作。
-  await page.goto("/tasks/task-alarm-flapping-e2e/rules/alarm.flapping");
+  // 活动 KPI 规则仍声明的源文件匹配范围支持键盘复制。
+  await page.goto("/tasks/task-kpi-history-current/rules/kpi.measurement_units");
   await page
     .context()
     .grantPermissions(["clipboard-read", "clipboard-write"], { origin: "http://127.0.0.1:5183" });
@@ -168,6 +168,8 @@ test("密度切换、复制与展开可键盘触发且有可见焦点", async ({
   const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
   expect(clipboardText).toBe(patternText);
 
+  // 历史告警结果只读展示，但发现项的展开 / 收起仍可键盘操作。
+  await page.goto("/tasks/task-alarm-flapping-e2e/rules/alarm.flapping");
   const toggle = page.locator(".rule-finding-toggle").first();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   expect(await tabTo(page, toggle)).toBe(true);

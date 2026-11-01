@@ -133,6 +133,7 @@ function renderPage(ruleCode = "alarm.flapping") {
 
 describe("RuleDetailPage", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(api.getTask).mockResolvedValue({ status: "completed" } as never);
   });
 
@@ -221,6 +222,25 @@ describe("RuleDetailPage", () => {
     });
     expect(screen.getByTestId("rule-skip-reason").textContent).toContain("未提供跳过原因");
     expect(screen.getByTestId("rule-section-conclusion").textContent).toContain("未提供跳过原因");
+  });
+
+  it("已下线规则展示历史只读提示并禁止重跑，同时保留发现与证据", async () => {
+    vi.mocked(api.getRuleResult).mockResolvedValue(makeRule());
+    vi.mocked(api.listInspectors).mockResolvedValue([]);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("rule-offline-banner").textContent).toContain("该规则已下线，仅供历史查看");
+    });
+
+    const rerunButton = screen.getByRole("button", { name: /重跑本规则/ }) as HTMLButtonElement;
+    expect(rerunButton.disabled).toBe(true);
+    fireEvent.click(rerunButton);
+    expect(api.rerunTask).not.toHaveBeenCalled();
+    expect(screen.getByTestId("rule-section-findings").textContent).toContain("未清除且反复的告警");
+    expect(screen.getByTestId("rule-section-evidence").textContent).toContain("告警生命周期分组");
+    expect(screen.getByTestId("rule-section-source-patterns").textContent).toContain("该规则未声明源文件匹配范围");
   });
 
   it("证据表默认精简列，切换后显示全部列", async () => {

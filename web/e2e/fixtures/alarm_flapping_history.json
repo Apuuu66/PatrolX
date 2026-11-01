@@ -1,0 +1,946 @@
+{
+  "code": "alarm.flapping",
+  "name": "告警闪断检测",
+  "category": "alarm",
+  "priority": 1,
+  "execution_order": 0,
+  "status": "fail",
+  "severity": "high",
+  "summary": "告警生命周期判定完成：17 个分组，反复闪断 2 个，未清除 9 个，短告警 1 个，Finding 3 条",
+  "skip_reason": null,
+  "executed_at": "2026-10-20T08:00:00Z",
+  "duration_ms": 87,
+  "metrics": [
+    {
+      "key": "alarm_groups",
+      "label": "告警分组数",
+      "value": 17,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "flapping_groups",
+      "label": "闪断分组数",
+      "value": 2,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "uncleared_repeated_groups",
+      "label": "未清除反复分组数",
+      "value": 1,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "short_alarm_groups",
+      "label": "短告警分组数",
+      "value": 1,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "stable_groups",
+      "label": "稳定分组数",
+      "value": 5,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "observation_insufficient_groups",
+      "label": "观察窗不足分组数",
+      "value": 11,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "out_of_window_groups",
+      "label": "窗口外再现分组数",
+      "value": 1,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "unrecovered_after_window_groups",
+      "label": "窗口后仍未恢复分组数",
+      "value": 1,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "excluded_rows",
+      "label": "被排除行数",
+      "value": 0,
+      "unit": "行",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "duplicate_rows",
+      "label": "重复行数",
+      "value": 0,
+      "unit": "行",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    },
+    {
+      "key": "failed_files",
+      "label": "解析失败文件数",
+      "value": 0,
+      "unit": "个",
+      "threshold": null,
+      "baseline": null,
+      "series": null
+    }
+  ],
+  "findings": [
+    {
+      "finding_id": "alarm.flapping-uncleared_repeated-1051-UMF核心服务",
+      "title": "未清除且反复的告警：1051 / UMF核心服务",
+      "severity": "critical",
+      "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+      "evidence": "分组 1051 / UMF核心服务；出现 3 次（已清除 0 / 未清除 3）；首次出现 2026-09-02T00:10:00+08:00；最近出现 2026-09-02T01:00:00+08:00；最近清除 无；最短复发间隔 无；触发复发窗口 2026-09-02T00:10:00+08:00 → 2026-09-02T01:00:00+08:00（3 次）；本次阈值：短告警 300 秒、复发窗口 3600 秒/≥3 次、闪断间隔 1800 秒、稳定观察窗 1800 秒；操作窗 00:00-02:00 内 3 次 / 窗外 0 次；定位 pod-umf-9；窗口后仍未恢复；来源 alarm/alarm_history_202609010101137101_003.csv:4（共 3 条）",
+      "details": "告警分组 1051 / UMF核心服务 判定为 未清除且反复",
+      "recommendation": "优先处置未清除且反复的告警，其次核查清除后闪断再现的分组，确认根因消除后再关闭",
+      "metrics": null
+    },
+    {
+      "finding_id": "alarm.flapping-cleared_repeated-1052-UMF核心服务",
+      "title": "清除后仍反复闪断的告警：1052 / UMF核心服务",
+      "severity": "high",
+      "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+      "evidence": "分组 1052 / UMF核心服务；出现 3 次（已清除 3 / 未清除 0）；首次出现 2026-09-02T11:00:00+08:00；最近出现 2026-09-02T11:50:00+08:00；最近清除 2026-09-02T12:00:00+08:00；最短复发间隔 600 秒；触发复发窗口 2026-09-02T11:00:00+08:00 → 2026-09-02T11:50:00+08:00（3 次）；本次阈值：短告警 300 秒、复发窗口 3600 秒/≥3 次、闪断间隔 1800 秒、稳定观察窗 1800 秒；操作窗 00:00-02:00 内 0 次 / 窗外 3 次；定位 pod-umf-9；来源 alarm/alarm_history_202609010101137101_003.csv:7（共 3 条）",
+      "details": "告警分组 1052 / UMF核心服务 判定为 已清除但反复",
+      "recommendation": "优先处置未清除且反复的告警，其次核查清除后闪断再现的分组，确认根因消除后再关闭",
+      "metrics": null
+    },
+    {
+      "finding_id": "alarm.flapping-cleared_short-1002-UMF核心服务",
+      "title": "已清除的单次短告警：1002 / UMF核心服务",
+      "severity": "medium",
+      "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+      "evidence": "分组 1002 / UMF核心服务；出现 1 次（已清除 1 / 未清除 0）；首次出现 2026-09-01T10:00:04+08:00；最近出现 2026-09-01T10:00:04+08:00；最近清除 2026-09-01T10:00:30+08:00；最短复发间隔 无；未触发复发窗口；本次阈值：短告警 300 秒、复发窗口 3600 秒/≥3 次、闪断间隔 1800 秒、稳定观察窗 1800 秒；操作窗 00:00-02:00 内 0 次 / 窗外 1 次；定位 umf-node-01；来源 alarm/alarm_history_202609010101137101_001.csv:3（共 1 条）",
+      "details": "告警分组 1002 / UMF核心服务 判定为 已清除但短告警",
+      "recommendation": "优先处置未清除且反复的告警，其次核查清除后闪断再现的分组，确认根因消除后再关闭",
+      "metrics": null
+    }
+  ],
+  "metadata": {
+    "alarm_flapping": {
+      "schema_version": 1,
+      "policy": {
+        "short_alarm_sec": 300,
+        "repeat_window_sec": 3600,
+        "min_repeat_count": 3,
+        "flap_gap_sec": 1800,
+        "stable_observation_sec": 1800,
+        "operation_window": "00:00-02:00",
+        "operation_window_enabled": true,
+        "parameter_source": "inspector_default"
+      },
+      "coverage": {
+        "start_at": "2026-09-01T10:00:01+08:00",
+        "end_at": "2026-09-02T12:05:30+08:00",
+        "span_sec": 93929
+      },
+      "totals": {
+        "rows": 22,
+        "valid_rows": 22,
+        "groups": 17,
+        "excluded_rows": 0,
+        "duplicate_rows": 0,
+        "failed_files": 0,
+        "findings_truncated": false,
+        "groups_truncated": false
+      },
+      "state_counts": {
+        "uncleared_repeated": 1,
+        "uncleared_single": 8,
+        "cleared_repeated": 1,
+        "cleared_short": 1,
+        "observation_insufficient": 1,
+        "cleared_stable": 5
+      },
+      "groups": [
+        {
+          "alarm_code": "1051",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "pod-umf-9"
+          ],
+          "event_types": [
+            "通信告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 3,
+          "state": "uncleared_repeated",
+          "occurrence_count": 3,
+          "cleared_count": 0,
+          "uncleared_count": 3,
+          "first_seen_at": "2026-09-02T00:10:00+08:00",
+          "recent_seen_at": "2026-09-02T01:00:00+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": true,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 3,
+          "out_of_window_occurrences": 0,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": true,
+          "flap_event_count": 1,
+          "flap_events": [
+            {
+              "started_at": "2026-09-02T00:10:00+08:00",
+              "last_seen_at": "2026-09-02T01:00:00+08:00",
+              "ended_at": null,
+              "occurrences": 3,
+              "duration_sec": null,
+              "gaps_sec": [],
+              "is_flap": true
+            }
+          ],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 4
+            },
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 5
+            },
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 6
+            }
+          ]
+        },
+        {
+          "alarm_code": "1013",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "pod-umf-3"
+          ],
+          "event_types": [
+            "性能告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:19:55+08:00",
+          "recent_seen_at": "2026-09-01T10:19:55+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_002.csv",
+              "line_no": 7
+            }
+          ]
+        },
+        {
+          "alarm_code": "1012",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "umf-node-02"
+          ],
+          "event_types": [
+            "许可告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:17:41+08:00",
+          "recent_seen_at": "2026-09-01T10:17:41+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_002.csv",
+              "line_no": 6
+            }
+          ]
+        },
+        {
+          "alarm_code": "1011",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "umf-node-02"
+          ],
+          "event_types": [
+            "通信告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:15:08+08:00",
+          "recent_seen_at": "2026-09-01T10:15:08+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_002.csv",
+              "line_no": 5
+            }
+          ]
+        },
+        {
+          "alarm_code": "1008",
+          "object": "CSP核心服务",
+          "app_ids": [
+            "9001"
+          ],
+          "locations": [
+            "csp-node-01"
+          ],
+          "event_types": [
+            "通信告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:09:12+08:00",
+          "recent_seen_at": "2026-09-01T10:09:12+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_002.csv",
+              "line_no": 2
+            }
+          ]
+        },
+        {
+          "alarm_code": "1007",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "csp-node-01"
+          ],
+          "event_types": [
+            "性能告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:06:47+08:00",
+          "recent_seen_at": "2026-09-01T10:06:47+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+              "line_no": 8
+            }
+          ]
+        },
+        {
+          "alarm_code": "1005",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "pod-umf-2"
+          ],
+          "event_types": [
+            "性能告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:04:35+08:00",
+          "recent_seen_at": "2026-09-01T10:04:35+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+              "line_no": 6
+            }
+          ]
+        },
+        {
+          "alarm_code": "1003",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "pod-umf-1"
+          ],
+          "event_types": [
+            "性能告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:02:11+08:00",
+          "recent_seen_at": "2026-09-01T10:02:11+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+              "line_no": 4
+            }
+          ]
+        },
+        {
+          "alarm_code": "1001",
+          "object": "CSP核心服务",
+          "app_ids": [
+            "9001"
+          ],
+          "locations": [
+            "paas-192.168.2.2"
+          ],
+          "event_types": [
+            "通信告警"
+          ],
+          "clear_types": [],
+          "source_repeat_max": 1,
+          "state": "uncleared_single",
+          "occurrence_count": 1,
+          "cleared_count": 0,
+          "uncleared_count": 1,
+          "first_seen_at": "2026-09-01T10:00:01+08:00",
+          "recent_seen_at": "2026-09-01T10:00:01+08:00",
+          "recent_cleared_at": null,
+          "max_duration_sec": 0,
+          "total_duration_sec": 0,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": null,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+              "line_no": 2
+            }
+          ]
+        },
+        {
+          "alarm_code": "1052",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "pod-umf-9"
+          ],
+          "event_types": [
+            "通信告警"
+          ],
+          "clear_types": [
+            "自动清除"
+          ],
+          "source_repeat_max": 3,
+          "state": "cleared_repeated",
+          "occurrence_count": 3,
+          "cleared_count": 3,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-02T11:00:00+08:00",
+          "recent_seen_at": "2026-09-02T11:50:00+08:00",
+          "recent_cleared_at": "2026-09-02T12:00:00+08:00",
+          "max_duration_sec": 600,
+          "total_duration_sec": 1800,
+          "min_repeat_gap_sec": 600,
+          "repeated": true,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": 330,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 3,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 1,
+          "flap_events": [
+            {
+              "started_at": "2026-09-02T11:00:00+08:00",
+              "last_seen_at": "2026-09-02T11:50:00+08:00",
+              "ended_at": "2026-09-02T12:00:00+08:00",
+              "occurrences": 3,
+              "duration_sec": 3600,
+              "gaps_sec": [
+                1200,
+                600
+              ],
+              "is_flap": true
+            }
+          ],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 7
+            },
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 8
+            },
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 9
+            }
+          ]
+        },
+        {
+          "alarm_code": "1002",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "umf-node-01"
+          ],
+          "event_types": [
+            "通信告警"
+          ],
+          "clear_types": [
+            "自动清除"
+          ],
+          "source_repeat_max": 1,
+          "state": "cleared_short",
+          "occurrence_count": 1,
+          "cleared_count": 1,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-01T10:00:04+08:00",
+          "recent_seen_at": "2026-09-01T10:00:04+08:00",
+          "recent_cleared_at": "2026-09-01T10:00:30+08:00",
+          "max_duration_sec": 26,
+          "total_duration_sec": 26,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": true,
+          "observation_insufficient": false,
+          "observation_gap_sec": 93900,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+              "line_no": 3
+            }
+          ]
+        },
+        {
+          "alarm_code": "1053",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "pod-umf-9"
+          ],
+          "event_types": [
+            "通信告警"
+          ],
+          "clear_types": [
+            "自动清除"
+          ],
+          "source_repeat_max": 1,
+          "state": "observation_insufficient",
+          "occurrence_count": 1,
+          "cleared_count": 1,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-02T12:00:00+08:00",
+          "recent_seen_at": "2026-09-02T12:00:00+08:00",
+          "recent_cleared_at": "2026-09-02T12:05:30+08:00",
+          "max_duration_sec": 330,
+          "total_duration_sec": 330,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": true,
+          "observation_gap_sec": 0,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 10
+            }
+          ]
+        },
+        {
+          "alarm_code": "1050",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "pod-umf-9"
+          ],
+          "event_types": [
+            "性能告警"
+          ],
+          "clear_types": [
+            "自动清除"
+          ],
+          "source_repeat_max": 2,
+          "state": "cleared_stable",
+          "occurrence_count": 2,
+          "cleared_count": 2,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-02T00:30:00+08:00",
+          "recent_seen_at": "2026-09-02T02:30:00+08:00",
+          "recent_cleared_at": "2026-09-02T02:40:00+08:00",
+          "max_duration_sec": 900,
+          "total_duration_sec": 1500,
+          "min_repeat_gap_sec": 6300,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": false,
+          "observation_gap_sec": 33930,
+          "in_window_occurrences": 1,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": true,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 2
+            },
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_003.csv",
+              "line_no": 3
+            }
+          ]
+        },
+        {
+          "alarm_code": "1010",
+          "object": "CSP核心服务",
+          "app_ids": [
+            "9001"
+          ],
+          "locations": [
+            "pod-csp-2"
+          ],
+          "event_types": [
+            "性能告警"
+          ],
+          "clear_types": [
+            "自动清除"
+          ],
+          "source_repeat_max": 1,
+          "state": "cleared_stable",
+          "occurrence_count": 1,
+          "cleared_count": 1,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-01T10:13:20+08:00",
+          "recent_seen_at": "2026-09-01T10:13:20+08:00",
+          "recent_cleared_at": "2026-09-01T10:31:05+08:00",
+          "max_duration_sec": 1065,
+          "total_duration_sec": 1065,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": false,
+          "observation_gap_sec": 92065,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_002.csv",
+              "line_no": 4
+            }
+          ]
+        },
+        {
+          "alarm_code": "1009",
+          "object": "CSP核心服务",
+          "app_ids": [
+            "9001"
+          ],
+          "locations": [
+            "pod-csp-1"
+          ],
+          "event_types": [
+            "进程告警"
+          ],
+          "clear_types": [
+            "自动清除"
+          ],
+          "source_repeat_max": 1,
+          "state": "cleared_stable",
+          "occurrence_count": 1,
+          "cleared_count": 1,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-01T10:11:33+08:00",
+          "recent_seen_at": "2026-09-01T10:11:33+08:00",
+          "recent_cleared_at": "2026-09-01T10:24:10+08:00",
+          "max_duration_sec": 757,
+          "total_duration_sec": 757,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": false,
+          "observation_gap_sec": 92480,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_002.csv",
+              "line_no": 3
+            }
+          ]
+        },
+        {
+          "alarm_code": "1006",
+          "object": "CSP核心服务",
+          "app_ids": [
+            "9001"
+          ],
+          "locations": [
+            "csp-node-01"
+          ],
+          "event_types": [
+            "业务告警"
+          ],
+          "clear_types": [
+            "手动清除"
+          ],
+          "source_repeat_max": 1,
+          "state": "cleared_stable",
+          "occurrence_count": 1,
+          "cleared_count": 1,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-01T10:05:02+08:00",
+          "recent_seen_at": "2026-09-01T10:05:02+08:00",
+          "recent_cleared_at": "2026-09-01T10:20:00+08:00",
+          "max_duration_sec": 898,
+          "total_duration_sec": 898,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": false,
+          "observation_gap_sec": 92730,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+              "line_no": 7
+            }
+          ]
+        },
+        {
+          "alarm_code": "1004",
+          "object": "UMF核心服务",
+          "app_ids": [
+            "9002"
+          ],
+          "locations": [
+            "umf-node-01"
+          ],
+          "event_types": [
+            "安全告警"
+          ],
+          "clear_types": [
+            "手动清除"
+          ],
+          "source_repeat_max": 1,
+          "state": "cleared_stable",
+          "occurrence_count": 1,
+          "cleared_count": 1,
+          "uncleared_count": 0,
+          "first_seen_at": "2026-09-01T10:03:21+08:00",
+          "recent_seen_at": "2026-09-01T10:03:21+08:00",
+          "recent_cleared_at": "2026-09-01T10:12:00+08:00",
+          "max_duration_sec": 519,
+          "total_duration_sec": 519,
+          "min_repeat_gap_sec": null,
+          "repeated": false,
+          "is_short": false,
+          "observation_insufficient": false,
+          "observation_gap_sec": 93210,
+          "in_window_occurrences": 0,
+          "out_of_window_occurrences": 1,
+          "out_of_window_reappear": false,
+          "unrecovered_after_window": false,
+          "flap_event_count": 0,
+          "flap_events": [],
+          "evidence_records": [
+            {
+              "source_file": "alarm/alarm_history_202609010101137101_001.csv",
+              "line_no": 5
+            }
+          ]
+        }
+      ],
+      "notes": [
+        "恢复结论只基于清除时间与观察窗，status 字段仅作展示，不作为恢复证据",
+        "操作窗 00:00-02:00（本地时间）仅作证据标注，不参与主状态判定，窗口结束后未清除的告警显式标注"
+      ]
+    }
+  }
+}

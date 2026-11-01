@@ -332,7 +332,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rerun Task V2 */
+        /**
+         * Rerun Task V2
+         * @description 仅可重跑当前活动普通规则；活动规则库仅包含 KPI 巡检规则。已删除或未注册的历史规则不可重跑，历史结果仍可只读查看。
+         */
         post: operations["rerunTaskV2"];
         delete?: never;
         options?: never;
@@ -349,7 +352,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rebuild Task V2 */
+        /**
+         * Rebuild Task V2
+         * @description 按当前活动普通规则库重建任务；活动规则库仅包含 KPI 巡检规则。已删除或未注册的历史规则不会被恢复或重建，其历史结果仍可只读查看。
+         */
         post: operations["rebuildTaskV2"];
         delete?: never;
         options?: never;
@@ -415,7 +421,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Rule Result V2 */
+        /**
+         * Get Rule Result V2
+         * @description 返回任务现场或数据库中的规则结果；已删除规则的历史结果继续可读。隐藏的解压基础设施规则不通过本接口作为普通规则结果返回。
+         */
         get: operations["getRuleResultV2"];
         put?: never;
         post?: never;
@@ -452,7 +461,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Inspectors V2 */
+        /**
+         * List Inspectors V2
+         * @description 默认只返回当前活动普通规则，即 KPI 巡检规则。隐藏的解压基础设施规则不进入普通规则目录；include_hidden=true 仅用于受控查看隐藏基础设施信息。
+         */
         get: operations["listInspectorsV2"];
         put?: never;
         post?: never;

@@ -25,12 +25,16 @@ function collectPageErrors(page: import("@playwright/test").Page) {
   return { consoleErrors, pageErrors, apiErrors };
 }
 
-test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发现 → 证据 → 技术信息组织", async ({ page }) => {
+test("历史告警闪断规则按结论 → 建议 → 源文件匹配 → 发现 → 证据 → 技术信息只读展示", async ({ page }) => {
   const { consoleErrors, pageErrors, apiErrors } = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/tasks/${TASK_ID}/rules/alarm.flapping`);
 
-  // 结论区首屏可见：状态、严重度、结论摘要、处理建议与重跑入口（FR-020、FR-023、SC-004）。
+  // 已删除规则只能查看历史结果：保留结论与证据，但禁止重跑或重建。
+  const offlineBanner = page.getByTestId("rule-offline-banner");
+  await expect(offlineBanner).toContainText("该规则已下线，仅供历史查看");
+
+  // 结论区首屏可见：状态、严重度、结论摘要与处理建议。
   const conclusion = page.getByTestId("rule-section-conclusion");
   await expect(conclusion).toBeVisible();
   await expect(conclusion.locator(".ant-tag").filter({ hasText: "失败" })).toBeVisible();
@@ -39,7 +43,9 @@ test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发�
   await expect(conclusion.getByText("告警生命周期判定完成", { exact: false })).toBeVisible();
   await expect(conclusion.getByTestId("rule-recommendation")).toBeVisible();
   await expect(page.getByTestId("rule-section-source-patterns")).toBeInViewport();
-  await expect(page.getByRole("button", { name: "重跑本规则" })).toBeInViewport();
+  const rerunButton = page.getByRole("button", { name: "重跑本规则" });
+  await expect(rerunButton).toBeVisible();
+  await expect(rerunButton).toBeDisabled();
 
   // 证据顺序（FR-020）。
   const order = await page
@@ -50,16 +56,10 @@ test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发�
   // 源文件匹配降级为结论卡内一行等宽元数据，不再独立占位（FR-015、R9、SC-005）。
   const sourcePatterns = page.getByTestId("rule-section-source-patterns");
   await expect(conclusion.getByTestId("rule-section-source-patterns")).toHaveCount(1);
-  await expect(sourcePatterns).toContainText("alarm");
+  await expect(sourcePatterns).toContainText("该规则未声明源文件匹配范围");
   const sourcePatternsBox = await sourcePatterns.boundingBox();
   expect(sourcePatternsBox?.height ?? 0).toBeLessThan(40);
   await expect(page.locator(".ant-card-head").filter({ hasText: "源文件匹配" })).toHaveCount(0);
-
-  // 一行元数据仍可复制完整 pattern（contracts §5、§7）。
-  const copyPattern = sourcePatterns.getByRole("button", { name: "复制源文件匹配" });
-  await sourcePatterns.hover();
-  await copyPattern.click();
-  await expect(copyPattern).not.toHaveAttribute("data-copy-state", "idle");
 
   // 发现列表：CRITICAL / HIGH / MEDIUM 三条证据可见（SC-008）。
   const findingsCard = page.getByTestId("rule-section-findings");
@@ -163,6 +163,7 @@ test("告警闪断规则详情按结论 → 建议 → 源文件匹配 → 发�
   await expect(technical.getByText("规则版本")).toHaveCount(0);
   await technical.getByText("技术信息").click();
   await expect(technical.getByText("规则版本")).toBeVisible();
+  await expect(technical.getByText("规则版本").locator("xpath=..")).toContainText("-");
 
   expect(pageErrors).toEqual([]);
   expect(apiErrors).toEqual([]);
@@ -184,9 +185,9 @@ test("规则详情重跑入口在执行中可见，完成后只刷新本页结�
   let taskPolls = 0;
 
   const ruleResult = (summary: string, duration: number, executedAt: string) => ({
-    code: "config.a",
-    name: "配置一致性",
-    category: "config",
+    code: "kpi.measurement_units",
+    name: "KPI 测量单元巡检",
+    category: "kpi",
     priority: 1,
     execution_order: 0,
     status: "fail",
@@ -206,11 +207,30 @@ test("规则详情重跑入口在执行中可见，完成后只刷新本页结�
       accepted = true;
       return route.fulfill({ status: 202, json: { task_id: ruleTask } });
     }
-    if (url.pathname.endsWith("/api/v2/inspectors")) return route.fulfill({ json: [] });
-    if (url.pathname.endsWith(`/api/v2/tasks/${ruleTask}/rules/config.a`)) {
+    if (url.pathname.endsWith("/api/v2/inspectors")) {
+      return route.fulfill({
+        json: [
+          {
+            code: "kpi.measurement_units",
+            name: "KPI 测量单元巡检",
+            category: "kpi",
+            severity: "medium",
+            priority: 1,
+            rule_version: "3.3.0",
+            hidden: false,
+            description: "检查 KPI 测量单元",
+            recommendation: "核查 KPI 异常",
+            source_patterns: ["^kpi/.*\\.csv$"],
+            outputs: { metrics: [] },
+            params: [],
+          },
+        ],
+      });
+    }
+    if (url.pathname.endsWith(`/api/v2/tasks/${ruleTask}/rules/kpi.measurement_units`)) {
       return route.fulfill({
         json: ruleResult(
-          accepted ? "重跑完成：配置不一致" : "配置不一致",
+          accepted ? "重跑完成：KPI 测量不一致" : "KPI 测量不一致",
           accepted ? 99 : 12,
           accepted ? "2026-10-10T01:00:00Z" : "2026-10-10T00:00:00Z",
         ),
@@ -234,12 +254,12 @@ test("规则详情重跑入口在执行中可见，完成后只刷新本页结�
     return route.fulfill({ json: {} });
   });
 
-  await page.goto(`/tasks/${ruleTask}/rules/config.a`);
-  await expect(page.getByText("配置不一致", { exact: true })).toBeVisible();
+  await page.goto(`/tasks/${ruleTask}/rules/kpi.measurement_units`);
+  await expect(page.getByText("KPI 测量不一致", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "重跑本规则" }).click();
 
   await expect(page.getByTestId("rule-rerun-progress")).toBeVisible();
-  await expect(page.getByText("重跑完成：配置不一致", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("重跑完成：KPI 测量不一致", { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("rule-rerun-progress")).toHaveCount(0);
 });

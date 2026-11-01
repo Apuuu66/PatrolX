@@ -8,6 +8,18 @@ async function firstRowHeight(page: import("@playwright/test").Page, rootSelecto
   return box?.height ?? 0;
 }
 
+async function showAllTasks(page: import("@playwright/test").Page) {
+  await page.locator(".ant-pagination-options .ant-select-selector").click();
+  const option = page
+    .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option")
+    .filter({ hasText: /^100\s*条\/页$/ });
+  await expect(option).toBeVisible();
+  await option.click();
+  await expect(page.locator(".ant-pagination-options .ant-select-selection-item")).toHaveText(
+    /100\s*条\/页/,
+  );
+}
+
 test("密度偏好在任务列表、任务详情与规则管理之间沿用并刷新后保持", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
@@ -45,30 +57,35 @@ test("密度偏好在任务列表、任务详情与规则管理之间沿用并�
   void taskDensity;
 });
 
-test("紧凑密度同视口比舒适密度多显示至少 2 行", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 620 });
-  await page.goto("/inspectors");
-  await expect(page.locator(".inspectors-table .ant-table-tbody > tr").first()).toBeVisible();
+test("任务列表紧凑密度同视口比舒适密度多显示至少 2 行", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await showAllTasks(page);
+  const rows = page.locator(".task-table .ant-table-tbody > tr.ant-table-row");
+  await expect(rows.filter({ hasText: "task-density-e2e-12" })).toBeVisible();
+
+  // 把多行任务表滚到视口顶部，使可见行数差异归因于密度而不是首页概览高度。
+  await page.locator(".task-table").evaluate((node) => node.scrollIntoView({ block: "start" }));
+  await expect(page.locator(".task-table thead")).toBeVisible();
 
   // 默认紧凑。
-  await expect(page.locator(".inspectors-table")).toHaveClass(/density-compact/);
-  const compactHeight = await firstRowHeight(page, ".inspectors-table");
+  await expect(page.locator(".task-table")).toHaveClass(/density-compact/);
+  const compactHeight = await firstRowHeight(page, ".task-table");
   const visibleRows = async () => {
-    const viewport = page.viewportSize() ?? { width: 1440, height: 620 };
-    const rows = page.locator(".inspectors-table .ant-table-tbody > tr.ant-table-row");
+    const viewport = page.viewportSize() ?? { width: 1440, height: 900 };
     const count = await rows.count();
     let visible = 0;
     for (let index = 0; index < count; index += 1) {
       const box = await rows.nth(index).boundingBox();
-      if (box && box.y < viewport.height) visible += 1;
+      if (box && box.y >= 0 && box.y + box.height <= viewport.height) visible += 1;
     }
     return visible;
   };
   const compactVisible = await visibleRows();
 
   await page.locator('[data-testid="density-control"]').getByRole("button", { name: "舒适" }).click();
-  await expect(page.locator(".inspectors-table")).toHaveClass(/density-comfortable/);
-  const comfortableHeight = await firstRowHeight(page, ".inspectors-table");
+  await expect(page.locator(".task-table")).toHaveClass(/density-comfortable/);
+  const comfortableHeight = await firstRowHeight(page, ".task-table");
   const comfortableVisible = await visibleRows();
 
   expect(comfortableHeight).toBeGreaterThan(compactHeight);
@@ -81,8 +98,10 @@ test("规则管理页更新时间以相对时间呈现并支持点击表头排�
 
   const rows = page.locator(".inspectors-table .ant-table-tbody > tr.ant-table-row");
   await expect(rows.first()).toBeVisible();
-  const rowCount = await rows.count();
-  expect(rowCount).toBeGreaterThanOrEqual(2);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first().locator(".inspectors-code code").first()).toHaveText(
+    "kpi.measurement_units",
+  );
 
   // 规则编码等宽字体（等宽样式落在 Typography.Text code 的内层 <code> 上）。
   const code = rows.first().locator(".inspectors-code code").first();
@@ -100,10 +119,7 @@ test("规则管理页更新时间以相对时间呈现并支持点击表头排�
   await expect(rows.first()).toBeVisible();
 
   // 相对时间 + 完整时间 Tooltip（放在排序交互之后，避免悬浮提示遮挡表头点击）。
-  const updatedAt = rows
-    .filter({ hasText: "log.filter" })
-    .first()
-    .locator('[data-testid="inspector-updated-at"]');
+  const updatedAt = rows.first().locator('[data-testid="inspector-updated-at"]');
   await expect(updatedAt).toHaveText(/前|刚刚/);
   await updatedAt.hover();
   await expect(page.locator(".ant-tooltip").filter({ hasText: /\d{4}-\d{2}-\d{2}/ })).toBeVisible();

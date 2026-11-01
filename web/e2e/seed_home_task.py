@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.core.config import settings
@@ -22,6 +22,37 @@ from app.models.schemas import (
 from app.services.store import save_rule_result, save_system, save_task_meta
 
 TASK_ID = "task-home-failed"
+DENSITY_TASK_PREFIX = "task-density-e2e"
+DENSITY_TASK_COUNT = 12
+
+
+def seed_density_tasks() -> None:
+    """播种足够多的轻量任务，供同视口表格密度对比使用。"""
+    base_time = datetime(2025, 12, 1, tzinfo=UTC)
+    for index in range(1, DENSITY_TASK_COUNT + 1):
+        created_at = base_time + timedelta(minutes=index)
+        save_task_meta(
+            settings.output,
+            InspectionTask(
+                task_id=f"{DENSITY_TASK_PREFIX}-{index:02d}",
+                name=f"密度测试任务 {index:02d}",
+                mode="local",
+                status="completed",
+                trigger="api",
+                created_at=created_at,
+                completed_at=created_at + timedelta(seconds=1),
+                duration_ms=1_000,
+                stats=TaskStats(
+                    total=0,
+                    pass_=0,
+                    warn=0,
+                    fail=0,
+                    error=0,
+                    skip=0,
+                    systems=0,
+                ),
+            ),
+        )
 
 
 def main() -> None:
@@ -89,6 +120,7 @@ def main() -> None:
         ) + "\n",
         encoding="utf-8",
     )
+    seed_density_tasks()
 
 
 if __name__ == "__main__":

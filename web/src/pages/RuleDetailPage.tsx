@@ -66,6 +66,7 @@ export function RuleDetailPage() {
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const mountedRef = useRef(true);
+  const isHistorical = meta === null;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -114,7 +115,7 @@ export function RuleDetailPage() {
   }, [fetchPageData]);
 
   const rerun = useCallback(async () => {
-    if (rerunning) return;
+    if (rerunning || isHistorical) return;
     const before = result;
     setRerunning(true);
     try {
@@ -146,7 +147,7 @@ export function RuleDetailPage() {
     } finally {
       if (mountedRef.current) setRerunning(false);
     }
-  }, [message, refreshResult, rerunning, result, ruleCode, taskId]);
+  }, [isHistorical, message, refreshResult, rerunning, result, ruleCode, taskId]);
 
   if (loading && !result) {
     return <PageSkeleton rows={5} />;
@@ -190,6 +191,17 @@ export function RuleDetailPage() {
         ]}
       />
 
+      {isHistorical && (
+        <Alert
+          className="rule-offline-banner"
+          data-testid="rule-offline-banner"
+          type="warning"
+          showIcon
+          message="该规则已下线，仅供历史查看"
+          description="当前活动规则库仅执行 KPI 巡检；该历史结果不可重跑或重建。"
+        />
+      )}
+
       {/* 结论 + 建议（FR-020）：状态、严重度、结论摘要、处理建议与重跑入口都在首屏。 */}
       <Card className="conclusion-hero rule-detail-panel" data-testid="rule-section-conclusion">
         <PageHeader
@@ -205,7 +217,7 @@ export function RuleDetailPage() {
             <Button
               icon={<RedoOutlined />}
               loading={rerunning}
-              disabled={rerunning}
+              disabled={rerunning || isHistorical}
               onClick={() => void rerun()}
             >
               {rerunning ? "重跑中…" : "重跑本规则"}

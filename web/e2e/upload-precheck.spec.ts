@@ -31,13 +31,15 @@ async function fillInspectionMetadata(page: Page) {
     const optionLocator = page.locator(
       `.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option[title="${option}"]`,
     );
-    // 上传预览响应会使弹窗重渲染并替换下拉选项，被替换的元素点击会报 detached；
-    // 用 toPass 重试“打开下拉 + 选中选项”，并在选中后等下拉收起，避免下一步点错浮层。
+    // 上传预览响应会使上传弹窗重渲染并替换下拉选项，被替换的元素点击会报 detached；
+    // 同时 AntD 虚拟列表会在 Playwright 自动滚动时回收边缘选项。这里对已渲染选项
+    // 直接派发点击，并用选中结果兜住重渲染，不触发虚拟列表滚动。
     await expect(async () => {
       if ((await optionLocator.count()) === 0) {
         await select.click();
       }
-      await optionLocator.click({ timeout: 2_000 });
+      await optionLocator.dispatchEvent("click");
+      await expect(select.locator(".ant-select-selection-item")).toHaveText(option);
     }).toPass({ timeout: 15_000 });
     await expect(page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")).toHaveCount(0);
   }
