@@ -69,7 +69,7 @@ pending → running → completed
 summary.total = pass + warn + fail + error + skip
 ```
 
-`total` 包含 hidden 规则和 `skip` 状态规则。
+`total` 只统计进入 `system.rules` 的活动普通规则结果（包括 `skip`）。隐藏的 `pkg.extract.*` 解压基础设施不进入普通规则结果或该统计。
 
 ## 4. RuleResult
 
@@ -77,7 +77,7 @@ summary.total = pass + warn + fail + error + skip
 
 | 字段 | 说明 |
 | --- | --- |
-| `code` | 规则 code，如 `log.error_density` |
+| `code` | 规则 code，如 `kpi.measurement_units` |
 | `name` | 展示名 |
 | `category` | `log` / `kpi` / `traffic` / `alarm` / `config` / `resource` / `other` |
 | `priority` | P0=0，P1=1，P2=2 |
@@ -91,6 +91,8 @@ summary.total = pass + warn + fail + error + skip
 | `metrics[]` | 指标列表 |
 | `findings[]` | 发现列表 |
 | `metadata{}` | 规则自定义扩展数据 |
+
+`RuleCategory` 的完整枚举保留用于历史结果、分类落位和契约兼容，不代表每类都有活动规则。当前活动普通规则仅 `kpi.measurement_units`；已删除规则的持久化结果仍可通过规则结果接口只读获取，但不能重跑或重建。隐藏的 `pkg.extract.*` 不进入普通规则目录或规则结果展示。
 
 状态语义：
 
@@ -153,8 +155,8 @@ summary.total = pass + warn + fail + error + skip
 
 - `source_patterns[]` 是 Python regex，执行器对 `TaskFileCatalog` 中的 `/` 归一化相对路径执行 `re.fullmatch()`。
 - 路径分隔符统一为 `/`，模式不得造成路径穿越或逃逸任务目录。
-- 执行器把匹配到的相对路径交给规则；示例为 `^logs/.*\.(log|log\.gz)$`、`^kpi/.*$`。
-- 物理日志目录是 `logs/`，规则类别仍然是 `log`。
+- 执行器把匹配到的相对路径交给规则；当前活动示例为 `^kpi/.*\.csv$`、`^traffic/.*\.csv$`。
+- 分类目录仍保留 `logs/`、`alarm/` 等物理结构，用于安全保存证据和读取历史结果，但当前没有对应活动普通规则。
 - 普通规则可以声明至多一个私有 prepare；prepare 继承 owner 的 `source_patterns` 和 priority。
 - prepared 数据只保存在 `output/<task_id>/prepared/<owner_code>/`，只有 owner 规则可读取，不写入规则契约，也不作为公共输入。
 - 无匹配文件、格式不适用或解析失败时必须返回 `skip` 和非空原因。
@@ -212,6 +214,8 @@ output/<task_id>/prepared/<owner_code>/
 
 ## 10. 示例
 
+以下为 `RuleResult` 结构示例，不代表存在多类活动规则。
+
 ```json
 {
   "task_id": "task-20260909-001",
@@ -238,31 +242,48 @@ output/<task_id>/prepared/<owner_code>/
     },
     "rules": [
       {
-        "code": "log.error_density",
-        "name": "日志错误密度",
-        "category": "log",
+        "code": "kpi.measurement_units",
+        "name": "KPI 测量单元检查",
+        "category": "kpi",
         "priority": 1,
         "execution_order": 3,
         "status": "warn",
         "severity": "medium",
-        "summary": "错误日志密度超限",
+        "summary": "KPI 测量单元检查完成：1 个文件未归属测量单元",
         "metrics": [
           {
-            "key": "error_count",
-            "label": "错误条数",
-            "value": 152,
-            "unit": "条",
-            "threshold": {"max": 100}
+            "key": "matched_files",
+            "label": "匹配文件数",
+            "value": 3,
+            "unit": "个"
+          },
+          {
+            "key": "unmatched_files",
+            "label": "未匹配文件数",
+            "value": 1,
+            "unit": "个"
+          },
+          {
+            "key": "skipped_files",
+            "label": "周期跳过文件数",
+            "value": 0,
+            "unit": "个"
+          },
+          {
+            "key": "measurement_units",
+            "label": "测量单元数",
+            "value": 2,
+            "unit": "个"
           }
         ],
         "findings": [
           {
             "finding_id": "f-001",
-            "title": "核心网错误日志密度超限",
+            "title": "KPI 文件未归属测量单元",
             "severity": "medium",
-            "source_file": "logs/core/error_20260909.log",
-            "evidence": "2026-09-09T10:00:00Z ERROR ...",
-            "recommendation": "检查数据库连接池配置"
+            "source_file": "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
+            "evidence": "测量开始时间,测量结束时间,周期(分钟),...",
+            "recommendation": "确认测量单元与指标绑定"
           }
         ]
       }

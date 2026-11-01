@@ -27,7 +27,7 @@ ZZapp01BCN_app_Problem_scene_333.zip
                 └── ServiceLog_20260901011314.zip
 ```
 
-`alarm_history_*.zip` 内部只有多个告警 CSV，没有 `alarm_summary.json`。`PerfResult_*.zip` 内部都是测量单元 CSV；展开时按压缩包成员归组统一进入 `kpi/`。
+`alarm_history_*.zip` 内部只有多个告警 CSV，没有 `alarm_summary.json`。`PerfResult_*.zip` 内部都是测量单元 CSV；展开时按压缩包成员归组统一进入 `kpi/`。当前活动普通规则仅 `kpi.measurement_units`，告警、配置、日志、资源和话统文件仍会安全分类保留，但不会触发对应业务的普通规则。
 
 `Basic Information/LST ME.txt` 是网元清单，样例同时保留键值记录和真实导出的表头加数据行格式。键值记录包含 `UMF-SZ-01`、`CSP-SZ-01`（含软件版本）和 `CSP-SZ-02`（缺软件版本）；表格式记录追加 `TABLE-CSP-01`（使用补丁版本）和 `TABLE-UMF-01`（补丁版本为 `null`，回退基础版本）。文件中的网元类型可使用 `umf` / `csp` 或 `UMF` / `CSP`，解析器会把上传 `product` 与清单值统一转为大写后比较，上传值始终是唯一筛选依据。
 
@@ -69,9 +69,7 @@ alarm_history_202609010101137101.zip
 | `清除类型` | 展示清除方式（自动/手动）；恢复结论仍只取决于清除时间与观察窗 |
 | `告警重复次数`、`事件类型`、`应用ID`、`定位信息` | 记录上下文，供展示与定位，不参与判定 |
 
-`_003.csv` 是闪断检测的固定演示数据（告警 1050–1053：操作窗内出现后窗口外再现、未清除且反复、
-清除后反复闪断、清除后观察窗不足），与 `_001` / `_002` 合并后由 `alarm.stat` 与 `alarm.flapping`
-各自独立读取；两条规则共用同一批告警文件但互不依赖。
+`_003.csv` 保留为历史闪断检测的固定演示证据（告警 1050–1053）。`alarm.stat` 与 `alarm.flapping` 已下线，不再从当前包执行；静态历史夹具只用于验证既有结果的只读展示。
 
 ### 性能包
 
@@ -93,7 +91,7 @@ PerfResult_202609010101137101.zip
 
 `周期(分钟)` 之后的全部列都是 KPI/测量对象列，列名与顺序可变化，不使用固定下标。
 
-`Container_Metric_Unit_*` 是容器 CPU/内存资源 CSV，不是 KPI。资源规则同样按列名识别 CPU、内存、时间与周期；CPU/内存列可按 `CPU`、`处理器`、`内存`、`memory` 等语义别名识别。
+`Container_Metric_Unit_*` 是容器 CPU/内存资源 CSV，不是 KPI，也不会被当作活动 KPI 测量单元。资源规则已下线，文件仅按既有分类规则安全保留。
 
 ### 日志包
 
@@ -157,21 +155,14 @@ logs/UMFAcc/logs/paas-192.168.2.3/UMFAcc.log
 
 ## 规则适配
 
-| 文件 | 类别 | 规则 |
+| 文件 | 类别 | 当前处理 |
 | --- | --- | --- |
-| `alarm_history_*.csv` | `alarm` | `alarm.stat`、`alarm.flapping`（共用同一批文件，互不依赖） |
-| `system_info.ini`、`version.ini` | `config` | `config.check` |
-| `LST ME.txt` | `config` | 台账解析（`site_device_lst_me`）；`config_all` 显式排除，不进 `config.check` |
+| `alarm_history_*.csv` | `alarm` | 安全保留，不触发普通规则 |
+| `system_info.ini`、`version.ini` | `config` | 安全保留，不触发普通规则 |
+| `LST ME.txt` | `config` | 台账解析（`site_device_lst_me`），不属于普通巡检规则 |
 | `Call_Session_API_Statistics_*` | `kpi` | `kpi.measurement_units` |
-| `PerfResult_*` 内 `Container_Metric_Unit_*` | `kpi` | `kpi.measurement_units`、`resource.check` |
-| `UmfService/*.log` | `log` | `log.umf_service` |
-| `UMFAcc/*.log` | `log` | `log.umf_acc` |
-
-服务专属日志规则只读取目录结构识别出的服务记录：
-
-- `log.umf_service`：检查认证失败和重试定时器超限。
-- `log.umf_acc`：检查连接池耗尽和 SCTP 链路错误。
-- `CspService` 暂无专属规则，日志由通用日志规则读取，保持多服务展示效果。
+| `PerfResult_*` 内 `Container_Metric_Unit_*` | `kpi` | 作为非 KPI 文件安全保留，不触发资源规则 |
+| `UmfService/*.log`、`UMFAcc/*.log`、`CspService/*.log` | `log` | 安全保留，不触发普通规则 |
 
 台账基准（`product` 取字典 code，比较时统一转为大写）：
 

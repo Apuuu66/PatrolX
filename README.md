@@ -2,6 +2,8 @@
 
 PatrolX 是一个面向系统维护场景的**离线巡检系统**：不连接被检系统、不做在线采集，用户将预先收集好的数据打包上传，系统对包内数据执行规则化巡检，输出契约化结果与 HTML 报告。
 
+当前活动普通巡检规则仅保留 `kpi.measurement_units`。告警、配置、日志、资源和话统类规则的实现已下线；历史任务中的既有结果仍可按原内容只读查看，但不能重新启停、重跑或重建。包解压、分类、台账归档和证据保留能力不受规则收缩影响。
+
 设计文档见 [docs/architecture.md](docs/architecture.md)，Agent 开发约定见 [AGENTS.md](AGENTS.md)，长期项目约束见 [`.specify/memory/constitution.md`](.specify/memory/constitution.md)。
 
 ## 快速开始

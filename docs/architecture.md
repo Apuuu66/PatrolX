@@ -324,7 +324,7 @@ deploy/config/extract_policy.yaml
 docs/example/real-package-structure.md
 ```
 
-典型映射：
+典型分类映射：
 
 - `alarm_history.csv` / `alarm_summary.json` → 告警。
 - `system_info.ini` / `version.ini` → 配置。
@@ -333,9 +333,7 @@ docs/example/real-package-structure.md
 - `call_stat_*.txt` → 话统。
 - `ServiceLog_*.zip` → 日志。
 
-`ServiceLog_*.zip` 解压后按 `ServiceLog_*/<service>/logs/<node>/*.log` 组织。服务名取
-`ServiceLog_*` 之后的业务目录，节点名取 `logs/` 后的目录。日志过滤必须递归读取 `.log`
-和 `.log.gz`，并记录 service、node、source_file。
+当前活动普通规则仅 `kpi.measurement_units`；上述映射只决定安全解压、分类落位和历史证据保留，不代表仍有对应业务规则。`ServiceLog_*.zip` 仍按 `ServiceLog_*/<service>/logs/<node>/*.log` 组织，分类与解压完成后不会触发日志巡检规则。
 
 ## 7. 规则模型与执行编排
 
@@ -343,11 +341,13 @@ docs/example/real-package-structure.md
 
 | 优先级 | 职责 | 示例 |
 | --- | --- | --- |
-| P0 | 数据准备、解析、过滤、标准化 | `pkg.extract.*`、`log.filter` |
-| P1 | 单维度阈值、统计、完整性检查 | `log.error_density`、`kpi.api` |
-| P2 | 跨维度关联、趋势、根因分析 | `traffic.compare`、`resource.trend` |
+| P0 | 隐藏的数据准备与解压基础设施 | `pkg.extract.*` |
+| P1 | 单维度阈值、统计、完整性检查 | `kpi.measurement_units` |
+| P2 | 跨维度关联、趋势、根因分析（当前无活动普通规则） | 无 |
 
 规则执行按优先级升序分组；组内按规则编码排序。
+
+活动普通规则目录严格为 KPI-only。告警、配置、日志、资源和话统类规则模块已删除，不能重新注册、启停、重跑或重建；已持久化的历史结果继续只读可查。
 
 ### 7.2 依赖
 
@@ -438,12 +438,12 @@ outputs.metrics[]  声明的指标契约
 
 - 规则逻辑变化必须升级 `rule_version`。
 
-### 7.7 日志处理
+### 7.7 日志文件处理（历史兼容）
 
-- 解压阶段先把 `.log.gz` 展开为同目录同名 `.log`；日志规则只匹配最终 `.log`。
+- 日志规则已随 037 规则库收缩下线，当前不会产生新的日志巡检结果。
+- 解压阶段仍先把 `.log.gz` 展开为同目录同名 `.log`，便于保留可读证据。
 - `.main/` 内保留原始 `.log.gz` 作为证据；工作现场的冲突/失败 `.log.gz` 也保留用于排查。
-- 物理落位目录是 `logs/`；契约类别仍然是 `log`。
-- 日志规则解析文件路径时提取 service、node、source_file 等上下文。
+- 物理落位目录是 `logs/`；契约类别仍然是 `log`。历史日志结果继续按既有字段只读展示。
 
 ## 8. 接口与前端
 
@@ -631,12 +631,12 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 ```yaml
 version: 1
 groups:
-  alarm_history:
-    description: 告警历史 CSV
+  kpi_all:
+    description: KPI 测量单元 CSV（含话统目录）
     source_patterns:
-      - '^alarm/(?:.*/)?alarm_history_\d+\.csv$'
-disabled_rules:
-  - 'log.ccc_service'
+      - '^kpi/.*\.csv$'
+      - '^traffic/.*\.csv$'
+disabled_rules: []
 ```
 
 `disabled_rules` 用于首次初始化规则启停状态时导入默认停用状态；注册表装载后仍保留全部规则元数据和私有
@@ -645,8 +645,8 @@ prepare。界面状态初始化后，SQLite 中的规则启停状态是唯一执
 
 ```python
 Inspector(
-    code="alarm.stat",
-    source_refs=["alarm_history"],
+    code="kpi.measurement_units",
+    source_refs=["kpi_all"],
 )
 ```
 
@@ -669,46 +669,8 @@ python tools/generate_scan_rules.py validate --source-dir output/task-<cleaned-p
 Windows 上推荐使用 Git Bash 或 WSL。YAML 中的 `source_patterns` 必须使用 POSIX `/` 分隔符；
 运行时任务清单会把相对路径统一转换为 `/` 后再做 `re.fullmatch()`。路径包含空格时加引号。
 
-### 7.10 告警生命周期与闪断检测
+### 7.10 告警规则的历史只读兼容
 
-`alarm.flapping`（P1）与 `alarm.stat` 共用 `scan_rules.yaml` 的 `alarm_all` 扫描组，但各自读取匹配文件、
-互不依赖、不消费对方结果：`alarm.stat` 只做总量与未处理统计，`alarm.flapping` 负责生命周期结论。
+`alarm.stat` 与 `alarm.flapping` 已随 037 规则库收缩删除，不再是活动能力，也不存在对应的 `scan_rules.yaml` 扫描组。历史任务中已持久化的结果和 `metadata.alarm_flapping` 仍可读取，规则详情页继续按既有字段渲染分组证据；这类结果不可重新启停、重跑或重建。
 
-- 分组键为 `alarm_code + object`（对应真实导出的 `告警ID + 应用名称`）；`object` 为空归入"对象未知"分组，不丢弃记录。
-- 告警 CSV 以真实导出表头为准（`告警流水号,应用ID,应用名称,告警ID,告警名称,告警级别,发生时间,清除时间,清除类型,事件类型,告警重复次数,定位信息`），
-  解析层同时保留英文列名别名；`告警级别` 的中文口径（`紧急` / `严重` / `重要` / `次要`）归一化为 `CRITICAL` / `HIGH` / `MEDIUM` / `LOW`。
-- 恢复证据只来自清除时间与观察窗；真实导出没有独立状态列，`status` 只由清除时间推断（`已清除` / `未清除`）并用于展示，
-  绝不作为恢复依据。
-- `应用ID`、`定位信息`、`事件类型`、`清除类型`、`告警重复次数` 只进入展示字段（`groups[].app_ids` / `locations` /
-  `event_types` / `clear_types` / `source_repeat_max`）与 Finding 定位文案，不参与任何判定或版本口径。
-- 覆盖窗口：`start_at = min(created_at)`、`end_at = max(cleared_at ?? created_at)`、`span_sec` 为整数秒。
-- 观察窗：`observation_gap_sec = end_at - recent_cleared_at`；未清除、无清除时间或
-  `observation_gap_sec < stable_observation_sec`（默认 1800 秒）时标记 `observation_insufficient`，
-  不得判为稳定恢复。
-- 复发：`repeat_window_sec`（默认 3600 秒）窗口内出现次数 `>= min_repeat_count`（默认 3）即 `repeated`。
-- 操作窗：默认 `00:00-02:00`（按 +08:00 解释的本地时间），只作为证据标注（窗口内/外出现次数、
-  窗口外再现、窗口后仍未恢复），不改变主状态；`operation_window_enabled=false` 时窗口计数归零、窗口标记全为 false。
-- 参数默认值只在规则 `params` 表声明，结果 `metadata.alarm_flapping.policy` 携带本次生效阈值；
-  纯参数取值变化不递增 `rule_version`，判定逻辑变化才递增。
-
-主状态六选一（互斥；反复优先于短告警，观察窗不足只作兜底）：
-
-| 状态 | 判定 | 贡献规则状态 | Finding |
-| --- | --- | --- | --- |
-| `uncleared_repeated` | 存在未清除记录且命中复发窗口 | fail | CRITICAL |
-| `uncleared_single` | 存在未清除记录且未命中复发窗口 | warn | 无 |
-| `cleared_repeated` | 全部已清除且命中复发窗口 | fail | HIGH |
-| `cleared_short` | 全部已清除、未复发，最长持续 ≤ `short_alarm_sec` | warn | MEDIUM |
-| `observation_insufficient` | 全部已清除、未复发、非短告警，但观察窗不足 | warn | 无 |
-| `cleared_stable` | 全部已清除、未复发且观察窗充足 | pass | 无 |
-
-容错与数据卫生：
-
-- 行级：`created_at` 不可解析、`cleared_at` 存在但不可解析、`cleared_at < created_at`、`alarm_code` 缺失的行计入
-  `excluded_rows` 并记录原因分类；`alarm_id + created_at + alarm_code + object` 重复的行计入 `duplicate_rows` 且只统计一次。
-- 文件级：单个文件解析失败只计入 `failed_files`，不影响其他文件。
-- 无匹配文件或全部记录时间不可解析时返回 `skip` + `skip_reason`，不静默通过、不伪装为 `pass`。
-- `groups` 超过 `groups_max`（500）时按状态优先级截断并在 `totals.groups_truncated` 标注；Finding 上限 20 条。
-
-结果契约见 [`specs/030-alarm-flapping/contracts/alarm-flapping-result.md`](../specs/030-alarm-flapping/contracts/alarm-flapping-result.md)；
-规则详情页由"告警生命周期分组"面板渲染 `metadata.alarm_flapping`（六态计数、覆盖窗口、生效阈值与分组明细）。
+历史告警结果的字段与判定语义见 [`specs/030-alarm-flapping/contracts/alarm-flapping-result.md`](../specs/030-alarm-flapping/contracts/alarm-flapping-result.md)。该规格仅用于解释历史数据，不得作为恢复活动告警规则的依据。
