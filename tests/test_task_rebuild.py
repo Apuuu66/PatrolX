@@ -11,9 +11,22 @@ from pydantic import ValidationError
 
 from app.cli import run_task
 from app.core.checksum import sha256_file
+from app.inspectors.base import Inspector, PrepareSpec
+from app.inspectors.registry import registry
 from app.main import app
-from app.models.schemas import RebuildMode, RebuildRequest, TaskMode, TaskStatus, TaskTrigger
+from app.models.schemas import (
+    Priority,
+    RebuildMode,
+    RebuildRequest,
+    RuleCategory,
+    RuleStatus,
+    Severity,
+    TaskMode,
+    TaskStatus,
+    TaskTrigger,
+)
 from app.services import store
+from app.services.executor import make_result
 from app.services.tasks import task_service
 from tests.baseline_helpers import load_rule, setup_env, strip_volatile, wait_for_task
 
@@ -80,6 +93,36 @@ def _setup_task(tmp_path, monkeypatch):
     return env, client, task_id
 
 
+def _register_rebuild_test_rule(monkeypatch) -> str:
+    """注册仅供重建测试使用的私有 prepare 规则。"""
+
+    def prepare(ctx) -> None:
+        owner_dir = ctx.prepared_dir / inspector.code
+        owner_dir.mkdir(parents=True, exist_ok=True)
+        (owner_dir / "records.txt").write_text("prepared", encoding="utf-8")
+
+    inspector = Inspector(
+        code="test.rebuild_prepare",
+        name="重建 prepare 测试规则",
+        category=RuleCategory.OTHER,
+        severity=Severity.LOW,
+        priority=Priority.P1,
+        rule_version="1.0.0",
+        description="测试增量重建强制刷新私有 prepare",
+        recommendation="无需处理",
+        source_patterns=[r"^logs/.*\.log$"],
+        run=lambda _ctx: None,
+        prepare=PrepareSpec(code="prepare.test.rebuild_prepare", owner_code="test.rebuild_prepare", run=prepare),
+    )
+    inspector.run = lambda _ctx: make_result(inspector, status=RuleStatus.PASS, summary="重建完成")
+    prepare_spec = inspector.prepare
+    assert prepare_spec is not None
+    monkeypatch.setitem(registry._rules, inspector.code, inspector)
+    monkeypatch.setitem(registry._prepares, prepare_spec.code, (inspector, prepare_spec))
+    monkeypatch.setitem(registry._prepare_by_owner, inspector.code, prepare_spec)
+    return inspector.code
+
+
 def test_full_rebuild_refreshes_snapshot_and_protects_package(tmp_path, monkeypatch) -> None:
     env, client, task_id = _setup_task(tmp_path, monkeypatch)
     package = env.uploads / task_id / "rebuild-sample.zip"
@@ -100,9 +143,9 @@ def test_full_rebuild_refreshes_snapshot_and_protects_package(tmp_path, monkeypa
 
 
 def test_incremental_rebuild_rebuilds_site_and_preserves_other_results(tmp_path, monkeypatch) -> None:
+    target = _register_rebuild_test_rule(monkeypatch)
     env, client, task_id = _setup_task(tmp_path, monkeypatch)
     system = client.get(f"/api/v2/tasks/{task_id}/system").json()
-    target = "log.umf_acc"
     assert any(rule["code"] == target for rule in system["rules"])
     others = [rule["code"] for rule in system["rules"] if rule["code"] != target]
     target_path = env.rules_dir(task_id) / f"{target}.json"
@@ -146,6 +189,7 @@ def test_rebuild_prechecks_reject_without_output_change(tmp_path, monkeypatch) -
                 digest += path.read_bytes()
         return digest
 
+    before = tree_digest()
     with client:
         response = client.post(
             f"/api/v2/tasks/{task_id}/rebuild",
@@ -156,7 +200,11 @@ def test_rebuild_prechecks_reject_without_output_change(tmp_path, monkeypatch) -
 
         response = client.post(
             f"/api/v2/tasks/{task_id}/rebuild",
-            json={"mode": "incremental", "confirmed": True, "rule_codes": ["not.registered"]},
+            json={
+                "mode": "incremental",
+                "confirmed": True,
+                "rule_codes": ["log.error_density", "alarm.stat"],
+            },
         )
         assert response.status_code == 400
         assert response.json()["code"] == "unknown_rule"
@@ -170,7 +218,6 @@ def test_rebuild_prechecks_reject_without_output_change(tmp_path, monkeypatch) -
         finally:
             task_service._active_task = original_active
 
-        before = tree_digest()
         uploads_dir = env.uploads / task_id
         root_package = env.uploads / "rebuild-sample.zip"
         root_package.unlink()

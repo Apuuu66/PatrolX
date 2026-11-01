@@ -13,9 +13,12 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.inspectors.base import Inspector
+from app.inspectors.registry import registry
 from app.main import app
+from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
 from app.services import parallel as parallel_module
-from app.services.executor import Executor
+from app.services.executor import Executor, make_result
 from app.services.parallel import ParallelPolicy
 from app.services.tasks import task_service
 from tests.baseline_helpers import (
@@ -125,8 +128,23 @@ def test_single_rule_rerun_never_builds_pool_and_preserves_other_results(tmp_pat
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
+    unrelated = Inspector(
+        code="test.parallel_unrelated",
+        name="并行无关结果测试规则",
+        category=RuleCategory.OTHER,
+        severity=Severity.LOW,
+        priority=Priority.P1,
+        rule_version="1.0.0",
+        description="测试单规则重跑保留无关结果",
+        recommendation="无需处理",
+        source_patterns=[r"^logs/.*\.log$"],
+        run=lambda _ctx: None,
+    )
+    unrelated.run = lambda _ctx: make_result(unrelated, status=RuleStatus.PASS, summary="无关结果")
+    monkeypatch.setitem(registry._rules, unrelated.code, unrelated)
+
     task_id = run_task(SAMPLE, task_id="task-policy-rerun").task_id
-    unrelated_path = env.rules_dir(task_id) / "kpi.measurement_units.json"
+    unrelated_path = env.rules_dir(task_id) / f"{unrelated.code}.json"
     unrelated_before = unrelated_path.read_bytes()
     unrelated_mtime_before = unrelated_path.stat().st_mtime_ns
     stage_events_before = [entry for entry in load_logs(env, task_id) if entry.get("message") == "stage_parallel_start"]
@@ -135,9 +153,9 @@ def test_single_rule_rerun_never_builds_pool_and_preserves_other_results(tmp_pat
         raise AssertionError("单规则重跑不得创建进程池")
 
     monkeypatch.setattr(parallel_module, "ProcessPoolExecutor", forbidden_executor)
-    run_single_rule("alarm.stat", package=SAMPLE, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task_id)
 
-    assert load_rule(env, task_id, "alarm.stat")["status"] == "fail"
+    assert load_rule(env, task_id, "kpi.measurement_units")["code"] == "kpi.measurement_units"
     assert unrelated_path.read_bytes() == unrelated_before
     assert unrelated_path.stat().st_mtime_ns == unrelated_mtime_before
 
@@ -205,10 +223,10 @@ def test_busy_and_rebuild_paths_are_unaffected_by_parallel(tmp_path: Path, monke
     finally:
         task_service._active_task = original_active
 
-    before = load_rule(env, task_id, "alarm.stat")
+    before = load_rule(env, task_id, "kpi.measurement_units")
     response = client.post(f"/api/v2/tasks/{task_id}/rebuild", json={"mode": "full", "confirmed": True})
     assert response.status_code == 202, response.text
     assert wait_for_task(client, task_id)["status"] == "completed"
 
-    assert strip_volatile(load_rule(env, task_id, "alarm.stat")) == strip_volatile(before)
+    assert strip_volatile(load_rule(env, task_id, "kpi.measurement_units")) == strip_volatile(before)
     assert multiprocessing.active_children() == []

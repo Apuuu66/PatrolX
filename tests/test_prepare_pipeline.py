@@ -408,14 +408,10 @@ def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch)
 
     task = run_task(SAMPLE, task_id="task-sample")
     task_dir = env.task_dir(task.task_id)
-    log_prepared = task_dir / "prepared" / "log.umf_acc" / "umf_acc_records.jsonl"
-    assert log_prepared.is_file()
-    assert (task_dir / "prepared" / "log.umf_acc" / ".prepare.sha256").is_file()
-    assert not (task_dir / "prepared" / "log.umf_acc" / "kpi_values.json").exists()
-    assert {result["code"] for result in load_task(env, task.task_id)["system"]["rules"]} >= {
-        "kpi.measurement_units",
-        "log.umf_acc",
-    }
+    prepared_dir = task_dir / "prepared"
+    assert not (prepared_dir / "log.umf_acc").exists()
+    assert not (prepared_dir / "traffic.stat").exists()
+    assert {result["code"] for result in load_task(env, task.task_id)["system"]["rules"]} == {"kpi.measurement_units"}
 
 
 def test_cli_main_extract_failure_creates_failed_task_without_report(tmp_path: Path, monkeypatch) -> None:

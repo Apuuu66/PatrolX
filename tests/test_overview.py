@@ -69,7 +69,7 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
     output = settings.output
     output.mkdir(parents=True, exist_ok=True)
 
-    # 隐藏规则（如 pkg.extract.*）必须与既有口径一致地排除在概览统计之外。
+    # 隐藏规则（如 pkg.extract.*）必须排除在普通规则统计之外。
     task1 = _task(
         "task-overview-1",
         {"total": 2, "pass": 1, "warn": 0, "fail": 1, "error": 0, "skip": 0},
@@ -106,10 +106,10 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
-    expected_rules = registry.all(include_hidden=True)
+    expected_rules = registry.all()
     assert body["task_count"] == before["task_count"] + 2
     assert body["registered_rule_count"] == len(expected_rules)
-    assert body["registered_rule_count"] > len(registry.all(include_hidden=False))
+    assert body["registered_rule_count"] == 1
     assert body["rule_result_count"] == before["rule_result_count"] + 3
     assert body["finding_count"] == before["finding_count"] + 3
     assert body["status_counts"]["total"] == before["status_counts"]["total"] + 3

@@ -34,7 +34,7 @@ def test_delete_removes_all_task_state(tmp_path: Path, monkeypatch) -> None:
         f"tasks/{task_id}/logs",
     ):
         assert client.get(f"/api/v2/{path}").status_code == 200
-    assert client.get(f"/api/v2/tasks/{task_id}/rules/alarm.stat").status_code == 200
+    assert client.get(f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units").status_code == 200
 
     assert client.delete(f"/api/v2/tasks/{task_id}").status_code == 204
 
@@ -50,7 +50,7 @@ def test_delete_removes_all_task_state(tmp_path: Path, monkeypatch) -> None:
         f"tasks/{task_id}/logs",
     ):
         assert client.get(f"/api/v2/{path}").status_code == 404
-    assert client.get(f"/api/v2/tasks/{task_id}/rules/alarm.stat").status_code == 404
+    assert client.get(f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units").status_code == 404
     assert client.delete(f"/api/v2/tasks/{task_id}").status_code == 404
 
 

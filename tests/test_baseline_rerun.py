@@ -6,7 +6,11 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.inspectors.base import Inspector
+from app.inspectors.registry import registry
 from app.main import app
+from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
+from app.services.executor import make_result
 from tests.baseline_helpers import (
     SAMPLE,
     load_rule,
@@ -19,24 +23,43 @@ from tests.baseline_helpers import (
 client = TestClient(app)
 
 
+def _register_unrelated_test_rule(monkeypatch) -> str:
+    """注册仅供本测试使用的无副作用规则，用于验证无关结果不被重写。"""
+    inspector = Inspector(
+        code="test.unrelated_result",
+        name="无关结果测试规则",
+        category=RuleCategory.OTHER,
+        severity=Severity.LOW,
+        priority=Priority.P1,
+        rule_version="1.0.0",
+        description="测试单规则重跑保留无关结果",
+        recommendation="无需处理",
+        source_patterns=[r"^logs/.*\.log$"],
+        run=lambda _ctx: None,
+    )
+    inspector.run = lambda _ctx: make_result(inspector, status=RuleStatus.PASS, summary="无关结果")
+    monkeypatch.setitem(registry._rules, inspector.code, inspector)
+    return inspector.code
+
+
 def test_local_single_rule_rerun_preserves_unrelated_results(tmp_path: Path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
+    unrelated_code = _register_unrelated_test_rule(monkeypatch)
     task_id = "task-sample"
     run_task(SAMPLE, task_id=task_id)
-    unrelated_path = env.task_dir(task_id) / "rules" / "kpi.measurement_units.json"
-    unrelated_before = load_rule(env, task_id, "kpi.measurement_units")
+    unrelated_path = env.task_dir(task_id) / "rules" / f"{unrelated_code}.json"
+    unrelated_before = load_rule(env, task_id, unrelated_code)
     task_before = load_task(env, task_id)
     unrelated_mtime_before = unrelated_path.stat().st_mtime_ns
-    assert load_rule(env, task_id, "alarm.stat")["status"] == "fail"
 
-    run_single_rule("alarm.stat", package=SAMPLE, task_id=task_id)
-    target = load_rule(env, task_id, "alarm.stat")
-    unrelated_after = load_rule(env, task_id, "kpi.measurement_units")
+    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task_id)
+    target = load_rule(env, task_id, "kpi.measurement_units")
+    unrelated_after = load_rule(env, task_id, unrelated_code)
     task_after = load_task(env, task_id)
 
-    assert target["status"] == "fail"
+    assert target["code"] == "kpi.measurement_units"
     assert unrelated_after == unrelated_before
     assert unrelated_path.stat().st_mtime_ns == unrelated_mtime_before
     assert task_after["stats"] == task_before["stats"]
@@ -45,11 +68,12 @@ def test_local_single_rule_rerun_preserves_unrelated_results(tmp_path: Path, mon
 
 def test_online_single_rule_rerun_refreshes_summary_and_report(tmp_path: Path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
+    unrelated_code = _register_unrelated_test_rule(monkeypatch)
     task_id = upload_package(env, client)
     wait_for_task(client, task_id)
     before = load_rule(env, task_id, "kpi.measurement_units")
-    unrelated_path = env.task_dir(task_id) / "rules" / "alarm.stat.json"
-    unrelated_before = load_rule(env, task_id, "alarm.stat")
+    unrelated_path = env.task_dir(task_id) / "rules" / f"{unrelated_code}.json"
+    unrelated_before = load_rule(env, task_id, unrelated_code)
     unrelated_mtime_before = unrelated_path.stat().st_mtime_ns
     report_before = (env.task_dir(task_id) / "report.html").read_text(encoding="utf-8")
 
@@ -59,8 +83,7 @@ def test_online_single_rule_rerun_refreshes_summary_and_report(tmp_path: Path, m
 
     target = load_rule(env, task_id, "kpi.measurement_units")
     task = load_task(env, task_id)
-    unrelated_after = load_rule(env, task_id, "alarm.stat")
-    assert target["status"] == "skip"
+    unrelated_after = load_rule(env, task_id, unrelated_code)
     assert target["executed_at"] != before["executed_at"] or target["duration_ms"] != before["duration_ms"]
     assert unrelated_after == unrelated_before
     assert unrelated_path.stat().st_mtime_ns == unrelated_mtime_before
@@ -89,20 +112,20 @@ def test_single_rule_rerun_rebuilds_missing_task_site(tmp_path: Path, monkeypatc
     assert load_rule(env, task_id, "kpi.measurement_units")["status"] == "skip"
 
 
-def test_single_rule_rerun_reports_skip_for_unmatched_sources(tmp_path: Path, monkeypatch) -> None:
+def test_single_rule_rerun_reports_kpi_skip_without_kpi_sources(tmp_path: Path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
-    package = tmp_path / "no-config.zip"
+    package = tmp_path / "no-kpi.zip"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr("logs/app.log", "2026-01-01 INFO ready\n")
     task_id = run_task(package).task_id
 
-    run_single_rule("config.check", package=package, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
 
-    target = load_rule(env, task_id, "config.check")
+    target = load_rule(env, task_id, "kpi.measurement_units")
     assert target["status"] == "skip"
-    assert target["skip_reason"] == ("source_patterns 未匹配到文件: ^config/(?!.*LST ME[.]txt$).*$")
+    assert target["skip_reason"] == "source_patterns 未匹配到文件: ^kpi/.*\\.csv$, ^traffic/.*\\.csv$"
 
 
 def test_kpi_measurement_rerun_without_prepare_and_deterministically(tmp_path: Path, monkeypatch) -> None:

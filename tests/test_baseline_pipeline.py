@@ -5,15 +5,7 @@ from pathlib import Path
 
 from tests.baseline_helpers import SAMPLE, Env, load_logs, load_rule, load_task, setup_env
 
-NORMAL_RULES = (
-    "log.filter",
-    "alarm.stat",
-    "config.check",
-    "kpi.measurement_units",
-    "log.error_density",
-    "resource.check",
-    "traffic.stat",
-)
+NORMAL_RULES = ("kpi.measurement_units",)
 
 
 def test_single_package_creates_single_task_site(tmp_path: Path, monkeypatch) -> None:
@@ -54,7 +46,7 @@ def test_package_name_derives_isolated_task_ids(tmp_path: Path, monkeypatch) -> 
     assert second.task_id == "task-package_b"
     for task_id in (first.task_id, second.task_id):
         assert (env.task_dir(task_id) / "system.json").is_file()
-        assert (env.task_dir(task_id) / "rules" / "alarm.stat.json").is_file()
+        assert (env.task_dir(task_id) / "rules" / "kpi.measurement_units.json").is_file()
     assert first.system.rules != second.system.rules
     assert env.task_dir(first.task_id) != env.task_dir(second.task_id)
 
@@ -143,4 +135,4 @@ def test_rule_exception_becomes_error_and_task_completes(tmp_path: Path, monkeyp
         and "注入的运行时异常" in entry.get("error", "")
         for entry in logs
     )
-    assert load_rule(env, task.task_id, "log.error_density")["status"] in {"pass", "warn", "fail"}
+    assert load_rule(env, task.task_id, "kpi.measurement_units")["status"] in {"pass", "warn", "fail", "skip"}

@@ -9,11 +9,12 @@ from app.core.checksum import sha256_file
 from app.core.classify import classify_name
 from app.core.dicts import load_dicts
 from app.inspectors.registry import registry
-from app.models.schemas import RuleCategory, RuleStatus
-from app.services.executor import RuleContext
+from app.models.schemas import RuleCategory
 from app.services.extraction import extract_main_site
 from app.services.inventory.parser import parse_inventory
 from tests.fixtures.make_real_package import LST_ME_TXT, build_real_package
+
+DEFAULT_FIXTURE_SHA256 = "a2a8265f5971d66899951187e5ff2634081fc2bf82c25eb9a3b00ad94f69b7cb"
 
 
 def _extract(tmp_path: Path):
@@ -22,18 +23,6 @@ def _extract(tmp_path: Path):
     data_dir = tmp_path / "task-333"
     manifest = extract_main_site(package, data_dir, sha256_file(package))
     return data_dir, manifest
-
-
-def _ctx_with_task(tmp_path: Path, files: list[str]) -> RuleContext:
-    data_dir = tmp_path / "task-333"
-    logs: list[dict] = []
-
-    def log(level: str, message: str, detail: dict | None = None) -> None:
-        logs.append({"level": level, "message": message, **(detail or {})})
-
-    ctx = RuleContext(task_id="task-333", data_dir=data_dir, log=log)
-    ctx.files = [Path(item) for item in files]
-    return ctx
 
 
 def test_real_package_member_names_match_reference(tmp_path: Path) -> None:
@@ -97,48 +86,21 @@ def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Pat
     assert not manifest["rejected"]
 
 
-def test_real_container_resource_and_alarm_rule_results(tmp_path: Path) -> None:
-    data_dir, _ = _extract(tmp_path)
+def test_real_non_kpi_files_are_preserved_without_active_rules(tmp_path: Path) -> None:
+    """非 KPI 数据继续安全落盘，但已下线的业务规则不得重新进入活动目录。"""
+    data_dir, manifest = _extract(tmp_path)
     registry.load_all()
 
-    resource_ctx = _ctx_with_task(
-        tmp_path,
-        [
-            "kpi/ne333_Container_Metric_Unit_5_0_202609020000.csv",
-            "kpi/ne333_Container_Metric_Unit_15_0_202609020000.csv",
-        ],
-    )
-    resource_result = registry.get("resource.check").run(resource_ctx)
-    assert resource_result.status == RuleStatus.WARN
-    # UMF-Core 与 CSP-Core 同时越过 CPU/内存水位，UMF-Access 保持正常用于对比展示。
-    assert resource_result.metrics[0].value == 2
-    assert resource_result.metrics[1].value == 2
-    assert {finding.title for finding in resource_result.findings} == {
-        "UMF-Core/umf-node-01 CPU使用率偏高",
-        "UMF-Core/umf-node-01 内存使用率偏高",
-        "CSP-Core/csp-node-01 CPU使用率偏高",
-        "CSP-Core/csp-node-01 内存使用率偏高",
-    }
+    targets = {item["target"] for item in manifest["files"]}
+    for prefix in ("alarm/", "config/", "logs/"):
+        assert any(target.startswith(prefix) for target in targets)
+        assert any(
+            path.relative_to(data_dir).as_posix().startswith(prefix) for path in data_dir.rglob("*") if path.is_file()
+        )
 
-    alarm_ctx = _ctx_with_task(
-        tmp_path,
-        [
-            "alarm/alarm_history_202609010101137101_001.csv",
-            "alarm/alarm_history_202609010101137101_002.csv",
-            "alarm/alarm_history_202609010101137101_003.csv",
-        ],
-    )
-    alarm_result = registry.get("alarm.stat").run(alarm_ctx)
-    assert alarm_result.status == RuleStatus.FAIL
-    assert alarm_result.metrics[0].value == 22
-    assert alarm_result.metrics[1].value == 11
-    # 真实导出使用中文级别，解析侧归一化为契约严重度键。
-    assert alarm_result.metadata["severity_distribution"] == {
-        "CRITICAL": 6,
-        "HIGH": 8,
-        "MEDIUM": 6,
-        "LOW": 2,
-    }
+    active_codes = {rule.code for rule in registry.all()}
+    assert active_codes == {"kpi.measurement_units"}
+    assert {"alarm.stat", "alarm.flapping", "resource.check"}.isdisjoint(active_codes)
 
 
 def test_real_package_network_element_types_match_product_dict() -> None:
@@ -195,105 +157,13 @@ def test_real_package_lst_me_feeds_device_ledger(tmp_path: Path) -> None:
     assert mme["network_element_type_filter"]["unmatched_count"] == 5
 
 
-def test_real_alarm_flapping_contract_snapshot(tmp_path: Path) -> None:
-    """真实样例包上的 alarm.flapping 结论必须与契约样例逐字段一致（SC-001/007/008）。"""
-    _extract(tmp_path)
-    registry.load_all()
-    ctx = _ctx_with_task(
-        tmp_path,
-        [
-            "alarm/alarm_history_202609010101137101_001.csv",
-            "alarm/alarm_history_202609010101137101_002.csv",
-            "alarm/alarm_history_202609010101137101_003.csv",
-        ],
-    )
-    result = registry.get("alarm.flapping").run(ctx)
-    assert result.status == RuleStatus.FAIL
+def test_real_package_fixture_variants_are_repeatable(tmp_path: Path) -> None:
+    """默认样例字节保持稳定，KPI 缺失边界变体可重复生成。"""
+    first = build_real_package(tmp_path / "first")
+    second = build_real_package(tmp_path / "second")
+    missing = build_real_package(tmp_path / "missing", include_kpi=False)
 
-    metrics = {metric.key: metric.value for metric in result.metrics}
-    assert metrics == {
-        "alarm_groups": 17,
-        "flapping_groups": 2,
-        "uncleared_repeated_groups": 1,
-        "short_alarm_groups": 1,
-        "stable_groups": 5,
-        "observation_insufficient_groups": 11,
-        "out_of_window_groups": 1,
-        "unrecovered_after_window_groups": 1,
-        "excluded_rows": 0,
-        "duplicate_rows": 0,
-        "failed_files": 0,
-    }
-
-    metadata = result.metadata["alarm_flapping"]
-    assert metadata["schema_version"] == 1
-    assert metadata["policy"] == {
-        "short_alarm_sec": 300,
-        "repeat_window_sec": 3600,
-        "min_repeat_count": 3,
-        "flap_gap_sec": 1800,
-        "stable_observation_sec": 1800,
-        "operation_window": "00:00-02:00",
-        "operation_window_enabled": True,
-        "parameter_source": "inspector_default",
-    }
-    assert metadata["coverage"] == {
-        "start_at": "2026-09-01T10:00:01+08:00",
-        "end_at": "2026-09-02T12:05:30+08:00",
-        "span_sec": 93929,
-    }
-    assert metadata["totals"] == {
-        "rows": 22,
-        "valid_rows": 22,
-        "groups": 17,
-        "excluded_rows": 0,
-        "duplicate_rows": 0,
-        "failed_files": 0,
-        "findings_truncated": False,
-        "groups_truncated": False,
-    }
-    assert metadata["state_counts"] == {
-        "uncleared_repeated": 1,
-        "uncleared_single": 8,
-        "cleared_repeated": 1,
-        "cleared_short": 1,
-        "observation_insufficient": 1,
-        "cleared_stable": 5,
-    }
-
-    groups = {(group["alarm_code"], group["object"]): group for group in metadata["groups"]}
-    assert len(groups) == 17
-    assert groups[("1051", "UMF核心服务")]["state"] == "uncleared_repeated"
-    assert groups[("1051", "UMF核心服务")]["unrecovered_after_window"] is True
-    assert groups[("1052", "UMF核心服务")]["state"] == "cleared_repeated"
-    assert groups[("1052", "UMF核心服务")]["min_repeat_gap_sec"] == 600
-    assert groups[("1052", "UMF核心服务")]["observation_gap_sec"] == 330
-    # 真实导出上下文（应用ID/定位信息/清除类型/事件类型/重复次数）只作展示，不参与判定。
-    assert groups[("1052", "UMF核心服务")]["app_ids"] == ["9002"]
-    assert groups[("1052", "UMF核心服务")]["locations"] == ["pod-umf-9"]
-    assert groups[("1052", "UMF核心服务")]["clear_types"] == ["自动清除"]
-    assert groups[("1052", "UMF核心服务")]["event_types"] == ["通信告警"]
-    assert groups[("1052", "UMF核心服务")]["source_repeat_max"] == 3
-    assert groups[("1001", "CSP核心服务")]["locations"] == ["paas-192.168.2.2"]
-    assert groups[("1053", "UMF核心服务")]["state"] == "observation_insufficient"
-    assert groups[("1053", "UMF核心服务")]["observation_gap_sec"] == 0
-    short = groups[("1002", "UMF核心服务")]
-    assert short["state"] == "cleared_short"
-    assert short["max_duration_sec"] == 26
-    assert short["observation_gap_sec"] == 93900
-    cross_window = groups[("1050", "UMF核心服务")]
-    assert cross_window["state"] == "cleared_stable"
-    assert cross_window["in_window_occurrences"] == 1
-    assert cross_window["out_of_window_occurrences"] == 1
-    assert cross_window["out_of_window_reappear"] is True
-    assert cross_window["unrecovered_after_window"] is False
-    assert cross_window["min_repeat_gap_sec"] == 6300
-    assert cross_window["observation_gap_sec"] == 33930
-
-    assert [(finding.finding_id, finding.severity.value) for finding in result.findings] == [
-        ("alarm.flapping-uncleared_repeated-1051-UMF核心服务", "critical"),
-        ("alarm.flapping-cleared_repeated-1052-UMF核心服务", "high"),
-        ("alarm.flapping-cleared_short-1002-UMF核心服务", "medium"),
-    ]
-    for finding in result.findings:
-        assert "定位 pod-umf-9" in finding.evidence or "定位 umf-node-01" in finding.evidence
+    assert sha256_file(first) == DEFAULT_FIXTURE_SHA256
+    assert sha256_file(second) == DEFAULT_FIXTURE_SHA256
+    assert missing.name.endswith("_without_kpi.zip")
+    assert sha256_file(missing) != DEFAULT_FIXTURE_SHA256

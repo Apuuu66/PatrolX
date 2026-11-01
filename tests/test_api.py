@@ -40,17 +40,19 @@ def _wait(task_id: str, timeout: float = 30) -> dict:
 
 
 def test_upload_list_system_rules_report_logs_delete() -> None:
+    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Session API Statistics\n"))
     task_id = _upload()
     task = _wait(task_id)
     assert task["status"] == "completed"
-    assert task["stats"]["fail"] >= 1
+    assert task["stats"]["total"] == 1
 
     system = client.get(f"/api/v2/tasks/{task_id}/system").json()
-    assert system["summary"]["total"] >= 10
+    assert system["summary"]["total"] == 1
+    assert [rule["code"] for rule in system["rules"]] == ["kpi.measurement_units"]
 
-    rule = client.get(f"/api/v2/tasks/{task_id}/rules/log.error_density").json()
-    assert rule["code"] == "log.error_density"
-    assert rule["status"] in ("pass", "warn", "fail")
+    rule = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units").json()
+    assert rule["code"] == "kpi.measurement_units"
+    assert rule["status"] in ("pass", "warn", "fail", "skip")
 
     report = client.get(f"/api/v2/tasks/{task_id}/report")
     assert report.status_code == 200 and "PatrolX" in report.text
@@ -68,12 +70,12 @@ def test_upload_list_system_rules_report_logs_delete() -> None:
 def test_rerun_single_rule() -> None:
     task_id = _upload("rerun-api.zip")
     _wait(task_id)
-    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
+    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["kpi.measurement_units"]})
     assert resp.status_code == 202
     task = _wait(task_id)
     assert task["status"] == "completed"
-    rule = client.get(f"/api/v2/tasks/{task_id}/rules/log.error_density").json()
-    assert rule["code"] == "log.error_density"
+    rule = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units").json()
+    assert rule["code"] == "kpi.measurement_units"
 
 
 def test_dicts_api() -> None:
@@ -86,8 +88,13 @@ def test_inspectors_metadata() -> None:
     resp = client.get("/api/v2/inspectors")
     assert resp.status_code == 200
     codes = {item["code"] for item in resp.json()}
-    assert {"kpi.measurement_units", "alarm.stat", "resource.check"} <= codes
+    assert codes == {"kpi.measurement_units"}
     assert all(item["description"] and item["recommendation"] for item in resp.json())
+
+    hidden_resp = client.get("/api/v2/inspectors", params={"include_hidden": True})
+    hidden_codes = {item["code"] for item in hidden_resp.json() if item["hidden"]}
+    assert "pkg.extract.main" in hidden_codes
+    assert all(code.startswith("pkg.extract.") for code in hidden_codes)
 
 
 def test_task_preparation_status_is_exposed() -> None:

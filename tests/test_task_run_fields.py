@@ -70,7 +70,7 @@ def test_rerun_refreshes_last_run_at_and_clears_duration_while_running(monkeypat
     monkeypatch.setattr("app.services.tasks.run_single_rule", blocked_run)
     response = client.post(
         f"/api/v2/tasks/{task_id}/rerun",
-        json={"rule_codes": ["log.error_density"]},
+        json={"rule_codes": ["kpi.measurement_units"]},
     )
     assert response.status_code == 202
     assert started.wait(timeout=20)
@@ -141,7 +141,7 @@ def test_local_cli_single_rule_rerun_refreshes_run_fields(tmp_path, monkeypatch)
     first_last_run_at = task.last_run_at
     assert first_last_run_at is not None
 
-    run_single_rule("log.error_density", SAMPLE, task_id=task.task_id)
+    run_single_rule("kpi.measurement_units", SAMPLE, task_id=task.task_id)
     payload = json.loads((env.task_dir(task.task_id) / "task.json").read_text(encoding="utf-8"))
     assert payload["last_run_at"] is not None
     assert _parse_time(payload["last_run_at"]) >= first_last_run_at

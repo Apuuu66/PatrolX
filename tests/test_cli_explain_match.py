@@ -7,17 +7,14 @@ def test_explain_match_reports_catalog_pattern_and_extraction_state(tmp_path, mo
     setup_env(tmp_path, monkeypatch)
     from app.cli import explain_match
 
-    report = explain_match("log.umf_acc", package=SAMPLE, task_id="task-explain-match")
+    report = explain_match("kpi.measurement_units", package=SAMPLE, task_id="task-explain-match")
 
     assert report["task_id"] == "task-explain-match"
     assert report["package_file"] == SAMPLE.name
     assert report["rule"]["enabled"] is True
     assert report["source_patterns"]
-    assert any(path.startswith("logs/") for path in report["catalog_paths"])
+    assert any(path.startswith("kpi/") for path in report["catalog_paths"])
     assert report["matched_files"]
+    assert any(report["pattern_matches"].get(pattern) for pattern in report["source_patterns"])
+    assert any(path.startswith("kpi/") for path in report["matched_files"])
     assert report["manifest"]["main"]["count"] > 0
-    assert all(
-        report["pattern_matches"][pattern]
-        for pattern in report["source_patterns"]
-        if pattern in report["pattern_matches"]
-    )

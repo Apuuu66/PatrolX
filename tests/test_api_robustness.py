@@ -198,12 +198,24 @@ def test_unknown_rerun_rule_is_rejected(tmp_path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     task_id = _upload(env).json()["task_id"]
     wait_for_task(client, task_id)
+    task_dir = env.task_dir(task_id)
+
+    def tree_digest() -> bytes:
+        digest = b""
+        for path in sorted(task_dir.rglob("*")):
+            digest += str(path.relative_to(task_dir)).encode()
+            if path.is_file():
+                digest += path.read_bytes()
+        return digest
+
+    before = tree_digest()
     response = client.post(
         f"/api/v2/tasks/{task_id}/rerun",
-        json={"rule_codes": ["rule.does_not_exist"]},
+        json={"rule_codes": ["log.error_density"]},
     )
     assert response.status_code == 400
     assert response.json()["code"] == "unknown_rule"
+    assert tree_digest() == before
 
 
 def test_rerun_keeps_summary_report_and_contract_consistent(tmp_path, monkeypatch) -> None:
@@ -213,7 +225,7 @@ def test_rerun_keeps_summary_report_and_contract_consistent(tmp_path, monkeypatc
     before_task = client.get(f"/api/v2/tasks/{task_id}").json()
     before_system = client.get(f"/api/v2/tasks/{task_id}/system").json()
 
-    response = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
+    response = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["kpi.measurement_units"]})
     assert response.status_code == 202
     after_task = wait_for_task(client, task_id)
     after_system = client.get(f"/api/v2/tasks/{task_id}/system").json()
@@ -228,11 +240,11 @@ def test_corrupt_rule_result_is_rebuilt_by_single_rule_rerun(tmp_path, monkeypat
     env = setup_env(tmp_path, monkeypatch)
     task_id = _upload(env).json()["task_id"]
     wait_for_task(client, task_id)
-    (env.rules_dir(task_id) / "log.error_density.json").write_text("{broken", encoding="utf-8")
+    (env.rules_dir(task_id) / "kpi.measurement_units.json").write_text("{broken", encoding="utf-8")
 
     response = client.post(
         f"/api/v2/tasks/{task_id}/rerun",
-        json={"rule_codes": ["log.error_density"]},
+        json={"rule_codes": ["kpi.measurement_units"]},
     )
     assert response.status_code == 202
     task = wait_for_task(client, task_id)
@@ -251,7 +263,7 @@ def test_concurrent_rerun_requests_complete_consistently(tmp_path, monkeypatch) 
     responses = [
         client.post(
             f"/api/v2/tasks/{task_id}/rerun",
-            json={"rule_codes": ["log.error_density"]},
+            json={"rule_codes": ["kpi.measurement_units"]},
         )
         for _ in range(2)
     ]

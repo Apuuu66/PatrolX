@@ -53,53 +53,48 @@ def _local_registry(codes: list[str]) -> RuleRegistry:
     return target
 
 
-def test_ensure_imports_configured_disabled_rules_once() -> None:
+def test_ensure_imports_kpi_state_once() -> None:
     ensure_rule_states()
 
     with session_factory() as session:
         states = {item.rule_code: item.enabled for item in session.query(RuleState).all()}
 
-    assert "log.ccc_service" in states
-    assert states["log.ccc_service"] is False
-    assert "log.error_density" in states
-    assert states["log.error_density"] is True
+    assert states == {"kpi.measurement_units": True}
 
 
 def test_existing_states_are_not_overwritten_by_reinitialization() -> None:
     ensure_rule_states()
-    update_rule_state("log.ccc_service", True)
+    update_rule_state("kpi.measurement_units", False)
     ensure_rule_states()
 
-    assert update_rule_state("log.ccc_service", True).enabled is True
+    assert update_rule_state("kpi.measurement_units", False).enabled is False
 
 
 def test_update_persists_state_and_timestamp() -> None:
     ensure_rule_states()
-    first = update_rule_state("log.error_density", False)
-    second = update_rule_state("log.error_density", False)
+    first = update_rule_state("kpi.measurement_units", False)
+    second = update_rule_state("kpi.measurement_units", False)
 
     assert first.enabled is False
     assert second.updated_at == first.updated_at
-    assert "log.error_density" not in get_enabled_rule_codes()
+    assert get_enabled_rule_codes() == set()
 
 
 def test_enabled_codes_match_persisted_states() -> None:
     ensure_rule_states()
-    update_rule_state("log.error_density", False)
+    update_rule_state("kpi.measurement_units", False)
 
-    enabled = get_enabled_rule_codes()
-    assert "log.error_density" not in enabled
-    assert "config.check" in enabled
+    assert get_enabled_rule_codes() == set()
 
 
 def test_ten_sequential_toggles_keep_final_state() -> None:
     ensure_rule_states()
     for enabled in [False, True] * 5:
-        state = update_rule_state("log.error_density", enabled)
+        state = update_rule_state("kpi.measurement_units", enabled)
         assert state.enabled is enabled
 
     states = {item.code: item.enabled for item in list_rule_states(page=1, page_size=100).items}
-    assert states["log.error_density"] is True
+    assert states["kpi.measurement_units"] is True
 
 
 def test_unknown_rule_returns_not_found() -> None:
@@ -176,8 +171,9 @@ def test_invalid_config_format_blocks_initialization(tmp_path: Path, monkeypatch
         ensure_rule_states(_local_registry(["test.enabled"]))
 
 
-def test_registry_keeps_disabled_rules_loaded_for_ui_and_rerun() -> None:
+def test_registry_keeps_only_kpi_active_after_legacy_removal() -> None:
     registry.load_all()
 
-    assert "log.ccc_service" in registry.codes()
-    assert registry.get("log.ccc_service").hidden is False
+    assert registry.all() == [registry.get("kpi.measurement_units")]
+    assert registry.get("kpi.measurement_units").hidden is False
+    assert "log.ccc_service" not in registry.codes()

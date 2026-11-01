@@ -15,7 +15,7 @@ def build_overview() -> OverviewSummary:
     counts = task_db.overview_counts()
     return OverviewSummary(
         task_count=counts.task_count,
-        registered_rule_count=len(registry.all(include_hidden=True)),
+        registered_rule_count=len(registry.all()),
         rule_result_count=counts.rule_result_count,
         finding_count=counts.finding_count,
         status_counts=Summary(

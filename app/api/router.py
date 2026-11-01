@@ -721,7 +721,8 @@ def get_rule_result_v2(
     exclude_records: bool = Query(default=False, description="是否移除 KPI 明细记录，只保留首屏摘要。"),
 ) -> RuleResult:
     registry.load_all()
-    if rule_code not in {rule.code for rule in registry.all()}:
+    registered = {rule.code: rule for rule in registry.all(include_hidden=True)}
+    if registered.get(rule_code) is not None and registered[rule_code].hidden:
         raise AppError("not_found", "规则结果不存在", 404)
     rule = _load_rule(task_id, rule_code)
     if rule is None:

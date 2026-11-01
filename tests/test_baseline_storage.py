@@ -50,8 +50,8 @@ def test_file_storage_layout_is_single_task_directory(tmp_path: Path, monkeypatc
     }
     for name in expected_files:
         assert (task_dir / name).is_file(), f"缺少 {name}"
-    assert (task_dir / "rules" / "log.error_density.json").is_file()
-    assert load_rule(env, "task-sample", "log.error_density")["code"] == "log.error_density"
+    assert (task_dir / "rules" / "kpi.measurement_units.json").is_file()
+    assert load_rule(env, "task-sample", "kpi.measurement_units")["code"] == "kpi.measurement_units"
     assert load_task(env, "task-sample")["task_id"] == "task-sample"
     for category in {"logs", "kpi", "traffic", "alarm", "config", "resource", "other"}:
         assert (task_dir / category).is_dir(), f"缺少类别目录 {category}"
@@ -262,7 +262,7 @@ def test_single_rule_rerun_keeps_task_system_summary_only(tmp_path: Path, monkey
     before = json.loads(task_path.read_text(encoding="utf-8"))
     assert metadata_size(before) <= 2
 
-    run_single_rule("log.error_density", package=SAMPLE, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task_id)
 
     after = json.loads(task_path.read_text(encoding="utf-8"))
     assert metadata_size(after) <= 2

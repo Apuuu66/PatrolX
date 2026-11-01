@@ -15,38 +15,38 @@ def test_inspector_states_default_page_size_is_ten() -> None:
     body = response.json()
     assert body["page"] == 1
     assert body["page_size"] == 10
-    assert len(body["items"]) == 10
-    assert body["total"] >= 10
+    assert len(body["items"]) == 1
+    assert body["total"] == 1
 
 
 def test_inspector_states_support_filters() -> None:
     ensure_rule_states()
     with TestClient(app) as client:
         disabled = client.get("/api/v2/inspector-states", params={"enabled": "false", "page_size": 100})
-        by_category = client.get("/api/v2/inspector-states", params={"category": "log", "page_size": 100})
-        by_search = client.get("/api/v2/inspector-states", params={"search": "error_density", "page_size": 100})
+        by_category = client.get("/api/v2/inspector-states", params={"category": "kpi", "page_size": 100})
+        by_search = client.get("/api/v2/inspector-states", params={"search": "measurement_units", "page_size": 100})
 
     assert disabled.status_code == 200
     assert all(item["enabled"] is False for item in disabled.json()["items"])
-    assert {item["code"] for item in disabled.json()["items"]} == {"log.ccc_service", "log.ddd_service"}
+    assert disabled.json()["items"] == []
     assert by_category.status_code == 200
-    assert all(item["category"] == "log" for item in by_category.json()["items"])
+    assert [item["code"] for item in by_category.json()["items"]] == ["kpi.measurement_units"]
     assert by_search.status_code == 200
-    assert [item["code"] for item in by_search.json()["items"]] == ["log.error_density"]
+    assert [item["code"] for item in by_search.json()["items"]] == ["kpi.measurement_units"]
 
 
 def test_admin_updates_rule_state() -> None:
     ensure_rule_states()
     with TestClient(app) as client:
         response = client.put(
-            "/api/v2/inspector-states/log.error_density/enabled",
+            "/api/v2/inspector-states/kpi.measurement_units/enabled",
             json={"enabled": False},
         )
 
     assert response.status_code == 200
     assert response.json()["enabled"] is False
     with session_factory() as session:
-        assert session.get(RuleState, "log.error_density").enabled is False
+        assert session.get(RuleState, "kpi.measurement_units").enabled is False
 
 
 def test_viewer_cannot_update_rule_state() -> None:
@@ -56,7 +56,7 @@ def test_viewer_cannot_update_rule_state() -> None:
     try:
         with TestClient(app) as client:
             response = client.put(
-                "/api/v2/inspector-states/log.error_density/enabled",
+                "/api/v2/inspector-states/kpi.measurement_units/enabled",
                 json={"enabled": False},
             )
     finally:
@@ -87,7 +87,7 @@ def test_non_boolean_state_is_validation_error() -> None:
     ensure_rule_states()
     with TestClient(app) as client:
         response = client.put(
-            "/api/v2/inspector-states/log.error_density/enabled",
+            "/api/v2/inspector-states/kpi.measurement_units/enabled",
             json={"enabled": "false"},
         )
     assert response.status_code == 422

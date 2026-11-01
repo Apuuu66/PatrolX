@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 PACKAGE_NAME = "ZZapp01BCN_app_Problem_scene_333.zip"
+NO_KPI_PACKAGE_NAME = "ZZapp01BCN_app_Problem_scene_333_without_kpi.zip"
 BASE = "ZZapp01BCN_app Problem scene_333/333/app Problem scene"
 FIXED_DATE = (2026, 9, 18, 9, 0, 0)
 
@@ -231,8 +232,8 @@ def _gzip_bytes(text: str) -> bytes:
     return gzip.compress(text.encode("utf-8"), mtime=0)
 
 
-def build_real_package(directory: Path) -> Path:
-    """在 directory 下生成固定内容的真实结构样例包，返回包路径。"""
+def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:
+    """生成固定内容的真实结构样例包；``include_kpi=False`` 生成 KPI 缺失边界包。"""
     alarm_buffer = io.BytesIO()
     with zipfile.ZipFile(alarm_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         _add_bytes(zf, "alarm_history_202609010101137101_001.csv", ALARM_CSV_001.encode("utf-8"))
@@ -303,7 +304,7 @@ def build_real_package(directory: Path) -> Path:
         )
 
     directory.mkdir(parents=True, exist_ok=True)
-    output = directory / PACKAGE_NAME
+    output = directory / (PACKAGE_NAME if include_kpi else NO_KPI_PACKAGE_NAME)
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
         _add_bytes(
             zf,
@@ -325,11 +326,12 @@ def build_real_package(directory: Path) -> Path:
             f"{BASE}/Basic Information/version.ini",
             b"[version]\nproduct=app\nrelease=R24.1\npatch=SP03\nbuild=20260901.01\n",
         )
-        _add_bytes(
-            zf,
-            f"{BASE}/KPI/PerfResult_202609010101137101.zip",
-            perf_buffer.getvalue(),
-        )
+        if include_kpi:
+            _add_bytes(
+                zf,
+                f"{BASE}/KPI/PerfResult_202609010101137101.zip",
+                perf_buffer.getvalue(),
+            )
         _add_bytes(
             zf,
             f"{BASE}/Service Logs (Problem)/ServiceLog_20260901011314.zip",

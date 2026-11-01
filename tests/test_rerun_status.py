@@ -23,7 +23,7 @@ def test_rerun_marks_output_task_pending_before_queueing(monkeypatch) -> None:
 
     # 阻断队列，保证断言发生在 rerun 受理阶段，而不是依赖 worker 完成速度。
     monkeypatch.setattr(task_service._queue, "put", lambda _task_id: None)
-    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
+    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["kpi.measurement_units"]})
     assert resp.status_code == 202
 
     task = task_service.get(task_id)
@@ -44,7 +44,7 @@ def test_rerun_failure_updates_output_status(monkeypatch) -> None:
         raise RuntimeError("rerun failed")
 
     monkeypatch.setattr("app.services.tasks.run_single_rule", raise_rerun)
-    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["log.error_density"]})
+    resp = client.post(f"/api/v2/tasks/{task_id}/rerun", json={"rule_codes": ["kpi.measurement_units"]})
     assert resp.status_code == 202
 
     deadline = time.time() + 2
@@ -133,13 +133,13 @@ def test_multi_rule_rerun_reuses_one_package_checksum(monkeypatch) -> None:
         calls.append((code, kwargs.get("package_checksum")))
 
     monkeypatch.setattr("app.services.tasks.run_single_rule", record_run)
-    task_service._rerun_plan[task_id] = ["log.error_density", "config.check"]
+    task_service._rerun_plan[task_id] = ["test.rerun.one", "test.rerun.two"]
     try:
         task_service._execute(task_id)
     finally:
         task_service._rerun_plan.pop(task_id, None)
 
-    assert [code for code, _checksum in calls] == ["log.error_density", "config.check"]
+    assert [code for code, _checksum in calls] == ["test.rerun.one", "test.rerun.two"]
     checksums = {checksum for _code, checksum in calls}
     assert len(checksums) == 1
     assert next(iter(checksums)) is not None

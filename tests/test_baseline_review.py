@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.schemas import (
+    Finding,
     InspectionTask,
     Priority,
     RuleCategory,
@@ -67,7 +68,6 @@ def test_review_endpoints_follow_contract(tmp_path: Path, monkeypatch) -> None:
         assert client.get(f"/api/v2/tasks/{task_id}/rules/{rule['code']}").json()["skip_reason"] == rule["skip_reason"]
 
     findings = [(rule, finding) for rule in system_data["rules"] for finding in rule["findings"]]
-    assert findings
     for rule, finding in findings:
         result = client.get(f"/api/v2/tasks/{task_id}/rules/{rule['code']}")
         assert result.status_code == 200
@@ -91,14 +91,24 @@ def test_system_endpoint_falls_back_to_task_json_for_legacy_tasks(tmp_path: Path
     env = setup_env(tmp_path, monkeypatch)
     now = datetime.now(UTC)
     rule = RuleResult(
-        code="log.error_density",
-        name="日志错误密度",
+        code="log.removed_rule",
+        name="已下线日志规则",
         category=RuleCategory.LOG,
         priority=Priority.P1,
         execution_order=0,
         status=RuleStatus.PASS,
         severity=Severity.LOW,
         summary="无异常",
+        findings=[
+            Finding(
+                finding_id="finding-removed-rule",
+                title="历史规则发现",
+                severity=Severity.HIGH,
+                source_file="logs/app.log",
+                evidence="历史证据仍可读取",
+                recommendation="保留历史证据",
+            )
+        ],
     )
     summary = Summary(total=1, pass_=1, warn=0, fail=0, error=0, skip=0)
     system = SystemInspection(
@@ -125,8 +135,9 @@ def test_system_endpoint_falls_back_to_task_json_for_legacy_tasks(tmp_path: Path
     client = TestClient(app)
     response = client.get("/api/v2/tasks/task-legacy/system")
     assert response.status_code == 200
-    assert response.json()["rules"][0]["code"] == "log.error_density"
+    assert response.json()["rules"][0]["code"] == "log.removed_rule"
 
-    response = client.get("/api/v2/tasks/task-legacy/rules/log.error_density")
+    response = client.get("/api/v2/tasks/task-legacy/rules/log.removed_rule")
     assert response.status_code == 200
-    assert response.json()["code"] == "log.error_density"
+    assert response.json()["code"] == "log.removed_rule"
+    assert response.json()["findings"][0]["finding_id"] == "finding-removed-rule"

@@ -32,7 +32,7 @@ def test_disabled_rule_is_excluded_then_included_after_enable(tmp_path, monkeypa
     env = setup_env(tmp_path, monkeypatch)
     sample_bytes = (Path(__file__).parent / "fixtures" / "sample" / "sample.zip").read_bytes()
     ensure_rule_states()
-    update_rule_state("log.error_density", False)
+    update_rule_state("kpi.measurement_units", False)
 
     first_package = env.uploads / "sample-disabled.zip"
     first_package.write_bytes(sample_bytes)
@@ -42,19 +42,19 @@ def test_disabled_rule_is_excluded_then_included_after_enable(tmp_path, monkeypa
     with TestClient(app) as client:
         disabled_task_id = upload_package(env, client, package=first_package, name="rule-state-disabled")
         wait_for_task(client, disabled_task_id)
-        update_rule_state("log.error_density", True)
+        update_rule_state("kpi.measurement_units", True)
         enabled_task_id = upload_package(env, client, package=second_package, name="rule-state-enabled")
         wait_for_task(client, enabled_task_id)
 
     disabled_files = {path.name for path in (env.task_dir(disabled_task_id) / "rules").iterdir()}
     enabled_files = {path.name for path in (env.task_dir(enabled_task_id) / "rules").iterdir()}
-    assert "log.error_density.json" not in disabled_files
-    assert "log.error_density.json" in enabled_files
-    assert "log.error_density" not in _system_rule_codes(env, disabled_task_id)
-    assert "log.error_density" in _system_rule_codes(env, enabled_task_id)
+    assert "kpi.measurement_units.json" not in disabled_files
+    assert "kpi.measurement_units.json" in enabled_files
+    assert "kpi.measurement_units" not in _system_rule_codes(env, disabled_task_id)
+    assert "kpi.measurement_units" in _system_rule_codes(env, enabled_task_id)
 
     before = _mtime_tree(env.task_dir(disabled_task_id))
-    update_rule_state("log.error_density", False)
+    update_rule_state("kpi.measurement_units", False)
     assert _mtime_tree(env.task_dir(disabled_task_id)) == before
 
 
@@ -77,17 +77,17 @@ def test_all_normal_rules_disabled_still_completes_with_empty_inspection(tmp_pat
 def test_single_rule_and_incremental_rebuild_reject_disabled_rules(tmp_path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     ensure_rule_states()
-    update_rule_state("log.error_density", False)
+    update_rule_state("kpi.measurement_units", False)
     package = env.uploads / "rule-state-rejected.zip"
     package.write_bytes((Path(__file__).parent / "fixtures" / "sample" / "sample.zip").read_bytes())
 
     from app.cli import run_incremental_rebuild, run_single_rule
 
     with pytest.raises(RuleStateError, match="规则已停用"):
-        run_single_rule("log.error_density", package=package, task_id="task-disabled-rerun")
+        run_single_rule("kpi.measurement_units", package=package, task_id="task-disabled-rerun")
     with pytest.raises(RuleStateError, match="规则已停用"):
         run_incremental_rebuild(
-            ["log.error_density"],
+            ["kpi.measurement_units"],
             package=package,
             task_id="task-disabled-rebuild",
         )
@@ -96,7 +96,7 @@ def test_single_rule_and_incremental_rebuild_reject_disabled_rules(tmp_path, mon
 def test_task_service_rerun_rejects_disabled_rule_without_output_change(tmp_path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     ensure_rule_states()
-    update_rule_state("log.error_density", False)
+    update_rule_state("kpi.measurement_units", False)
     package = env.uploads / "rule-state-rerun.zip"
     package.write_bytes((Path(__file__).parent / "fixtures" / "sample" / "sample.zip").read_bytes())
 
@@ -106,7 +106,7 @@ def test_task_service_rerun_rejects_disabled_rule_without_output_change(tmp_path
 
     before = _mtime_tree(env.task_dir(task_id))
     with pytest.raises(TaskRebuildError) as exc_info:
-        task_service.rerun(task_id, ["log.error_density"])
+        task_service.rerun(task_id, ["kpi.measurement_units"])
     assert exc_info.value.status_code == 409
     assert exc_info.value.code == "rule_disabled"
     assert _mtime_tree(env.task_dir(task_id)) == before
@@ -115,7 +115,7 @@ def test_task_service_rerun_rejects_disabled_rule_without_output_change(tmp_path
 def test_task_service_rebuild_rejects_disabled_rule(tmp_path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     ensure_rule_states()
-    update_rule_state("log.error_density", False)
+    update_rule_state("kpi.measurement_units", False)
 
     with TestClient(app) as client:
         task_id = upload_package(env, client, name="rule-state-rebuild")
@@ -130,6 +130,6 @@ def test_task_service_rebuild_rejects_disabled_rule(tmp_path, monkeypatch) -> No
             RebuildRequest(
                 mode=RebuildMode.INCREMENTAL,
                 confirmed=True,
-                rule_codes=["log.error_density"],
+                rule_codes=["kpi.measurement_units"],
             ),
         )

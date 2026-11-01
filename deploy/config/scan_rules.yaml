@@ -2,43 +2,10 @@
 # pattern 必须匹配以 / 分隔的任务内 POSIX 相对路径。
 version: 1
 groups:
-  alarm_all:
-    description: 告警目录全量文件
-    source_patterns:
-      - '^alarm/.*$'
-  config_all:
-    description: 基础配置目录全量文件
-    source_patterns:
-      - '^config/(?!.*LST ME[.]txt$).*$'
-  resource_all:
-    description: 资源目录全量文件；兼容 PerfResult 归组到 kpi 的容器资源
-    source_patterns:
-      - '^resource/.*$'
-      - '^kpi/.*Container_Metric_Unit.*\.csv$'
-  traffic_all:
-    description: 话务目录全量文件
-    source_patterns:
-      - '^traffic/.*$'
-  logs_all:
-    description: 解压后的最终日志文件
-    source_patterns:
-      - '^logs/.*\.log$'
-  ccc_service_logs:
-    description: CCC 服务日志
-    source_patterns:
-      - '^logs/(?:ServiceLog_[^/]+/)?CCC/.+\.log$'
-  ddd_service_logs:
-    description: DDD 服务日志
-    source_patterns:
-      - '^logs/(?:ServiceLog_[^/]+/)?DDD/.+\.log$'
   kpi_all:
     description: KPI 测量单元 CSV（含话统目录）
     source_patterns:
       - '^kpi/.*\.csv$'
       - '^traffic/.*\.csv$'
 
-# 首次初始化规则启停状态时的默认停用列表。
-# 调测/占位规则在确认可用前列入此处；初始化后以界面保存状态为准。
-disabled_rules:
-  - "log.ccc_service"
-  - "log.ddd_service"
+disabled_rules: []
