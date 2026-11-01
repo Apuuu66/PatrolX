@@ -58,3 +58,7 @@ web/e2e/.tmp-retention/
 # 本地草稿与包管理器锁文件
 drafts/
 uv.lock
+
+# 本地真实数据采集目录（禁止入库、提交或推送）
+DataCollect/
+DataCollect.zip
