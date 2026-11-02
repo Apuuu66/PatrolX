@@ -3,10 +3,12 @@
 import pytest
 
 from app.services.extraction.audit import (
+    ConflictRecord,
     LandedEntry,
     build_summary,
     canonical_json,
     conflict_digest,
+    make_conflict_record,
     make_failure_record,
     make_ignored_record,
     make_landed_entry,
@@ -198,6 +200,7 @@ def test_build_summary_counts_and_groups_records() -> None:
         ignored=[ignored],
         conflicts_count=1,
         failures=[failure],
+        catalog_count=1,
     )
 
     assert set(summary.__dataclass_fields__) == {
@@ -265,8 +268,6 @@ def test_landed_entry_rejects_invalid_values(kwargs: dict[str, str | int]) -> No
 
 def test_conflict_record_rejects_short_digest() -> None:
     """冲突记录必须拒绝非 12 位摘要。"""
-    from app.services.extraction.audit import make_conflict_record
-
     entry = make_landed_entry(
         source_relative="dir/file.txt",
         route_id="route.a",
@@ -281,3 +282,87 @@ def test_conflict_record_rejects_short_digest() -> None:
 
     with pytest.raises(ValueError, match="摘要必须为 12"):
         make_conflict_record(entry, "abc")
+
+
+def _conflict_entry(digest: str) -> LandedEntry:
+    """构造与指定摘要匹配的 landed entry。"""
+    return make_landed_entry(
+        source_relative="dir/file.txt",
+        route_id="route.a",
+        product="UMF",
+        category="config",
+        original_target="basic/file.txt",
+        target=f"basic/file__{digest}.txt",
+        action="copy",
+        sha256=SHA256_A,
+        size=1,
+    )
+
+
+def test_conflict_record_recomputes_digest_from_entry_identity() -> None:
+    """冲突摘要不得由调用方伪造，必须与 product/source/member 重算一致。"""
+    expected = conflict_digest("UMF", "dir/file.txt", "")
+    wrong = "0" * 12 if expected != "0" * 12 else "1" * 12
+    entry = _conflict_entry(wrong)
+
+    with pytest.raises(ValueError, match="不一致"):
+        make_conflict_record(entry, wrong)
+
+
+def test_conflict_record_requires_disambiguated_distinct_target() -> None:
+    """未发生消歧或目标不含摘要时不得声明冲突已解决。"""
+    digest = conflict_digest("UMF", "dir/file.txt", "")
+    unchanged = make_landed_entry(
+        source_relative="dir/file.txt",
+        route_id="route.a",
+        product="UMF",
+        category="config",
+        original_target="basic/file.txt",
+        target="basic/file.txt",
+        action="copy",
+        sha256=SHA256_A,
+        size=1,
+    )
+
+    with pytest.raises(ValueError, match="不同|摘要"):
+        make_conflict_record(unchanged, digest)
+
+
+def test_conflict_record_rejects_direct_forgery() -> None:
+    """直接实例化 ConflictRecord 也必须执行固定状态与目标格式校验。"""
+    digest = conflict_digest("UMF", "dir/file.txt", "")
+
+    with pytest.raises(ValueError, match="摘要|不同|resolved"):
+        ConflictRecord(
+            source_relative="dir/file.txt",
+            member_relative=None,
+            original_target="basic/file.txt",
+            target="basic/forged.txt",
+            digest=digest,
+            status="resolved",
+        )
+
+
+def test_build_summary_uses_explicit_catalog_count() -> None:
+    """摘要 catalog 计数必须由真实 catalog 数组显式传入，不得从 entries 推断。"""
+    entry = make_landed_entry(
+        source_relative="config.txt",
+        route_id="route.a",
+        product="UMF",
+        category="config",
+        original_target="config/file.txt",
+        target="config/file.txt",
+        action="copy",
+        sha256=SHA256_A,
+        size=1,
+    )
+
+    summary = build_summary(
+        entries=[entry],
+        ignored=[],
+        conflicts_count=0,
+        failures=[],
+        catalog_count=0,
+    )
+
+    assert summary.counts.catalog == 0

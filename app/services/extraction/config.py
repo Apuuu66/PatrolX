@@ -171,6 +171,13 @@ def _construct_unique_mapping(
     mapping: dict[Any, Any] = {}
     for key_node, _value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
+        if not isinstance(key, str):
+            raise yaml.constructor.ConstructorError(
+                None,
+                None,
+                "YAML mapping key 必须是字符串",
+                key_node.start_mark,
+            )
         if key in mapping:
             raise yaml.constructor.ConstructorError(
                 None,
@@ -199,6 +206,13 @@ def _config_error(
 
 def _is_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _normalized_enum(value: object) -> str | None:
+    """把字符串 enum 规范化为小写；非字符串返回 None。"""
+    if not isinstance(value, str):
+        return None
+    return value.strip().lower()
 
 
 def _reject_forbidden_chars(value: str, *, wildcard: bool = False) -> None:
@@ -270,41 +284,40 @@ def validate_member_pattern(value: object) -> tuple[str, tuple[str, ...]]:
     return text, tuple(segment.upper() for segment in raw_segments)
 
 
-def _parse_source(
-    payload: object,
-    route_path: str,
-) -> SourcePattern:
+def _parse_source(payload: object, route_path: str, route_id: str) -> SourcePattern:
     if not isinstance(payload, Mapping):
-        raise _config_error("source 必须是对象", f"{route_path}.source")
+        raise _config_error("source 必须是对象", f"{route_path}.source", route_id)
     allowed = {"scope", "directory", "file", "capture_root"}
     unknown = set(payload) - allowed
     if unknown:
         raise _config_error(
             f"source 存在未知字段: {sorted(unknown)}",
             f"{route_path}.source",
+            route_id,
         )
     missing = {"scope", "directory", "file"} - set(payload)
     if missing:
         raise _config_error(
             f"source 缺少字段: {sorted(missing)}",
             f"{route_path}.source",
+            route_id,
         )
-    scope = payload["scope"]
+    scope = _normalized_enum(payload["scope"])
     if scope not in {"scene", "evidence"}:
-        raise _config_error("未知 scope", f"{route_path}.source.scope")
+        raise _config_error("未知 scope", f"{route_path}.source.scope", route_id)
     try:
         directory, _segments = validate_directory_pattern(payload["directory"])
         file_name = validate_glob_file_name(payload["file"])
     except ValueError as exc:
-        raise _config_error(str(exc), f"{route_path}.source") from exc
+        raise _config_error(str(exc), f"{route_path}.source", route_id) from exc
     capture_root = payload.get("capture_root")
     if capture_root is not None:
         if not isinstance(capture_root, str):
-            raise _config_error("capture_root 必须是字符串", f"{route_path}.source.capture_root")
+            raise _config_error("capture_root 必须是字符串", f"{route_path}.source.capture_root", route_id)
         try:
             capture_root = validate_literal_segment(capture_root)
         except ValueError as exc:
-            raise _config_error(str(exc), f"{route_path}.source.capture_root") from exc
+            raise _config_error(str(exc), f"{route_path}.source.capture_root", route_id) from exc
     return SourcePattern(
         scope=str(scope),
         directory=directory,
@@ -320,25 +333,34 @@ def _parse_selection(
     route_id: str | None,
 ) -> Selection:
     if not isinstance(payload, Mapping):
-        raise _config_error("selection 必须是对象", f"{route_path}.selection")
+        raise _config_error("selection 必须是对象", f"{route_path}.selection", route_id)
     allowed = {"include", "exclude"}
     if set(payload) != allowed:
-        raise _config_error("selection 键必须严格为 include/exclude", f"{route_path}.selection")
+        raise _config_error("selection 键必须严格为 include/exclude", f"{route_path}.selection", route_id)
     includes = payload["include"]
     excludes = payload.get("exclude", [])
     if not isinstance(includes, list) or not includes:
-        raise _config_error("selection.include 必须是非空列表", f"{route_path}.selection.include")
+        raise _config_error(
+            "selection.include 必须是非空列表",
+            f"{route_path}.selection.include",
+            route_id,
+        )
     if not isinstance(excludes, list):
-        raise _config_error("selection.exclude 必须是列表", f"{route_path}.selection.exclude")
+        raise _config_error("selection.exclude 必须是列表", f"{route_path}.selection.exclude", route_id)
 
     parsed_include: list[SelectionInclude] = []
     for index, item in enumerate(includes):
         if not isinstance(item, Mapping):
-            raise _config_error("include 项必须是对象", f"{route_path}.selection.include[{index}]")
+            raise _config_error(
+                "include 项必须是对象",
+                f"{route_path}.selection.include[{index}]",
+                route_id,
+            )
         if set(item) - {"pattern", "service"} or "pattern" not in item:
             raise _config_error(
                 "include 项键必须严格为 pattern/service",
                 f"{route_path}.selection.include[{index}]",
+                route_id,
             )
         try:
             pattern, _segments = validate_member_pattern(item["pattern"])
@@ -346,6 +368,7 @@ def _parse_selection(
             raise _config_error(
                 str(exc),
                 f"{route_path}.selection.include[{index}].pattern",
+                route_id,
             ) from exc
         service = item.get("service")
         if service is not None:
@@ -353,6 +376,7 @@ def _parse_selection(
                 raise _config_error(
                     "service 必须是非空字符串",
                     f"{route_path}.selection.include[{index}].service",
+                    route_id,
                 )
             service = service.strip().upper()
         parsed_include.append(SelectionInclude(pattern=pattern, service=service))
@@ -360,11 +384,16 @@ def _parse_selection(
     parsed_exclude: list[SelectionExclude] = []
     for index, item in enumerate(excludes):
         if not isinstance(item, Mapping):
-            raise _config_error("exclude 项必须是对象", f"{route_path}.selection.exclude[{index}]")
+            raise _config_error(
+                "exclude 项必须是对象",
+                f"{route_path}.selection.exclude[{index}]",
+                route_id,
+            )
         if set(item) != {"pattern", "reason"}:
             raise _config_error(
                 "exclude 项键必须严格为 pattern/reason",
                 f"{route_path}.selection.exclude[{index}]",
+                route_id,
             )
         try:
             pattern, _segments = validate_member_pattern(item["pattern"])
@@ -372,12 +401,14 @@ def _parse_selection(
             raise _config_error(
                 str(exc),
                 f"{route_path}.selection.exclude[{index}].pattern",
+                route_id,
             ) from exc
         reason = item["reason"]
         if not isinstance(reason, str) or not reason.strip():
             raise _config_error(
                 "reason 必须是非空字符串",
                 f"{route_path}.selection.exclude[{index}].reason",
+                route_id,
             )
         parsed_exclude.append(SelectionExclude(pattern=pattern, reason=reason.strip()))
 
@@ -387,6 +418,7 @@ def _parse_selection(
         raise _config_error(
             "include 未声明 service 时 target 不能使用 {service}",
             f"{route_path}.target",
+            route_id,
         )
     return Selection(include=tuple(parsed_include), exclude=tuple(parsed_exclude))
 
@@ -395,15 +427,20 @@ def _target_variables(target: str) -> set[str]:
     variables: set[str] = set()
     cursor = 0
     while cursor < len(target):
-        start = target.find("{", cursor)
-        if start < 0:
-            break
-        end = target.find("}", start + 1)
+        char = target[cursor]
+        if char == "}":
+            raise ValueError("目标变量存在多余 }")
+        if char != "{":
+            cursor += 1
+            continue
+        end = target.find("}", cursor + 1)
         if end < 0:
             raise ValueError("目标变量未闭合")
-        name = target[start + 1 : end]
+        name = target[cursor + 1 : end]
         if not name:
             raise ValueError("目标变量为空")
+        if "{" in name:
+            raise ValueError("目标变量不得嵌套")
         variables.add(name)
         cursor = end + 1
     return variables
@@ -472,6 +509,22 @@ def _validate_target_template(
     return value
 
 
+def _directory_segments(directory: str) -> tuple[str, ...]:
+    """返回已 strip 并大写的目录段。"""
+    return tuple(segment.strip().upper() for segment in directory.strip().split("/"))
+
+
+def _is_catch_all_source(source: SourcePattern) -> bool:
+    """判断 source 是否无前置条件地覆盖 scope 内全部普通文件。"""
+    segments = _directory_segments(source.directory)
+    return (
+        source.capture_root is None
+        and bool(segments)
+        and all(segment == "**" for segment in segments)
+        and source.file.strip() == "*"
+    )
+
+
 def _parse_route(payload: object, index: int) -> Route:
     route_path = f"routes[{index}]"
     if not isinstance(payload, Mapping):
@@ -479,7 +532,7 @@ def _parse_route(payload: object, index: int) -> Route:
 
     preliminary_id = payload.get("id")
     detail_route_id = preliminary_id if isinstance(preliminary_id, str) else None
-    action = payload.get("action")
+    action = _normalized_enum(payload.get("action"))
     if action not in ACTIONS:
         raise _config_error(
             f"未知动作: {action}",
@@ -487,7 +540,7 @@ def _parse_route(payload: object, index: int) -> Route:
             detail_route_id,
         )
 
-    allowed = {
+    base_keys = {
         "id",
         "phase",
         "priority",
@@ -497,13 +550,17 @@ def _parse_route(payload: object, index: int) -> Route:
         "category",
         "target",
     }
+    allowed = set(base_keys)
     if action in EXPAND_ACTIONS:
         allowed.add("member_decompress")
     if action == "select_and_decompress":
         allowed.add("selection")
     unknown = set(payload) - allowed
     if unknown:
-        raise _config_error(f"route 存在未知字段: {sorted(unknown)}", route_path)
+        raise _config_error(f"route 存在未知字段: {sorted(unknown)}", route_path, detail_route_id)
+    missing = base_keys - set(payload)
+    if missing:
+        raise _config_error(f"route 缺少基础字段: {sorted(missing)}", route_path, detail_route_id)
 
     route_id = payload.get("id")
     if (
@@ -513,7 +570,7 @@ def _parse_route(payload: object, index: int) -> Route:
         or not all(char.isascii() and (char.islower() or char.isdigit() or char in "._-") for char in route_id)
     ):
         raise _config_error("route id 非法", f"{route_path}.id")
-    phase = payload.get("phase")
+    phase = _normalized_enum(payload.get("phase"))
     if phase not in PHASES:
         raise _config_error(f"未知 phase: {phase}", f"{route_path}.phase", route_id)
     priority = payload.get("priority")
@@ -533,9 +590,14 @@ def _parse_route(payload: object, index: int) -> Route:
         profiles.add(item.strip().upper())
     if "GENERIC" in profiles and (profiles & {"UMF", "CSP"}):
         raise _config_error("GENERIC 不得与 UMF/CSP 混用", f"{route_path}.profiles", route_id)
+    if phase == "alarm" and profiles != {"UMF", "CSP"}:
+        raise _config_error("告警 route 的 profiles 必须为 [UMF, CSP]", f"{route_path}.profiles", route_id)
 
-    source = _parse_source(payload.get("source"), route_path)
-    category = payload.get("category")
+    source = _parse_source(payload.get("source"), route_path, route_id)
+    category_payload = payload["category"]
+    if category_payload is not None and not isinstance(category_payload, str):
+        raise _config_error("category 必须是字符串或 null", f"{route_path}.category", route_id)
+    category = _normalized_enum(category_payload)
     target = payload.get("target")
     if action == "ignore":
         if category is not None:
@@ -547,6 +609,12 @@ def _parse_route(payload: object, index: int) -> Route:
         if category not in CATEGORIES:
             raise _config_error(f"非法业务分类: {category}", f"{route_path}.category", route_id)
         target_value = _validate_target_template(target, action, route_path, route_id)
+    if action == "fallback" and not _is_catch_all_source(source):
+        raise _config_error(
+            "fallback route 必须覆盖全部路径且不得声明 capture_root",
+            f"{route_path}.source",
+            route_id,
+        )
     if phase == "alarm":
         if action != "expand_recursive":
             raise _config_error("告警 route 必须使用 expand_recursive", f"{route_path}.action", route_id)
@@ -570,14 +638,14 @@ def _parse_route(payload: object, index: int) -> Route:
         value = payload["member_decompress"]
         if not isinstance(value, list):
             raise _config_error("member_decompress 必须是列表", f"{route_path}.member_decompress", route_id)
-        patterns: set[str] = set()
+        patterns: dict[str, str] = {}
         for item in value:
             try:
                 pattern, _segments = validate_member_pattern(item)
             except ValueError as exc:
                 raise _config_error(str(exc), f"{route_path}.member_decompress", route_id) from exc
-            patterns.add(pattern)
-        member_decompress = tuple(sorted(patterns))
+            patterns.setdefault(pattern.upper(), pattern)
+        member_decompress = tuple(sorted(patterns.values()))
 
     return Route(
         id=route_id,
@@ -596,9 +664,14 @@ def _parse_route(payload: object, index: int) -> Route:
 def _validate_profiles(payload: object) -> dict[str, Profile]:
     if not isinstance(payload, Mapping):
         raise _config_error("profiles 必须是对象", "profiles")
-    normalized_keys = {str(key).strip().upper(): key for key in payload}
-    if len(normalized_keys) != len(payload):
-        raise _config_error("profile key 重复", "profiles")
+    normalized_keys: dict[str, str] = {}
+    for key in payload:
+        if not isinstance(key, str):
+            raise _config_error("profile key 必须是字符串", "profiles")
+        normalized = key.strip().upper()
+        if normalized in normalized_keys:
+            raise _config_error("profile key 重复", "profiles")
+        normalized_keys[normalized] = key
     missing = PROFILE_KEYS - set(normalized_keys)
     unknown = set(normalized_keys) - PROFILE_KEYS
     if missing or unknown:
@@ -620,7 +693,6 @@ def _validate_profiles(payload: object) -> dict[str, Profile]:
         if normalized_key != "GENERIC" and not anchors_payload:
             raise _config_error("scene_anchors 必须是非空列表", f"profiles.{normalized_key}")
         anchors: set[str] = set()
-        normalized_anchors: set[str] = set()
         for anchor in anchors_payload:
             if not isinstance(anchor, str):
                 raise _config_error("anchor 必须是字符串", f"profiles.{normalized_key}")
@@ -628,11 +700,7 @@ def _validate_profiles(payload: object) -> dict[str, Profile]:
                 value = validate_literal_segment(anchor)
             except ValueError as exc:
                 raise _config_error(str(exc), f"profiles.{normalized_key}") from exc
-            normalized = value.upper()
-            if normalized in normalized_anchors:
-                raise _config_error("anchor 重复", f"profiles.{normalized_key}")
             anchors.add(value)
-            normalized_anchors.add(normalized)
         result[normalized_key] = Profile(
             key=normalized_key,
             scene_anchors=tuple(sorted(anchors)),
@@ -646,9 +714,7 @@ def _validate_reachable_defaults(profiles: dict[str, Profile], routes: tuple[Rou
     for route in routes:
         if route.phase not in {"ignore", "fallback"}:
             continue
-        source = route.source
-        is_catchall = source.directory == "**" and source.file == "*"
-        if not is_catchall:
+        if not _is_catch_all_source(route.source):
             continue
         if route.action == "ignore":
             covered.update(route.profiles)
@@ -699,7 +765,7 @@ def _directory_symbols(routes: tuple[Route, ...]) -> set[_Symbol]:
     """收集全部目录 literal scalar；OTHER 在校验时单独补入。"""
     symbols: set[_Symbol] = set()
     for route in routes:
-        for segment in route.source.directory.strip().upper().split("/"):
+        for segment in _directory_segments(route.source.directory):
             if segment != "**":
                 symbols.add(_Symbol("directory", segment))
     return symbols
@@ -937,7 +1003,7 @@ def _validate_route_overlaps(routes: tuple[Route, ...]) -> None:
 def _normalized_source(source: SourcePattern) -> dict[str, object]:
     return {
         "scope": source.scope,
-        "directory": "/".join(segment.upper() for segment in source.directory.strip().split("/")),
+        "directory": "/".join(_directory_segments(source.directory)),
         "file": source.file.upper(),
         "capture_root": None if source.capture_root is None else source.capture_root.upper(),
     }
@@ -946,8 +1012,13 @@ def _normalized_source(source: SourcePattern) -> dict[str, object]:
 def _normalized_selection(selection: Selection | None) -> dict[str, object] | None:
     if selection is None:
         return None
-    include = [{"pattern": item.pattern.upper(), "service": item.service} for item in selection.include]
-    exclude = [{"pattern": item.pattern.upper(), "reason": item.reason} for item in selection.exclude]
+    include_values = {
+        (item.pattern.strip().upper(), None if item.service is None else item.service.strip().upper())
+        for item in selection.include
+    }
+    exclude_values = {(item.pattern.strip().upper(), item.reason.strip()) for item in selection.exclude}
+    include = [{"pattern": pattern, "service": service} for pattern, service in include_values]
+    exclude = [{"pattern": pattern, "reason": reason} for pattern, reason in exclude_values]
     include.sort(key=lambda item: (item["pattern"], item["service"] or ""))
     exclude.sort(key=lambda item: (item["pattern"], item["reason"]))
     return {"include": include, "exclude": exclude}
@@ -970,7 +1041,7 @@ def _fingerprint_data(
                 "category": route.category,
                 "target": route.target,
                 "selection": _normalized_selection(route.selection),
-                "member_decompress": list(route.member_decompress),
+                "member_decompress": sorted({pattern.strip().upper() for pattern in route.member_decompress}),
             }
         )
     normalized_profiles = {
@@ -1039,7 +1110,7 @@ def loads_classification_config(text: str) -> ClassificationConfig:
     """从 YAML 字符串读取并严格校验分类配置。"""
     try:
         payload = yaml.load(text, Loader=_UniqueKeyLoader)  # noqa: S506
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, TypeError, ValueError, AttributeError) as exc:
         raise _config_error(f"YAML 解析失败：{exc}") from exc
     return parse_classification_config(payload)
 

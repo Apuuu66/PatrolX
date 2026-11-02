@@ -107,6 +107,19 @@ class ConflictRecord:
     digest: str
     status: str
 
+    def __post_init__(self) -> None:
+        """拒绝直接构造的伪造或未消歧冲突记录。"""
+        _validate_relative_path(self.source_relative, "source_relative")
+        _validate_optional_member(self.member_relative)
+        original_target = _validate_target(self.original_target)
+        target = _validate_target(self.target)
+        if self.status != "resolved":
+            raise ValueError("status 必须固定为 resolved")
+        if not isinstance(self.digest, str) or _DIGEST_PATTERN.fullmatch(self.digest) is None:
+            raise ValueError("摘要必须为 12 位小写十六进制摘要")
+        if not _conflict_target_is_valid(original_target, target, self.digest):
+            raise ValueError("冲突 target 必须不同于 original_target 且包含对应摘要")
+
 
 @dataclass(frozen=True, slots=True)
 class FailureRecord:
@@ -338,6 +351,9 @@ def make_conflict_record(entry: LandedEntry, digest: str) -> ConflictRecord:
     """根据成功 entry 构造已解决冲突记录。"""
     if not isinstance(digest, str) or _DIGEST_PATTERN.fullmatch(digest) is None:
         raise ValueError("摘要必须为 12 位小写十六进制摘要")
+    expected = conflict_digest(entry.product, entry.source_relative, entry.member_relative or "")
+    if digest != expected:
+        raise ValueError("摘要与 product/source/member 重算结果不一致")
     return ConflictRecord(
         source_relative=entry.source_relative,
         member_relative=entry.member_relative,
@@ -380,6 +396,23 @@ def _disambiguated_target(original_target: str, digest: str, suffix: int | None 
     if directory:
         return f"{directory}{separator}{new_filename}"
     return new_filename
+
+
+def _conflict_target_is_valid(original_target: str, target: str, digest: str) -> bool:
+    """确认 target 是由 original_target 与指定摘要生成的唯一消歧路径。"""
+    original_directory, _, original_filename = original_target.rpartition("/")
+    target_directory, _, target_filename = target.rpartition("/")
+    if original_directory != target_directory or original_target == target:
+        return False
+    dot_index = original_filename.find(".")
+    if dot_index < 0:
+        stem = original_filename
+        extension = ""
+    else:
+        stem = original_filename[:dot_index]
+        extension = original_filename[dot_index:]
+    pattern = re.compile(re.escape(stem) + rf"__{re.escape(digest)}(?:-[2-9]\d*)?" + re.escape(extension))
+    return pattern.fullmatch(target_filename) is not None
 
 
 def _disambiguation_slot_count(original_target: str, used_targets: set[str]) -> int:
@@ -441,10 +474,13 @@ def build_summary(
     ignored: list[IgnoredRecord],
     conflicts_count: int,
     failures: list[FailureRecord],
+    catalog_count: int,
 ) -> Summary:
     """根据审计数组构造严格摘要。"""
     if not _is_int(conflicts_count) or conflicts_count < 0:
         raise ValueError("conflicts_count 必须是非负整数")
+    if not _is_int(catalog_count) or catalog_count < 0:
+        raise ValueError("catalog_count 必须是非负整数")
 
     by_route: dict[str, int] = {}
     by_category: dict[str, int] = {}
@@ -469,7 +505,7 @@ def build_summary(
         ignored=len(ignored),
         conflicts=conflicts_count,
         failures=len(failures),
-        catalog=len(entries),
+        catalog=catalog_count,
     )
     return Summary(
         counts=counts,

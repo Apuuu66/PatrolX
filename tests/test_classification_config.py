@@ -460,7 +460,7 @@ def test_alarm_overlapping_ignore_phase_is_not_static_conflict() -> None:
         "alarm.route",
         "alarm",
         1000,
-        "CSP",
+        "UMF, CSP",
         "evidence",
         "**/0/Alarm Data/**",
         "*",
@@ -485,3 +485,271 @@ def test_alarm_overlapping_ignore_phase_is_not_static_conflict() -> None:
     config = loads_classification_config(_config_with_routes([alarm, ignore]))
 
     assert {route.id for route in config.routes} >= {"alarm.route", "zero.ignore"}
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        ("action: copy", "action: [copy]"),
+        ("phase: precise", "phase: [precise]"),
+        ("category: config", "category: [config]"),
+        ("scope: scene", "scope: [scene]"),
+    ],
+)
+def test_malformed_enum_types_fail_with_stable_config_error(replacement: tuple[str, str]) -> None:
+    """列表等不可哈希 enum 输入不得泄漏 TypeError。"""
+    text = _valid_yaml().replace(replacement[0], replacement[1], 1)
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    assert exc_info.value.code == "invalid_classification_config"
+    assert exc_info.value.route_id == "umf.root"
+
+
+def test_complex_yaml_mapping_key_fails_with_stable_config_error() -> None:
+    """复杂 YAML mapping key 不得在重复键检测中泄漏 TypeError。"""
+    text = """
+version: 1
+profiles:
+  ? [UMF]
+  : {scene_anchors: [Anchor]}
+routes: []
+"""
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    assert exc_info.value.code == "invalid_classification_config"
+    assert "key" in exc_info.value.message
+
+
+@pytest.mark.parametrize("missing_line", ["    category: null\n", "    target: null\n"])
+def test_ignore_route_requires_every_base_key(missing_line: str) -> None:
+    """ignore route 省略基础键时不得通过可选读取绕过严格 schema。"""
+    text = _valid_yaml().replace(missing_line, "", 1)
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    error = exc_info.value
+    assert error.path == "routes[2]"
+    assert error.route_id == "csp.ignore"
+    assert "缺少基础字段" in error.message
+
+
+def test_alarm_route_requires_umf_and_csp_profiles() -> None:
+    """跨网元告警 route 必须同时声明 UMF 与 CSP。"""
+    alarm = _route_yaml(
+        "alarm.partial",
+        "alarm",
+        1000,
+        "UMF",
+        "evidence",
+        "**/Alarm Information/**",
+        "*",
+        action="expand_recursive",
+        category="alarm",
+        target='"alarm/{member}"',
+        capture_root="Alarm Information",
+    )
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(_config_with_routes([alarm]))
+
+    assert exc_info.value.path == "routes[4].profiles"
+    assert exc_info.value.route_id == "alarm.partial"
+    assert "UMF" in exc_info.value.message and "CSP" in exc_info.value.message
+
+
+def test_fallback_action_must_use_catch_all_source() -> None:
+    """fallback action 自身必须承担 catch-all 语义。"""
+    narrow = _route_yaml(
+        "narrow.fallback",
+        "fallback",
+        1,
+        "UMF",
+        "scene",
+        "one-directory",
+        "*",
+        action="fallback",
+        category="other",
+        target='"other/{suffix}"',
+    )
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(_config_with_routes([narrow]))
+
+    assert exc_info.value.route_id == "narrow.fallback"
+    assert "fallback" in exc_info.value.message
+    assert "全部路径" in exc_info.value.message
+
+
+def test_multiple_double_star_directories_are_catch_all() -> None:
+    """`**/**` 与 `**` 一样覆盖零到任意目录深度。"""
+    text = _valid_yaml().replace(
+        '      directory: "**"\n      file: "*"\n    action: fallback',
+        '      directory: "**/**"\n      file: "*"\n    action: fallback',
+        1,
+    )
+
+    config = loads_classification_config(text)
+
+    assert "umf.fallback" in {route.id for route in config.routes}
+
+
+def test_fallback_with_capture_root_is_not_catch_all() -> None:
+    """capture_root 会要求实际命中段，因此不能作为完整 fallback。"""
+    text = _valid_yaml().replace(
+        '      directory: "**"\n      file: "*"\n    action: fallback',
+        '      directory: "**"\n      file: "*"\n      capture_root: "UMF Root"\n    action: fallback',
+        1,
+    )
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    assert exc_info.value.route_id == "umf.fallback"
+    assert "capture_root" in exc_info.value.message or "全部路径" in exc_info.value.message
+
+
+def test_source_error_includes_route_id() -> None:
+    """route 内 source 校验失败仍必须返回已知 route id。"""
+    text = _valid_yaml().replace("scope: scene", "scope: unknown", 1)
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    assert exc_info.value.route_id == "umf.root"
+    assert exc_info.value.path == "routes[0].source.scope"
+
+
+def test_member_decompress_fingerprint_case_deduplicates() -> None:
+    """member_decompress 仅大小写或顺序不同时指纹应完全一致。"""
+    single = _config_with_routes(
+        [
+            """
+  - id: expand.a
+    phase: precise
+    priority: 40
+    profiles: [UMF]
+    source:
+      scope: evidence
+      directory: "bundle"
+      file: "*.tar.gz"
+    action: expand
+    category: log
+    target: "logs/{member}"
+    member_decompress: ["**/*.gz"]
+"""
+        ]
+    )
+    duplicate = _config_with_routes(
+        [
+            """
+  - id: expand.a
+    phase: precise
+    priority: 40
+    profiles: [UMF]
+    source:
+      scope: evidence
+      directory: "bundle"
+      file: "*.tar.gz"
+    action: expand
+    category: log
+    target: "logs/{member}"
+    member_decompress: ["**/*.GZ", " **/*.gz "]
+"""
+        ]
+    )
+
+    assert loads_classification_config(single).fingerprint == loads_classification_config(duplicate).fingerprint
+
+
+def test_selection_fingerprint_case_deduplicates() -> None:
+    """selection 仅大小写或重复项不同时指纹应完全一致。"""
+    single = _config_with_routes(
+        [
+            """
+  - id: select.a
+    phase: precise
+    priority: 40
+    profiles: [UMF]
+    source:
+      scope: evidence
+      directory: "bundle"
+      file: "*.zip"
+    action: select_and_decompress
+    category: chr
+    target: "chr/{member}"
+    selection:
+      include:
+        - pattern: "**/*.bil.gz"
+          service: chr
+      exclude:
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+"""
+        ]
+    )
+    duplicate = _config_with_routes(
+        [
+            """
+  - id: select.a
+    phase: precise
+    priority: 40
+    profiles: [UMF]
+    source:
+      scope: evidence
+      directory: "bundle"
+      file: "*.zip"
+    action: select_and_decompress
+    category: chr
+    target: "chr/{member}"
+    selection:
+      include:
+        - pattern: "**/*.bil.gz"
+          service: CHR
+        - pattern: "**/*.BIL.GZ"
+          service: chr
+      exclude:
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+        - pattern: "**/locallogreport.csv"
+          reason: report_not_log
+"""
+        ]
+    )
+
+    assert loads_classification_config(single).fingerprint == loads_classification_config(duplicate).fingerprint
+
+
+def test_directory_segment_whitespace_is_fingerprint_normalized() -> None:
+    """目录段两侧空白不得改变规范化指纹。"""
+    normal = _valid_yaml()
+    padded = _valid_yaml().replace('directory: "UMF Root/**"', 'directory: " UMF Root / ** "', 1)
+
+    assert loads_classification_config(normal).fingerprint == loads_classification_config(padded).fingerprint
+
+
+def test_case_variant_duplicate_anchors_are_canonically_deduplicated() -> None:
+    """anchor 按 strip().upper() 比较，重复大小写值只影响一组 canonical 语义。"""
+    normal = _valid_yaml()
+    duplicate = _valid_yaml().replace(
+        'scene_anchors: ["UMF Root"]',
+        'scene_anchors: ["umf root", " UMF ROOT "]',
+        1,
+    )
+
+    assert loads_classification_config(normal).fingerprint == loads_classification_config(duplicate).fingerprint
+
+
+def test_target_rejects_extra_closing_brace() -> None:
+    """目标变量解析必须拒绝多余右花括号。"""
+    text = _valid_yaml().replace('target: "basic/{suffix}"', 'target: "basic/{suffix}}"', 1)
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    assert exc_info.value.path == "routes[0].target"
+    assert "}" in exc_info.value.message
