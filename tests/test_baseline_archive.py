@@ -88,8 +88,10 @@ def test_path_traversal_rejected(tmp_path: Path, writer) -> None:
             data = b"boom"
             info.size = len(data)
             tf.addfile(info, io.BytesIO(data))
-    with pytest.raises(ArchiveError, match="路径穿越"):
+    with pytest.raises(ArchiveError, match="父目录跳转") as exc_info:
         writer(archive, tmp_path / "out", limit())
+
+    assert exc_info.value.error_code == "unsafe_path"
 
 
 def test_symlink_rejected(tmp_path: Path) -> None:
@@ -123,5 +125,9 @@ def test_nested_depth_budget(tmp_path: Path, writer) -> None:
             data = b"x"
             info.size = len(data)
             tf.addfile(info, io.BytesIO(data))
-    with pytest.raises(ArchiveError, match="嵌套深度超限"):
-        writer(archive, tmp_path / "out", limit())
+    value = limit()
+    value.max_member_path_depth = 2
+    with pytest.raises(ArchiveError, match="成员路径深度超限") as exc_info:
+        writer(archive, tmp_path / "out", value)
+
+    assert exc_info.value.error_code == "member_path_depth_exceeded"

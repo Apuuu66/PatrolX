@@ -80,11 +80,19 @@ def _relative_files(root: Path) -> list[Path]:
 
 
 def _safe_destination(data_dir: Path, relative: Path, path_policy: PathLimitPolicy | None = None) -> Path:
+    """解析任务目标，并拒绝越界路径与链接路径。"""
+    root_resolved = data_dir.resolve()
     destination = (data_dir / relative).resolve()
-    if not destination.is_relative_to(data_dir.resolve()):
-        raise ArchiveError(f"目标路径穿越被拒绝: {relative.as_posix()}")
+    if not destination.is_relative_to(root_resolved):
+        raise ArchiveError(
+            f"目标路径穿越被拒绝: {relative.as_posix()}",
+            "unsafe_path",
+        )
     if destination.is_symlink() or any(parent.is_symlink() for parent in destination.parents):
-        raise ArchiveError(f"目标路径包含链接: {relative.as_posix()}")
+        raise ArchiveError(
+            f"目标路径包含链接: {relative.as_posix()}",
+            "link_rejected",
+        )
     if path_policy is not None:
         path_policy.check(destination)
     return destination
@@ -122,13 +130,19 @@ def _remove_empty_work_site(work_path: Path, category_root: Path) -> None:
 
 
 def _category_of(path: Path, parent_category: str, archive_name: str | None = None) -> tuple[str, str]:
+    """旧 v4 链路的分类入口；内容嗅探失败时回退父类或 other，后续展开仍会记录损坏。"""
     locked_category = classify_member(archive_name)
     if locked_category is not None:
         return locked_category.value, "archive:member"
     name_category = classify_name(path.name)
-    category = name_category or classify_content(path)
-    if category is not None:
-        return category.value, "self:name" if name_category is not None else "self:content"
+    if name_category is not None:
+        return name_category.value, "self:name"
+    try:
+        content_category = classify_content(path)
+    except ArchiveError:
+        content_category = None
+    if content_category is not None:
+        return content_category.value, "self:content"
     if parent_category:
         return parent_category, "parent:category"
     return RuleCategory.OTHER.value, "fallback:other"
@@ -154,12 +168,14 @@ def _register_rejected(
     reason: str,
     category: str,
     depth: int,
+    error_code: str | None = None,
 ) -> None:
-    manifest["rejected"].append(
-        {
-            "source": source,
-            "category": category,
-            "reason": reason,
-            "depth": depth,
-        }
-    )
+    item: dict[str, object] = {
+        "source": source,
+        "category": category,
+        "reason": reason,
+        "depth": depth,
+    }
+    if error_code is not None:
+        item["error_code"] = error_code
+    manifest["rejected"].append(item)

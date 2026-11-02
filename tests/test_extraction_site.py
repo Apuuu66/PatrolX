@@ -335,10 +335,12 @@ def test_task_level_budget_failures_are_isolated_and_recorded(tmp_path, monkeypa
     manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
 
     assert manifest["main"]["count"] == 3
-    assert any(
-        item["source"] == "config/version.ini" and item["reason"] == "任务累计文件数超限"
-        for item in manifest["rejected"]
-    )
+    rejected_item = next(item for item in manifest["rejected"] if item["source"] == "config/version.ini")
+    assert rejected_item["reason"] == "任务累计文件数超限"
+    assert rejected_item["error_code"] == "task_file_count_exceeded"
+    assert manifest["log_gz"][0]["status"] == "failed"
+    assert manifest["log_gz"][0]["error_code"] == "task_file_count_exceeded"
+    assert not (data_dir / "logs/node/app.log").exists()
     assert (data_dir / extraction.MANIFEST_NAME).is_file()
 
 
@@ -416,7 +418,7 @@ def test_path_limit_blocks_main_evidence_before_rebuild(tmp_path, monkeypatch) -
 
 
 def test_path_limit_records_normal_file_and_cleans_partial_file(tmp_path, monkeypatch) -> None:
-    """普通文件路径过长提前失败，记录 path_too_long 且不留下半成品。"""
+    """普通文件路径过长提前失败，记录 unsafe_path 且不留下半成品。"""
     from app.services.extraction.budget import ExtractionBudget
     from app.services.extraction.layout import PathLimitPolicy
     from app.services.extraction.nested import _ingest_file
@@ -446,7 +448,7 @@ def test_path_limit_records_normal_file_and_cleans_partial_file(tmp_path, monkey
 
     item = manifest["files"][0]
     assert item["status"] == "failed"
-    assert item["error_code"] == "path_too_long"
+    assert item["error_code"] == "unsafe_path"
     assert item["path_length"] == len(str(destination))
     assert item["path_limit"] == len(str(destination))
     assert not destination.exists()
@@ -475,6 +477,70 @@ def test_path_limit_records_log_gz_and_nested_staging(tmp_path, monkeypatch) -> 
 
     assert manifest["log_gz"][0]["status"] == "extracted"
     assert manifest["subpackages"][0]["status"] == "failed"
-    assert manifest["subpackages"][0]["error_code"] == "path_too_long"
+    assert manifest["subpackages"][0]["error_code"] == "unsafe_path"
     assert not (data_dir / "logs/AppService").exists()
     assert not any(path.name.startswith(".extract-") for path in data_dir.iterdir())
+
+
+# v5 归档深度与局部失败的端到端契约测试
+def _write_chain_archive(path: Path, depth: int, leaf_name: str = "leaf.txt") -> None:
+    """构造主包内 depth 层 ZIP 链，最深层包含一个普通文件。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    leaf_path = path.parent / f"_leaf_{depth}.bin"
+    leaf_path.write_bytes(b"leaf")
+    inner_path = path.parent / f"_inner_{depth}.zip"
+    _zip(inner_path, {leaf_name: leaf_path.read_bytes()})
+    for level in range(depth - 1, 0, -1):
+        wrapper_path = path.parent / f"_wrapper_{depth}_{level}.zip"
+        member_name = inner_path.name
+        _zip(wrapper_path, {member_name: inner_path.read_bytes()})
+        inner_path = wrapper_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    inner_path.rename(path)
+
+
+@pytest.mark.parametrize("depth", [8, 9])
+def test_nested_archive_depth_boundary(tmp_path, monkeypatch, depth: int) -> None:
+    """嵌套归档等于 8 层允许，第 9 层记录 archive_depth_exceeded 且不阻断任务。"""
+    env = setup_env(tmp_path, monkeypatch)
+    package = env.uploads / f"chain-{depth}.zip"
+    _write_chain_archive(tmp_path / f"_build/chain-{depth}.zip", depth)
+    root_archive = tmp_path / f"_build/chain-{depth}.zip"
+    _zip(package, {"chain.zip": root_archive.read_bytes(), "ok.txt": "ok"})
+
+    manifest = extraction.extract_main_site(
+        package,
+        env.task_dir(f"chain-{depth}"),
+        sha256_file(package),
+    )
+
+    if depth == 8:
+        assert not any(item.get("error_code") == "archive_depth_exceeded" for item in manifest["subpackages"])
+        assert (env.task_dir(f"chain-{depth}") / "other/leaf.txt").is_file()
+    else:
+        assert any(item.get("error_code") == "archive_depth_exceeded" for item in manifest["subpackages"])
+        assert (env.task_dir(f"chain-{depth}") / "other/ok.txt").is_file()
+
+
+def test_local_archive_failures_keep_stable_codes_and_continue(tmp_path, monkeypatch) -> None:
+    """损坏 ZIP 与 GZIP 只记录自身失败，其他文件继续落位。"""
+    env = setup_env(tmp_path, monkeypatch)
+    package = env.uploads / "local-failures-v5.zip"
+    _zip(
+        package,
+        {
+            "bad.zip": b"not zip",
+            "bad.log.gz": b"not gzip",
+            "ok.txt": "ok",
+        },
+    )
+
+    manifest = extraction.extract_main_site(
+        package,
+        env.task_dir("local-failures-v5"),
+        sha256_file(package),
+    )
+
+    assert any(item.get("error_code") == "archive_corrupt" for item in manifest["subpackages"])
+    assert any(item.get("error_code") == "archive_corrupt" for item in manifest["log_gz"])
+    assert (env.task_dir("local-failures-v5") / "other/ok.txt").is_file()

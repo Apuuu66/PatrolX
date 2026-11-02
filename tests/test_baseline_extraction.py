@@ -69,7 +69,7 @@ def test_invalid_nested_archive_does_not_abort_task(tmp_path: Path, monkeypatch)
             "checksum": failures[0]["checksum"],
             "target": "logs",
             "error": failures[0]["error"],
-            "error_code": None,
+            "error_code": "archive_corrupt",
             "status": failures[0]["status"],
             "path_length": None,
             "path_limit": None,

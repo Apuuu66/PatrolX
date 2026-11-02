@@ -7,12 +7,12 @@ from app.core.archive import ArchiveError, unpack
 from app.services.extraction.budget import ExtractionBudget, ExtractionLogger, _log_extract
 from app.services.extraction.layout import (
     MAIN_EVIDENCE_DIR,
+    MANIFEST_VERSION,
     WORK_CATEGORIES,
     PathLimitPolicy,
     _relative_files,
 )
-from app.services.extraction.manifest import (
-    MANIFEST_VERSION,
+from app.services.extraction.legacy_manifest import (
     manifest_path,
     reusable_manifest,
     write_manifest,

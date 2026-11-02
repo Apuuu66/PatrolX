@@ -10,7 +10,8 @@ from app.models.schemas import (
     PreparationItem,
     PreparationStatus,
 )
-from app.services.extraction import WORK_CATEGORIES, manifest_path, validate_manifest
+from app.services.extraction import WORK_CATEGORIES, manifest_path
+from app.services.extraction.legacy_manifest import validate_manifest
 
 _MAIN_CODE = "pkg.extract.main"
 _CATEGORY_LABELS = {

@@ -49,8 +49,11 @@ def _source_display(source_relative: Path, source_kind: str) -> str:
 def _set_path_error(state: dict[str, object], exc: Exception) -> None:
     state["status"] = "failed"
     state["error"] = str(exc)
+    error_code = getattr(exc, "error_code", None)
+    if error_code is not None:
+        state["error_code"] = error_code
     if isinstance(exc, PathTooLongError):
-        state["error_code"] = "path_too_long"
+        state["error_code"] = "unsafe_path"
         state["path_length"] = exc.length
         state["path_limit"] = exc.limit
 
@@ -100,7 +103,14 @@ def _retain_evidence(
         if target is not None:
             target.unlink(missing_ok=True)
         _set_path_error(state, exc)
-        _register_rejected(manifest, source_relative.as_posix(), str(exc), category, depth)
+        _register_rejected(
+            manifest,
+            source_relative.as_posix(),
+            str(exc),
+            category,
+            depth,
+            getattr(exc, "error_code", None),
+        )
         _log_extract(
             log,
             "error",
@@ -200,9 +210,14 @@ def _extract_log_gzip(
                 target,
                 charge=budget.charge_gzip_chunk,
             )
+            if budget.files + 1 > budget.max_files:
+                raise ArchiveError(
+                    "任务累计文件数超限",
+                    "task_file_count_exceeded",
+                    count=budget.files + 1,
+                    limit=budget.max_files,
+                )
             budget.files += 1
-            if budget.files > budget.max_files:
-                raise ArchiveError("任务累计文件数超限")
             if source_kind != "evidence":
                 source.unlink(missing_ok=True)
     except (ArchiveError, OSError) as exc:
@@ -211,7 +226,14 @@ def _extract_log_gzip(
             target.unlink(missing_ok=True)
         _set_path_error(state, exc)
         if state["status"] != "conflict":
-            _register_rejected(manifest, source_relative.as_posix(), str(exc), category, depth)
+            _register_rejected(
+                manifest,
+                source_relative.as_posix(),
+                str(exc),
+                category,
+                depth,
+                getattr(exc, "error_code", None),
+            )
     task_id = data_dir.name
     if state["status"] == "extracted":
         _log_extract(
@@ -307,8 +329,16 @@ def _extract_subpackage(
     if depth > budget.max_depth or depth > limit.max_depth:
         state["status"] = "rejected"
         state["error"] = "嵌套深度超限"
+        state["error_code"] = "archive_depth_exceeded"
         manifest["subpackages"].append(state)
-        _register_rejected(manifest, source_relative.as_posix(), str(state["error"]), category, depth)
+        _register_rejected(
+            manifest,
+            source_relative.as_posix(),
+            str(state["error"]),
+            category,
+            depth,
+            "archive_depth_exceeded",
+        )
         if source_kind != "evidence":
             source.unlink(missing_ok=True)
         _log_extract(
@@ -367,13 +397,24 @@ def _extract_subpackage(
         depth=depth,
         checksum=checksum,
     )
+    rejected_before = len(manifest["rejected"])
     try:
         if budget.files + 1 > budget.max_files:
-            raise ArchiveError("任务累计文件数超限")
+            raise ArchiveError(
+                "任务累计文件数超限",
+                "task_file_count_exceeded",
+                count=budget.files + 1,
+                limit=budget.max_files,
+            )
         unpack(source, staging, limit, path_policy.check if path_policy is not None else None)
         extracted_files = _relative_files(staging)
         if budget.files + len(extracted_files) > budget.max_files:
-            raise ArchiveError("任务累计文件数超限")
+            raise ArchiveError(
+                "任务累计文件数超限",
+                "task_file_count_exceeded",
+                count=budget.files + len(extracted_files),
+                limit=budget.max_files,
+            )
         for extracted_file in extracted_files:
             budget.charge_file(extracted_file)
         for member in extracted_files:
@@ -399,6 +440,15 @@ def _extract_subpackage(
     except (ArchiveError, OSError) as exc:
         shutil.rmtree(staging, ignore_errors=True)
         _set_path_error(state, exc)
+        if len(manifest["rejected"]) == rejected_before:
+            _register_rejected(
+                manifest,
+                source_relative.as_posix(),
+                str(exc),
+                category,
+                depth,
+                getattr(exc, "error_code", None),
+            )
         if source_kind != "evidence":
             source.unlink(missing_ok=True)
     task_id = data_dir.name
@@ -545,7 +595,14 @@ def _ingest_file(
             target.unlink(missing_ok=True)
         _set_path_error(state, exc)
         manifest["files"].append(state)
-        _register_rejected(manifest, source_relative.as_posix(), str(exc), category, depth)
+        _register_rejected(
+            manifest,
+            source_relative.as_posix(),
+            str(exc),
+            category,
+            depth,
+            getattr(exc, "error_code", None),
+        )
         _log_extract(
             log,
             "error",

@@ -35,16 +35,16 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 - [x] T006 实现 `app/models/schemas.py` 的 Product/PackageKind 规范化规则，巡检包只接受 `UMF`/`CSP`，日志补充包 product 为 `null`，并保持 `TaskRecord.customer["product"]` 为唯一持久化位置（FR-001、FR-002）
 - [x] T007 更新 `deploy/config/dicts.yaml` 和 `app/core/dicts.py`，统一 product code 为大写 `UMF`/`CSP`，移除依赖展示层大小写转换的业务判断（FR-001）
 - [x] T008 更新 `app/services/unit_runtime.py`，为 `RuleContext` 增加 `product`/`package_kind`，为可序列化 `UnitRequest` 增加同名字段，并让 worker 只使用请求值（FR-040、FR-051）
-- [ ] T009 在 `tests/test_classification_config.py` 先写严格 schema 测试，覆盖顶层键 `{version, profiles, routes}`、重复 YAML key、未知动作、非法 category/target、不可达 fallback、未知 profile 和错误详情（FR-037、FR-038）
-- [ ] T010 新建 `app/services/extraction/config.py`，实现分类配置读取、严格键校验、profile/anchor 校验、route/selection/target 校验、规范化和稳定错误码 `invalid_classification_config`（FR-037、FR-038）
-- [ ] T011 在 `tests/test_classification_config.py` 增加同 phase、同 priority、profile 交集 pattern 重叠的 ε-NFA 测试，覆盖 `*`、`?`、`**/`、scene/evidence 等价前缀和告警优先于 ignore（FR-009、FR-023、FR-024、FR-026）
-- [ ] T012 在 `app/services/extraction/config.py` 实现确定性的 ε-NFA 乘积重叠校验，配置冲突必须整体失败并报告两条 route id、phase、priority 和 profile 交集（FR-009、FR-038）
-- [ ] T013 新建 `tests/test_classification_runtime.py`，先写 LandedEntry、IgnoredRecord、ConflictRecord、FailureRecord 和 Summary 的严格字段、枚举、计数和 canonical 排序测试（FR-035、FR-036、FR-044、FR-045）
-- [ ] T014 新建 `app/services/extraction/audit.py`，实现审计记录构造函数、稳定消歧摘要、分类/动作/状态汇总、失败原因和 canonical JSON 序列化（FR-035、FR-036、FR-044、FR-045）
-- [ ] T015 在 `tests/test_extraction_package.py` 先写 manifest v5 严格结构测试，覆盖重复 JSON key、未知顶层键、entries/ignored/conflicts/failures/catalog 字段、summary 一致性和 v1-v4 一律不可复用（FR-041、FR-046）
-- [ ] T016 将 `app/services/extraction/manifest.py` 升级为 v5 读写与严格校验，使用 `manifest.json` 作为发布凭据，记录 main checksum/evidence fingerprint、product、classification snapshot、path limit、entries、ignored、conflicts、failures、catalog 和 summary（FR-040、FR-041、FR-046）
-- [ ] T017 在 `tests/test_archive_robustness.py`、`tests/test_extraction_site.py` 和 `tests/test_classification_runtime.py` 增加路径穿越、绝对路径、符号/硬链接、重复成员、归档深度、成员深度、文件数量、单文件大小、累计字节和目标越界测试，并断言稳定错误码（FR-035、FR-052、SC-012）
-- [ ] T018 更新 `app/core/archive.py`、`app/services/extraction/budget.py` 和 `app/services/extraction/nested.py`，实现 v5 稳定错误码、链接拒绝、重复成员检测、预算边界和单成员失败隔离（FR-035、FR-052、FR-053）
+- [x] T009 在 `tests/test_classification_config.py` 先写严格 schema 测试，覆盖顶层键 `{version, profiles, routes}`、重复 YAML key、未知动作、非法 category/target、不可达 fallback、未知 profile 和错误详情（FR-037、FR-038）
+- [x] T010 新建 `app/services/extraction/config.py`，实现分类配置读取、严格键校验、profile/anchor 校验、route/selection/target 校验、规范化和稳定错误码 `invalid_classification_config`（FR-037、FR-038）
+- [x] T011 在 `tests/test_classification_config.py` 增加同 phase、同 priority、profile 交集 pattern 重叠的 ε-NFA 测试，覆盖 `*`、`?`、`**/`、scene/evidence 等价前缀和告警优先于 ignore（FR-009、FR-023、FR-024、FR-026）
+- [x] T012 在 `app/services/extraction/config.py` 实现确定性的 ε-NFA 乘积重叠校验，配置冲突必须整体失败并报告两条 route id、phase、priority 和 profile 交集（FR-009、FR-038）
+- [x] T013 新建 `tests/test_classification_runtime.py`，先写 LandedEntry、IgnoredRecord、ConflictRecord、FailureRecord 和 Summary 的严格字段、枚举、计数和 canonical 排序测试（FR-035、FR-036、FR-044、FR-045）
+- [x] T014 新建 `app/services/extraction/audit.py`，实现审计记录构造函数、稳定消歧摘要、分类/动作/状态汇总、失败原因和 canonical JSON 序列化（FR-035、FR-036、FR-044、FR-045）
+- [x] T015 在 `tests/test_extraction_package.py` 先写 manifest v5 严格结构测试，覆盖重复 JSON key、未知顶层键、entries/ignored/conflicts/failures/catalog 字段、summary 一致性和 v1-v4 一律不可复用（FR-041、FR-046）
+- [x] T016 将 `app/services/extraction/manifest.py` 升级为 v5 读写与严格校验，使用 `manifest.json` 作为发布凭据，记录 main checksum/evidence fingerprint、product、classification snapshot、path limit、entries、ignored、conflicts、failures、catalog 和 summary（FR-040、FR-041、FR-046）
+- [x] T017 在 `tests/test_archive_robustness.py`、`tests/test_extraction_site.py` 和 `tests/test_classification_runtime.py` 增加路径穿越、绝对路径、符号/硬链接、重复成员、归档深度、成员深度、文件数量、单文件大小、累计字节和目标越界测试，并断言稳定错误码（FR-035、FR-052、SC-012）
+- [x] T018 更新 `app/core/archive.py`、`app/services/extraction/budget.py` 和 `app/services/extraction/nested.py`，实现 v5 稳定错误码、链接拒绝、重复成员检测、预算边界和单成员失败隔离（FR-035、FR-052、FR-053）
 - [ ] T019 在 `tests/test_preparation.py` 和 `tests/test_executor.py` 先写两个隐藏单元测试，断言注册表只生产 `pkg.extract.main`、`pkg.extract.classification`，且 classification 为 `ERROR` 时 prepare/inspect 被阻断（FR-053、SC-011）
 - [ ] T020 重构 `app/inspectors/pkg.py`，仅保留 `pkg.extract.main` 与 `pkg.extract.classification`；classification 返回 `PASS`/`WARN` 时发布有效 catalog，返回 `ERROR` 时禁止 prepare/inspect，并按要求升级隐藏单元 `rule_version`（FR-053、SC-011）
 - [ ] T021 在 `tests/test_executor.py` 和 `tests/test_executor_parallel_faults.py` 先写父进程/worker product 与 package kind 传播、ERROR 阻断和 WARN 继续执行的失败测试（FR-051、FR-053）
