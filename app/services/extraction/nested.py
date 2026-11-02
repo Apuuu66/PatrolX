@@ -399,15 +399,44 @@ def _extract_subpackage(
     )
     rejected_before = len(manifest["rejected"])
     try:
-        if budget.files + 1 > budget.max_files:
+        remaining_files = min(limit.max_files, budget.max_files - budget.files)
+        remaining_bytes = min(limit.max_total_bytes, budget.max_total_bytes - budget.bytes)
+        if remaining_files <= 0:
             raise ArchiveError(
                 "任务累计文件数超限",
                 "task_file_count_exceeded",
-                count=budget.files + 1,
+                count=budget.files,
                 limit=budget.max_files,
             )
-        unpack(source, staging, limit, path_policy.check if path_policy is not None else None)
+        if remaining_bytes <= 0:
+            raise ArchiveError(
+                "任务累计解压总量超限",
+                "total_bytes_exceeded",
+                bytes=budget.bytes,
+                limit=budget.max_total_bytes,
+            )
+        limit.max_files = remaining_files
+        limit.max_total_bytes = remaining_bytes
+        member_errors: list[ArchiveError] = []
+        unpack(
+            source,
+            staging,
+            limit,
+            path_policy.check if path_policy is not None else None,
+            on_member_error=member_errors.append,
+        )
+        for error in member_errors:
+            _register_rejected(
+                manifest,
+                source_relative.as_posix(),
+                str(error),
+                category,
+                depth + 1,
+                error.error_code,
+            )
         extracted_files = _relative_files(staging)
+        if member_errors and not extracted_files:
+            raise member_errors[0]
         if budget.files + len(extracted_files) > budget.max_files:
             raise ArchiveError(
                 "任务累计文件数超限",

@@ -81,17 +81,33 @@ def _relative_files(root: Path) -> list[Path]:
 
 def _safe_destination(data_dir: Path, relative: Path, path_policy: PathLimitPolicy | None = None) -> Path:
     """解析任务目标，并拒绝越界路径与链接路径。"""
-    root_resolved = data_dir.resolve()
-    destination = (data_dir / relative).resolve()
-    if not destination.is_relative_to(root_resolved):
+    if data_dir.is_symlink():
+        raise ArchiveError(
+            f"任务根目录不得是链接: {data_dir}",
+            "link_rejected",
+        )
+    candidate = data_dir / relative
+    if not candidate.is_relative_to(data_dir):
         raise ArchiveError(
             f"目标路径穿越被拒绝: {relative.as_posix()}",
             "unsafe_path",
         )
-    if destination.is_symlink() or any(parent.is_symlink() for parent in destination.parents):
+
+    current = data_dir
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ArchiveError(
+                f"目标路径包含链接: {relative.as_posix()}",
+                "link_rejected",
+            )
+
+    root_resolved = data_dir.resolve()
+    destination = candidate.resolve()
+    if not destination.is_relative_to(root_resolved):
         raise ArchiveError(
-            f"目标路径包含链接: {relative.as_posix()}",
-            "link_rejected",
+            f"目标路径穿越被拒绝: {relative.as_posix()}",
+            "unsafe_path",
         )
     if path_policy is not None:
         path_policy.check(destination)

@@ -1,7 +1,10 @@
 """解压服务的包形态、幂等、损坏重建与局部失败测试。"""
 
 import gzip
+import json
+import os
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -154,6 +157,35 @@ def test_nested_and_gzip_local_failures_continue(tmp_path, monkeypatch) -> None:
     assert TaskFileCatalog.build(data_dir).paths() == [Path("config/system.ini")]
 
 
+def test_nested_package_rejects_bad_member_and_ingests_valid_member(tmp_path, monkeypatch) -> None:
+    """子包单成员穿越失败不能中断同包子包中其他合法成员的落位。"""
+    env: Env = setup_env(tmp_path, monkeypatch)
+    child = env.uploads / "_build/partial-nested.zip"
+    _zip(
+        child,
+        {
+            "../evil.txt": "must not escape",
+            "config/safe.ini": "[app]\nname=safe\n",
+        },
+    )
+    package = env.uploads / "nested-member-isolation.zip"
+    _zip(package, {"config/partial-nested.zip": child.read_bytes()})
+    data_dir = env.task_dir("task-nested-member-isolation")
+
+    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
+
+    assert (data_dir / "config/config/safe.ini").is_file()
+    assert Path("config/config/safe.ini") in TaskFileCatalog.build(data_dir).paths()
+    assert any(
+        item["source"] == "config/partial-nested.zip"
+        and item.get("error_code") == "unsafe_path"
+        and "evil.txt" in item["reason"]
+        for item in manifest["rejected"]
+    )
+    assert not (data_dir / "evil.txt").exists()
+    assert not (tmp_path / "evil.txt").exists()
+
+
 def test_nested_package_members_place_directly_in_category(tmp_path, monkeypatch) -> None:
     """嵌套子包成员不再保留来源包目录层。"""
     import hashlib
@@ -179,15 +211,20 @@ def test_nested_package_members_place_directly_in_category(tmp_path, monkeypatch
 
 
 # Manifest v5 严格契约测试
+import app.services.extraction.manifest as manifest_module  # noqa: E402
+from app.services.extraction.audit import conflict_digest  # noqa: E402
 from app.services.extraction.manifest import (  # noqa: E402
     MANIFEST_VERSION,
+    ManifestReuseContext,
     ManifestV5Error,
+    evidence_fingerprint,
     loads_manifest,
     read_manifest,
     reusable_manifest,
     validate_manifest,
     write_manifest,
 )
+from app.services.extraction.manifest import sha256_file as manifest_sha256_file  # noqa: E402
 
 V5_SHA256_A = "a" * 64
 V5_SHA256_B = "b" * 64
@@ -214,6 +251,66 @@ V5_BUDGETS = {
     "max_file_bytes": 2147483648,
     "max_total_bytes": 3221225472,
 }
+V5_CONFLICT_DIGEST = conflict_digest("UMF", "dir/file.txt", "")
+V5_RESOLVED_TARGET = f"basic/file__{V5_CONFLICT_DIGEST}.txt"
+
+
+def _v5_reuse_context(manifest: dict | None = None) -> ManifestReuseContext:
+    """从 manifest 快照构造完整复用上下文。"""
+    manifest = manifest or _v5_manifest()
+    snapshot = manifest["classification"]["snapshot"]
+    return ManifestReuseContext(
+        checksum=manifest["main"]["checksum"],
+        product=manifest["product"],
+        package_kind=snapshot["package_kind"],
+        profile=snapshot["profile"],
+        config_fingerprint=snapshot["config_fingerprint"],
+        extraction_policy_fingerprint=snapshot["extraction_policy_fingerprint"],
+        path_limit=dict(manifest["path_limit"]),
+        scene_root=snapshot["scene_root"],
+        target_roots=tuple(snapshot["target_roots"]),
+        budgets=dict(snapshot["budgets"]),
+    )
+
+
+def _materialized_v5_manifest(data_dir: Path, *, with_conflict: bool = False) -> dict:
+    """构造包含真实证据与 catalog 文件的合法 v5 现场。"""
+    evidence_file = data_dir / ".main/dir/file.txt"
+    evidence_file.parent.mkdir(parents=True)
+    evidence_file.write_text("x", encoding="utf-8")
+    digest = manifest_sha256_file(evidence_file)
+    count, fingerprint = evidence_fingerprint(data_dir)
+    manifest = _v5_manifest()
+    manifest["main"].update({"count": count, "evidence_fingerprint": fingerprint})
+    entry = _v5_entry()
+    entry.update({"sha256": digest, "size": 1})
+    if not with_conflict:
+        entry.update({"target": entry["original_target"]})
+    manifest["entries"] = [entry]
+    catalog = _v5_catalog_item()
+    catalog.update({"path": entry["target"], "sha256": digest, "size": 1})
+    manifest["catalog"] = [catalog]
+    manifest["summary"] = {
+        "counts": {
+            "landed": 1,
+            "ignored": 0,
+            "conflicts": 0,
+            "failures": 0,
+            "catalog": 1,
+        },
+        "by_route": {"route.a": 1},
+        "by_category": {"config": 1},
+        "by_action": {"copy": 1},
+        "by_status": {"failed": 0, "ignored": 0, "landed": 1},
+    }
+    if with_conflict:
+        manifest["conflicts"] = [_v5_conflict()]
+        manifest["summary"]["counts"]["conflicts"] = 1
+    target = data_dir / entry["target"]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("x", encoding="utf-8")
+    write_manifest(data_dir, manifest)
+    return manifest
 
 
 def _v5_manifest() -> dict:
@@ -279,7 +376,7 @@ def _v5_entry() -> dict:
         "product": "UMF",
         "category": "config",
         "original_target": "basic/file.txt",
-        "target": "basic/file.txt",
+        "target": V5_RESOLVED_TARGET,
         "action": "copy",
         "status": "landed",
         "reason": None,
@@ -312,8 +409,8 @@ def _v5_conflict() -> dict:
         "source_relative": "dir/file.txt",
         "member_relative": None,
         "original_target": "basic/file.txt",
-        "target": "basic/file.txt",
-        "digest": "0123456789ab",
+        "target": V5_RESOLVED_TARGET,
+        "digest": V5_CONFLICT_DIGEST,
         "status": "resolved",
     }
 
@@ -334,7 +431,7 @@ def _v5_failure() -> dict:
 def _v5_catalog_item() -> dict:
     """手工构造一个严格字段的 catalog 记录。"""
     return {
-        "path": "basic/file.txt",
+        "path": V5_RESOLVED_TARGET,
         "category": "config",
         "route_id": "route.a",
         "source_relative": "dir/file.txt",
@@ -494,4 +591,333 @@ def test_manifest_versions_1_to_4_cannot_be_reused(tmp_path: Path, version: int)
     manifest["version"] = version
     (tmp_path / "manifest.json").write_text(__import__("json").dumps(manifest), encoding="utf-8")
 
-    assert reusable_manifest(tmp_path, V5_SHA256_A) is None
+    assert reusable_manifest(tmp_path, _v5_reuse_context(manifest)) is None
+
+
+def test_write_manifest_uses_same_directory_atomic_replace_and_fsync(tmp_path: Path, monkeypatch) -> None:
+    """发布必须同目录 staging、fsync 后原子替换，并输出键排序 JSON。"""
+    staged_paths: list[Path] = []
+    fsync_fds: list[int] = []
+    real_replace = os.replace
+    real_fsync = os.fsync
+
+    def tracking_replace(source, destination) -> None:
+        staged_paths.append(Path(source))
+        assert Path(source).parent == Path(destination).parent == tmp_path
+        real_replace(source, destination)
+
+    def tracking_fsync(fd: int) -> None:
+        fsync_fds.append(fd)
+        real_fsync(fd)
+
+    monkeypatch.setattr(manifest_module.os, "replace", tracking_replace)
+    monkeypatch.setattr(manifest_module.os, "fsync", tracking_fsync)
+
+    manifest = _v5_manifest()
+    write_manifest(tmp_path, manifest)
+
+    assert len(staged_paths) == 1
+    assert not staged_paths[0].exists()
+    assert len(fsync_fds) >= 2
+    text = (tmp_path / "manifest.json").read_text(encoding="utf-8")
+    assert text == json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+    assert list(json.loads(text)) == sorted(json.loads(text))
+
+
+def test_write_manifest_rejects_manifest_symlink(tmp_path: Path) -> None:
+    """manifest.json 自身是链接时不得跟随写入。"""
+    outside = tmp_path / "outside.json"
+    outside.write_text("keep", encoding="utf-8")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "manifest.json").symlink_to(outside)
+
+    with pytest.raises(ManifestV5Error, match="链接"):
+        write_manifest(data_dir, _v5_manifest())
+
+    assert outside.read_text(encoding="utf-8") == "keep"
+
+
+def test_write_manifest_cleans_same_directory_staging_after_replace_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """原子替换失败时必须清理同目录 staging，且不发布半成品。"""
+    staged_paths: list[Path] = []
+
+    def failing_replace(source, _destination) -> None:
+        staged_paths.append(Path(source))
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(manifest_module.os, "replace", failing_replace)
+
+    with pytest.raises(ManifestV5Error, match="无法原子发布"):
+        write_manifest(tmp_path, _v5_manifest())
+
+    assert staged_paths and all(not path.exists() for path in staged_paths)
+    assert not (tmp_path / "manifest.json").exists()
+
+
+@pytest.mark.parametrize(
+    "catalog_state",
+    ["missing", "wrong_digest", "wrong_size", "directory", "symlink", "parent_symlink"],
+)
+def test_write_manifest_verifies_catalog_before_publish(tmp_path: Path, catalog_state: str) -> None:
+    """catalog 不可验证时不得发布 manifest，也不能跟随 catalog 链接。"""
+    manifest = _v5_manifest_with_records()
+    target = tmp_path / manifest["catalog"][0]["path"]
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_target = outside / target.name
+    outside_target.write_text("outside", encoding="utf-8")
+
+    if catalog_state in {"wrong_digest", "wrong_size"}:
+        target.parent.mkdir(parents=True)
+        target.write_text("x" if catalog_state == "wrong_digest" else "xx", encoding="utf-8")
+    if catalog_state == "wrong_size":
+        digest = manifest_sha256_file(target)
+        manifest["entries"][0]["sha256"] = digest
+        manifest["catalog"][0]["sha256"] = digest
+    elif catalog_state == "directory":
+        target.mkdir(parents=True)
+    elif catalog_state == "symlink":
+        target.parent.mkdir(parents=True)
+        target.symlink_to(outside_target)
+    elif catalog_state == "parent_symlink":
+        target.parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ManifestV5Error, match="catalog"):
+        write_manifest(tmp_path, manifest)
+
+    assert not (tmp_path / "manifest.json").exists()
+    assert outside_target.read_text(encoding="utf-8") == "outside"
+
+
+def test_reusable_manifest_rejects_catalog_parent_symlink(tmp_path: Path) -> None:
+    """catalog 任一父目录是链接时不能复用分类现场。"""
+    manifest = _materialized_v5_manifest(tmp_path)
+    target = tmp_path / manifest["catalog"][0]["path"]
+    target.unlink()
+    target.parent.rmdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / target.name).write_text("x", encoding="utf-8")
+    target.parent.symlink_to(outside, target_is_directory=True)
+
+    assert reusable_manifest(tmp_path, _v5_reuse_context(manifest)) is None
+
+
+@pytest.mark.parametrize("record_kind", ["ignored", "failures"])
+def test_reusable_manifest_rejects_missing_non_entry_evidence(
+    tmp_path: Path,
+    record_kind: str,
+) -> None:
+    """ignored/failure 的来源文件也必须是 .main 内真实普通文件。"""
+    manifest = _materialized_v5_manifest(tmp_path)
+    if record_kind == "ignored":
+        manifest["ignored"] = [_v5_ignored()]
+        manifest["summary"]["counts"]["ignored"] = 1
+        manifest["summary"]["by_status"]["ignored"] = 1
+        manifest["summary"]["by_action"]["ignore"] = 1
+    else:
+        manifest["failures"] = [_v5_failure()]
+        manifest["summary"]["counts"]["failures"] = 1
+        manifest["summary"]["by_status"]["failed"] = 1
+        manifest["summary"]["by_action"]["expand"] = 1
+    manifest["summary"]["by_route"]["route.a"] = 2
+    write_manifest(tmp_path, manifest)
+
+    assert reusable_manifest(tmp_path, _v5_reuse_context(manifest)) is None
+
+
+def test_reusable_manifest_rejects_missing_evidence_source(tmp_path: Path) -> None:
+    """entry.source_relative 必须回溯到 .main 内真实普通文件。"""
+    manifest = _v5_manifest()
+    entry = _v5_entry()
+    entry.update({"target": entry["original_target"]})
+    catalog = _v5_catalog_item()
+    catalog["path"] = entry["target"]
+    manifest["entries"] = [entry]
+    manifest["catalog"] = [catalog]
+    manifest["summary"] = {
+        "counts": {"landed": 1, "ignored": 0, "conflicts": 0, "failures": 0, "catalog": 1},
+        "by_route": {"route.a": 1},
+        "by_category": {"config": 1},
+        "by_action": {"copy": 1},
+        "by_status": {"failed": 0, "ignored": 0, "landed": 1},
+    }
+    target = tmp_path / entry["target"]
+    target.parent.mkdir(parents=True)
+    target.write_text("x", encoding="utf-8")
+    digest = manifest_sha256_file(target)
+    manifest["entries"][0]["sha256"] = digest
+    manifest["catalog"][0]["sha256"] = digest
+    (tmp_path / ".main").mkdir()
+    write_manifest(tmp_path, manifest)
+
+    assert reusable_manifest(tmp_path, _v5_reuse_context(manifest)) is None
+
+
+def test_manifest_v5_rejects_main_prefixed_landed_source() -> None:
+    """entry/conflict/catalog 的来源必须是 .main 内相对路径而非 .main/ 前缀路径。"""
+    manifest = _v5_manifest_with_records()
+    source = ".main/dir/file.txt"
+    digest = conflict_digest("UMF", source, "")
+    target = f"basic/file__{digest}.txt"
+    manifest["entries"][0].update({"source_relative": source, "target": target})
+    manifest["conflicts"][0].update({"source_relative": source, "target": target, "digest": digest})
+    manifest["catalog"][0].update({"path": target, "source_relative": source})
+
+    assert not validate_manifest(manifest)
+
+
+@pytest.mark.parametrize("record_kind", ["ignored", "failures"])
+def test_manifest_v5_rejects_main_prefixed_non_landed_source(record_kind: str) -> None:
+    """ignored/failure 的 source_relative 同样不得带 .main/ 前缀。"""
+    manifest = _v5_manifest_with_records()
+    record = manifest[record_kind][0]
+    record["source_relative"] = f".main/{record['source_relative']}"
+
+    assert not validate_manifest(manifest)
+
+
+@pytest.mark.parametrize(
+    "target_roots",
+    [
+        ["alarm", "kpi"],
+        ["basic"],
+    ],
+)
+def test_manifest_v5_accepts_nonempty_allowlisted_target_root_subset(target_roots: list[str]) -> None:
+    """target_roots 必须是非空、去重、排序的固定 allowlist 子集。"""
+    manifest = _v5_manifest()
+    manifest["classification"]["snapshot"]["target_roots"] = target_roots
+
+    assert validate_manifest(manifest)
+
+
+@pytest.mark.parametrize(
+    "target_roots",
+    [
+        [],
+        ["prepared"],
+        ["rules"],
+        [".main"],
+        ["config"],
+        ["alarm", "alarm"],
+        ["kpi", "alarm"],
+    ],
+)
+def test_manifest_v5_rejects_reserved_unknown_duplicate_or_unsorted_target_roots(
+    target_roots: list[str],
+) -> None:
+    """保留路径、旧分类根、重复项和未排序集合都必须拒绝。"""
+    manifest = _v5_manifest()
+    manifest["classification"]["snapshot"]["target_roots"] = target_roots
+
+    assert not validate_manifest(manifest)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda manifest: manifest["conflicts"][0].update({"digest": "0" * 12}),
+        lambda manifest: manifest["conflicts"][0].update({"target": "basic/file.txt"}),
+        lambda manifest: manifest["conflicts"][0].update({"target": "basic/file.txt"}),
+        lambda manifest: manifest["conflicts"][0].update({"target": "basic/other.txt"}),
+        lambda manifest: manifest["conflicts"].append(dict(manifest["conflicts"][0])),
+    ],
+)
+def test_manifest_v5_conflicts_require_matching_digest_disambiguated_target_and_entry(
+    mutate,
+) -> None:
+    """伪造摘要、未消歧目标、错误摘要后缀和重复冲突记录都必须失败。"""
+    manifest = _v5_manifest_with_records()
+    mutate(manifest)
+
+    assert not validate_manifest(manifest)
+
+
+def test_manifest_v5_accepts_collision_suffix_with_recomputed_digest() -> None:
+    """同一摘要的第二消歧槽位允许使用 -2 后缀。"""
+    manifest = _v5_manifest_with_records()
+    target = f"basic/file__{V5_CONFLICT_DIGEST}-2.txt"
+    manifest["entries"][0]["target"] = target
+    manifest["conflicts"][0]["target"] = target
+    manifest["catalog"][0]["path"] = target
+
+    assert validate_manifest(manifest)
+
+
+def test_manifest_v5_catalog_and_landed_entries_are_one_to_one() -> None:
+    """catalog 不得漏项、额外项或多对一。"""
+    missing = _v5_manifest_with_records()
+    missing["catalog"] = []
+    missing["summary"]["counts"]["catalog"] = 0
+    assert not validate_manifest(missing)
+
+    extra = _v5_manifest_with_records()
+    extra["catalog"].append(dict(extra["catalog"][0]))
+    extra["summary"]["counts"]["catalog"] = 2
+    assert not validate_manifest(extra)
+
+    mismatch = _v5_manifest_with_records()
+    mismatch["catalog"][0]["path"] = "basic/other.txt"
+    assert not validate_manifest(mismatch)
+
+
+def test_manifest_v5_rejects_null_route_for_current_profiles() -> None:
+    """当前 UMF/CSP/GENERIC profile 都不得产生 null route_id。"""
+    manifest = _v5_manifest()
+    ignored = _v5_ignored()
+    ignored.update(
+        {
+            "route_id": None,
+            "category": None,
+            "original_target": None,
+            "target": None,
+            "action": "ignore",
+            "reason": "no_route_match",
+        }
+    )
+    manifest["ignored"] = [ignored]
+    manifest["summary"] = {
+        "counts": {"landed": 0, "ignored": 1, "conflicts": 0, "failures": 0, "catalog": 0},
+        "by_route": {},
+        "by_category": {},
+        "by_action": {"ignore": 1},
+        "by_status": {"failed": 0, "ignored": 1, "landed": 0},
+    }
+    assert not validate_manifest(manifest)
+
+
+def test_manifest_v5_summary_allows_unreachable_route_zero_only() -> None:
+    """by_route 可显式列出不可达 route 的 0 计数，但不得虚增非零计数。"""
+    manifest = _v5_manifest_with_records()
+    manifest["summary"]["by_route"]["route.unreachable"] = 0
+
+    assert validate_manifest(manifest)
+
+    manifest["summary"]["by_route"]["route.unreachable"] = 1
+    assert not validate_manifest(manifest)
+
+
+def test_reusable_manifest_requires_complete_context_and_verifies_disk(tmp_path: Path) -> None:
+    """复用必须同时匹配 checksum、product、kind、配置/策略、路径与预算上下文。"""
+    manifest = _materialized_v5_manifest(tmp_path)
+    context = _v5_reuse_context(manifest)
+    assert reusable_manifest(tmp_path, context) is not None
+
+    variants = [
+        replace(context, checksum=V5_SHA256_B),
+        replace(context, product="CSP"),
+        replace(context, package_kind="log_supplement"),
+        replace(context, profile="CSP"),
+        replace(context, config_fingerprint=V5_SHA256_B),
+        replace(context, extraction_policy_fingerprint=V5_SHA256_A),
+        replace(context, path_limit={**context.path_limit, "fingerprint": V5_SHA256_B}),
+        replace(context, scene_root=".main/other"),
+        replace(context, target_roots=("alarm", "kpi")),
+        replace(context, budgets={**context.budgets, "max_archive_depth": 7}),
+    ]
+    assert all(reusable_manifest(tmp_path, variant) is None for variant in variants)

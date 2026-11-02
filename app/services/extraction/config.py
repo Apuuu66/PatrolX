@@ -233,8 +233,10 @@ def validate_literal_segment(segment: str) -> str:
     return value
 
 
-def validate_glob_file_name(value: str) -> str:
+def validate_glob_file_name(value: object) -> str:
     """校验单个文件名 glob。"""
+    if not isinstance(value, str):
+        raise ValueError("文件名 glob 必须是字符串")
     text = value.strip()
     if not text or text in {".", ".."} or "/" in text:
         raise ValueError("文件名不能为空、保留段或包含 /")
@@ -307,9 +309,12 @@ def _parse_source(payload: object, route_path: str, route_id: str) -> SourcePatt
         raise _config_error("未知 scope", f"{route_path}.source.scope", route_id)
     try:
         directory, _segments = validate_directory_pattern(payload["directory"])
+    except ValueError as exc:
+        raise _config_error(str(exc), f"{route_path}.source.directory", route_id) from exc
+    try:
         file_name = validate_glob_file_name(payload["file"])
     except ValueError as exc:
-        raise _config_error(str(exc), f"{route_path}.source", route_id) from exc
+        raise _config_error(str(exc), f"{route_path}.source.file", route_id) from exc
     capture_root = payload.get("capture_root")
     if capture_root is not None:
         if not isinstance(capture_root, str):
@@ -514,6 +519,17 @@ def _directory_segments(directory: str) -> tuple[str, ...]:
     return tuple(segment.strip().upper() for segment in directory.strip().split("/"))
 
 
+def _is_catch_all_file_pattern(pattern: str) -> bool:
+    """判断文件名 glob 是否覆盖所有非空文件名。"""
+    normalized = pattern.strip()
+    return (
+        bool(normalized)
+        and all(char in {"*", "?"} for char in normalized)
+        and "*" in normalized
+        and normalized.count("?") <= 1
+    )
+
+
 def _is_catch_all_source(source: SourcePattern) -> bool:
     """判断 source 是否无前置条件地覆盖 scope 内全部普通文件。"""
     segments = _directory_segments(source.directory)
@@ -521,7 +537,7 @@ def _is_catch_all_source(source: SourcePattern) -> bool:
         source.capture_root is None
         and bool(segments)
         and all(segment == "**" for segment in segments)
-        and source.file.strip() == "*"
+        and _is_catch_all_file_pattern(source.file)
     )
 
 
@@ -532,14 +548,6 @@ def _parse_route(payload: object, index: int) -> Route:
 
     preliminary_id = payload.get("id")
     detail_route_id = preliminary_id if isinstance(preliminary_id, str) else None
-    action = _normalized_enum(payload.get("action"))
-    if action not in ACTIONS:
-        raise _config_error(
-            f"未知动作: {action}",
-            f"{route_path}.action",
-            detail_route_id,
-        )
-
     base_keys = {
         "id",
         "phase",
@@ -550,6 +558,17 @@ def _parse_route(payload: object, index: int) -> Route:
         "category",
         "target",
     }
+    missing = base_keys - set(payload)
+    if missing:
+        raise _config_error(f"route 缺少基础字段: {sorted(missing)}", route_path, detail_route_id)
+    action = _normalized_enum(payload.get("action"))
+    if action not in ACTIONS:
+        raise _config_error(
+            f"未知动作: {action}",
+            f"{route_path}.action",
+            detail_route_id,
+        )
+
     allowed = set(base_keys)
     if action in EXPAND_ACTIONS:
         allowed.add("member_decompress")
@@ -558,9 +577,6 @@ def _parse_route(payload: object, index: int) -> Route:
     unknown = set(payload) - allowed
     if unknown:
         raise _config_error(f"route 存在未知字段: {sorted(unknown)}", route_path, detail_route_id)
-    missing = base_keys - set(payload)
-    if missing:
-        raise _config_error(f"route 缺少基础字段: {sorted(missing)}", route_path, detail_route_id)
 
     route_id = payload.get("id")
     if (

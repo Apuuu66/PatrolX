@@ -507,6 +507,35 @@ def test_malformed_enum_types_fail_with_stable_config_error(replacement: tuple[s
     assert exc_info.value.route_id == "umf.root"
 
 
+@pytest.mark.parametrize("source_file", ["123", "[alarm]"])
+def test_non_string_source_file_fails_with_stable_config_error(source_file: str) -> None:
+    """非字符串 source.file 不得泄漏 AttributeError，并应保留 route 与字段路径。"""
+    text = _valid_yaml().replace('      file: "*"\n', f"      file: {source_file}\n", 1)
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    error = exc_info.value
+    assert error.code == "invalid_classification_config"
+    assert error.path == "routes[0].source.file"
+    assert error.route_id == "umf.root"
+    assert "字符串" in error.message
+
+
+def test_source_directory_error_keeps_precise_field_path_and_route_id() -> None:
+    """source.directory 校验失败时不得退化为整个 source 路径或丢失 route id。"""
+    text = _valid_yaml().replace('      directory: "UMF Root/**"', "      directory: 123", 1)
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    error = exc_info.value
+    assert error.code == "invalid_classification_config"
+    assert error.path == "routes[0].source.directory"
+    assert error.route_id == "umf.root"
+    assert "directory" in error.message
+
+
 def test_complex_yaml_mapping_key_fails_with_stable_config_error() -> None:
     """复杂 YAML mapping key 不得在重复键检测中泄漏 TypeError。"""
     text = """
@@ -536,6 +565,20 @@ def test_ignore_route_requires_every_base_key(missing_line: str) -> None:
     assert error.path == "routes[2]"
     assert error.route_id == "csp.ignore"
     assert "缺少基础字段" in error.message
+
+
+def test_route_missing_action_is_rejected_as_missing_base_key() -> None:
+    """基础字段检查必须先于动作枚举检查，缺失 action 也不能绕过严格键集合。"""
+    text = _valid_yaml().replace("    action: ignore\n", "", 1)
+
+    with pytest.raises(ClassificationConfigError) as exc_info:
+        loads_classification_config(text)
+
+    error = exc_info.value
+    assert error.path == "routes[2]"
+    assert error.route_id == "csp.ignore"
+    assert "缺少基础字段" in error.message
+    assert "action" in error.message
 
 
 def test_alarm_route_requires_umf_and_csp_profiles() -> None:
@@ -590,6 +633,20 @@ def test_multiple_double_star_directories_are_catch_all() -> None:
     text = _valid_yaml().replace(
         '      directory: "**"\n      file: "*"\n    action: fallback',
         '      directory: "**/**"\n      file: "*"\n    action: fallback',
+        1,
+    )
+
+    config = loads_classification_config(text)
+
+    assert "umf.fallback" in {route.id for route in config.routes}
+
+
+@pytest.mark.parametrize("catch_all_file", ["**", "?*", "*?"])
+def test_fallback_accepts_semantically_equivalent_catch_all_file_patterns(catch_all_file: str) -> None:
+    """fallback 的全路径判断必须按 glob 语义而非字面 `*` 判断。"""
+    text = _valid_yaml().replace(
+        '      file: "*"\n    action: fallback',
+        f'      file: "{catch_all_file}"\n    action: fallback',
         1,
     )
 

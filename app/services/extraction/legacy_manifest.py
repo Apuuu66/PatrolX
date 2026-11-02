@@ -29,6 +29,7 @@ _ERROR_CODES = {
     "target_conflict",
     "unsafe_path",
     "link_rejected",
+    "duplicate_member",
     "archive_corrupt",
     "archive_depth_exceeded",
     "member_path_depth_exceeded",

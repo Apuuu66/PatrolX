@@ -59,14 +59,18 @@ def extract_main_site(
         checksum=checksum,
     )
     try:
-        unpack(
+        main_member_errors: list[ArchiveError] = []
+        extracted_count = unpack(
             package,
             staging,
             path_limit_check=lambda target, label: path_policy.check(
                 data_dir / MAIN_EVIDENCE_DIR / target.relative_to(staging.resolve()),
                 label,
             ),
+            on_member_error=main_member_errors.append,
         )
+        if main_member_errors and extracted_count == 0:
+            raise main_member_errors[0]
     except ArchiveError as exc:
         shutil.rmtree(staging, ignore_errors=True)
         _log_extract(
@@ -116,6 +120,16 @@ def extract_main_site(
         "policy": policy_manifest_snapshot(policy),
         "path_limit": path_policy.snapshot(),
     }
+    for error in main_member_errors:
+        manifest["rejected"].append(
+            {
+                "source": MAIN_EVIDENCE_DIR,
+                "category": "other",
+                "reason": str(error),
+                "depth": 1,
+                "error_code": error.error_code,
+            }
+        )
     budget = ExtractionBudget()
     seen_checksums: set[str] = set()
     for source in _relative_files(evidence):

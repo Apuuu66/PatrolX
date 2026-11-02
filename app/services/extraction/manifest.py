@@ -6,8 +6,12 @@ import hashlib
 import json
 import os
 import re
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from app.services.extraction.audit import conflict_digest
 
 MANIFEST_NAME = "manifest.json"
 MANIFEST_VERSION = 5
@@ -52,6 +56,22 @@ FIXED_BUDGETS = {
     "max_file_bytes": 2 * 1024 * 1024 * 1024,
     "max_total_bytes": 3 * 1024 * 1024 * 1024,
 }
+TARGET_ROOT_ALLOWLIST = frozenset(
+    {
+        "alarm",
+        "basic",
+        "chr",
+        "debug",
+        "host-debug",
+        "host-system",
+        "kpi",
+        "logs",
+        "mml",
+        "operation-log",
+        "other",
+        "status",
+    }
+)
 TOP_LEVEL_KEYS = frozenset(
     {
         "version",
@@ -110,6 +130,22 @@ _ROUTE_ID_RE = re.compile(r"[a-z0-9._-]+")
 _DIGEST_RE = re.compile(r"[0-9a-f]{12}")
 
 
+@dataclass(frozen=True, slots=True)
+class ManifestReuseContext:
+    """复用 manifest v5 时必须与当前任务现场完全一致的上下文。"""
+
+    checksum: str
+    product: str | None
+    package_kind: str
+    profile: str
+    config_fingerprint: str
+    extraction_policy_fingerprint: str
+    path_limit: dict[str, Any]
+    scene_root: str
+    target_roots: tuple[str, ...]
+    budgets: dict[str, int]
+
+
 class ManifestV5Error(ValueError):
     """manifest v5 损坏、 schema 非法或现场不可复用时抛出。"""
 
@@ -151,6 +187,13 @@ def _is_relative_path(value: object) -> bool:
         return False
     segments = value.split("/")
     return not any(segment in {"", ".", ".."} for segment in segments)
+
+
+def _is_source_relative_path(value: object) -> bool:
+    """证据来源必须是 .main 内相对路径，不得携带 .main/ 前缀。"""
+    if not _is_relative_path(value):
+        return False
+    return value.split("/", 1)[0] != MAIN_EVIDENCE_DIR
 
 
 def _is_route_id(value: object) -> bool:
@@ -264,6 +307,7 @@ def _validate_classification(classification: object, product: object, path_limit
         or len(target_roots) != len(set(target_roots))
         or target_roots != sorted(target_roots)
         or not all(isinstance(item, str) and _is_relative_path(item) and "/" not in item for item in target_roots)
+        or not set(target_roots).issubset(TARGET_ROOT_ALLOWLIST)
     ):
         return False, None
     if snapshot["budgets"] != FIXED_BUDGETS:
@@ -275,7 +319,7 @@ def _validate_entry(item: object, expected_product: object, target_roots: set[st
     if not _exact_keys(item, ENTRY_KEYS):
         return False
     return (
-        _is_relative_path(item["source_relative"])
+        _is_source_relative_path(item["source_relative"])
         and _is_optional_relative_path(item["member_relative"])
         and _is_route_id(item["route_id"])
         and item["product"] == expected_product
@@ -298,9 +342,9 @@ def _validate_ignored(item: object, expected_product: object) -> bool:
     if not _exact_keys(item, IGNORED_KEYS):
         return False
     return (
-        _is_relative_path(item["source_relative"])
+        _is_source_relative_path(item["source_relative"])
         and _is_optional_relative_path(item["member_relative"])
-        and (item["route_id"] is None or _is_route_id(item["route_id"]))
+        and _is_route_id(item["route_id"])
         and item["product"] == expected_product
         and (item["category"] is None or item["category"] in CATEGORIES)
         and _is_optional_relative_path(item["original_target"])
@@ -317,7 +361,7 @@ def _validate_conflict(item: object) -> bool:
     if not _exact_keys(item, CONFLICT_KEYS):
         return False
     return (
-        _is_relative_path(item["source_relative"])
+        _is_source_relative_path(item["source_relative"])
         and _is_optional_relative_path(item["member_relative"])
         and _is_relative_path(item["original_target"])
         and _is_relative_path(item["target"])
@@ -327,11 +371,28 @@ def _validate_conflict(item: object) -> bool:
     )
 
 
+def _conflict_target_matches(original_target: str, target: str, digest: str) -> bool:
+    """确认冲突目标只在原文件名首个扩展名前插入摘要及可选槽位。"""
+    original_directory, _, original_filename = original_target.rpartition("/")
+    target_directory, _, target_filename = target.rpartition("/")
+    if original_directory != target_directory or original_target == target:
+        return False
+    dot_index = original_filename.find(".")
+    if dot_index < 0:
+        stem = original_filename
+        extension = ""
+    else:
+        stem = original_filename[:dot_index]
+        extension = original_filename[dot_index:]
+    pattern = re.compile(re.escape(stem) + rf"__{re.escape(digest)}(?:-(?:[2-9]|[1-9]\d+))?" + re.escape(extension))
+    return pattern.fullmatch(target_filename) is not None
+
+
 def _validate_failure(item: object) -> bool:
     if not _exact_keys(item, FAILURE_KEYS):
         return False
     return (
-        _is_relative_path(item["source_relative"])
+        _is_source_relative_path(item["source_relative"])
         and _is_optional_relative_path(item["member_relative"])
         and _is_route_id(item["route_id"])
         and (item["category"] is None or item["category"] in CATEGORIES)
@@ -350,7 +411,7 @@ def _validate_catalog_item(item: object, entries: list[dict], target_roots: set[
         and item["path"].split("/", 1)[0] in target_roots
         and item["category"] in CATEGORIES
         and _is_route_id(item["route_id"])
-        and _is_relative_path(item["source_relative"])
+        and _is_source_relative_path(item["source_relative"])
         and _is_sha256(item["sha256"])
         and _is_int(item["size"])
         and item["size"] >= 0
@@ -422,10 +483,15 @@ def _validate_summary(manifest: dict) -> bool:
         _increase(by_route, item["route_id"])
         _increase(by_action, item["action"])
     expected_status = {"landed": len(entries), "ignored": len(ignored), "failed": len(failures)}
+    actual_by_route = summary["by_route"]
+    if not _is_string_int_mapping(actual_by_route) or list(actual_by_route) != sorted(actual_by_route):
+        return False
+    if any(actual_by_route.get(route) != count for route, count in by_route.items()):
+        return False
+    if any(count != 0 for route, count in actual_by_route.items() if route not in by_route):
+        return False
     return (
-        _is_string_int_mapping(summary["by_route"])
-        and summary["by_route"] == dict(sorted(by_route.items()))
-        and _is_string_int_mapping(summary["by_category"])
+        _is_string_int_mapping(summary["by_category"])
         and summary["by_category"] == dict(sorted(by_category.items()))
         and _is_string_int_mapping(summary["by_action"])
         and summary["by_action"] == dict(sorted(by_action.items()))
@@ -457,6 +523,7 @@ def _validate_record_relations(manifest: dict, snapshot: dict) -> bool:
         (item["source_relative"], item["member_relative"], item["original_target"], item["target"]): item
         for item in entries
     }
+    conflict_keys: list[tuple[object, object, object, object]] = []
     for conflict in conflicts:
         key = (
             conflict["source_relative"],
@@ -466,8 +533,27 @@ def _validate_record_relations(manifest: dict, snapshot: dict) -> bool:
         )
         if key not in entry_index:
             return False
+        expected_digest = conflict_digest(
+            snapshot["product"],
+            conflict["source_relative"],
+            conflict["member_relative"] or "",
+        )
+        if conflict["digest"] != expected_digest or not _conflict_target_matches(
+            conflict["original_target"],
+            conflict["target"],
+            conflict["digest"],
+        ):
+            return False
+        conflict_keys.append(key)
+    if len(conflict_keys) != len(set(conflict_keys)):
+        return False
     catalog_paths = [item["path"] for item in catalog]
-    if catalog_paths != sorted(catalog_paths) or len(catalog_paths) != len(set(catalog_paths)):
+    entry_targets = sorted(item["target"] for item in entries)
+    if (
+        catalog_paths != sorted(catalog_paths)
+        or len(catalog_paths) != len(set(catalog_paths))
+        or catalog_paths != entry_targets
+    ):
         return False
     return all(_validate_catalog_item(item, entries, target_roots) for item in catalog)
 
@@ -525,6 +611,8 @@ def loads_manifest(text: str | bytes) -> dict[str, Any]:
 def read_manifest(data_dir: Path | str) -> dict[str, Any]:
     """读取并严格校验 manifest.json；缺失或损坏均抛出 ManifestV5Error。"""
     path = manifest_path(data_dir)
+    if path.is_symlink():
+        raise ManifestV5Error(f"manifest v5 不得是链接: {path}")
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -533,12 +621,45 @@ def read_manifest(data_dir: Path | str) -> dict[str, Any]:
 
 
 def write_manifest(data_dir: Path | str, manifest: dict[str, Any]) -> None:
-    """完整校验通过后将 v5 payload 发布到 manifest.json。"""
+    """完整校验通过后以同目录 staging、fsync 和原子替换发布 manifest.json。"""
     if not validate_manifest(manifest):
         raise ManifestV5Error("拒绝写入无效 manifest v5")
     path = manifest_path(data_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    parent = path.parent
+    if parent.is_symlink():
+        raise ManifestV5Error(f"manifest v5 目录不得是链接: {parent}")
+    parent.mkdir(parents=True, exist_ok=True)
+    if parent.is_symlink():
+        raise ManifestV5Error(f"manifest v5 目录不得是链接: {parent}")
+    if path.is_symlink():
+        raise ManifestV5Error(f"manifest v5 不得是链接: {path}")
+    if not _verify_catalog_files(parent, manifest):
+        raise ManifestV5Error("catalog 文件缺失、损坏、非普通文件或包含链接，拒绝发布 manifest v5")
+    payload = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+    staging: Path | None = None
+    try:
+        descriptor, staging_name = tempfile.mkstemp(prefix=f".{MANIFEST_NAME}.", suffix=".tmp", dir=parent)
+        staging = Path(staging_name)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if path.is_symlink():
+            raise ManifestV5Error(f"manifest v5 不得是链接: {path}")
+        os.replace(staging, path)
+        directory_descriptor = os.open(parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    except ManifestV5Error:
+        if staging is not None:
+            staging.unlink(missing_ok=True)
+        raise
+    except OSError as exc:
+        if staging is not None:
+            staging.unlink(missing_ok=True)
+        raise ManifestV5Error(f"无法原子发布 manifest v5: {path}") from exc
 
 
 def _scan_evidence(root: Path) -> tuple[int, str]:
@@ -590,29 +711,69 @@ def evidence_fingerprint(data_dir: Path | str) -> tuple[int, str]:
 def _verify_catalog_files(data_dir: Path, manifest: dict[str, Any]) -> bool:
     for item in manifest["catalog"]:
         path = data_dir / item["path"]
-        if (
-            not path.is_relative_to(data_dir.resolve())
-            or path.is_symlink()
-            or not path.is_file()
-            or path.stat().st_size != item["size"]
-            or sha256_file(path) != item["sha256"]
-        ):
+        if not _verify_regular_file_chain(data_dir, item["path"]):
+            return False
+        try:
+            if path.stat().st_size != item["size"] or sha256_file(path) != item["sha256"]:
+                return False
+        except OSError:
             return False
     return True
 
 
-def reusable_manifest(data_dir: Path | str, checksum: str) -> dict[str, Any] | None:
+def _verify_regular_file_chain(root: Path, relative: str) -> bool:
+    """逐组件拒绝链接并确认相对路径最终指向普通文件。"""
+    if root.is_symlink() or not root.is_dir() or not _is_relative_path(relative):
+        return False
+    current = root
+    for part in relative.split("/")[:-1]:
+        current /= part
+        if current.is_symlink() or not current.is_dir():
+            return False
+    target = current / relative.split("/")[-1]
+    if target.is_symlink() or not target.is_file():
+        return False
+    try:
+        return target.resolve(strict=True).is_relative_to(root.resolve(strict=True))
+    except OSError:
+        return False
+
+
+def _context_matches_manifest(manifest: dict[str, Any], context: ManifestReuseContext) -> bool:
+    snapshot = manifest["classification"]["snapshot"]
+    return (
+        manifest["main"]["checksum"] == context.checksum
+        and manifest["product"] == context.product
+        and snapshot["package_kind"] == context.package_kind
+        and snapshot["product"] == context.product
+        and snapshot["profile"] == context.profile
+        and snapshot["config_fingerprint"] == context.config_fingerprint
+        and snapshot["extraction_policy_fingerprint"] == context.extraction_policy_fingerprint
+        and manifest["path_limit"] == context.path_limit
+        and snapshot["scene_root"] == context.scene_root
+        and snapshot["target_roots"] == list(context.target_roots)
+        and snapshot["budgets"] == context.budgets
+    )
+
+
+def reusable_manifest(data_dir: Path | str, context: ManifestReuseContext) -> dict[str, Any] | None:
     """仅在 v5 schema、主包校验和、证据指纹与 catalog 摘要全部一致时复用。"""
     root = Path(data_dir)
     try:
+        if root.is_symlink():
+            return None
         manifest = read_manifest(root)
-        if manifest["main"]["checksum"] != checksum or not _is_sha256(checksum):
+        if not _context_matches_manifest(manifest, context):
             return None
         count, fingerprint = evidence_fingerprint(root)
         if manifest["main"]["count"] != count or manifest["main"]["evidence_fingerprint"] != fingerprint:
             return None
-        if not _verify_catalog_files(root.resolve(), manifest):
+        if not _verify_catalog_files(root, manifest):
             return None
+        evidence_root = root / MAIN_EVIDENCE_DIR
+        for key in ("entries", "ignored", "conflicts", "failures", "catalog"):
+            if not all(_verify_regular_file_chain(evidence_root, item["source_relative"]) for item in manifest[key]):
+                return None
     except (ManifestV5Error, OSError):
         return None
     return manifest

@@ -84,7 +84,7 @@ def _normalize_member_path(member_path: str) -> tuple[list[str], str]:
         raise ArchiveError("成员路径不能为空", "unsafe_path")
     if candidate.startswith(("/", "\\")):
         raise ArchiveError(f"成员路径不得是绝对路径: {member_path}", "unsafe_path")
-    if re.fullmatch(r"[A-Za-z]:(?:[\\/].*)?", candidate):
+    if re.match(r"[A-Za-z]:", candidate):
         raise ArchiveError(f"成员路径不得使用 Windows 盘符: {member_path}", "unsafe_path")
 
     # 归档成员中的反斜杠统一按目录分隔符处理，避免 Windows 风格路径绕过校验。
@@ -112,8 +112,17 @@ def _member_key(canonical_path: str) -> str:
 
 def _resolve_member_target(root: Path, parts: list[str], member_path: str) -> Path:
     """解析成员目标并确认其仍位于归档输出根内。"""
+    if root.is_symlink():
+        raise ArchiveError(f"目标路径包含链接: {member_path}", "link_rejected")
+
+    current = root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise ArchiveError(f"目标路径包含链接: {member_path}", "link_rejected")
+
     root_resolved = root.resolve()
-    target = root.joinpath(*parts)
+    target = current
     target_resolved = target.resolve()
     if not target_resolved.is_relative_to(root_resolved):
         raise ArchiveError(f"路径穿越被拒绝: {member_path}", "unsafe_path")
@@ -199,9 +208,23 @@ def _reject_unsafe_zip_raw_names(archive: Path) -> None:
             raise ArchiveError(f"压缩包读取失败: {archive.name}", "archive_corrupt")
 
 
-def _validate_zip_member(member: zipfile.ZipInfo) -> tuple[list[str], str] | None:
+def _zip_member_is_directory(member: zipfile.ZipInfo) -> bool:
+    """识别带或不带结尾斜杠的 ZIP 目录成员。"""
+    if member.is_dir():
+        return True
+    if member.create_system == 3:
+        unix_mode = (member.external_attr >> 16) & 0xFFFF
+        return stat.S_ISDIR(unix_mode)
+    return False
+
+
+def _validate_zip_member(
+    member: zipfile.ZipInfo,
+    limit: UnpackLimit,
+) -> tuple[list[str], str] | None:
     """校验 ZIP 成员路径和类型；目录成员只做安全检查，不计入文件数。"""
-    display_name = member.filename.rstrip("/\\") if member.is_dir() else member.filename
+    is_directory = _zip_member_is_directory(member)
+    display_name = member.filename.rstrip("/\\") if is_directory else member.filename
     parts, canonical = _normalize_member_path(display_name)
 
     if member.create_system == 3:
@@ -209,10 +232,14 @@ def _validate_zip_member(member: zipfile.ZipInfo) -> tuple[list[str], str] | Non
         if stat.S_ISLNK(unix_mode):
             raise ArchiveError(f"链接文件被拒绝: {member.filename}", "link_rejected")
         member_type = stat.S_IFMT(unix_mode)
-        if member_type not in (0, stat.S_IFREG):
+        if not is_directory and member_type not in (0, stat.S_IFREG):
             raise ArchiveError(f"不支持的 ZIP 成员类型: {member.filename}", "unsafe_path")
 
-    if member.is_dir():
+    if len(parts) > limit.max_member_path_depth:
+        message = f"成员路径深度超限: {member.filename}"
+        raise ArchiveError(message, "member_path_depth_exceeded", depth=len(parts))
+
+    if is_directory:
         return None
     return parts, canonical
 
@@ -240,6 +267,16 @@ def _delete_partial_target(target: Path | None) -> None:
         target.unlink(missing_ok=True)
 
 
+def _prepare_archive_root(root: Path) -> Path:
+    """在解析路径前拒绝根链接，并返回创建完成后的规范目录。"""
+    if root.is_symlink():
+        raise ArchiveError(f"归档输出根目录不得是链接: {root}", "link_rejected")
+    root.mkdir(parents=True, exist_ok=True)
+    if root.is_symlink():
+        raise ArchiveError(f"归档输出根目录不得是链接: {root}", "link_rejected")
+    return root.resolve()
+
+
 def unpack_zip(
     archive: Path,
     root: Path,
@@ -249,8 +286,7 @@ def unpack_zip(
 ) -> int:
     """安全展开 ZIP，返回成功写入的普通文件数。"""
     limit = limit or UnpackLimit()
-    root = root.resolve()
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_archive_root(root)
     count = 0
     max_total = _expansion_budget(limit)
     total_written = 0
@@ -258,19 +294,21 @@ def unpack_zip(
     try:
         _reject_unsafe_zip_raw_names(archive)
         with zipfile.ZipFile(archive) as zf:
+            members = zf.infolist()
+            file_members = [member for member in members if not _zip_member_is_directory(member)]
+            if len(file_members) > limit.max_files:
+                message = f"文件数超限: {len(file_members)}"
+                raise ArchiveError(message, "file_count_exceeded", count=len(file_members))
+
             prepared_members: list[tuple[zipfile.ZipInfo, list[str], str]] = []
-            for member in zf.infolist():
+            for member in members:
                 try:
-                    prepared = _validate_zip_member(member)
+                    prepared = _validate_zip_member(member, limit)
                 except ArchiveError as member_error:
                     _record_member_error(on_member_error, member_error)
                     continue
                 if prepared is not None:
                     prepared_members.append((member, prepared[0], prepared[1]))
-
-            if len(prepared_members) > limit.max_files:
-                message = f"文件数超限: {len(prepared_members)}"
-                raise ArchiveError(message, "file_count_exceeded", count=len(prepared_members))
 
             seen_members: set[str] = set()
             for member, parts, canonical in prepared_members:
@@ -308,7 +346,15 @@ def unpack_zip(
                     total_written -= member_written
                     _delete_partial_target(target)
                     _record_member_error(on_member_error, member_error)
-                except (zipfile.BadZipFile, zlib.error, OSError) as exc:
+                except (
+                    zipfile.BadZipFile,
+                    zlib.error,
+                    OSError,
+                    RuntimeError,
+                    NotImplementedError,
+                    struct.error,
+                    EOFError,
+                ) as exc:
                     total_written -= member_written
                     _delete_partial_target(target)
                     error = ArchiveError(
@@ -319,7 +365,15 @@ def unpack_zip(
                     _record_member_error(on_member_error, error)
     except ArchiveError:
         raise
-    except (zipfile.BadZipFile, zlib.error, OSError) as exc:
+    except (
+        zipfile.BadZipFile,
+        zlib.error,
+        OSError,
+        RuntimeError,
+        NotImplementedError,
+        struct.error,
+        EOFError,
+    ) as exc:
         raise ArchiveError(f"压缩包读取失败: {archive.name}", "archive_corrupt") from exc
     return count
 
@@ -354,16 +408,21 @@ def unpack_tar(
 ) -> int:
     """安全展开 TAR/TAR.GZ，返回成功写入的普通文件数。"""
     limit = limit or UnpackLimit()
-    root = root.resolve()
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_archive_root(root)
     count = 0
     max_total = _expansion_budget(limit)
     total_written = 0
 
     try:
         with tarfile.open(archive, "r:*") as tf:
+            members = tf.getmembers()
+            file_members = [member for member in members if not member.isdir()]
+            if len(file_members) > limit.max_files:
+                message = f"文件数超限: {len(file_members)}"
+                raise ArchiveError(message, "file_count_exceeded", count=len(file_members))
+
             prepared_members: list[tuple[tarfile.TarInfo, list[str], str]] = []
-            for member in tf.getmembers():
+            for member in members:
                 try:
                     prepared = _validate_tar_member(member)
                 except ArchiveError as member_error:
@@ -371,10 +430,6 @@ def unpack_tar(
                     continue
                 if prepared is not None:
                     prepared_members.append((member, prepared[0], prepared[1]))
-
-            if len(prepared_members) > limit.max_files:
-                message = f"文件数超限: {len(prepared_members)}"
-                raise ArchiveError(message, "file_count_exceeded", count=len(prepared_members))
 
             seen_members: set[str] = set()
             for member, parts, canonical in prepared_members:
@@ -415,7 +470,15 @@ def unpack_tar(
                     total_written -= member_written
                     _delete_partial_target(target)
                     _record_member_error(on_member_error, member_error)
-                except (tarfile.TarError, zlib.error, OSError) as exc:
+                except (
+                    tarfile.TarError,
+                    zlib.error,
+                    OSError,
+                    RuntimeError,
+                    NotImplementedError,
+                    struct.error,
+                    EOFError,
+                ) as exc:
                     total_written -= member_written
                     _delete_partial_target(target)
                     error = ArchiveError(
@@ -426,7 +489,15 @@ def unpack_tar(
                     _record_member_error(on_member_error, error)
     except ArchiveError:
         raise
-    except (tarfile.TarError, zlib.error, OSError) as exc:
+    except (
+        tarfile.TarError,
+        zlib.error,
+        OSError,
+        RuntimeError,
+        NotImplementedError,
+        struct.error,
+        EOFError,
+    ) as exc:
         raise ArchiveError(f"压缩包读取失败: {archive.name}", "archive_corrupt") from exc
     return count
 

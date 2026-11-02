@@ -2,6 +2,7 @@
 
 import io
 import shutil
+import stat
 import struct
 import tarfile
 import zipfile
@@ -341,6 +342,7 @@ def test_unpack_limit_uses_v5_fixed_defaults() -> None:
         "/etc/escape.txt",
         r"C:\escape.txt",
         "C:/escape.txt",
+        "C:relative.txt",
         "dir\x00name.txt",
         r"foo\..\bar.txt",
     ],
@@ -571,3 +573,221 @@ def test_target_out_of_bounds_uses_stable_code(tmp_path: Path) -> None:
         _safe_destination(tmp_path / "data", Path("../escape.txt"))
 
     assert exc_info.value.error_code == "unsafe_path"
+
+
+def test_zip_file_count_includes_rejected_non_directory_members(tmp_path: Path) -> None:
+    """文件数先按全部非目录成员统计，非法路径成员也不能绕过单归档预算。"""
+    archive = tmp_path / "count-invalid.zip"
+    _write_zip(
+        archive,
+        [
+            _zip_info("../rejected.txt", b"x"),
+            _zip_info("safe.txt", b"x"),
+        ],
+    )
+    limit = UnpackLimit()
+    limit.max_files = 1
+
+    with pytest.raises(ArchiveError) as exc_info:
+        unpack_zip(archive, tmp_path / "out", limit=limit)
+
+    assert exc_info.value.error_code == "file_count_exceeded"
+
+
+def test_tar_file_count_includes_rejected_non_directory_members(tmp_path: Path) -> None:
+    """TAR 也必须先统计全部非目录成员，非法路径成员不能绕过预算。"""
+    archive = tmp_path / "count-invalid.tar.gz"
+    _write_tar(
+        archive,
+        [
+            (_tar_info("../rejected.txt", 1), b"x"),
+            (_tar_info("safe.txt", 1), b"x"),
+        ],
+    )
+    limit = UnpackLimit()
+    limit.max_files = 1
+
+    with pytest.raises(ArchiveError) as exc_info:
+        unpack_tar(archive, tmp_path / "out", limit=limit)
+
+    assert exc_info.value.error_code == "file_count_exceeded"
+
+
+def test_unix_zip_directory_without_trailing_slash_is_not_a_file(tmp_path: Path) -> None:
+    """Unix ZIP 目录成员即使名称无结尾斜杠也不计文件数且深度受限。"""
+    archive = tmp_path / "unix-directory.zip"
+    directory = zipfile.ZipInfo("directory")
+    directory.create_system = 3
+    directory.external_attr = (stat.S_IFDIR | 0o755) << 16
+    _write_zip(archive, [(directory, b""), _zip_info("safe.txt", b"x")])
+    limit = UnpackLimit()
+    limit.max_files = 1
+
+    assert unpack_zip(archive, tmp_path / "out", limit=limit) == 1
+    assert (tmp_path / "out/safe.txt").is_file()
+
+
+def test_unix_zip_directory_member_path_depth_is_checked(tmp_path: Path) -> None:
+    """目录成员同样适用 12 段成员路径深度限制。"""
+    archive = tmp_path / "deep-directory.zip"
+    directory = zipfile.ZipInfo("/".join(f"level-{index}" for index in range(13)))
+    directory.create_system = 3
+    directory.external_attr = (stat.S_IFDIR | 0o755) << 16
+    _write_zip(archive, [(directory, b"")])
+
+    with pytest.raises(ArchiveError) as exc_info:
+        unpack_zip(archive, tmp_path / "out")
+
+    assert exc_info.value.error_code == "member_path_depth_exceeded"
+
+
+@pytest.mark.parametrize("extension", ["zip", "tar.gz"])
+def test_archive_member_parent_symlink_is_rejected(tmp_path: Path, extension: str) -> None:
+    """成员目标已有父目录链接时必须拒绝，不能跟随到任务根之外。"""
+    output = tmp_path / "out"
+    output.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (output / "dir").symlink_to(outside, target_is_directory=True)
+    archive = tmp_path / f"parent-link.{extension}"
+    if extension == "zip":
+        _write_zip(archive, [_zip_info("dir/file.txt", b"x")])
+        writer = unpack_zip
+    else:
+        _write_tar(archive, [(_tar_info("dir/file.txt", 1), b"x")])
+        writer = unpack_tar
+
+    with pytest.raises(ArchiveError) as exc_info:
+        writer(archive, output)
+
+    assert exc_info.value.error_code == "link_rejected"
+    assert not (outside / "file.txt").exists()
+
+
+@pytest.mark.parametrize("extension", ["zip", "tar.gz"])
+def test_archive_root_symlink_is_rejected(tmp_path: Path, extension: str) -> None:
+    """归档输出根自身是链接时不得在解析后跟随到任务现场外。"""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    output = tmp_path / "out"
+    output.symlink_to(outside, target_is_directory=True)
+    archive = tmp_path / f"root-link.{extension}"
+    if extension == "zip":
+        _write_zip(archive, [_zip_info("safe.txt", b"x")])
+        writer = unpack_zip
+    else:
+        _write_tar(archive, [(_tar_info("safe.txt", 1), b"x")])
+        writer = unpack_tar
+
+    with pytest.raises(ArchiveError) as exc_info:
+        writer(archive, output)
+
+    assert exc_info.value.error_code == "link_rejected"
+    assert not (outside / "safe.txt").exists()
+
+
+def test_safe_destination_rejects_symlinked_task_root(tmp_path: Path) -> None:
+    """任务根本身为链接时，_safe_destination 必须在 resolve 前拒绝。"""
+    from app.services.extraction.layout import _safe_destination
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ArchiveError) as exc_info:
+        _safe_destination(data_dir, Path("safe.txt"))
+
+    assert exc_info.value.error_code == "link_rejected"
+    assert not (outside / "safe.txt").exists()
+
+
+def test_gzip_target_parent_symlink_is_rejected(tmp_path: Path) -> None:
+    """gzip 目标父目录是链接时必须在解析前拒绝。"""
+    import gzip
+
+    archive = tmp_path / "input.log.gz"
+    archive.write_bytes(gzip.compress(b"abc"))
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ArchiveError) as exc_info:
+        unpack_gzip(archive, linked_parent / "output.log")
+
+    assert exc_info.value.error_code == "link_rejected"
+    assert not (outside / "output.log").exists()
+
+
+@pytest.mark.parametrize("exception_type", [RuntimeError, NotImplementedError, struct.error, EOFError])
+def test_zip_runtime_style_archive_failures_map_to_archive_corrupt(
+    tmp_path: Path,
+    monkeypatch,
+    exception_type,
+) -> None:
+    """加密、不支持压缩方法、结构错误和截断读取都稳定映射为 archive_corrupt。"""
+    import app.core.archive as archive_module
+
+    archive = tmp_path / "archive.zip"
+    archive.write_bytes(b"placeholder")
+
+    def raising(_archive: Path) -> None:
+        raise exception_type("failed")
+
+    monkeypatch.setattr(archive_module, "_reject_unsafe_zip_raw_names", raising)
+
+    with pytest.raises(ArchiveError) as exc_info:
+        unpack_zip(archive, tmp_path / "out")
+
+    assert exc_info.value.error_code == "archive_corrupt"
+
+
+@pytest.mark.parametrize(
+    ("counter", "limit_attr", "remaining"),
+    [
+        ("files", "max_files", 1),
+        ("bytes", "max_total_bytes", 1),
+    ],
+)
+def test_subpackage_staging_receives_remaining_task_budget_before_unpack(
+    tmp_path: Path,
+    monkeypatch,
+    counter: str,
+    limit_attr: str,
+    remaining: int,
+) -> None:
+    """子包 staging 前必须把单归档上限收紧到剩余任务预算。"""
+    from app.services.extraction import nested as nested_module
+    from app.services.extraction.budget import ExtractionBudget
+
+    source = tmp_path / "nested.zip"
+    _write_zip(source, [_zip_info("safe.txt", b"x")])
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    budget = ExtractionBudget()
+    full_limit = getattr(budget, limit_attr)
+    setattr(budget, counter, full_limit - remaining)
+    captured: list[UnpackLimit] = []
+
+    def fake_unpack(_source, _root, limit, _path_limit_check=None, on_member_error=None) -> int:
+        del on_member_error
+        captured.append(limit)
+        return 0
+
+    monkeypatch.setattr(nested_module, "unpack", fake_unpack)
+    manifest = {"files": [], "subpackages": [], "log_gz": [], "rejected": []}
+    nested_module._extract_subpackage(
+        source,
+        Path("nested.zip"),
+        "evidence",
+        "",
+        data_dir,
+        manifest,
+        budget,
+        set(),
+        1,
+    )
+
+    assert captured
+    assert getattr(captured[0], limit_attr) == remaining
