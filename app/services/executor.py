@@ -38,9 +38,19 @@ from app.services.unit_runtime import (
     run_inspect_call,
 )
 
-__all__ = ["Executor", "RuleContext", "make_result"]
+__all__ = ["Executor", "RuleContext", "RuleDependencyError", "make_result"]
 
 WORKER_RESULT_MISSING = "worker 未返回结果"
+
+
+class RuleDependencyError(ValueError):
+    """执行规则前依赖门禁失败；携带稳定错误码与可展示详情。"""
+
+    def __init__(self, code: str, message: str, *, detail: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.detail = detail
 
 
 class Executor:
@@ -208,7 +218,7 @@ class Executor:
             data_dir=str(ctx.data_dir),
             prepared_dir=str(ctx.prepared_dir),
             files=tuple(path.as_posix() for path in matched),
-            product=ctx.product.value if ctx.product is not None else None,
+            product=str(ctx.product) if ctx.product is not None else None,
             package_kind=ctx.package_kind.value,
         )
         return plan
@@ -313,30 +323,31 @@ class Executor:
             prepared_dir=str(ctx.prepared_dir),
             files=tuple(path.as_posix() for path in matched),
             prepare_state=prepare_state,
-            product=ctx.product.value if ctx.product is not None else None,
+            product=str(ctx.product) if ctx.product is not None else None,
             package_kind=ctx.package_kind.value,
         )
         return plan
 
-    def _store_result(self, result: RuleResult) -> RuleResult:
+    def _store_result(self, result: RuleResult, *, collect: bool = True) -> RuleResult:
         """结果收集与 RULES_TOTAL 自增只发生在父进程。"""
-        self.collected[result.code] = result
+        if collect:
+            self.collected[result.code] = result
         RULES_TOTAL.labels(rule=result.code, status=result.status.value).inc()
         return result
 
-    def run_one(self, code: str, ctx: RuleContext) -> RuleResult:
+    def run_one(self, code: str, ctx: RuleContext, *, collect: bool = True) -> RuleResult:
         """父进程串行执行单个规则；EXTRACT、隐藏规则与单规则重跑都走这条路径。"""
         plan = self._plan_inspect(code, ctx)
         flush_logs(ctx, plan.logs)
         if plan.short_circuit is not None:
-            return self._store_result(plan.short_circuit)
+            return self._store_result(plan.short_circuit, collect=collect)
         rule = self.registry.get(code)
         ctx.files = [Path(item) for item in (plan.request.files if plan.request is not None else ())]
         logs: list[dict[str, Any]] = []
         started = time.monotonic()
         result = run_inspect_call(rule, ctx, logs, started)
         flush_logs(ctx, logs)
-        return self._store_result(result)
+        return self._store_result(result, collect=collect)
 
     def _stage_runner(self) -> StageRunner:
         return StageRunner(registry=self.registry, policy=self.policy, worker_setup=self._worker_setup)
@@ -347,14 +358,16 @@ class Executor:
         for code in self.extract_plan():
             result = self.run_one(code, ctx)
             results[code] = result
-            if code == "pkg.extract.main" and result.status == RuleStatus.ERROR:
-                ctx.log(
-                    "error",
-                    "主包解压失败，阻断 prepare 和 inspect",
-                    task_id=ctx.task_id,
-                    rule_code=code,
-                )
-                return results
+
+        failed_units = [code for code in self.extract_plan() if results[code].status == RuleStatus.ERROR]
+        if failed_units:
+            ctx.log(
+                "error",
+                "解压失败，阻断 prepare 和 inspect",
+                task_id=ctx.task_id,
+                failed_units=failed_units,
+            )
+            return results
 
         if after_extract is not None:
             after_extract()
@@ -406,6 +419,41 @@ class Executor:
         except ArchiveError as exc:
             raise ValueError(f"单规则重跑前主包解压失败: {exc}") from exc
 
+    def ensure_rule_dependencies(self, code: str, ctx: RuleContext) -> None:
+        """确保普通规则执行前的解压与分类 catalog 门禁一致通过。"""
+        if code.startswith("pkg.extract."):
+            return
+        try:
+            self._ensure_extraction_site(ctx)
+        except Exception as exc:  # noqa: BLE001 - 统一转换为稳定依赖错误
+            raise RuleDependencyError(
+                "extraction_failed",
+                f"规则依赖的主包解压失败: {exc}",
+                detail={"failed_units": ["pkg.extract.main"], "error": str(exc)},
+            ) from exc
+
+        classification_code = "pkg.extract.classification"
+        if classification_code in self.registry.codes():
+            classification = self.run_one(classification_code, ctx, collect=False)
+            if classification.status == RuleStatus.ERROR:
+                raise RuleDependencyError(
+                    "classification_error",
+                    f"解压分类门禁失败，阻断执行: failed_units=[{classification_code}] | "
+                    f"{classification.summary or 'classification error'}",
+                    detail={
+                        "failed_units": [classification_code],
+                        "classification": classification.model_dump(mode="json"),
+                    },
+                )
+        try:
+            ctx.ensure_catalog()
+        except Exception as exc:  # noqa: BLE001 - catalog 异常必须保留稳定错误详情
+            raise RuleDependencyError(
+                "catalog_build_failed",
+                f"catalog 构建失败: {exc}",
+                detail={"failed_units": [classification_code], "error": str(exc)},
+            ) from exc
+
     def run_rule_with_deps(
         self,
         code: str,
@@ -420,8 +468,9 @@ class Executor:
         rule = self.registry.get(code)
         if not rule.hidden and not self._owner_enabled(code):
             raise ValueError(f"规则已停用: {code}")
-        self._ensure_extraction_site(ctx)
-        ctx.ensure_catalog()
+        if code.startswith("pkg.extract."):
+            return self.run_one(code, ctx)
+        self.ensure_rule_dependencies(code, ctx)
         if rule.prepare is not None:
             runner = self._stage_runner()
             try:

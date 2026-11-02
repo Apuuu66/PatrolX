@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from app.inspectors.base import Inspector
-from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
+from app.models.schemas import PackageKind, Priority, Product, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor
 from app.services.parallel import ParallelPolicy
 from app.services.prepare import marker_path
@@ -25,6 +25,7 @@ from tests.parallel_helpers import (
     EXTRACT_CODE,
     GAMMA,
     INSPECT_FAIL,
+    METADATA,
     PREPARE_FAIL,
     RULES_ENV,
     TRACE_DIR_ENV,
@@ -49,13 +50,23 @@ def _run(
     codes: list[str],
     task_id: str,
     parallel: bool,
+    product: Product | str | None = None,
+    package_kind: PackageKind | str = PackageKind.INSPECTION,
+    log_files: list[str] | None = None,
+    package_name: str = "package.zip",
 ) -> tuple[object, dict[str, object], list[dict], list[dict]]:
     """跑一次完整巡检；返回任务现场、结果、执行日志与追踪。"""
     monkeypatch.setenv(RULES_ENV, ",".join(codes))
     trace_root = tmp_path / f"trace-{task_id}"
     monkeypatch.setenv(TRACE_DIR_ENV, str(trace_root))
-    ctx = make_context(tmp_path, task_id=task_id)
-    write_logs(ctx, LOG_FILES)
+    ctx = make_context(
+        tmp_path,
+        task_id=task_id,
+        product=product,
+        package_kind=package_kind,
+        package_name=package_name,
+    )
+    write_logs(ctx, log_files or LOG_FILES)
     executor = make_executor(build_registry(), parallel=parallel)
     results = executor.run_all(ctx)
     return ctx, results, read_log(ctx.data_dir / "execution.log"), read_traces(trace_root)
@@ -67,6 +78,31 @@ def _assert_same_results(expected: dict[str, object], actual: dict[str, object],
         assert actual[code].model_dump(exclude=VOLATILE_FIELDS) == expected[code].model_dump(exclude=VOLATILE_FIELDS), (
             code
         )
+
+
+def test_worker_uses_request_metadata_across_real_spawn_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """路径和包名暗示 CSP 巡检包时，真实 worker 仍只使用请求中的 UMF 日志包元数据。"""
+    _, results, _, traces = _run(
+        tmp_path,
+        monkeypatch,
+        codes=[METADATA],
+        task_id="metadata-spawn",
+        parallel=True,
+        product=" UMF ",
+        package_kind=PackageKind.LOG_SUPPLEMENT,
+        log_files=["CSP/inspection-csp.log"],
+        package_name="CSP-inspection-package.zip",
+    )
+
+    assert results[METADATA].status == RuleStatus.PASS
+    record = next(trace for trace in traces if trace["unit"] == METADATA)
+    assert record["pid"] != os.getpid()
+    assert record["product"] == Product.UMF
+    assert record["package_kind"] == PackageKind.LOG_SUPPLEMENT
+    assert multiprocessing.active_children() == []
 
 
 def test_prepare_failure_only_skips_owner_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

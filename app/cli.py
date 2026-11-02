@@ -23,6 +23,7 @@ from app.models.db import init_db
 from app.models.schemas import (
     InspectionTask,
     PackageKind,
+    Product,
     RuleCategory,
     RuleStatus,
     SystemInspection,
@@ -35,7 +36,7 @@ from app.models.schemas import (
 )
 from app.services import extraction, store, task_db
 from app.services.auth import AuthError, create_user, ensure_default_admin
-from app.services.executor import Executor, RuleContext
+from app.services.executor import Executor, RuleContext, RuleDependencyError
 from app.services.extraction import WORK_CATEGORIES
 from app.services.inventory.ledger import archive_inventory
 from app.services.inventory.parser import parse_inventory
@@ -45,6 +46,117 @@ from app.services.rule_states import assert_rule_enabled, get_enabled_rule_codes
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+class CliMetadataError(ValueError):
+    """CLI 任务元数据错误；携带稳定错误码与详情。"""
+
+    def __init__(self, code: str, message: str, *, detail: dict[str, object]) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.detail = detail
+
+
+def _print_cli_error(error: CliMetadataError | RuleDependencyError) -> None:
+    print(f"错误 [{error.code}]: {error.message}")
+    if error.detail:
+        print(json.dumps(error.detail, ensure_ascii=False, sort_keys=True))
+
+
+def _resolve_task_metadata(
+    product: Product | str | None,
+    package_kind: PackageKind | str | None,
+    *,
+    existing: dict | None = None,
+    task_id: str | None = None,
+    require_product_when_new: bool = True,
+) -> tuple[Product | str | None, PackageKind]:
+    """按 API 语义合并显式与持久化元数据，并拒绝同任务冲突。"""
+    customer = ((existing or {}).get("system") or {}).get("customer") or {}
+    persisted_product_raw = customer.get("product")
+    persisted_product: Product | str | None = None
+    if persisted_product_raw:
+        normalized_persisted = str(persisted_product_raw).strip().upper()
+        try:
+            persisted_product = Product(normalized_persisted)
+        except ValueError as exc:
+            if normalized_persisted == "UMF2020":
+                # 仅允许旧任务持久化现场恢复；CLI 新输入仍只接受 Product。
+                persisted_product = normalized_persisted
+            else:
+                raise CliMetadataError(
+                    "invalid_product",
+                    "已有任务的网元类型不是受支持的历史值",
+                    detail={
+                        "value": str(persisted_product_raw),
+                        "allowed": [Product.UMF.value, Product.CSP.value, "UMF2020"],
+                    },
+                ) from exc
+
+    persisted_kind: PackageKind | None = None
+    if existing is not None:
+        persisted_kind_raw = existing.get("package_kind")
+        try:
+            persisted_kind = PackageKind(persisted_kind_raw or PackageKind.INSPECTION)
+        except ValueError:
+            persisted_kind = PackageKind.INSPECTION
+
+    requested_kind = PackageKind(package_kind) if package_kind is not None else persisted_kind or PackageKind.INSPECTION
+    if existing is not None and package_kind is not None and persisted_kind is not None:
+        if requested_kind != persisted_kind:
+            raise CliMetadataError(
+                "package_kind_conflict",
+                "同一任务的包类型与已有任务冲突",
+                detail={
+                    "task_id": task_id,
+                    "existing": persisted_kind.value,
+                    "requested": requested_kind.value,
+                },
+            )
+
+    explicit_product: Product | None = None
+    normalized_input = str(product).strip().upper() if product is not None else None
+    if normalized_input:
+        try:
+            explicit_product = Product(normalized_input)
+        except ValueError as exc:
+            raise CliMetadataError(
+                "invalid_product",
+                "巡检包网元类型仅支持 UMF 或 CSP",
+                detail={"value": str(product), "allowed": [Product.UMF.value, Product.CSP.value]},
+            ) from exc
+
+    if requested_kind == PackageKind.LOG_SUPPLEMENT:
+        if explicit_product is not None:
+            raise CliMetadataError(
+                "metadata_not_applicable",
+                "日志补充包不允许携带网元类型",
+                detail={"package_kind": requested_kind.value, "fields": ["product"]},
+            )
+        # 日志补充包的 product 在契约中固定为 null；历史脏值不得继续传播到执行上下文。
+        return None, requested_kind
+
+    if existing is not None and explicit_product is not None:
+        if persisted_product is None or explicit_product.value != str(persisted_product):
+            raise CliMetadataError(
+                "package_product_conflict",
+                "同一任务的网元类型与已有任务冲突",
+                detail={
+                    "task_id": task_id,
+                    "existing": str(persisted_product) if persisted_product is not None else None,
+                    "requested": explicit_product.value,
+                },
+            )
+
+    resolved_product = explicit_product if explicit_product is not None else persisted_product
+    if resolved_product is None and existing is None and require_product_when_new:
+        raise CliMetadataError(
+            "missing_product",
+            "巡检包必须提供网元类型",
+            detail={"package_kind": requested_kind.value, "field": "product"},
+        )
+    return resolved_product, requested_kind
 
 
 def new_task_id() -> str:
@@ -91,7 +203,14 @@ def _make_log_fn(task_id: str):
     return log
 
 
-def _new_context(task_id: str, package: Path, package_checksum: str | None = None) -> RuleContext:
+def _new_context(
+    task_id: str,
+    package: Path,
+    package_checksum: str | None = None,
+    *,
+    product: Product | str | None = None,
+    package_kind: PackageKind | str = PackageKind.INSPECTION,
+) -> RuleContext:
     task_dir = settings.output / task_id
     return RuleContext(
         task_id=task_id,
@@ -101,6 +220,8 @@ def _new_context(task_id: str, package: Path, package_checksum: str | None = Non
         package_checksum=package_checksum,
         result_dir=task_dir / "rules",
         prepared_dir=task_dir / "prepared",
+        product=product,
+        package_kind=package_kind,
     )
 
 
@@ -183,12 +304,23 @@ def run_task(
         mode=mode.value,
         trigger=trigger.value,
     )
-    ctx = _new_context(task_id, package)
+    ctx = _new_context(
+        task_id,
+        package,
+        product=(customer or {}).get("product"),
+        package_kind=package_kind,
+    )
     executor = Executor(registry, enabled_rules)
     results = executor.run_all(ctx)
-    main_result = results.get("pkg.extract.main")
-    if main_result is not None and main_result.status == RuleStatus.ERROR:
-        store.save_rule_result(settings.output, task_id, main_result)
+    extract_errors = [
+        result
+        for code, result in results.items()
+        if code.startswith("pkg.extract.") and result.status == RuleStatus.ERROR
+    ]
+    if extract_errors:
+        executor.assign_order(results)
+        for result in results.values():
+            store.save_rule_result(settings.output, task_id, result)
         summary = store.compute_summary([])
         system = SystemInspection(
             package_file=package.name,
@@ -215,19 +347,18 @@ def run_task(
             package_kind=package_kind,
         )
         store.save_system(settings.output, task_id, system)
-        _publish_terminal(task, publish)
-        # 首次接收的 checksum 是恢复现场与冲突判定的唯一依据，失败任务同样必须落库。
-        task_db.set_package_checksum(task_id, sha256_file(package))
-        return task
         store.append_log(
             settings.output,
             task_id,
             "error",
-            "主包解压失败，任务失败",
-            error=main_result.summary,
+            "解压失败，任务失败",
+            failed_units=[result.code for result in extract_errors],
         )
         TASKS_TOTAL.labels(result="failed", mode=mode.value).inc()
-        print(f"\n任务 {task_id} 失败：主包解压失败 | 日志: {settings.output / task_id / 'execution.log'}")
+        print(f"\n任务 {task_id} 失败：解压失败 | 日志: {settings.output / task_id / 'execution.log'}")
+        _publish_terminal(task, publish)
+        # 首次接收的 checksum 是恢复现场与冲突判定的唯一依据，失败任务同样必须落库。
+        task_db.set_package_checksum(task_id, sha256_file(package))
         return task
     executor.assign_order(results)
     ordered = [results[code] for code in executor.plan() if code in results]
@@ -321,6 +452,8 @@ def run_incremental_rebuild(
     task_id: str | None = None,
     package_checksum: str | None = None,
     publish: Callable[[InspectionTask], None] | None = None,
+    product: Product | str | None = None,
+    package_kind: PackageKind | str | None = None,
 ) -> list[str]:
     """强制重建解压现场后只执行指定普通规则及其私有 prepare。"""
     if not rule_codes:
@@ -335,7 +468,22 @@ def run_incremental_rebuild(
     task_dir = settings.output / task_id
 
     checksum = package_checksum or sha256_file(package)
-    ctx = _new_context(task_id, package, checksum)
+    old = _load_old_task(task_id) or {}
+    customer = old.get("system", {}).get("customer") or {}
+    resolved_product, resolved_package_kind = _resolve_task_metadata(
+        product,
+        package_kind,
+        existing=_load_old_task(task_id),
+        task_id=task_id,
+        require_product_when_new=False,
+    )
+    ctx = _new_context(
+        task_id,
+        package,
+        checksum,
+        product=resolved_product,
+        package_kind=resolved_package_kind,
+    )
     executor = Executor(registry, enabled_rules)
 
     # 只删除解压 manifest 和工作分类目录；规则结果、prepared 数据与任务元数据保留。
@@ -357,9 +505,7 @@ def run_incremental_rebuild(
             result.execution_order = old_result.execution_order
         store.save_rule_result(settings.output, task_id, result)
 
-    old = _load_old_task(task_id)
-    customer = (old or {}).get("system", {}).get("customer") or {}
-    version = (old or {}).get("system", {}).get("version")
+    version = old.get("system", {}).get("version")
     system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
     store.save_system(settings.output, task_id, system)
     completed: InspectionTask | None = None
@@ -408,6 +554,9 @@ def run_single_rule(
     task_id: str | None = None,
     package_checksum: str | None = None,
     trigger_retention: bool = True,
+    *,
+    product: Product | str | None = None,
+    package_kind: PackageKind | str | None = None,
 ) -> None:
     run_started_at = _now()
     registry.load_all()
@@ -416,7 +565,22 @@ def run_single_rule(
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
     task_path = settings.output / task_id / "task.json"
-    ctx = _new_context(task_id, package, package_checksum)
+    old = _load_old_task(task_id) or {}
+    customer = old.get("system", {}).get("customer") or {}
+    resolved_product, resolved_package_kind = _resolve_task_metadata(
+        product,
+        package_kind,
+        existing=_load_old_task(task_id),
+        task_id=task_id,
+        require_product_when_new=False,
+    )
+    ctx = _new_context(
+        task_id,
+        package,
+        package_checksum,
+        product=resolved_product,
+        package_kind=resolved_package_kind,
+    )
     executor = Executor(registry, enabled_rules)
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
@@ -431,8 +595,6 @@ def run_single_rule(
         if old_result is not None:
             result.execution_order = old_result.execution_order
         store.save_rule_result(settings.output, task_id, result)
-    old = _load_old_task(task_id) or {}
-    customer = old.get("system", {}).get("customer") or {}
     version = old.get("system", {}).get("version")
     system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
     store.save_system(settings.output, task_id, system)
@@ -472,6 +634,8 @@ def explain_match(
     package: Path | None = None,
     task_id: str | None = None,
     package_checksum: str | None = None,
+    product: Product | str | None = None,
+    package_kind: PackageKind | str | None = None,
 ) -> dict:
     """输出规则匹配诊断：解压终态、任务清单和每个 pattern 的命中明细。"""
     registry.load_all()
@@ -483,13 +647,22 @@ def explain_match(
     enabled_rules = get_enabled_rule_codes()
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
-    task_dir = settings.output / task_id
-    ctx = _new_context(task_id, package, package_checksum)
+    resolved_product, resolved_package_kind = _resolve_task_metadata(
+        product,
+        package_kind,
+        existing=_load_old_task(task_id),
+        task_id=task_id,
+        require_product_when_new=False,
+    )
+    ctx = _new_context(
+        task_id,
+        package,
+        package_checksum,
+        product=resolved_product,
+        package_kind=resolved_package_kind,
+    )
     executor = Executor(registry, enabled_rules)
-    if not (task_dir / EXTRACT_MANIFEST).exists():
-        extraction_result = executor.run_rule("pkg.extract.main", ctx)
-        store.save_rule_result(settings.output, task_id, extraction_result)
-
+    executor.ensure_rule_dependencies(code, ctx)
     manifest = extraction.read_manifest(ctx.data_dir)
     catalog = ctx.ensure_catalog()
     matched = catalog.match(rule.source_patterns)
@@ -539,10 +712,24 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd")
     run_parser = sub.add_parser("run", help="扫描输入目录并运行全部规则（默认 uploads/）")
     run_parser.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<package>）")
+    run_parser.add_argument("--product", default=None, help="巡检包网元类型：UMF 或 CSP")
+    run_parser.add_argument(
+        "--package-kind",
+        default=None,
+        choices=[kind.value for kind in PackageKind],
+        help="任务包类型（默认读取已有任务，否则 inspection）",
+    )
     run_one = sub.add_parser("run-one", help="仅重跑指定规则")
     run_one.add_argument("--rule", required=True, help="规则 code")
     run_one.add_argument("--package-dir", default=None, help="输入目录（可选）")
     run_one.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<package>）")
+    run_one.add_argument("--product", default=None, help="巡检包网元类型：UMF 或 CSP")
+    run_one.add_argument(
+        "--package-kind",
+        default=None,
+        choices=[kind.value for kind in PackageKind],
+        help="任务包类型（默认读取已有任务，否则 inspection）",
+    )
     explain_match_parser = sub.add_parser(
         "explain-match",
         help="解释规则解压状态与 source_patterns 匹配结果",
@@ -550,6 +737,13 @@ def main(argv: list[str] | None = None) -> int:
     explain_match_parser.add_argument("--rule", required=True, help="规则 code")
     explain_match_parser.add_argument("--package-dir", default=None, help="输入目录（可选）")
     explain_match_parser.add_argument("--task-id", default=None, help="固定任务 ID（默认按包名生成 task-<package>）")
+    explain_match_parser.add_argument("--product", default=None, help="巡检包网元类型：UMF 或 CSP")
+    explain_match_parser.add_argument(
+        "--package-kind",
+        default=None,
+        choices=[kind.value for kind in PackageKind],
+        help="任务包类型（默认读取已有任务，否则 inspection）",
+    )
     create_user_parser = sub.add_parser("create-user", help="创建认证用户（不支持在线注册）")
     create_user_parser.add_argument("--username", required=True, help="用户名")
     create_user_parser.add_argument("--password", required=True, help="密码")
@@ -572,17 +766,51 @@ def main(argv: list[str] | None = None) -> int:
         packages = find_packages(root)
         if not packages:
             raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
-        for pkg in packages:
-            run_single_rule(args.rule, pkg, task_id=args.task_id)
+        try:
+            for pkg in packages:
+                lookup_task_id = args.task_id or generate_task_id(pkg.name)
+                product, package_kind = _resolve_task_metadata(
+                    args.product,
+                    args.package_kind,
+                    existing=_load_old_task(lookup_task_id),
+                    task_id=lookup_task_id,
+                )
+                run_single_rule(
+                    args.rule,
+                    pkg,
+                    task_id=args.task_id,
+                    product=product,
+                    package_kind=package_kind,
+                )
+        except (CliMetadataError, RuleDependencyError) as exc:
+            _print_cli_error(exc)
+            return 1
         return 0
     if args.cmd == "explain-match":
         root = Path(args.package_dir) if args.package_dir else None
         packages = find_packages(root)
         if not packages:
             raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
-        for pkg in packages:
-            report = explain_match(args.rule, package=pkg, task_id=args.task_id)
-            print(json.dumps(report, ensure_ascii=False, indent=2))
+        try:
+            for pkg in packages:
+                lookup_task_id = args.task_id or generate_task_id(pkg.name)
+                product, package_kind = _resolve_task_metadata(
+                    args.product,
+                    args.package_kind,
+                    existing=_load_old_task(lookup_task_id),
+                    task_id=lookup_task_id,
+                )
+                report = explain_match(
+                    args.rule,
+                    package=pkg,
+                    task_id=args.task_id,
+                    product=product,
+                    package_kind=package_kind,
+                )
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+        except (CliMetadataError, RuleDependencyError) as exc:
+            _print_cli_error(exc)
+            return 1
         return 0
     if args.cmd == "create-user":
         init_db()
@@ -611,7 +839,26 @@ def main(argv: list[str] | None = None) -> int:
         print("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
         return 1
     for pkg in packages:
-        run_task(pkg, task_id=args.task_id)
+        if args.cmd == "run":
+            lookup_task_id = args.task_id or generate_task_id(pkg.name)
+            try:
+                product, package_kind = _resolve_task_metadata(
+                    args.product,
+                    args.package_kind,
+                    existing=_load_old_task(lookup_task_id),
+                    task_id=lookup_task_id,
+                )
+            except CliMetadataError as exc:
+                _print_cli_error(exc)
+                return 1
+            run_task(
+                pkg,
+                task_id=args.task_id,
+                customer={"product": product} if product is not None else {},
+                package_kind=package_kind,
+            )
+        else:
+            run_task(pkg, task_id=args.task_id)
     return 0
 
 

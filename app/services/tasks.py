@@ -258,6 +258,8 @@ class TaskService:
                         task_id=task_id,
                         package_checksum=package_checksum,
                         trigger_retention=False,
+                        product=customer.get("product"),
+                        package_kind=package_kind,
                     )
                 append_log(settings.output, task_id, "info", "重跑完成，报告已更新")
                 current = load_task_meta(settings.output, task_id)
@@ -359,6 +361,8 @@ class TaskService:
             package=package,
             task_id=task_id,
             publish=self._publish_terminal,
+            product=customer.get("product"),
+            package_kind=package_kind,
         )
         append_log(settings.output, task_id, "info", "增量重建重跑完成", **log_detail)
 

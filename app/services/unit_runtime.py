@@ -50,7 +50,18 @@ class RuleContext:
         self.package_checksum = package_checksum
         self.result_dir = result_dir
         self.prepared_dir = prepared_dir or data_dir / "prepared"
-        self.product = Product(product) if product is not None else None
+        if product is None:
+            self.product: Product | str | None = None
+        else:
+            normalized_product = str(product).strip().upper()
+            if normalized_product == "UMF2020":
+                # 只兼容明确的历史持久化值；新任务仍由上传契约限制为 Product。
+                self.product = normalized_product
+            else:
+                try:
+                    self.product = Product(normalized_product)
+                except ValueError as exc:
+                    raise ValueError(f"非法 product: {product}") from exc
         self.package_kind = PackageKind(package_kind)
         self.files: list[Path] = []
         self.catalog: TaskFileCatalog | None = None

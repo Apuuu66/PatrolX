@@ -45,10 +45,10 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 - [x] T016 将 `app/services/extraction/manifest.py` 升级为 v5 读写与严格校验，使用 `manifest.json` 作为发布凭据，记录 main checksum/evidence fingerprint、product、classification snapshot、path limit、entries、ignored、conflicts、failures、catalog 和 summary（FR-040、FR-041、FR-046）
 - [x] T017 在 `tests/test_archive_robustness.py`、`tests/test_extraction_site.py` 和 `tests/test_classification_runtime.py` 增加路径穿越、绝对路径、符号/硬链接、重复成员、归档深度、成员深度、文件数量、单文件大小、累计字节和目标越界测试，并断言稳定错误码（FR-035、FR-052、SC-012）
 - [x] T018 更新 `app/core/archive.py`、`app/services/extraction/budget.py` 和 `app/services/extraction/nested.py`，实现 v5 稳定错误码、链接拒绝、重复成员检测、预算边界和单成员失败隔离（FR-035、FR-052、FR-053）
-- [ ] T019 在 `tests/test_preparation.py` 和 `tests/test_executor.py` 先写两个隐藏单元测试，断言注册表只生产 `pkg.extract.main`、`pkg.extract.classification`，且 classification 为 `ERROR` 时 prepare/inspect 被阻断（FR-053、SC-011）
-- [ ] T020 重构 `app/inspectors/pkg.py`，仅保留 `pkg.extract.main` 与 `pkg.extract.classification`；classification 返回 `PASS`/`WARN` 时发布有效 catalog，返回 `ERROR` 时禁止 prepare/inspect，并按要求升级隐藏单元 `rule_version`（FR-053、SC-011）
-- [ ] T021 在 `tests/test_executor.py` 和 `tests/test_executor_parallel_faults.py` 先写父进程/worker product 与 package kind 传播、ERROR 阻断和 WARN 继续执行的失败测试（FR-051、FR-053）
-- [ ] T022 更新 `app/services/executor.py`，把持久化 product/package kind 写入 `RuleContext` 与 `UnitRequest`，并让 EXTRACT 阶段只以两个隐藏解压单元的最终状态决定是否进入 PREPARE/INSPECT（FR-051、FR-053）
+- [x] T019 在 `tests/test_preparation.py` 和 `tests/test_executor.py` 先写两个隐藏单元测试，断言注册表只生产 `pkg.extract.main`、`pkg.extract.classification`，且 classification 为 `ERROR` 时 prepare/inspect 被阻断（FR-053、SC-011）
+- [x] T020 重构 `app/inspectors/pkg.py`，仅保留 `pkg.extract.main` 与 `pkg.extract.classification`；classification 返回 `PASS`/`WARN` 时发布有效 catalog，返回 `ERROR` 时禁止 prepare/inspect，并按要求升级隐藏单元 `rule_version`（FR-053、SC-011）
+- [x] T021 在 `tests/test_executor.py` 和 `tests/test_executor_parallel_faults.py` 先写父进程/worker product 与 package kind 传播、ERROR 阻断和 WARN 继续执行的失败测试（FR-051、FR-053）
+- [x] T022 更新 `app/services/executor.py`，把持久化 product/package kind 写入 `RuleContext` 与 `UnitRequest`，并让 EXTRACT 阶段只以两个隐藏解压单元的最终状态决定是否进入 PREPARE/INSPECT（FR-051、FR-053）
 
 **检查点**：基础契约、配置校验、审计模型、manifest v5、安全错误和阶段屏障就绪。
 

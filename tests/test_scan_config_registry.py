@@ -8,13 +8,7 @@ from app.inspectors.registry import registry
 ACTIVE_RULES = {"kpi.measurement_units"}
 HIDDEN_RULES = {
     "pkg.extract.main",
-    "pkg.extract.logs",
-    "pkg.extract.kpi",
-    "pkg.extract.traffic",
-    "pkg.extract.alarm",
-    "pkg.extract.config",
-    "pkg.extract.resource",
-    "pkg.extract.other",
+    "pkg.extract.classification",
 }
 
 
@@ -41,6 +35,11 @@ def test_load_all_keeps_only_kpi_active_and_extraction_hidden() -> None:
     hidden = {rule.code for rule in registry.all(include_hidden=True) if rule.hidden}
     assert hidden == HIDDEN_RULES
     assert all(code.startswith("pkg.extract.") for code in hidden)
+    versions = {rule.code: rule.rule_version for rule in registry.all(include_hidden=True) if rule.hidden}
+    assert versions == {
+        "pkg.extract.main": "4.0.0",
+        "pkg.extract.classification": "1.0.0",
+    }
     assert get_enabled_rule_codes() == ACTIVE_RULES
 
     assert Executor(registry, get_enabled_rule_codes()).inspect_plan() == ["kpi.measurement_units"]

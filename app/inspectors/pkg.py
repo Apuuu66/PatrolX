@@ -1,4 +1,6 @@
-"""解压规则族（hidden P0）：统一调用安全解压现场服务。"""
+"""解压规则族（hidden P0）：主包现场与分类终态校验。"""
+
+import json
 
 from app.core import archive
 from app.core.checksum import sha256_file
@@ -9,53 +11,25 @@ from app.services import extraction
 from app.services.executor import RuleContext, make_result
 
 EXTRACT_MANIFEST = extraction.MANIFEST_NAME
-CATEGORIES = ["logs", "kpi", "traffic", "alarm", "config", "resource", "other"]
+_FAILED_ITEM_STATUSES = {"conflict", "duplicate", "failed", "rejected"}
 
 
-def _result_for_manifest(
-    inspector: Inspector,
-    manifest: dict,
-    *,
-    category: str | None = None,
-) -> object:
-    if category is None:
-        main = manifest.get("main") or {}
-        count = int(main.get("count", 0))
-        return make_result(
-            inspector,
-            status=RuleStatus.PASS,
-            summary=f"主包解压完成，保留现场并生成 {count} 个原始文件",
-            metadata={
-                "count": count,
-                "checksum": main.get("checksum"),
-                "evidence_path": main.get("evidence_path", extraction.MAIN_EVIDENCE_DIR),
-                "reused": bool(main.get("reused", False)),
-                "subpackages": len(manifest.get("subpackages", [])),
-                "log_gz": len(manifest.get("log_gz", [])),
-                "rejected": len(manifest.get("rejected", [])),
-            },
-        )
-
-    items = [
-        *[item for item in manifest.get("files", []) if item.get("category") == category],
-        *[item for item in manifest.get("subpackages", []) if item.get("category") == category],
-    ]
-    if category == "logs":
-        items.extend(manifest.get("log_gz", []))
-    failures = extraction.category_failures(manifest, category)
-    total = len(items)
-    failed = len(failures)
-    completed = sum(item.get("status") == "extracted" for item in items)
-    status = RuleStatus.PASS if failed == 0 else RuleStatus.WARN
+def _result_for_manifest(inspector: Inspector, manifest: dict) -> object:
+    """主包单元只汇报证据现场状态；局部落位问题由分类单元汇总。"""
+    main = manifest.get("main") or {}
+    count = int(main.get("count", 0))
     return make_result(
         inspector,
-        status=status,
-        summary=f"{category} 类解压 {completed}/{total}",
+        status=RuleStatus.PASS,
+        summary=f"主包解压完成，保留现场并生成 {count} 个原始文件",
         metadata={
-            "extracted": completed,
-            "total": total,
-            "failed": failed,
-            "failures": failures,
+            "count": count,
+            "checksum": main.get("checksum"),
+            "evidence_path": main.get("evidence_path", extraction.MAIN_EVIDENCE_DIR),
+            "reused": bool(main.get("reused", False)),
+            "subpackages": len(manifest.get("subpackages", [])),
+            "log_gz": len(manifest.get("log_gz", [])),
+            "rejected": len(manifest.get("rejected", [])),
         },
     )
 
@@ -66,9 +40,9 @@ main_inspector = Inspector(
     category=RuleCategory.OTHER,
     severity=Severity.LOW,
     priority=Priority.P0,
-    rule_version="3.1.0",
+    rule_version="4.0.0",
     hidden=True,
-    description="安全解压主数据包到 .main 证据现场，并递归生成分类工作现场",
+    description="安全解压主数据包到 .main 证据现场，并生成 v4 分类工作现场",
     recommendation="主包无法解压时检查包格式与安全限制",
 )
 
@@ -116,39 +90,114 @@ main_inspector.run = _run_main
 registry.register(main_inspector)
 
 
-def _make_category_inspector(category: str) -> Inspector:
-    inspector = Inspector(
-        code=f"pkg.extract.{category}",
-        name=f"{category} 类解压状态检查",
-        category=RuleCategory.OTHER,
-        severity=Severity.LOW,
-        priority=Priority.P0,
-        rule_version="3.0.0",
-        hidden=True,
-        description=f"汇总 {category} 类子包与日志 gzip 解压状态",
-        recommendation="解压失败或冲突时查看 manifest 与 .main 原始现场",
+classification_inspector = Inspector(
+    code="pkg.extract.classification",
+    name="分类落位终态校验",
+    category=RuleCategory.OTHER,
+    severity=Severity.LOW,
+    priority=Priority.P0,
+    rule_version="1.0.0",
+    hidden=True,
+    description="校验 v4 分类清单并发布本次任务唯一可巡检 catalog",
+    recommendation="分类清单无效或 catalog 不一致时检查解压现场",
+)
+
+
+def _manifest_failures(manifest: dict) -> tuple[int, int, list[dict[str, object]]]:
+    """汇总 v4 文件、子包、日志 GZIP 与非归档拒绝项的终态。"""
+    sources: list[tuple[dict, str | None, bool]] = []
+    sources.extend((item, item.get("source"), False) for item in manifest.get("files", []))
+    sources.extend((item, item.get("source"), False) for item in manifest.get("subpackages", []))
+    sources.extend((item, item.get("source_relative_path"), False) for item in manifest.get("log_gz", []))
+    sources.extend((item, item.get("source"), True) for item in manifest.get("rejected", []))
+
+    failures: list[dict[str, object]] = []
+    extracted = 0
+    for item, source, rejected_entry in sources:
+        status = "rejected" if rejected_entry else str(item.get("status", ""))
+        if status == "extracted":
+            extracted += 1
+        if status not in _FAILED_ITEM_STATUSES:
+            continue
+        failures.append(
+            {
+                "source": source,
+                "target": item.get("target"),
+                "status": status,
+                "error": item.get("reason") if rejected_entry else item.get("error"),
+                "error_code": item.get("error_code"),
+            }
+        )
+    return extracted, len(sources), failures
+
+
+def _run_classification(ctx: RuleContext) -> object:
+    path = extraction.manifest_path(ctx.data_dir)
+    try:
+        raw = path.read_text(encoding="utf-8")
+        manifest = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return make_result(
+            classification_inspector,
+            status=RuleStatus.ERROR,
+            summary=f"分类清单无法读取或解析: {exc}",
+            metadata={"error": str(exc), "manifest": str(path)},
+        )
+    if not isinstance(manifest, dict):
+        return make_result(
+            classification_inspector,
+            status=RuleStatus.ERROR,
+            summary="分类清单根节点必须是对象",
+            metadata={"error": "manifest_root_not_object", "manifest": str(path)},
+        )
+    if not extraction.validate_manifest(manifest):
+        return make_result(
+            classification_inspector,
+            status=RuleStatus.ERROR,
+            summary="分类清单 v4 校验失败",
+            metadata={"error": "invalid_manifest_v4", "manifest": str(path)},
+        )
+
+    extracted, total, failures = _manifest_failures(manifest)
+    status = RuleStatus.WARN if failures else RuleStatus.PASS
+    if failures:
+        ctx.log(
+            "warn",
+            "分类存在局部失败，继续执行 prepare 和 inspect",
+            task_id=ctx.task_id,
+            rule_code=classification_inspector.code,
+            failed=len(failures),
+            total=total,
+        )
+    try:
+        ctx.ensure_catalog()
+    except Exception as exc:  # noqa: BLE001 - catalog 异常必须转为分类 ERROR
+        return make_result(
+            classification_inspector,
+            status=RuleStatus.ERROR,
+            summary=f"分类 catalog 构建失败: {exc}",
+            metadata={
+                "extracted": extracted,
+                "total": total,
+                "failed": len(failures),
+                "failures": failures,
+                "error": str(exc),
+            },
+        )
+
+    summary = f"分类完成，{total - len(failures)}/{total} 项可巡检" if failures else f"分类完成，{total} 项可巡检"
+    return make_result(
+        classification_inspector,
+        status=status,
+        summary=summary,
+        metadata={
+            "extracted": extracted,
+            "total": total,
+            "failed": len(failures),
+            "failures": failures,
+        },
     )
 
-    def run(ctx: RuleContext) -> object:
-        manifest = extraction.read_manifest(ctx.data_dir)
-        failures = extraction.category_failures(manifest, category)
-        if failures:
-            for failure in failures:
-                ctx.log(
-                    "error",
-                    "分类解压项未成功",
-                    task_id=ctx.task_id,
-                    rule_code=inspector.code,
-                    category=category,
-                    target=failure.get("target"),
-                    error=failure.get("error"),
-                )
-        return _result_for_manifest(inspector, manifest, category=category)
 
-    inspector.run = run
-    registry.register(inspector)
-    return inspector
-
-
-for _category in CATEGORIES:
-    _make_category_inspector(_category)
+classification_inspector.run = _run_classification
+registry.register(classification_inspector)

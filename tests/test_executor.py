@@ -8,7 +8,7 @@ import pytest
 from app.core.checksum import sha256_file
 from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
-from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
+from app.models.schemas import PackageKind, Priority, Product, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext, make_result
 from app.services.scanning import TaskFileCatalog
 
@@ -37,7 +37,7 @@ def _rule(
     code: str,
     run: Any,
     *,
-    source_patterns: list[str],
+    source_patterns: list[str] | None,
     prepare: PrepareSpec | None = None,
 ) -> None:
     registry.register(
@@ -87,6 +87,169 @@ def test_run_all_builds_catalog_once_after_extract_barrier(tmp_path: Path, monke
     assert build_calls == [tmp_path]
     assert results["rule.log"].status == RuleStatus.PASS
     assert ctx.catalog is not None
+
+
+def test_extract_errors_run_all_extract_units_and_block_followup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """任一 EXTRACT ERROR 都必须等全部解压单元执行后统一阻断后续阶段。"""
+    logs: list[tuple[str, str, dict]] = []
+    events: list[str] = []
+
+    def log(level: str, message: str, detail: dict | None = None) -> None:
+        logs.append((level, message, detail or {}))
+
+    def main_extract(_ctx: RuleContext) -> object:
+        events.append("extract:main")
+        return make_result(registry.get("pkg.extract.main"), status=RuleStatus.ERROR, summary="主包失败")
+
+    def classification(_ctx: RuleContext) -> object:
+        events.append("extract:classification")
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.ERROR,
+            summary="分类失败",
+        )
+
+    def prepare(_ctx: RuleContext) -> None:
+        events.append("prepare")
+
+    def inspect(_ctx: RuleContext) -> object:
+        events.append("inspect")
+        return make_result(registry.get("rule.owner"), status=RuleStatus.PASS, summary="ok")
+
+    registry = RuleRegistry()
+    _rule(registry, "pkg.extract.main", main_extract, source_patterns=None)
+    _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
+    _rule(
+        registry,
+        "rule.owner",
+        inspect,
+        source_patterns=[r"logs/.*"],
+        prepare=PrepareSpec(code="prepare.owner", owner_code="rule.owner", run=prepare),
+    )
+    _file(tmp_path, "logs/a.log")
+    ctx = RuleContext(
+        task_id="task-extract-gate",
+        data_dir=tmp_path,
+        log=log,
+        package_path=tmp_path / "package.zip",
+        prepared_dir=tmp_path / "prepared",
+    )
+    build_calls: list[Path] = []
+
+    def forbidden_build(cls: type[TaskFileCatalog], data_dir: Path) -> TaskFileCatalog:
+        build_calls.append(data_dir)
+        raise AssertionError("解压失败后不得构建 catalog")
+
+    monkeypatch.setattr(TaskFileCatalog, "build", classmethod(forbidden_build))
+
+    results = Executor(registry).run_all(ctx, after_extract=lambda: events.append("after_extract"))
+
+    assert set(results) == {"pkg.extract.main", "pkg.extract.classification"}
+    assert events == ["extract:main", "extract:classification"]
+    assert build_calls == []
+    gate = next(detail for _level, message, detail in logs if message == "解压失败，阻断 prepare 和 inspect")
+    assert gate["failed_units"] == ["pkg.extract.main", "pkg.extract.classification"]
+
+
+def test_classification_error_blocks_followup_when_main_passes(tmp_path: Path) -> None:
+    """主包成功但分类 ERROR 时，仍必须阻断 prepare 与 inspect。"""
+    events: list[str] = []
+    logs: list[tuple[str, str, dict]] = []
+    registry = RuleRegistry()
+
+    def log(level: str, message: str, detail: dict | None = None) -> None:
+        logs.append((level, message, detail or {}))
+
+    def main_extract(_ctx: RuleContext) -> object:
+        events.append("extract:main")
+        return make_result(registry.get("pkg.extract.main"), status=RuleStatus.PASS, summary="ok")
+
+    def classification(_ctx: RuleContext) -> object:
+        events.append("extract:classification")
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.ERROR,
+            summary="分类失败",
+        )
+
+    def prepare(_ctx: RuleContext) -> None:
+        events.append("prepare")
+
+    def inspect(_ctx: RuleContext) -> object:
+        events.append("inspect")
+        return make_result(registry.get("rule.owner"), status=RuleStatus.PASS, summary="ok")
+
+    _rule(registry, "pkg.extract.main", main_extract, source_patterns=None)
+    _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
+    _rule(
+        registry,
+        "rule.owner",
+        inspect,
+        source_patterns=[r"logs/.*"],
+        prepare=PrepareSpec(code="prepare.owner", owner_code="rule.owner", run=prepare),
+    )
+    _file(tmp_path, "logs/a.log")
+    ctx = RuleContext(
+        task_id="task-classification-error",
+        data_dir=tmp_path,
+        log=log,
+        package_path=tmp_path / "package.zip",
+        prepared_dir=tmp_path / "prepared",
+    )
+
+    results = Executor(registry).run_all(ctx, after_extract=lambda: events.append("after_extract"))
+
+    assert set(results) == {"pkg.extract.main", "pkg.extract.classification"}
+    assert events == ["extract:main", "extract:classification"]
+    gate = next(detail for _level, message, detail in logs if message == "解压失败，阻断 prepare 和 inspect")
+    assert gate["failed_units"] == ["pkg.extract.classification"]
+
+
+def test_classification_warn_allows_prepare_and_inspect(tmp_path: Path) -> None:
+    """classification WARN 表示局部失败但 catalog 可用，后续阶段必须继续。"""
+    events: list[str] = []
+    registry = RuleRegistry()
+
+    def main_extract(_ctx: RuleContext) -> object:
+        events.append("extract:main")
+        return make_result(registry.get("pkg.extract.main"), status=RuleStatus.PASS, summary="ok")
+
+    def classification(_ctx: RuleContext) -> object:
+        events.append("extract:classification")
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.WARN,
+            summary="局部解压失败",
+        )
+
+    def prepare(_ctx: RuleContext) -> None:
+        events.append("prepare")
+
+    def inspect(_ctx: RuleContext) -> object:
+        events.append("inspect")
+        return make_result(registry.get("rule.owner"), status=RuleStatus.PASS, summary="ok")
+
+    _rule(registry, "pkg.extract.main", main_extract, source_patterns=None)
+    _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
+    _rule(
+        registry,
+        "rule.owner",
+        inspect,
+        source_patterns=[r"logs/.*"],
+        prepare=PrepareSpec(code="prepare.owner", owner_code="rule.owner", run=prepare),
+    )
+    _file(tmp_path, "logs/a.log")
+
+    results = Executor(registry).run_all(
+        _context(tmp_path),
+        after_extract=lambda: events.append("after_extract"),
+    )
+
+    assert results["rule.owner"].status == RuleStatus.PASS
+    assert events == ["extract:main", "extract:classification", "after_extract", "prepare", "inspect"]
 
 
 def test_prepare_and_inspect_match_same_catalog_and_exclude_infrastructure(
@@ -167,6 +330,171 @@ def test_single_rule_rerun_ensures_extraction_then_catalog(
 
     assert result.status == RuleStatus.PASS
     assert calls == ["extract", "catalog"]
+
+
+def test_single_rule_rerun_is_blocked_by_classification_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    registry = RuleRegistry()
+
+    def classification(_ctx: RuleContext) -> object:
+        events.append("classification")
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.ERROR,
+            summary="分类失败",
+        )
+
+    def inspect(_ctx: RuleContext) -> object:
+        events.append("inspect")
+        return make_result(registry.get("rule.target"), status=RuleStatus.PASS, summary="ok")
+
+    _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
+    _rule(registry, "rule.target", inspect, source_patterns=[r"logs/.*"])
+    _file(tmp_path, "logs/a.log")
+    monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
+
+    with pytest.raises(ValueError, match="pkg.extract.classification"):
+        Executor(registry).run_rule_with_deps("rule.target", _context(tmp_path))
+
+    assert events == ["classification"]
+
+
+def test_single_rule_rerun_allows_classification_warn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """classification WARN 时单规则重跑仍继续执行目标 prepare 与 inspect。"""
+    events: list[str] = []
+    registry = RuleRegistry()
+
+    def classification(_ctx: RuleContext) -> object:
+        events.append("classification")
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.WARN,
+            summary="局部失败",
+        )
+
+    def prepare(_ctx: RuleContext) -> None:
+        events.append("prepare")
+
+    def inspect(_ctx: RuleContext) -> object:
+        events.append("inspect")
+        return make_result(registry.get("rule.target"), status=RuleStatus.PASS, summary="ok")
+
+    _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
+    _rule(
+        registry,
+        "rule.target",
+        inspect,
+        source_patterns=[r"logs/.*"],
+        prepare=PrepareSpec(code="prepare.target", owner_code="rule.target", run=prepare),
+    )
+    _file(tmp_path, "logs/a.log")
+    monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
+
+    result = Executor(registry).run_rule_with_deps("rule.target", _context(tmp_path))
+
+    assert result.status == RuleStatus.PASS
+    assert events == ["classification", "prepare", "inspect"]
+
+
+def test_single_rule_rerun_does_not_collect_classification_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """分类门禁可执行，但不得混入单规则重跑的目标结果集合。"""
+    registry = RuleRegistry()
+
+    def classification(_ctx: RuleContext) -> object:
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.WARN,
+            summary="局部失败",
+        )
+
+    def inspect(_ctx: RuleContext) -> object:
+        return make_result(registry.get("rule.target"), status=RuleStatus.PASS, summary="ok")
+
+    _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
+    _rule(registry, "rule.target", inspect, source_patterns=[r"logs/.*"])
+    _file(tmp_path, "logs/a.log")
+    monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
+    executor = Executor(registry)
+
+    executor.run_rule_with_deps("rule.target", _context(tmp_path))
+
+    assert set(executor.collected) == {"rule.target"}
+
+
+def test_single_rule_classification_target_does_not_recurse(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    registry = RuleRegistry()
+
+    def classification(_ctx: RuleContext) -> object:
+        events.append("classification")
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.ERROR,
+            summary="分类失败",
+        )
+
+    _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
+    monkeypatch.setattr(
+        Executor,
+        "_ensure_extraction_site",
+        lambda self, ctx: (_ for _ in ()).throw(AssertionError("直接重跑分类不得递归解压")),
+    )
+
+    result = Executor(registry).run_rule_with_deps("pkg.extract.classification", _context(tmp_path))
+
+    assert result.status == RuleStatus.ERROR
+    assert events == ["classification"]
+
+
+def test_single_rule_rerun_does_not_require_classification_unit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """测试注册表未注册 classification 时，普通规则重跑仍可继续。"""
+    registry = RuleRegistry()
+
+    def inspect(_ctx: RuleContext) -> object:
+        return make_result(registry.get("rule.target"), status=RuleStatus.PASS, summary="ok")
+
+    _rule(registry, "rule.target", inspect, source_patterns=[r"logs/.*"])
+    _file(tmp_path, "logs/a.log")
+    monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
+
+    result = Executor(registry).run_rule_with_deps("rule.target", _context(tmp_path))
+
+    assert result.status == RuleStatus.PASS
+
+
+def test_inspect_request_propagates_task_product_and_package_kind(tmp_path: Path) -> None:
+    registry = RuleRegistry()
+    _rule(registry, "rule.meta", lambda _ctx: None, source_patterns=[r"logs/.*"])
+    _file(tmp_path, "logs/a.log")
+    ctx = RuleContext(
+        task_id="task-meta",
+        data_dir=tmp_path,
+        log=lambda *_args, **_kwargs: None,
+        product=Product.CSP,
+        package_kind=PackageKind.INSPECTION,
+        prepared_dir=tmp_path / "prepared",
+    )
+
+    plan = Executor(registry)._plan_inspect("rule.meta", ctx)
+
+    assert plan.request is not None
+    assert plan.request.product == "CSP"
+    assert plan.request.package_kind == "inspection"
 
 
 def test_ensure_catalog_reuses_existing_context_catalog(tmp_path: Path) -> None:

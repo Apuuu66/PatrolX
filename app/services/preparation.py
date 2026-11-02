@@ -10,26 +10,19 @@ from app.models.schemas import (
     PreparationItem,
     PreparationStatus,
 )
-from app.services.extraction import WORK_CATEGORIES, manifest_path
+from app.services.extraction import manifest_path
 from app.services.extraction.legacy_manifest import validate_manifest
 
 _MAIN_CODE = "pkg.extract.main"
-_CATEGORY_LABELS = {
-    "logs": "日志",
-    "kpi": "KPI",
-    "traffic": "流量",
-    "alarm": "告警",
-    "config": "配置",
-    "resource": "资源",
-    "other": "其他",
-}
+_CLASSIFICATION_CODE = "pkg.extract.classification"
+_FAILED_STATUSES = {"conflict", "duplicate", "failed", "rejected"}
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
     """读取 JSON；坏文件由上层统一按准备失败处理。"""
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None
     return value if isinstance(value, dict) else None
 
@@ -63,26 +56,13 @@ def _aggregate_status(statuses: list[PreparationStatus]) -> PreparationStatus:
     return PreparationStatus.PASS
 
 
-def _item_status(total: int, extracted: int, issues: list[PreparationIssue]) -> PreparationStatus:
-    if any(issue.type in {"failed", "rejected"} for issue in issues):
-        return PreparationStatus.FAIL
-    if issues:
-        return PreparationStatus.WARN
-    if total == 0:
-        return PreparationStatus.SKIP
-    if extracted < total:
-        return PreparationStatus.WARN
-    return PreparationStatus.PASS
-
-
-def _issue(item: dict[str, Any], source: str | None) -> PreparationIssue | None:
-    status = str(item.get("status", ""))
-    if status not in {"conflict", "duplicate", "skipped", "failed", "rejected"}:
+def _issue(item: dict[str, Any], source: str | None, *, status: str | None = None) -> PreparationIssue | None:
+    issue_status = status or str(item.get("status", ""))
+    if issue_status not in _FAILED_STATUSES:
         return None
-    policy = item.get("policy") if isinstance(item.get("policy"), dict) else {}
-    reason = item.get("error") or policy.get("reason") or "数据准备项未成功"
+    reason = item.get("error") or item.get("reason") or "数据准备项未成功"
     return PreparationIssue(
-        type=status,  # type: ignore[arg-type]
+        type=issue_status,  # type: ignore[arg-type]
         source=source,
         target=str(item.get("target")) if item.get("target") is not None else None,
         reason=str(reason),
@@ -91,36 +71,55 @@ def _issue(item: dict[str, Any], source: str | None) -> PreparationIssue | None:
     )
 
 
-def _category_sources(manifest: dict[str, Any], category: str) -> list[dict[str, Any]]:
+def _saved_issue(result: dict[str, Any]) -> PreparationIssue:
+    metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+    reason = metadata.get("error") or result.get("summary") or "隐藏解压单元执行失败"
+    return PreparationIssue(type="rejected", reason=str(reason))
+
+
+def _classification_sources(manifest: dict[str, Any]) -> list[tuple[dict[str, Any], str | None, str]]:
     sources = [
-        item for item in manifest.get("files", []) if isinstance(item, dict) and item.get("category") == category
+        (item, item.get("source"), str(item.get("status", "")))
+        for item in manifest.get("files", [])
+        if isinstance(item, dict)
     ]
     sources.extend(
-        item for item in manifest.get("subpackages", []) if isinstance(item, dict) and item.get("category") == category
+        (item, item.get("source"), str(item.get("status", "")))
+        for item in manifest.get("subpackages", [])
+        if isinstance(item, dict)
     )
-    if category == "logs":
-        sources.extend(item for item in manifest.get("log_gz", []) if isinstance(item, dict))
+    sources.extend(
+        (item, item.get("source_relative_path"), str(item.get("status", "")))
+        for item in manifest.get("log_gz", [])
+        if isinstance(item, dict)
+    )
+    sources.extend(
+        (item, item.get("source"), "rejected") for item in manifest.get("rejected", []) if isinstance(item, dict)
+    )
     return sources
 
 
-def _category_item(data_dir: Path, manifest: dict[str, Any], category: str) -> PreparationItem:
-    code = f"pkg.extract.{category}"
-    result = _rule_result(data_dir, code)
-    sources = _category_sources(manifest, category)
-    issues = [issue for issue in (_issue(item, item.get("source")) for item in sources) if issue is not None]
-    extracted = sum(item.get("status") == "extracted" for item in sources)
+def _classification_item(data_dir: Path, manifest: dict[str, Any]) -> PreparationItem:
+    result = _rule_result(data_dir, _CLASSIFICATION_CODE)
+    saved_status = str(result.get("status", ""))
+    sources = _classification_sources(manifest)
+    issues = [issue for item, source, status in sources if (issue := _issue(item, source, status=status)) is not None]
+    extracted = sum(status == "extracted" for _item, _source, status in sources)
     total = len(sources)
-    status = _item_status(total, extracted, issues)
-    if total == 0:
-        summary = f"{category} 类无来源数据"
+    if saved_status == "error":
+        status = PreparationStatus.ERROR
+        issues = [_saved_issue(result), *issues]
+    elif saved_status == "warn" or issues:
+        status = PreparationStatus.WARN
     else:
-        summary = f"{category} 类准备 {extracted}/{total}"
+        status = PreparationStatus.PASS
+    summary = str(result.get("summary")) if result.get("summary") else f"分类完成 {extracted}/{total}"
     return PreparationItem(
-        code=code,
-        name=str(result.get("name") or f"{_CATEGORY_LABELS[category]}分类解压"),
-        category=category,
+        code=_CLASSIFICATION_CODE,
+        name=str(result.get("name") or "分类落位终态校验"),
+        category="classification",
         status=status,
-        summary=str(result.get("summary") or summary),
+        summary=summary,
         duration_ms=result.get("duration_ms"),
         extracted_count=extracted,
         total_count=total,
@@ -131,7 +130,8 @@ def _category_item(data_dir: Path, manifest: dict[str, Any], category: str) -> P
 def _main_item(data_dir: Path, manifest: dict[str, Any]) -> PreparationItem:
     result = _rule_result(data_dir, _MAIN_CODE)
     main = manifest.get("main")
-    if not isinstance(main, dict):
+    if not isinstance(main, dict) or str(result.get("status", "")) == "error":
+        reason = _saved_issue(result).reason if result else "主包解压失败"
         return PreparationItem(
             code=_MAIN_CODE,
             name=str(result.get("name") or "主包解压"),
@@ -141,7 +141,7 @@ def _main_item(data_dir: Path, manifest: dict[str, Any]) -> PreparationItem:
             duration_ms=result.get("duration_ms"),
             extracted_count=0,
             total_count=0,
-            issues=[PreparationIssue(type="rejected", reason="主包解压失败")],
+            issues=[PreparationIssue(type="rejected", reason=str(reason))],
         )
     total = int(main.get("count", 0))
     return PreparationItem(
@@ -157,7 +157,31 @@ def _main_item(data_dir: Path, manifest: dict[str, Any]) -> PreparationItem:
     )
 
 
-def _corrupt_preparation() -> DataPreparation:
+def _corrupt_preparation(data_dir: Path) -> DataPreparation:
+    classification_result = _rule_result(data_dir, _CLASSIFICATION_CODE)
+    if classification_result.get("status") == "error":
+        classification = PreparationItem(
+            code=_CLASSIFICATION_CODE,
+            name=str(classification_result.get("name") or "分类落位终态校验"),
+            category="classification",
+            status=PreparationStatus.ERROR,
+            summary=str(classification_result.get("summary") or "分类失败"),
+            duration_ms=classification_result.get("duration_ms"),
+            extracted_count=0,
+            total_count=0,
+            issues=[_saved_issue(classification_result)],
+        )
+    else:
+        classification = PreparationItem(
+            code=_CLASSIFICATION_CODE,
+            name="分类落位终态校验",
+            category="classification",
+            status=PreparationStatus.ERROR,
+            summary="数据准备清单损坏",
+            extracted_count=0,
+            total_count=0,
+            issues=[PreparationIssue(type="rejected", reason="manifest 损坏或版本不匹配")],
+        )
     items = [
         PreparationItem(
             code=_MAIN_CODE,
@@ -168,21 +192,9 @@ def _corrupt_preparation() -> DataPreparation:
             extracted_count=0,
             total_count=0,
             issues=[PreparationIssue(type="rejected", reason="manifest 损坏或版本不匹配")],
-        )
+        ),
+        classification,
     ]
-    for category in WORK_CATEGORIES:
-        items.append(
-            PreparationItem(
-                code=f"pkg.extract.{category}",
-                name=f"{_CATEGORY_LABELS[category]}分类解压",
-                category=category,
-                status=PreparationStatus.SKIP,
-                summary=f"{category} 类无来源数据",
-                extracted_count=0,
-                total_count=0,
-                issues=[],
-            )
-        )
     return _build_preparation(items)
 
 
@@ -221,9 +233,10 @@ def load_preparation(data_dir: Path) -> DataPreparation | None:
     if manifest is None:
         return None
     if not manifest:
-        return _corrupt_preparation()
-    items = [
-        _main_item(data_dir, manifest),
-        *(_category_item(data_dir, manifest, category) for category in WORK_CATEGORIES),
-    ]
-    return _build_preparation(items)
+        return _corrupt_preparation(data_dir)
+    return _build_preparation(
+        [
+            _main_item(data_dir, manifest),
+            _classification_item(data_dir, manifest),
+        ]
+    )

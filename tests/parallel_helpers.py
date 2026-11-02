@@ -16,7 +16,7 @@ from typing import Any
 from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
 from app.inspectors.registry import registry as runtime_registry
-from app.models.schemas import Finding, Metric, Priority, RuleCategory, RuleStatus, Severity
+from app.models.schemas import Finding, Metric, PackageKind, Priority, Product, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext
 from app.services.parallel import ParallelPolicy
 
@@ -33,6 +33,7 @@ DELTA = "test.parallel.delta"
 PREPARE_FAIL = "test.parallel.prepare_fail"
 INSPECT_FAIL = "test.parallel.inspect_fail"
 CRASH = "test.parallel.crash"
+METADATA = "test.parallel.metadata"
 ALL_LOGS = r"^logs/.*\.log$"
 DEFAULT_CODES = [ALPHA, BETA, GAMMA, DELTA]
 
@@ -199,6 +200,18 @@ def _run_crash(ctx: RuleContext) -> Any:
     os._exit(1)
 
 
+def _run_metadata(ctx: RuleContext) -> Any:
+    """记录 worker 从 UnitRequest 恢复的规范化任务元数据。"""
+    started = time.time()
+    trace(
+        METADATA,
+        started=started,
+        product=ctx.product,
+        package_kind=ctx.package_kind,
+    )
+    return make_fake_result(METADATA, status=RuleStatus.PASS, summary="元数据传播完成")
+
+
 SPECS: dict[str, FakeSpec] = {
     EXTRACT_CODE: FakeSpec(
         code=EXTRACT_CODE,
@@ -262,6 +275,13 @@ SPECS: dict[str, FakeSpec] = {
         patterns=(ALL_LOGS,),
         run=_run_crash,
     ),
+    METADATA: FakeSpec(
+        code=METADATA,
+        priority=Priority.P1,
+        severity=Severity.LOW,
+        patterns=(r"^logs/CSP/inspection-.*\.log$",),
+        run=_run_metadata,
+    ),
 }
 
 
@@ -320,7 +340,14 @@ def build_registry(*, with_extract: bool = True) -> RuleRegistry:
     return registry
 
 
-def make_context(tmp_path: Path, *, task_id: str = "task-parallel") -> RuleContext:
+def make_context(
+    tmp_path: Path,
+    *,
+    task_id: str = "task-parallel",
+    product: Product | str | None = None,
+    package_kind: PackageKind | str = PackageKind.INSPECTION,
+    package_name: str = "package.zip",
+) -> RuleContext:
     """构造任务现场：日志文件、execution.log 写入器与 owner 私有 prepared 目录。"""
     data_dir = tmp_path / task_id
     (data_dir / "logs").mkdir(parents=True, exist_ok=True)
@@ -335,9 +362,11 @@ def make_context(tmp_path: Path, *, task_id: str = "task-parallel") -> RuleConte
         task_id=task_id,
         data_dir=data_dir,
         log=log,
-        package_path=data_dir / "package.zip",
+        package_path=data_dir / package_name,
         result_dir=data_dir / "rules",
         prepared_dir=data_dir / "prepared",
+        product=product,
+        package_kind=package_kind,
     )
 
 

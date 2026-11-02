@@ -107,18 +107,11 @@ def test_task_preparation_status_is_exposed() -> None:
     assert detail["preparation"] is not None
     preparation = detail["preparation"]
     assert preparation["status"] in ("pass", "warn", "fail", "error")
-    assert [item["category"] for item in preparation["items"]] == [
-        "main",
-        "logs",
-        "kpi",
-        "traffic",
-        "alarm",
-        "config",
-        "resource",
-        "other",
-    ]
+    assert [item["category"] for item in preparation["items"]] == ["main", "classification"]
     main = preparation["items"][0]
     assert main["code"] == "pkg.extract.main"
+    classification = preparation["items"][1]
+    assert classification["code"] == "pkg.extract.classification"
     assert main["total_count"] >= 1
     assert main["extracted_count"] == main["total_count"]
     assert detail["stats"] == stats

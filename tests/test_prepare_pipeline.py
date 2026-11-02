@@ -75,11 +75,15 @@ def test_extract_prepare_and_inspect_use_fixed_phase_barriers(tmp_path: Path) ->
 
         return make_result(registry.get("pkg.extract.main"), status=RuleStatus.PASS, summary="ok")
 
-    def category_extract(ctx: RuleContext) -> object:
-        events.append("extract:pkg.extract.logs")
+    def classification(ctx: RuleContext) -> object:
+        events.append("extract:pkg.extract.classification")
         (ctx.data_dir / "logs").mkdir(exist_ok=True)
         (ctx.data_dir / "logs/app.log").write_text("ok", encoding="utf-8")
-        return None
+        return make_result(
+            registry.get("pkg.extract.classification"),
+            status=RuleStatus.PASS,
+            summary="catalog 已发布",
+        )
 
     def first_prepare(ctx: RuleContext) -> object:
         events.append("prepare:rule.a")
@@ -119,8 +123,8 @@ def test_extract_prepare_and_inspect_use_fixed_phase_barriers(tmp_path: Path) ->
     )
     registry.register(
         Inspector(
-            code="pkg.extract.logs",
-            name="logs extract",
+            code="pkg.extract.classification",
+            name="classification extract",
             category=RuleCategory.OTHER,
             severity=Severity.LOW,
             priority=Priority.P0,
@@ -128,7 +132,7 @@ def test_extract_prepare_and_inspect_use_fixed_phase_barriers(tmp_path: Path) ->
             description="测试解压",
             recommendation="测试解压",
             hidden=True,
-            run=category_extract,
+            run=classification,
         )
     )
     registry.register(
@@ -169,13 +173,13 @@ def test_extract_prepare_and_inspect_use_fixed_phase_barriers(tmp_path: Path) ->
     extract_events = [event for event in events if event.startswith("extract:")]
     prepare_events = [event for event in events if event.startswith("prepare:")]
     inspect_events = [event for event in events if event.startswith("inspect:")]
-    assert events[:2] == ["extract:pkg.extract.main", "extract:pkg.extract.logs"]
+    assert events[:2] == ["extract:pkg.extract.main", "extract:pkg.extract.classification"]
     assert events[2:4] == ["prepare:rule.a", "prepare:rule.b"]
     assert events[4:] == ["inspect:rule.a", "inspect:rule.b"]
-    assert extract_events == ["extract:pkg.extract.main", "extract:pkg.extract.logs"]
+    assert extract_events == ["extract:pkg.extract.main", "extract:pkg.extract.classification"]
     assert prepare_events == ["prepare:rule.a", "prepare:rule.b"]
     assert inspect_events == ["inspect:rule.a", "inspect:rule.b"]
-    assert set(results) == {"pkg.extract.main", "pkg.extract.logs", "rule.a", "rule.b"}
+    assert set(results) == {"pkg.extract.main", "pkg.extract.classification", "rule.a", "rule.b"}
     assert (ctx.prepared_dir / "rule.a" / "data.txt").is_file()
     assert (ctx.prepared_dir / "rule.b" / "data.txt").is_file()
 

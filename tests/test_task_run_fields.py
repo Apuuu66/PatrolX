@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
+import zipfile
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
@@ -15,8 +16,10 @@ from test_api import _upload, _wait
 
 from app.main import app
 from app.models.db import TaskRecord, session_factory
+from app.models.schemas import PackageKind, Product, RebuildMode, TaskMode, TaskTrigger
 from app.services import task_db
-from app.services.tasks import task_service
+from app.services.executor import Executor
+from app.services.tasks import RebuildPlan, task_service
 from tests.baseline_helpers import SAMPLE, setup_env
 
 client = TestClient(app)
@@ -146,3 +149,178 @@ def test_local_cli_single_rule_rerun_refreshes_run_fields(tmp_path, monkeypatch)
     assert payload["last_run_at"] is not None
     assert _parse_time(payload["last_run_at"]) >= first_last_run_at
     assert payload["duration_ms"] is not None and payload["duration_ms"] >= 0
+
+
+def test_cli_run_propagates_explicit_product_and_package_kind(tmp_path, monkeypatch) -> None:
+    """本地全量运行必须把显式 product/package kind 写入 RuleContext。"""
+    setup_env(tmp_path, monkeypatch)
+    from app.cli import run_task
+
+    contexts: list[tuple[object, PackageKind]] = []
+    original_run_all = Executor.run_all
+
+    def capture_context(self, ctx, *args, **kwargs):
+        contexts.append((ctx.product, ctx.package_kind))
+        return original_run_all(self, ctx, *args, **kwargs)
+
+    monkeypatch.setattr(Executor, "run_all", capture_context)
+
+    run_task(
+        SAMPLE,
+        customer={"product": "CSP"},
+        package_kind=PackageKind.INSPECTION,
+    )
+
+    assert contexts == [(Product.CSP, PackageKind.INSPECTION)]
+
+
+def test_cli_run_log_supplement_context_has_null_product(tmp_path, monkeypatch) -> None:
+    """日志补充包必须沿用 package kind，但 RuleContext.product 固定为 null。"""
+    setup_env(tmp_path, monkeypatch)
+    from app.cli import run_task
+
+    contexts: list[tuple[object, PackageKind]] = []
+    original_run_all = Executor.run_all
+
+    def capture_context(self, ctx, *args, **kwargs):
+        contexts.append((ctx.product, ctx.package_kind))
+        return original_run_all(self, ctx, *args, **kwargs)
+
+    monkeypatch.setattr(Executor, "run_all", capture_context)
+
+    run_task(SAMPLE, package_kind=PackageKind.LOG_SUPPLEMENT)
+
+    assert contexts == [(None, PackageKind.LOG_SUPPLEMENT)]
+
+
+def test_cli_single_rule_reads_persisted_context_metadata(tmp_path, monkeypatch) -> None:
+    """单规则重跑未显式传参时必须读取 task.json 中的 product/package kind。"""
+    setup_env(tmp_path, monkeypatch)
+    from app.cli import run_single_rule, run_task
+
+    task = run_task(
+        SAMPLE,
+        customer={"product": "CSP"},
+        package_kind=PackageKind.INSPECTION,
+    )
+    contexts: list[tuple[object, PackageKind]] = []
+    original_run_rule = Executor.run_rule_with_deps
+
+    def capture_context(self, code, ctx, *args, **kwargs):
+        contexts.append((ctx.product, ctx.package_kind))
+        return original_run_rule(self, code, ctx, *args, **kwargs)
+
+    monkeypatch.setattr(Executor, "run_rule_with_deps", capture_context)
+
+    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task.task_id, trigger_retention=False)
+
+    assert contexts
+    assert all(context == (Product.CSP, PackageKind.INSPECTION) for context in contexts)
+
+
+def test_cli_single_rule_does_not_rewrite_classification_result(tmp_path, monkeypatch) -> None:
+    """verify-one 只写目标规则结果，分类门禁不得生成额外 JSON。"""
+    env = setup_env(tmp_path, monkeypatch)
+    from app.cli import run_single_rule, run_task
+
+    task = run_task(SAMPLE)
+    classification_path = env.rules_dir(task.task_id) / "pkg.extract.classification.json"
+    before = classification_path.read_bytes()
+
+    run_single_rule(
+        "kpi.measurement_units",
+        package=SAMPLE,
+        task_id=task.task_id,
+        trigger_retention=False,
+    )
+
+    assert classification_path.read_bytes() == before
+
+
+def test_cli_incremental_rebuild_reads_persisted_context_metadata(tmp_path, monkeypatch) -> None:
+    """增量重建未显式传参时必须读取 task.json 中的 product/package kind。"""
+    setup_env(tmp_path, monkeypatch)
+    from app.cli import run_incremental_rebuild, run_task
+
+    task = run_task(
+        SAMPLE,
+        customer={"product": "CSP"},
+        package_kind=PackageKind.INSPECTION,
+    )
+    contexts: list[tuple[object, PackageKind]] = []
+    original_run_rule = Executor.run_rule_with_deps
+
+    def capture_context(self, code, ctx, *args, **kwargs):
+        contexts.append((ctx.product, ctx.package_kind))
+        return original_run_rule(self, code, ctx, *args, **kwargs)
+
+    monkeypatch.setattr(Executor, "run_rule_with_deps", capture_context)
+
+    run_incremental_rebuild(
+        ["kpi.measurement_units"],
+        package=SAMPLE,
+        task_id=task.task_id,
+    )
+
+    assert contexts
+    assert all(context == (Product.CSP, PackageKind.INSPECTION) for context in contexts)
+
+
+def test_task_service_rerun_propagates_persisted_context_metadata(tmp_path, monkeypatch) -> None:
+    """TaskService 单规则重跑必须把持久化 product/package kind 传给 CLI 执行入口。"""
+    env = setup_env(tmp_path, monkeypatch)
+    created = task_service.reserve(
+        "service-rerun.zip",
+        name="服务重跑",
+        province=None,
+        operator=None,
+        version="V1",
+        product=None,
+        package_kind=PackageKind.LOG_SUPPLEMENT,
+    )
+    package = env.uploads / created.task_id / "service-rerun.zip"
+    package.parent.mkdir(parents=True)
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("readme.txt", "ok")
+
+    captured: dict[str, object] = {}
+
+    def capture_run(code: str, **kwargs) -> None:
+        captured.update(code=code, **kwargs)
+
+    monkeypatch.setattr("app.services.tasks.run_single_rule", capture_run)
+    task_service._rerun_plan[created.task_id] = ["kpi.measurement_units"]
+
+    try:
+        task_service._execute(created.task_id)
+    finally:
+        task_service._rerun_plan.pop(created.task_id, None)
+
+    assert captured["product"] is None
+    assert captured["package_kind"] == PackageKind.LOG_SUPPLEMENT
+
+
+def test_task_service_incremental_rebuild_propagates_context_metadata(tmp_path, monkeypatch) -> None:
+    """TaskService 增量重建必须把持久化 product/package kind 传给 CLI 执行入口。"""
+    setup_env(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
+
+    def capture_rebuild(_codes: list[str], **kwargs) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr("app.services.tasks.run_incremental_rebuild", capture_rebuild)
+
+    task_service._execute_rebuild(
+        "task-rebuild-meta",
+        RebuildPlan(mode=RebuildMode.INCREMENTAL, rule_codes=["kpi.measurement_units"]),
+        package=tmp_path / "package.zip",
+        customer={"product": "CSP"},
+        version="v1",
+        name="重建",
+        mode=TaskMode.LOCAL,
+        trigger=TaskTrigger.CLI,
+        package_kind=PackageKind.INSPECTION,
+    )
+
+    assert captured["product"] == "CSP"
+    assert captured["package_kind"] == PackageKind.INSPECTION
