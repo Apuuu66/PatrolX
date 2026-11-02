@@ -69,7 +69,7 @@ pending → running → completed
 summary.total = pass + warn + fail + error + skip
 ```
 
-`total` 只统计进入 `system.rules` 的活动普通规则结果（包括 `skip`）。隐藏的 `pkg.extract.*` 解压基础设施不进入普通规则结果或该统计。
+`total` 只统计进入 `system.rules` 的活动普通规则结果（包括 `skip`）。隐藏的 `pkg.extract.main` 和 `pkg.extract.classification` 不进入普通规则结果或该统计。
 
 ## 4. RuleResult
 
@@ -92,7 +92,7 @@ summary.total = pass + warn + fail + error + skip
 | `findings[]` | 发现列表 |
 | `metadata{}` | 规则自定义扩展数据 |
 
-`RuleCategory` 的完整枚举保留用于历史结果、分类落位和契约兼容，不代表每类都有活动规则。当前活动普通规则仅 `kpi.measurement_units`；已删除规则的持久化结果仍可通过规则结果接口只读获取，但不能重跑或重建。隐藏的 `pkg.extract.*` 不进入普通规则目录或规则结果展示。
+`RuleCategory` 的完整枚举保留用于历史结果、分类落位和契约兼容，不代表每类都有活动规则。当前活动普通规则仅 `kpi.measurement_units`；已删除规则的持久化结果仍可通过规则结果接口只读获取，但不能重跑或重建。隐藏的 `pkg.extract.main` 与 `pkg.extract.classification` 不进入普通规则目录或规则结果展示。
 
 状态语义：
 
@@ -161,34 +161,113 @@ summary.total = pass + warn + fail + error + skip
 - prepared 数据只保存在 `output/<task_id>/prepared/<owner_code>/`，只有 owner 规则可读取，不写入规则契约，也不作为公共输入。
 - 无匹配文件、格式不适用或解析失败时必须返回 `skip` 和非空原因。
 
-## 8. TaskFileCatalog
+## 8. Manifest v5 与分类审计
+
+`output/<task_id>/manifest.json` 是分类现场唯一发布凭据。目录扫描、临时文件、旧版清单和规则目录都不是分类事实。
+
+### 发布模型
+
+```text
+原始包（只读）
+  └─ pkg.extract.main
+       └─ .main/ 证据现场
+            └─ pkg.extract.classification
+                 ├─ .classification.staging/ 目标根 + catalog 构建
+                 ├─ 目标根交换（可逆）
+                 └─ manifest.json 原子发布
+```
+
+- 分类只读取 `.main/`，不得重新消费外部输入。
+- staging 摘要复核通过后才交换目标根；manifest 使用 `os.replace()` 原子发布。
+- 发布失败按目标根交换的逆序回滚；成功后只清理 allowlist 内的 legacy 分类根。
+- 发布不得修改 `.main/`、`prepared/`、`rules/`、`reports/`、`task.json` 或 `execution.log`。
+
+### 顶层结构
+
+顶层严格键集合：
+
+```text
+version
+main
+product
+classification
+path_limit
+entries
+ignored
+conflicts
+failures
+catalog
+summary
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `version` | 固定为 `5`；v1-v4 一律不可复用 |
+| `main` | 原始包 checksum、证据路径、文件数、evidence fingerprint 和本次是否复用 |
+| `product` | 巡检包为 `UMF`/`CSP`；日志补充包为 `null` |
+| `classification` | package kind、profile、ruleset、配置/发布/path-limit 指纹、scene root、目标根和固定预算 |
+| `path_limit` | 快照、fingerprint 与统一路径上限 |
+| `entries[]` | 成功落位记录：来源、成员、route、product、category、target、action、status、reason、size 和 SHA-256 |
+| `ignored[]` | 规则或 selection 明确忽略的来源/成员，必须带稳定 reason |
+| `conflicts[]` | 目标重名且已按来源摘要稳定消歧的记录，不覆盖既有文件 |
+| `failures[]` | 单归档/成员局部失败，使用稳定 error code 和非空 reason |
+| `catalog[]` | 普通规则唯一可见的成功落位文件清单 |
+| `summary` | entries/ignored/conflicts/failures/catalog 计数，以及按 route/category/action/status 的稳定汇总 |
+
+### 复用与重建矩阵
+
+| 条件 | 处理 |
+| --- | --- |
+| manifest v5 有效，checksum/product/kind/配置指纹/发布指纹/path-limit/evidence fingerprint/target roots/catalog 摘要全部一致 | 复用分类现场 |
+| 仅 YAML 注释、空白、映射键顺序或 route 顺序变化 | fingerprint 不变，复用 |
+| 任一有效 route、target、profile、action、预算或 path limit 语义变化 | 从 `.main/` 全量重建分类现场 |
+| product 或 package kind 变化 | 从 `.main/` 全量重建分类现场 |
+| manifest 缺失、损坏、版本低于 v5、summary 不一致或 catalog 摘要不符 | 从 `.main/` 全量重建 |
+| `.main/` 缺失、含链接/非普通文件、指纹不可计算或不一致 | 复核原包 checksum 后重建证据现场，再重建分类现场 |
+| 原始包 checksum 冲突 | 拒绝复用/重建并返回稳定冲突错误，不修改原包 |
+
+单成员损坏、预算拒绝或目标失败写 `failures[]`，classification 为 `WARN`，其他合法文件继续发布。
+配置无效、证据不可建立、catalog 预校验失败或原子发布失败为 `ERROR`，prepare/inspect 不得执行。
+同一包、同一元数据和同一有效配置重复执行必须复用或产生完全相同的目标、audit 和 catalog。
+
+## 9. TaskFileCatalog
 
 `TaskFileCatalog` 是执行期内存清单，不属于 API、SQLite 或磁盘契约。
 
-- 构建时机：全部 `pkg.extract.*` 到达终态后；单规则重跑先确保解压现场可复用。
-- 扫描范围：`logs/`、`kpi/`、`traffic/`、`alarm/`、`config/`、`resource/`、`other/`。
-- 路径形式：相对 `output/<task_id>/` 的 POSIX 路径，去重并按字典序稳定排序。
-- 排除范围：`.main/`、manifest、`prepared/`、任务元数据、规则结果、报告和执行日志。
-- 安全约束：拒绝符号链接、越界路径、非法正则和路径穿越。
+- 构建时机：`pkg.extract.main` 与 `pkg.extract.classification` 到达终态后；单规则重跑先确保 v5 现场可复用。
+- 唯一来源：有效 manifest v5 的 `catalog[]`，不得扫描分类目录或回退旧 manifest。
+- 路径形式：相对 `output/<task_id>/` 的 POSIX 路径，稳定排序、去重。
+- 摘要校验：每个 catalog 项必须是普通文件，size 和 SHA-256 与磁盘一致，summary 与数组一致。
+- 排除范围：`.main/`、manifest、staging、`prepared/`、任务元数据、规则结果、报告和执行日志。
+- 安全约束：拒绝符号链接、越界路径、非法正则、路径穿越和不一致 catalog。
 
-## 9. 文件组织
+## 10. 文件组织
 
 ```text
 output/<task_id>/
 ├── task.json
 ├── system.json
-├── logs/
-├── kpi/
-├── traffic/
+├── manifest.json
+├── .main/
 ├── alarm/
-├── config/
-├── resource/
+├── basic/
+├── chr/
+├── debug/
+├── host-debug/
+├── host-system/
+├── kpi/
+├── logs/
+├── mml/
+├── operation-log/
 ├── other/
+├── status/
 ├── rules/<rule_code>.json
 ├── report.html
-├── execution.log
-└── .patrolx-extracted.json
+└── execution.log
 ```
+
+`.classification.staging/` 只在分类执行期间存在，不得作为已发布现场读取。目标根是 manifest
+`classification.target_roots[]` 与配置模板的交集；目录存在本身不证明分类有效。
 
 规则结果文件：
 
@@ -212,7 +291,7 @@ output/<task_id>/prepared/<owner_code>/
 - 现场按留存策略只保留最近 50 个任务；被清理后上述数据仍可从 DB 完整读取，规则结果文件缺失不影响规则详情、发现与指标展示。
 - 执行日志（`execution.log`）与报告（`report.html`）只存在于现场，不入库；现场缺失时对应接口返回 410 `scene_cleaned`。
 
-## 10. 示例
+## 11. 示例
 
 以下为 `RuleResult` 结构示例，不代表存在多类活动规则。
 
@@ -292,7 +371,7 @@ output/<task_id>/prepared/<owner_code>/
 }
 ```
 
-## 11. KPI Catalog
+## 12. KPI Catalog
 
 PatrolX 将 KPI 数据拆为权威基础数据、分类状态和任务快照三层。
 
@@ -358,7 +437,7 @@ KPI 跨任务历史的字段、降级和查询边界见 [025 历史趋势数据�
 
 SQLite 保存分类之外的 KPI 动态配置：指标规则与受控 ratio 公式、阈值（默认值和 5/15/30/60 分钟周期）、容量规则、展示规则、公共配置、配置修订和配置审计。每次原子保存或删除会记录审计并递增 `rule_config_version`。分类线索只读展示，不改变规则状态；配置或分类变更后必须手动重跑受影响的 KPI 规则。
 
-## 12. 局点设备台账
+## 13. 局点设备台账
 
 台账把任务证据和跨任务资产分层保存。
 
@@ -412,7 +491,7 @@ inventory_change_audits                    # 覆盖、重建和变更审计
 - 设备档案由巡检任务观测写入，不提供手动建档和备注编辑接口。
 - `DELETE /api/v2/inventory/devices/{device_id}`：管理员执行物理删除；同事务删除设备档案、全部观测和版本历史聚合，写入删除审计。任务原始包、任务详情和 `inventory.json` 不被修改；相同设备身份再次巡检时重新建账。
 
-## 11. 扩展规则
+## 14. 扩展规则
 
 新增能力时：
 
@@ -428,7 +507,7 @@ inventory_change_audits                    # 覆盖、重建和变更审计
   - 目录处理逻辑。
   - 测试样例。
 
-## 13. 任务数据持久化与磁盘留存
+## 15. 任务数据持久化与磁盘留存
 
 ### 13.1 数据角色
 

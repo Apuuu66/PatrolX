@@ -58,9 +58,12 @@ logs/<service>/<node_path>/<日志名>
 chr/<...>.bil
 host-debug/<...>
 host-system/<...>
+other/<未命中 fallback 路径>
 ```
 
 检查 `catalog[]` 只包含成功落位文件，且路径均能在任务根内解析。不得出现 `.main/`、`prepared/`、`rules/`、`reports/`、`task.json` 或 `execution.log`。
+
+合成包固定基准为：告警 2 个、KPI 73 个、MESH 14 个、Service Logs 98 个、CHR 3 个、Host Debug/System 各 2 个 `.log`。UMF Service Logs 的 98 个业务日志中，13 个为直接文件、85 个由 `.log.gz` 解压得到。
 
 ### 2.2 告警与 CSP
 
@@ -85,7 +88,7 @@ host-system/<...>
 检查 `Service Logs (Problem)/ServiceLogs_*.zip`：
 
 ```text
-logs/ 中业务主日志数（fixture 版本按 fixture 断言）
+logs/ 中恰好 98 个业务主日志
 85 个 .log.gz 解压为 .log
 RScheck、dblog、UFP、monitor、start/proxy、bbox、LocalLogReport.csv 不出现在 catalog
 ```
@@ -95,6 +98,14 @@ RScheck、dblog、UFP、monitor、start/proxy、bbox、LocalLogReport.csv 不出
 ```text
 chr/ 中恰好有 3 个 .bil 文件
 LocalLogReport.csv 及其他未选成员只出现在 ignored[]，不进入 catalog
+```
+
+检查 `Host Debugging Logs/DEBUG.tar.gz` 与 `Host System Logs/OS.tar.gz`：
+
+```text
+host-debug/ 中 2 个 DEBUG.log
+host-system/ 中 2 个 OS.log
+同包 README/uptime 等普通成员按 host 根路径保留
 ```
 
 ### 2.4 配置复用与重建
@@ -177,7 +188,7 @@ shasum -a 256 "$REAL_PACKAGE"
 两次哈希必须相同。按 [spec.md](./spec.md) 的成功标准核对：
 
 ```text
-UMF 告警文件：2 个，进入同一个 alarm/
+告警文件：共 2 个（UMF 1 个、CSP 1 个），进入同一个 alarm/
 CSP 0/Problems/Alarm Data/ 告警：全部进入 alarm/，同树非告警进入 catalog：0
 PerfResult_*.zip：73 个成员进入 kpi/
 CollectExport*.zip：14 个 CSV 进入 other/MESH Application Metrics/
@@ -191,6 +202,7 @@ CHR：3 个 .bil 可读取
 ## 6. 完成判定
 
 - lint、test、contract、gen-web-api、verify、web-build、e2e 全部通过；
+- `contract` 与 `gen-web-api` 后生成客户端无未提交漂移；
 - 合成包和真实包验收结果可重复；
 - 原始包 SHA-256 前后一致；
 - manifest v5 的 catalog 与物理文件一致；

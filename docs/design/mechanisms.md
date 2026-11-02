@@ -19,36 +19,39 @@
 
 - 一个压缩包对应一个任务和一个输出目录。
 - 原始上传包只读，不被修改。
-- 解压使用隐藏的 P0 基础设施规则，不作为普通巡检规则展示。
-- 主包内容按类别落位，日志、KPI、话统、告警、配置、资源等分别进入对应目录。
-- 主包保留 `.main/` 原始解压现场；嵌套压缩包和 `.log.gz` 通过共享服务安全递归展开。
-- 解压必须具备路径穿越、链接和资源预算防护，并且同一子包只解压一次。
-- 部署侧可配置压缩项跳过与白名单；白名单优先于全局保留和路径跳过，主包本身不可跳过。
+- 只使用两个隐藏的 P0 基础设施单元：`pkg.extract.main` 与
+  `pkg.extract.classification`，不作为普通巡检规则展示。
+- `pkg.extract.main` 只建立并校验 `.main/` 证据现场；分类动作只从该证据现场读取。
+- `pkg.extract.classification` 按上传网元类型选择 `UMF`、`CSP` 或 `GENERIC` profile，
+  按真实来源路径执行告警、精细、忽略和 fallback 路线。
+- 只有配置明确声明的归档才展开；未知归档按 fallback 原样保留，不通过内容嗅探或扩展名猜测分类。
+- `manifest.json` v5 是分类现场的唯一发布凭据；普通规则只能读取其中的 `catalog[]`。
+- 解压必须具备路径穿越、链接、成员深度和资源预算防护，并且同一包、同一配置重复执行保持幂等。
 
 ### 当前实现
 
-实现位于 `app/inspectors/pkg.py`。
+实现入口位于 `app/inspectors/pkg.py`，核心位于 `app/services/extraction/`。
 
 - `pkg.extract.main`：
-  - 解压主包到 `.main/` 证据现场。
-  - 调用共享解压服务，按 `deploy/config/classify_rules.yaml` 和内容特征递归分类。
-  - 生成只包含最终文件的分类工作现场，成员直落 `<category>/<压缩包内部相对路径>`，并写入 `.patrolx-extracted.json` manifest v4。
-- `pkg.extract.<category>`：
-  - 汇总 manifest 中对应分类的子包与 `.log.gz` 终态。
-  - 失败或冲突时返回 `warn`，不阻断其他规则。
+  - 从只读原始包安全展开到 `.main/`，记录普通文件数量、checksum 和 evidence fingerprint。
+  - 证据缺失、损坏、含链接或指纹不符时，复核原始包 checksum 后整场重建。
+- `pkg.extract.classification`：
+  - 读取 `deploy/config/classify_rules.yaml`，校验 profile、route、selection 和 fallback 可达性。
+  - 在 `.classification.staging/` 构建目标根，完成 catalog 摘要复核后交换目标根并原子发布 `manifest.json`。
+  - 发布失败时逆序回滚；成功后仅清理明确的 legacy 分类根，不触碰 `.main/`、`prepared/`、`rules/` 或 `reports/`。
+  - 告警按 `Alarm Information/` 或 `Alarm Data/` 识别并递归展开；Service Logs、CHR、Host Debug/System、KPI 和 MML 只在配置声明时选择性解压。
+  - `entries[]` 记录成功落位，`ignored[]` 记录未选成员或规则忽略，`conflicts[]` 记录稳定消歧，`failures[]` 记录局部失败；`summary` 按 route、category、action、status 汇总。
+  - 单个成员归档损坏或预算拒绝使 classification 为 `WARN`，其余合法文件继续发布；配置、主包或发布失败为 `ERROR`，阻断 prepare/inspect。
 - 解压规则均为 `hidden=true`，优先级为 `P0`。
-- 解压策略加载自 `deploy/config/extract_policy.yaml`：
-  - `whitelist.paths[]` 和 `whitelist.name_keywords[]` 命中后恢复既有解压流程。
-  - `nested.skip_all=true` 或 `nested.skip_paths[]` 命中的非白名单压缩项不读取成员，保留为最终文件。
-  - 路径前缀归一化后必须有目录边界；名称关键字按目录段和文件名忽略大小写匹配。
-  - 保留项计入任务预算；只有复制成功才是 `skipped`，冲突/失败/拒绝分别是 `conflict`、`failed`、`rejected`。
-  - manifest v4 的 `policy` 节保存快照、fingerprint、计数器和逐项决策；path-limit 快照变化时重建现场，v3 及更早清单不允许静默迁移。
-- 策略是部署侧静态配置；没有在线修改 API、任务级覆盖或热更新契约。有效旧任务不因策略变化重建，现场缺失或损坏重建时使用当时配置。
+- 分类配置是部署侧静态配置；没有在线修改 API、任务级覆盖或热更新契约。
+- manifest v1-v4 一律不可复用。v5 仅在 checksum、evidence fingerprint、product、package kind、
+  有效配置指纹、发布语义指纹、path-limit 和 catalog 校验全部一致时复用。
+- 单文件选择遵循 exclude 优先于 include；未选成员写入稳定 ignored reason，成功选中的 `.gz` 只去除一层后缀。
 
 ### 差异
 
 - 活动 KPI 规则只通过 `source_patterns` 读取自身匹配的最终文件；`.main/` 只作为证据现场，不进入规则匹配。
-- 解压分类现场是普通规则的唯一磁盘输入来源；普通规则不再通过隐藏规则直接交换数据。
+- manifest v5 catalog 是普通规则的唯一文件输入来源；普通规则不再扫描分类目录或通过隐藏规则直接交换数据。
 - 日志规则已下线；日志文件仍按分类现场安全保留并可供历史结果追溯，但不会触发当前普通规则。
 
 ## 2. TaskFileCatalog 机制
@@ -56,8 +59,8 @@
 ### 目标设计
 
 - `EXTRACT` 是统一屏障；主包、嵌套子包和 `.log.gz` 全部先展开到终态。
-- 解压完成后构建一次任务级内存文件清单，不持久化、不复制文件。
-- 清单只扫描七个 category 根目录，返回稳定排序、去重的 POSIX 相对路径。
+- 分类发布后从 v5 manifest 的 `catalog[]` 构建一次任务级内存文件清单，不扫描目录、不复制文件。
+- catalog 只包含成功落位的普通文件，返回稳定排序、去重的 POSIX 相对路径及摘要。
 - 链接、越界路径、非法 pattern 和路径穿越立即拒绝。
 - 普通规则和 owner 私有 prepare 的输入必须来自同一个 `TaskFileCatalog`。
 
@@ -72,13 +75,13 @@
 
 关键机制：
 
-- `Executor.run_all()` 在 `EXTRACT` 主包屏障和其余解压规则完成后调用 `ctx.ensure_catalog()`。
-- `TaskFileCatalog.build()` 只扫描 `logs`、`kpi`、`traffic`、`alarm`、`config`、`resource`、`other`。
+- `Executor.run_all()` 在 `pkg.extract.main` 与 `pkg.extract.classification` 完成后调用 `ctx.ensure_catalog()`。
+- `TaskFileCatalog.build()` 只读取有效 manifest v5 的 `catalog[]`，并校验路径边界、普通文件、size、SHA-256 和 summary 一致性。
 - `TaskFileCatalog.match()` 委托 matcher，对每个相对路径执行 `re.fullmatch()`。
 - `RuleContext.resolved_files()` 通过 catalog 将相对路径解析到任务根内。
 - 单规则重跑先确保 manifest 和 `.main/` 可复用，必要时重建主包现场，再构建 catalog。
-- 策略跳过后的压缩项是 category 根下的最终文件，会进入 catalog；其内部成员不会进入 catalog。普通规则仍只依赖自身 `source_patterns[]`。
-- 普通规则无匹配时，执行器可根据同 category 的 manifest 审计补充可读 `skip_reason`；规则本身不读取 manifest、策略对象或其他规则数据。
+- fallback 保留的未知归档是目标根下的最终文件，会进入 catalog；未展开成员不会进入 catalog。普通规则仍只依赖自身 `source_patterns[]`。
+- 普通规则无匹配时，执行器可根据 manifest 的 ignored/failures 摘要补充可读 `skip_reason`；规则本身不读取 manifest 或其他规则数据。
 
 ### 差异
 
@@ -294,14 +297,14 @@ GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元
 关键约束：
 
 - 注册表自动扫描 `app/inspectors/` 下所有 Python 模块；每个模块在文件末尾通过 `registry.register()` 注册。
-- 普通规则与隐藏规则（`pkg.extract.*` 解压族）统一注册；隐藏规则通过 `hidden=True` 区分。
+- 普通规则与两个隐藏解压单元（`pkg.extract.main`、`pkg.extract.classification`）统一注册；隐藏单元通过 `hidden=True` 区分。
 - `GET /api/v2/inspectors` 默认 `include_hidden=False`，只返回普通规则；传 `?include_hidden=true` 可返回全部。
 - 前端规则管理页（`InspectorsPage.tsx`）和任务详情页（`TaskDetailPage.tsx`）都通过 API 获取规则列表，不硬编码规则编码。
 - 任务详情页使用 `hidden` 字段构建隐藏集合，从任务结果中过滤隐藏规则后再展示。
 
 ### 差异
 
-当前活动普通规则只有 `kpi.measurement_units`，隐藏规则只有 `pkg.extract.*`。已删除规则的历史结果仍可从持久化数据读取，但不会因历史数据重新出现在活动目录。新增普通规则必须经过新的规格、契约和规则库范围审查，不能通过注册旧模块恢复。
+当前活动普通规则只有 `kpi.measurement_units`，隐藏单元只有 `pkg.extract.main` 和 `pkg.extract.classification`。已删除规则的历史结果仍可从持久化数据读取，但不会因历史数据重新出现在活动目录。新增普通规则必须经过新的规格、契约和规则库范围审查，不能通过注册旧模块恢复。
 
 ## 11. 后续迁移建议
 

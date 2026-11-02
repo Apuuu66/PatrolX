@@ -131,20 +131,18 @@ python run_online.py
 
 3. **安全解压与按类落位**
    - 主包由隐藏规则 `pkg.extract.main` 解压到 `.main/`，该目录永久保留主包原始解压现场。
-   - 共享解压服务从 `.main/` 递归登记并展开子压缩包，再生成分类工作现场。
-   - 文件按日志、KPI、话统、告警、配置、资源、其他分类落位；分类现场只保留最终规则输入。
-   - `.log.gz` 在 `logs/` 内展开为同目录同名 `.log`，成功后移除工作现场的 `.log.gz`。
-   - 同一子包通过 checksum/manifest 去重，只解压一次。
-   - 项目级 `extract_policy.yaml` 先判断白名单，再判断路径跳过/全局保留；主包本身始终解压。
-   - 命中跳过的嵌套压缩项和 `.log.gz` 不展开，作为 category 根下的最终文件保留；白名单命中仍走既有解压和安全流程。
-   - 主包解压失败时任务失败，不进入后续阶段；子包或 gzip 局部失败保留原因并继续任务。
+   - `.main/` 记录 evidence fingerprint；证据缺失、损坏或指纹不符时，复核原包 checksum 后重建。
+   - 隐藏规则 `pkg.extract.classification` 按 product/package kind 选择 profile，从 `.main/` 执行配置驱动的告警、精细、忽略和 fallback 路线。
+   - 只有配置声明的归档和 `.gz` 成员按需展开；未知归档原样 fallback，不做内容嗅探或扩展名猜测。
+   - 分类在 staging 构建目标根，校验 catalog 摘要后交换目标根并原子发布 `manifest.json`；失败逆序回滚。
+   - 主包或发布失败时 classification 为 `ERROR`，不进入后续阶段；子归档、成员或单文件 gzip 局部失败为 `WARN`，其他合法文件继续发布。
 
 4. **任务文件清单**
-   - 全部解压隐藏规则到达终态后，执行器构建一次内存 `TaskFileCatalog`。
-   - 清单只扫描 `logs/`、`kpi/`、`traffic/`、`alarm/`、`config/`、`resource/`、`other/` 七个 category 根。
-   - 策略跳过后的压缩项是 category 根下的最终文件，会进入清单；其内部成员不会进入清单。
-   - `.main/`、manifest、`prepared/`、任务元数据、规则结果、报告和执行日志天然排除。
-   - 清单返回 POSIX 相对路径，稳定排序、去重，并在发现链接或越界路径时拒绝。
+   - `pkg.extract.main` 与 `pkg.extract.classification` 到达终态后，执行器从 v5 `manifest.json` 构建一次内存 `TaskFileCatalog`。
+   - catalog 只包含成功落位的普通文件，不再扫描分类目录。
+   - fallback 保留的未知归档是目标根下的最终文件，会进入 catalog；未展开成员不会进入 catalog。
+   - `.main/`、manifest、staging、`prepared/`、任务元数据、规则结果、报告和执行日志不在 catalog 中。
+   - 清单返回 POSIX 相对路径，稳定排序、去重，并校验路径边界、普通文件、size、SHA-256 和 summary。
 
 5. **规则私有 prepare**
    - 全部解压准备到达终态后，才执行 `PREPARE`。
@@ -168,7 +166,7 @@ python run_online.py
    - Web 只消费契约化数据，不直接理解规则内部实现。
 
 8. **终态发布与留存治理**
-   - 任务进入终态时，父进程在单个事务内发布任务行（含 `last_run_at`、`duration_ms`、`preparation`）、全部规则结果（含隐藏规则如 `pkg.extract.*`）与本次 KPI 历史点。
+   - 任务进入终态时，父进程在单个事务内发布任务行（含 `last_run_at`、`duration_ms`、`preparation`）、全部规则结果（含 `pkg.extract.main`、`pkg.extract.classification`）与本次 KPI 历史点。
    - 发布完成后再写现场文件（`task.json`、`system.json`、`report.html`），最后触发留存清理。
    - 留存清理只删除磁盘现场，不改动任何 DB 行；保留集合 = 按 `COALESCE(last_run_at, created_at)` 倒序的前 50 个任务 ∪ 全部 `pending` / `running` 任务。
    - 重跑、全量/增量重建与单规则重跑同样整批替换该任务的规则结果与 KPI 历史点：只保留最新一次执行结果，不做版本历史。
@@ -201,22 +199,27 @@ data/
 output/
 └── <task_id>/
     ├── .main/
+    ├── manifest.json
     ├── task.json
     ├── system.json
-    ├── logs/
-    ├── kpi/
-    ├── traffic/
     ├── alarm/
-    ├── config/
-    ├── resource/
+    ├── basic/
+    ├── chr/
+    ├── debug/
+    ├── host-debug/
+    ├── host-system/
+    ├── kpi/
+    ├── logs/
+    ├── mml/
+    ├── operation-log/
     ├── other/
+    ├── status/
     ├── prepared/
     │   └── <rule_code>/
     ├── rules/
     │   └── <rule_code>.json
     ├── report.html
-    ├── execution.log
-    └── .patrolx-extracted.json
+    └── execution.log
 ```
 
 职责：
@@ -227,12 +230,16 @@ output/
 | `uploads/` | 原始包输入现场，不修改；按留存策略保留最近 50 个任务的现场 |
 | `output/` | 处理现场，包含解压数据、结果副本、日志、报告；按留存策略保留最近 50 个任务的现场 |
 | `data/` | 系统元数据库等非任务输出数据 |
+| `.main/` | 原始包只读证据现场，可由原包校验后重建，不进入 catalog |
+| `manifest.json` | v5 分类现场唯一发布凭据，记录证据、快照、审计和 catalog |
 | `prepared/` | 规则私有中间数据，按 owner 规则隔离，不进入 API 契约 |
 | `rules/` | 规则契约结果，单规则单文件，支持原地更新 |
 
 生命周期：
 
 - 数据库长期保留任务行、规则结果与 KPI 历史点（人工删除除外），是界面展示的唯一来源；磁盘现场按“最近 50 个任务”策略自动清理。
+- `.classification.staging/` 只存在于分类执行期间；发布成功后删除，失败则回滚并清理。
+- manifest v5 是分类目录、entries、ignored、conflicts、failures 和 catalog 的一致性凭据；目录扫描结果不构成事实。
 - 保留集合 = 按 `COALESCE(last_run_at, created_at)` 倒序的前 50 个任务 ∪ 全部 `pending` / `running` 任务（执行中的任务豁免清理）。
 - 清理范围：`uploads/<task_id>/`、`output/<task_id>/` 中不在保留集合内的任务目录，以及 `uploads/` 根目录中可派生已知 task_id 的散包；无法归属到已知任务的目录与散包不删除。
 - 清理触发点：每次任务终态发布完成后（完成/失败/重跑/重建/单规则重跑，含本地 CLI）；创建接口的兜底恢复写回现场不触发清理，界面覆盖重建按删除 + 重建的正常终态触发。
@@ -246,62 +253,55 @@ output/
 
 ### 6.1 分类规则
 
-分类优先依据文件名、目录名、扩展名和业务名称规律，规则表在：
+分类只依据上传网元类型和配置声明的真实来源路径，不再通过成员内容嗅探或通用扩展名兜底。
+静态配置位于：
 
 ```text
 deploy/config/classify_rules.yaml
 ```
 
-当前类别：
+配置顶层严格为 `{version, profiles, routes}`，必须声明 `UMF`、`CSP`、`GENERIC` profile。
+巡检包 profile 等于规范化 product；日志补充包固定使用 `GENERIC`。每条 route 声明：
 
-- `log`
-- `kpi`
-- `traffic`
-- `alarm`
-- `config`
-- `resource`
-- `other`
+- 阶段：`alarm`、`precise`、`ignore`、`fallback`。
+- 动作：`copy`、`expand`、`decompress`、`expand_recursive`、`select_and_decompress`、`ignore`、`fallback`。
+- 来源目录 glob、文件名 glob、优先级、profile 集合和目标模板。
+- 可选 selection include/exclude；exclude 始终优先于 include。
 
-规则表支持通配符和中文别名，例如：
+匹配顺序固定为阶段优先、阶段内 priority 优先、同级 route id 稳定排序。告警路线跨 UMF/CSP
+生效并高于 ignore；CSP 非告警内容不进入工作分类现场。目录段和文件名匹配不区分大小写，
+落位保留来源大小写。
 
-- `*log*` → 日志
-- `*kpi*` → KPI
-- `*alarm*` / `*告警*` → 告警
-- `*config*` / `*配置*` → 配置
-- `*service*` / `*日志*` → 日志
+配置加载时拒绝重复 YAML key、未知字段、非法动作/category/target、不可达 fallback、profile
+交集内同 phase/priority 的重叠 pattern。加载后对规范化有效配置计算 SHA-256 fingerprint；
+仅修改注释、空白、映射顺序或 route 顺序不得改变 fingerprint。
 
-名称无法判定时，可解压后做内部文件名或内容嗅探；仍无法判定归入 `other/`。
+内部审计 category 为 `config`、`status`、`operation`、`kpi`、`alarm`、`log`、`chr`、`other`，
+不等同于公共 `RuleCategory`。物理目标根由配置模板决定，例如 `basic/`、`mml/`、`logs/`、
+`chr/`、`host-debug/`、`host-system/`、`kpi/`、`alarm/` 和 `other/`。
 
-规则表还可声明 `archive_members`，将指定压缩包内普通成员统一归入一个类别。例如 `PerfResult_*.zip` 内的呼叫和容器 CSV 都属于测量单元，统一进入 `kpi/`；嵌套压缩包仍按自身名称分类。
+按需展开只适用于配置明确声明的归档。未声明的 KPI/MESH/MML/CHR/Host/Service Logs 归档
+不读取成员；未命中任何精细路线的归档按 fallback 原样保留。选中 `.gz` 成员时只去除一层
+`.gz` 后缀，exclude 与未选成员进入 ignored 审计，不进入 catalog。
 
-### 6.2 嵌套包与 manifest
+### 6.2 两个隐藏单元与 manifest v5
 
 - 主包先解压为 `.main/` 证据现场，原始子压缩包和原始 `.log.gz` 都保留在该现场。
-- 通用递归解压服务按子包自身文件名/内容分类；无法识别时继承父级分类，最后归入 `other/`。
-- 成员展开到 `<category>/<压缩包内部相对路径>`，不再插入来源子包名目录层；KPI 包内的日志子包、日志包内的 KPI 子包都允许跨分类落位。
-- 分类工作现场只保留最终解压结果；中间压缩包和已成功展开的 `.log.gz` 会被移除。
-- `pkg.extract.{category}` 汇总对应分类的 manifest 终态，不再各自维护一套解压流程。
-- 解压清单为 `.patrolx-extracted.json`（manifest v4），记录主包现场、各级子包、`.log.gz`、失败和拒绝状态，以及逐项路径长度与路径上限。
-- manifest 必须校验版本和结构；旧版本、损坏或不匹配 checksum/path-limit 时整体安全重建现场。
-- manifest v4 新现场包含 `policy` 审计节，保存归一化策略快照、fingerprint、计数器和 path-limit 快照；v3 及更早清单不允许静默迁移，必须重建。
-- 有效 manifest 按 checksum、policy fingerprint 和 path-limit 快照复用现场；快照不匹配或现场缺失/损坏时按当前静态配置重建。
-- 同 checksum 子包去重；任务级累计文件数、总字节数和嵌套深度构成固定安全预算。策略跳过项复制/保留时同样计费。
+- 隐藏单元只有 `pkg.extract.main` 和 `pkg.extract.classification`；前者建立证据现场，后者完成分类发布。
+- 分类在 `.classification.staging/` 构建目标根和 catalog；摘要复核通过后交换目标根，并通过 `os.replace()` 原子发布 `manifest.json`。
+- 发布失败按已完成交换的逆序回滚；成功后只清理代码 allowlist 中的 legacy 分类根，不触碰 `.main/`、prepared、rules、reports、任务摘要或执行日志。
+- manifest v5 严格记录 `main` 证据快照、product/package kind、classification snapshot、path limit、entries、ignored、conflicts、failures、catalog 和 summary。
+- `.main/` 证据指纹按相对路径、size 和 SHA-256 的 canonical JSON 计算；原始包 checksum 始终是重建依据。
+- v1-v4 manifest 一律不可复用。v5 只有 checksum、evidence fingerprint、product、package kind、配置/发布/path-limit 指纹和目标根全部一致且 catalog 摘要有效时才复用。
+- catalog 只包含成功落位且摘要匹配的普通文件；不得包含 `.main/`、manifest、staging、prepared、rules、reports、task.json、execution.log 或链接。
+- 单个子归档/成员失败记录稳定 `error_code` 和 reason，classification 返回 `WARN` 并继续发布其他合法文件；配置、证据或发布失败返回 `ERROR`，阻断 prepare/inspect。
 
-### 6.3 解压策略
+### 6.3 固定安全预算
 
-静态项目级配置位于：
-
-```text
-deploy/config/extract_policy.yaml
-```
-
-- 决策顺序：主包始终解压 → 普通文件保持既有分类拷贝 → 白名单路径 → 白名单名称关键字 → 全局保留 → 路径跳过 → 既有解压。
-- 路径作用域归一化为任务内 POSIX 目录前缀，`/0/`、`0/` 等价；`0/` 不匹配 `0a/file`。
-- 名称关键字对每个目录段和最终文件名做大小写无关子串匹配，只使用外部来源路径，不读取跳过压缩包内部。
-- 被跳过的压缩项复制到对应 category 根并保留相对路径；来源已在 category 子现场的项原地保留。
-- 复制成功记录 `skipped`；目标冲突、复制失败或预算拒绝记录局部 `failed` / `rejected`，不覆盖既有文件。
-- 执行器可在普通规则无匹配时，按同 category 的 manifest 审计补充可读 `skip_reason`；普通规则仍不读取 manifest 或策略对象。
-- 该文件是部署侧静态配置，不提供在线修改 API、任务级覆盖或热更新契约。
+- 最大归档深度 8，最大成员路径深度 12。
+- 单归档最多 100000 个文件，单任务最多 200000 个文件。
+- 单文件最大 2 GiB，任务累计解压最大 3 GiB。
+- 预算为代码固定值，任务和 YAML 不可覆盖；超限只影响对应归档或成员，并写 FailureRecord。
 
 ### 6.4 安全限制
 
@@ -314,7 +314,7 @@ deploy/config/extract_policy.yaml
 - 总解压体积超限。
 - 嵌套深度超限。
 
-超限或异常文件不应中断任务，应记录到解压规则结果或执行日志。
+子归档或成员超限/异常不应中断整个任务，应记录 FailureRecord；配置、证据现场或原子发布失败必须使 classification 为 `ERROR` 并阻断规则阶段。
 
 ### 6.5 真实样例
 
@@ -324,16 +324,13 @@ deploy/config/extract_policy.yaml
 docs/example/real-package-structure.md
 ```
 
-典型分类映射：
+基准映射包括：UMF/CSP 告警统一进入 `alarm/`；`PerfResult_*.zip` 的 73 个成员进入
+`kpi/`；`CollectExport*.zip` 的 14 个 CSV 进入 `other/MESH Application Metrics/`；
+Service Logs 只保留 98 个业务主日志并将 85 个 `.log.gz` 展开为 `.log`；CHR 选择并解压
+3 个 `.bil.gz` 为 `chr/*.bil`。所有排除成员必须出现在 ignored 审计中。
 
-- `alarm_history.csv` / `alarm_summary.json` → 告警。
-- `system_info.ini` / `version.ini` → 配置。
-- `kpi_*.csv` → KPI。
-- `pod_cpu_mem_*.txt` → 资源。
-- `call_stat_*.txt` → 话统。
-- `ServiceLog_*.zip` → 日志。
-
-当前活动普通规则仅 `kpi.measurement_units`；上述映射只决定安全解压、分类落位和历史证据保留，不代表仍有对应业务规则。`ServiceLog_*.zip` 仍按 `ServiceLog_*/<service>/logs/<node>/*.log` 组织，分类与解压完成后不会触发日志巡检规则。
+当前活动普通规则仅 `kpi.measurement_units`；上述映射只决定安全解压、分类落位和证据保留，
+不代表恢复日志、告警、配置、状态、资源或 CHR 业务规则。
 
 ## 7. 规则模型与执行编排
 
@@ -341,7 +338,7 @@ docs/example/real-package-structure.md
 
 | 优先级 | 职责 | 示例 |
 | --- | --- | --- |
-| P0 | 隐藏的数据准备与解压基础设施 | `pkg.extract.*` |
+| P0 | 隐藏的数据准备与解压基础设施 | `pkg.extract.main`、`pkg.extract.classification` |
 | P1 | 单维度阈值、统计、完整性检查 | `kpi.measurement_units` |
 | P2 | 跨维度关联、趋势、根因分析（当前无活动普通规则） | 无 |
 
@@ -359,7 +356,7 @@ outputs.metrics[]  声明的指标契约
 可选 prepare       规则私有预处理声明
 ```
 
-执行器维护 `EXTRACT → PREPARE → INSPECT` 阶段屏障，但不维护普通规则依赖图。普通规则只能读取自己的匹配文件或自己的 prepared 数据；`pkg.extract.*` 是隐藏解压基础设施，prepare 是隐藏规则私有准备单元，都不作为普通规则展示。
+执行器维护 `EXTRACT → PREPARE → INSPECT` 阶段屏障，但不维护普通规则依赖图。普通规则只能读取自己的匹配文件或自己的 prepared 数据；`pkg.extract.main` 与 `pkg.extract.classification` 是隐藏解压基础设施，prepare 是隐藏规则私有准备单元，都不作为普通规则展示。
 
 执行编排细节：
 
@@ -423,8 +420,8 @@ outputs.metrics[]  声明的指标契约
 
 重跑会刷新、复用或不触碰的数据清单见 [`docs/design/task-rerun.md`](design/task-rerun.md)。
 
-- 先确保 manifest 与主包解压现场可复用；缺失或不可复用时执行主包解压。
-- 再构建 `TaskFileCatalog`，执行目标规则私有 prepare 或复用其缓存。
+- 先确保 `.main/` 证据现场与 manifest v5 分类现场可复用；缺失、指纹变化或不可复用时按复用矩阵重建。
+- 再从 manifest catalog 构建 `TaskFileCatalog`，执行目标规则私有 prepare 或复用其缓存。
 - 最后按目标规则 `source_patterns` 重新匹配文件并执行目标规则。
 - 只重写目标规则 JSON，再重建任务摘要和 HTML 报告。
 - 不自动补跑其他普通规则，不建立规则间依赖图。

@@ -5,7 +5,8 @@
 ## 基准包
 
 - 主包：`ZZapp01BCN_app_Problem_scene_333.zip`
-- 本地样例：`uploads/ZZapp01BCN_app_Problem_scene_333.zip`
+- 仓库内测试夹具：`tests/fixtures/sample/sample.zip`
+- 本地运行输入：生成到临时目录，或复制到已忽略的 `uploads/` 后上传；运行时输入不得入库
 - 生成器：`tests/fixtures/make_real_package.py`
 
 ## 原始主包结构
@@ -59,6 +60,10 @@ Outer Device/
             │   └── EXPMML_20260918.zip
             ├── Performance Measurement Results/PerfResult_20260918.zip
             ├── MESH Application Metrics/CollectExport_20260918.zip
+            ├── Service Logs (Problem)/ServiceLogs_20260918.zip
+            ├── CHR Information/ServiceLogs_20260918.zip
+            ├── Host Debugging Logs/DEBUG.tar.gz
+            ├── Host System Logs/OS.tar.gz
             ├── collectandcheck.ini
             └── Unlisted/
                 ├── custom.dat
@@ -67,7 +72,7 @@ Outer Device/
 
 ### 场景根与目录匹配
 
-`deploy/config/classify_rules.yaml` 为 UMF profile 声明 13 个场景 anchor，包括 `Basic Information About the UMF`、`Operation Logs`、`MML Configurations` 和 `Performance Measurement Results` 等。分类器扫描 `.main/` 中命中 anchor 的完整目录段，以这些 anchor 父目录的最长公共父目录推导 scene root。因此即使包中只有 `Operation Logs` 和 `MML Configurations`，也能剥离设备名、问题编号和包装层。
+`deploy/config/classify_rules.yaml` 为 UMF profile 声明 13 个场景 anchor，包括 `Basic Information About the UMF`、`Operation Logs`、`MML Configurations` 和 `Performance Measurement Results` 等。分类器扫描 `.main/` 中命中 anchor 的完整目录段，先按 anchor 父目录精确聚类，再优先选择覆盖 anchor 种类最多、命中次数最多且路径最具体的目录作为 scene root。因此即使包中只有 `Operation Logs` 和 `MML Configurations`，也能剥离设备名、问题编号和包装层。
 
 目录段和文件名 glob 匹配不区分大小写，落位时保留来源原始大小写。`capture_root` 使用命中路径中最右侧的完整同名目录段，`{suffix}` 从该段之后开始。例如重复出现 `Basic Information About the UMF/.../basic information about the umf/Sub/Config.TXT` 时，目标为 `basic/Sub/Config.TXT`。
 
@@ -85,11 +90,18 @@ Outer Device/
 | `umf.mml-archive` | `MML Configurations` / `EXPMML_*.zip` | expand | `config` | `mml/{member}` |
 | `umf.kpi` | `Performance Measurement Results` / `PerfResult_*.zip` | expand | `kpi` | `kpi/{member}` |
 | `umf.mesh-metrics` | `MESH Application Metrics` / `CollectExport*.zip` | expand | `other` | `other/MESH Application Metrics/{archive_stem}/{member}` |
+| `umf.service-logs` | `Service Logs (Problem)` / `ServiceLogs_*.zip` | select_and_decompress | `log` | `logs/{service}/{node_path}/{name_without_gz}` |
+| `umf.chr` | `CHR Information` / `ServiceLogs_*.zip` | select_and_decompress | `chr` | `chr/{member}` |
+| `umf.host-debug` | `Host Debugging Logs` / `DEBUG.tar.gz` | expand | `log` | `host-debug/{member}` |
+| `umf.host-system` | `Host System Logs` / `OS.tar.gz` | expand | `log` | `host-system/{member}` |
 | `umf.other` | `**` / `*` | fallback | `other` | `other/{suffix}` |
+| `umf.ignore-outside-scene` | evidence / `**` / `*` | ignore | — | 仅写忽略审计 |
 
 `PerfResult_*.zip` 的全部 73 个成员直接进入 `kpi/`，不按成员文件名或扩展名二次分类。`CollectExport*.zip` 的 14 个 CSV 进入以归档 stem 命名的 `other/MESH Application Metrics/<archive_stem>/` 命名空间。MML ZIP 同样按单一 `expand` 路线进入 `mml/`。
 
-未声明的 `UnknownBundle.ZIP` 按 `umf.other` 原样复制，不读取或推断其成员；`collectandcheck.ini` 和未命中普通文件也保留场景相对路径。CSP 非告警内容命中 `csp.ignore-non-alarm`，只写忽略审计，不进入工作分类现场。
+Service Logs 归档使用 include/exclude 选择：13 个业务主日志和 85 个轮转 `.log.gz` 共生成 98 个 `.log`；RScheck、dblog、UFP、monitor、start/proxy、bbox 和 `LocalLogReport.csv` 均只写 ignored。CHR 归档选择 3 个 `**/*.bil.gz` 并去除一层 `.gz`，`LocalLogReport.csv` 与其他成员只写 ignored。Host Debug/System 归档展开后，把其中的 `**/*.log.gz` 解压为 `.log`，同包非日志成员仍按成员路径保留。
+
+未声明的 `UnknownBundle.ZIP` 按 `umf.other` 原样复制，不读取或推断其成员；场景内 `collectandcheck.ini` 和未命中普通文件也按 `umf.other` 保留场景相对路径。场景根之外的 `collectandcheck.ini` 等文件命中 `umf.ignore-outside-scene`，只写忽略审计。CSP 非告警内容命中 `csp.ignore-non-alarm`，只写忽略审计，不进入工作分类现场。
 
 这些目录后缀、文件模式和目标模板均位于部署配置中；调整真实目录时只需修改配置，不在分类器中新增 UMF 目录分支。
 
@@ -149,6 +161,8 @@ PerfResult_202609010101137101.zip
 
 ### 日志包
 
+以下通用 `ServiceLog_*.zip` 保留了历史样例和多节点结构。038 的 UMF 选择规则匹配的是 `Service Logs (Problem)/ServiceLogs_*.zip`，并使用上一节声明的 selection。
+
 ```text
 ServiceLog_20260901011314.zip
 ├── CspService/
@@ -178,34 +192,86 @@ ServiceLog_20260901011314.zip
 
 `*.log.gz` 展开后为同名 `*.log`。
 
-## PatrolX 工作现场
-
-`.main/` 保留主包完整证据现场；分类工作现场只保存规则可读取的终态文件：
+### UMF Service Logs 选择包
 
 ```text
+Service Logs (Problem)/ServiceLogs_20260918.zip
+├── UMFAcc/logs/node-01..07/pod-01..07/UMFAcc.log | UMFAcc_*.log.gz
+├── UmfService/logs/node-01..07/pod-01..07/UmfService.log | UmfService_*.log.gz
+├── CacheService/logs/node-03/pod-01/CacheService.log
+├── ResourceManageService/logs/node-01..03/pod-01/ResourceManageService.log
+├── UMFAcc/logs/node-01/{proxy,RScheck}/...
+├── UMFAcc/logs/node-01/{rscheck_*.gz,dblog.tar.gz,UFP_*.log,UFP_MSS_2_0.zip,monitor_detect.log}
+├── UmfService/logs/node-02/{UmfService_monitor.log,start/boot.log,proxy/request.log}
+├── CacheService/logs/node-03/bbox.dat.txt
+└── LocalLogReport.csv
+```
+
+选择后必须恰好得到：
+
+```text
+logs/UMFACC/<node_path>/<name>.log       # 42 个轮转 + 3 个主日志
+logs/UMFSERVICE/<node_path>/<name>.log    # 43 个轮转 + 3 个主日志
+logs/CACHESERVICE/<node_path>/CacheService.log
+logs/RESOURCEMANAGESERVICE/<node_path>/ResourceManageService.log
+```
+
+总计 98 个业务主日志，其中 85 个来源为 `.log.gz`。exclude 优先于 include；未命中 include 的成员写 `member_not_selected`，带明确 exclude 的成员写稳定 reason，二者均不进入 catalog。
+
+### CHR 与 Host 日志包
+
+```text
+CHR Information/ServiceLogs_20260918.zip
+├── nodes/paas-01/health.bil.gz
+├── nodes/paas-02/health_2.bil.gz
+├── nodes/paas-03/health_3.bil.gz
+├── nodes/paas-01/LocalLogReport.csv
+└── nodes/paas-01/notes.txt
+
+Host Debugging Logs/DEBUG.tar.gz
+├── nodes/paas-01/DEBUG.log.gz
+├── nodes/paas-01/README.txt
+└── nodes/paas-02/DEBUG.log.gz
+
+Host System Logs/OS.tar.gz
+├── nodes/paas-01/OS.log.gz
+├── nodes/paas-01/uptime.txt
+└── nodes/paas-02/OS.log.gz
+```
+
+CHR 产生 3 个可读取的 `chr/*.bil`；Host Debug/System 的 4 个 `.log.gz` 分别产生 `host-debug/*.log` 和 `host-system/*.log`。Host 包中的 README/uptime 不属于 selection，但仍作为普通展开成员进入对应 host 根；如后续只关注日志，应在配置中显式改为 selection，而不是在代码内按扩展名猜测。
+
+## PatrolX 工作现场
+
+`.main/` 保留主包完整证据现场；`manifest.json` v5 是分类工作现场的唯一发布凭据，`catalog[]` 只列出成功落位的终态普通文件。下例只展示代表性路径：
+
+```text
+manifest.json
+basic/Nested/config.ini
+debug/Diagnostic.JSON
+status/equipment.csv
+status/mesh.txt
+status/resources.txt
+operation-log/OPERATIONLOG_HISTORY_20260918.CSV
+mml/Config/Fragment.txt
+mml/Config/Parameters.cfg
+other/MESH Application Metrics/CollectExport_20260918/<14 CSV>
+logs/UMFACC/<node_path>/<98 中对应日志>
+chr/nodes/paas-01/health.bil
+host-debug/nodes/paas-01/DEBUG.log
+host-system/nodes/paas-01/OS.log
 alarm/alarm_history_202609010101137101_001.csv
 alarm/alarm_history_202609010101137101_002.csv
-config/LST ME.txt
-config/system_info.ini
-config/version.ini
 kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv
 kpi/ne333_Call_Session_API_Statistics_15_0_202609020000.csv
 kpi/ne333_Call_Session_API_Statistics_30_0_202609020000.csv
 kpi/ne333_Call_Session_API_Statistics_60_0_202609020000.csv
 kpi/ne333_Container_Metric_Unit_5_0_202609020000.csv
 kpi/ne333_Container_Metric_Unit_15_0_202609020000.csv
-logs/CspService/logs/paas-192.168.2.2/CspService.log
-logs/CspService/logs/paas-192.168.2.2/CspService_20260901011314.log
-logs/CspService/logs/paas-192.168.2.3/CspService.log
-logs/UmfService/logs/paas-192.168.2.2/UmfService.log
-logs/UmfService/logs/paas-192.168.2.2/UmfService_20260901011314.log
-logs/UmfService/logs/paas-192.168.2.3/UmfService.log
-logs/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log
-logs/UMFAcc/logs/paas-192.168.2.2/UMFAcc_20260901011314.log
-logs/UMFAcc/logs/paas-192.168.2.3/UMFAcc.log
+other/...
 ```
 
-主包内非日志类普通文件按语义类目平铺，例如 `Basic Information/system_info.ini` 落到 `config/system_info.ini`。主包内日志文件保留服务与节点路径，避免丢失识别上下文。
+上例中的 `kpi/*` 使用真实包基准名称；合成 UMF 包使用 `PerfResult_20260918.zip` 的 73 个成员。实际 task 只会命中一个可识别场景，路径以 manifest 为准。所有 ignored、conflicts 和 failures 必须能在 manifest 中逐项追溯；目录存在但未进入 catalog 的文件不得被规则读取。
 
 ## 规则适配
 

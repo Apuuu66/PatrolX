@@ -45,19 +45,19 @@
 
 ### Decision
 
-每个 profile 声明 `scene_anchors`。分类器扫描证据文件的父目录，将任意完整目录段匹配 anchor 的目录前缀收集为候选；场景根取这些候选路径的最长公共父目录。没有命中 anchor 时，场景根回退到证据根。UMF 场景根只使用 UMF anchor，CSP anchor 不参与 UMF 根推导。
+每个 profile 声明 `scene_anchors`。分类器扫描证据文件的父目录，将任意完整目录段匹配 anchor 的目录前缀收集为候选，并按 anchor 父目录精确聚类。若存在多个候选，依次选择覆盖 anchor 种类最多、命中次数最多、目录层数最多（路径最具体）的候选，最后按大小写归一化路径字典序稳定决胜；没有命中 anchor 时，场景根回退到证据根。UMF 场景根只使用 UMF anchor，CSP anchor 不参与 UMF 根推导。
 
 UMF 的 anchor 至少包含 `Basic Information About the UMF`、`Debugging Commands`、`Equipment Status`、`MESH Information (Problem)`、`System Resources`、`Operation Logs`、`MML Configurations`、`Performance Measurement Results`、`MESH Application Metrics`、`CHR Information`、`Host Debugging Logs`、`Host System Logs` 和 `Service Logs (Problem)`。每个 scene-scope 精确复制路线都必须把对应业务目录声明为 `capture_root`，否则业务目录会错误进入目标路径。
 
 ### Rationale
 
-真实包场景根是 `.../UMF Problem scene`，但其外层设备目录、问题编号和包装层可能变化。由已知业务子目录反向求最长公共父目录，可以去掉包装层，同时不把场景内中间目录带入 fallback 目标。
+真实包场景根是 `.../UMF Problem scene`，但其外层设备目录、问题编号和包装层可能变化。由已知业务子目录反向聚类，并优先选择覆盖 anchor 种类最多、命中次数最多且路径最具体的父目录，可以去掉包装层，同时不把场景内中间目录带入 fallback 目标。
 
 ### Alternatives considered
 
 - 写死 `UMF Problem scene`：名称可能有变体，且不是所有来源都直接位于该目录。
 - 以证据根作场景根：会把设备名、问题编号等外层目录写入 `other/`。
-- 以第一个 anchor 的父目录作根：多个 anchor 分处不同包装层时不稳定。
+- 以所有候选的公共父目录作根：孤立共享 anchor 会拉宽场景根并污染相对路径。
 
 ## 4. 固定阶段优先于声明顺序
 
