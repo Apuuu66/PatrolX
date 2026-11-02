@@ -378,8 +378,29 @@ function selectUploadFile(file: File) {
   fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
 }
 
+async function chooseSelectOption(label: string, option: string) {
+  const user = userEvent.setup();
+  const combobox = screen.getByRole("combobox", { name: label });
+  const selector = combobox.closest(".ant-select")?.querySelector(".ant-select-selector");
+  expect(selector).not.toBeNull();
+  fireEvent.mouseDown(selector as Element);
+  const optionLabel = await screen.findByTitle(option);
+  const optionItem = optionLabel.closest(".ant-select-item-option");
+  expect(optionItem).not.toBeNull();
+  await user.click(optionItem as Element);
+  await waitFor(() => {
+    expect(combobox.closest(".ant-select")?.textContent).toContain(option);
+  });
+}
+
+async function fillInspectionMetadata() {
+  await chooseSelectOption("省份", "江苏");
+  await chooseSelectOption("运营商", "中国移动");
+  await chooseSelectOption("网元类型", "UMF");
+}
+
 function okButton(): HTMLButtonElement {
-  return screen.getByRole("button", { name: "提交巡检" }) as HTMLButtonElement;
+  return screen.getByRole("button", { name: /^提交(巡检|日志包)$/ }) as HTMLButtonElement;
 }
 
 function overwriteButton(): HTMLButtonElement {
@@ -475,6 +496,104 @@ describe("TaskListPage 上传预检", () => {
   });
 });
 
+describe("TaskListPage 上传元数据", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [makeTask({ task_id: "task-other" })],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+    vi.mocked(api.getOverview).mockResolvedValue({
+      task_count: 1,
+      registered_rule_count: 0,
+      rule_result_count: 0,
+      finding_count: 0,
+      status_counts: { total: 0, pass: 0, warn: 0, fail: 0, error: 0, skip: 0 },
+    });
+    vi.mocked(api.listDicts).mockResolvedValue({
+      province: [{ code: "JS", name: "江苏" }],
+      operator: [{ code: "CMCC", name: "中国移动" }],
+      product: [{ code: "umf", name: "UMF" }],
+      version: [],
+    });
+    vi.mocked(api.getTask).mockRejectedValue(new ApiError("not_found", "任务不存在", 404));
+    vi.mocked(api.createTaskV3).mockResolvedValue({ task_id: "task-sample_pkg" });
+  });
+
+  it("巡检包缺少网元类型时阻止提交并显示字段错误", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText("task-other")).toBeDefined());
+    await openUploadModal();
+    selectUploadFile(new File(["payload"], "sample-pkg.zip", { type: "application/zip" }));
+
+    await chooseSelectOption("省份", "江苏");
+    await chooseSelectOption("运营商", "中国移动");
+    fireEvent.click(okButton());
+
+    await waitFor(() => {
+      expect(screen.getByText("请选择网元类型")).toBeDefined();
+    });
+    expect(api.createTaskV3).not.toHaveBeenCalled();
+  }, 60000);
+
+  it("提交前将网元类型去空白并规范化为大写", async () => {
+    renderPageWithRoutes();
+    await waitFor(() => expect(screen.getByText("task-other")).toBeDefined());
+    await openUploadModal();
+    selectUploadFile(new File(["payload"], "sample-pkg.zip", { type: "application/zip" }));
+    await fillInspectionMetadata();
+
+    fireEvent.click(okButton());
+
+    await waitFor(() => expect(api.createTaskV3).toHaveBeenCalledTimes(1));
+    const form = vi.mocked(api.createTaskV3).mock.calls[0][0];
+    expect(form.get("product")).toBe("UMF");
+    expect(form.get("province")).toBe("JS");
+    expect(form.get("operator")).toBe("CMCC");
+  }, 60000);
+
+  it("日志补充包隐藏设备元数据且不会提交", async () => {
+    renderPageWithRoutes();
+    await waitFor(() => expect(screen.getByText("task-other")).toBeDefined());
+    await openUploadModal();
+    selectUploadFile(new File(["payload"], "logs.zip", { type: "application/zip" }));
+    await fillInspectionMetadata();
+
+    await chooseSelectOption("包类型", "日志补充包");
+
+    expect(screen.queryByRole("combobox", { name: "省份" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "运营商" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "网元类型" })).toBeNull();
+    fireEvent.click(okButton());
+
+    await waitFor(() => expect(api.createTaskV3).toHaveBeenCalledTimes(1));
+    const form = vi.mocked(api.createTaskV3).mock.calls[0][0];
+    expect(form.get("package_kind")).toBe("log_supplement");
+    expect(form.get("province")).toBeNull();
+    expect(form.get("operator")).toBeNull();
+    expect(form.get("product")).toBeNull();
+  }, 60000);
+
+  it("网元类型冲突显示稳定错误码", async () => {
+    vi.mocked(api.createTaskV3).mockRejectedValue(
+      new ApiError("package_product_conflict", "同名任务网元类型不一致", 409),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByText("task-other")).toBeDefined());
+    await openUploadModal();
+    selectUploadFile(new File(["payload"], "sample-pkg.zip", { type: "application/zip" }));
+    await fillInspectionMetadata();
+
+    fireEvent.click(okButton());
+
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain("package_product_conflict");
+    });
+  }, 60000);
+});
+
 function renderPageWithRoutes() {
   return render(
     <App>
@@ -499,9 +618,9 @@ describe("TaskListPage 同名冲突", () => {
       status_counts: { total: 0, pass: 0, warn: 0, fail: 0, error: 0, skip: 0 },
     });
     vi.mocked(api.listDicts).mockResolvedValue({
-      province: [],
-      operator: [],
-      product: [],
+      province: [{ code: "JS", name: "江苏" }],
+      operator: [{ code: "CMCC", name: "中国移动" }],
+      product: [{ code: "UMF", name: "UMF" }],
       version: [],
     });
     vi.mocked(api.getTask).mockRejectedValue(new ApiError("not_found", "任务不存在", 404));
@@ -526,6 +645,7 @@ describe("TaskListPage 同名冲突", () => {
     await waitFor(() => {
       expect(okButton().disabled).toBe(false);
     });
+    await fillInspectionMetadata();
     fireEvent.click(okButton());
     await waitFor(() => {
       expect(document.querySelector('[data-testid="upload-conflict"]')).not.toBeNull();
@@ -612,6 +732,7 @@ describe("TaskListPage 同名冲突", () => {
     await waitFor(() => {
       expect(overwriteButton().disabled).toBe(false);
     });
+    await fillInspectionMetadata();
     fireEvent.click(overwriteButton());
 
     // 未确认前不得删除旧现场，也不得重复创建任务。
@@ -658,6 +779,7 @@ describe("TaskListPage 同名冲突", () => {
     await waitFor(() => {
       expect(okButton().disabled).toBe(false);
     });
+    await fillInspectionMetadata();
     fireEvent.click(okButton());
 
     await waitFor(() => {

@@ -80,6 +80,10 @@ const PREPARATION_STATUS_COLORS: Record<string, string> = {
   error: "#8c8c8c",
 };
 
+function normalizeProductValue(value: unknown): string {
+  return typeof value === "string" ? value.trim().toUpperCase() : "";
+}
+
 function TaskDeletePanel({
   taskId,
   error,
@@ -325,6 +329,12 @@ export function TaskListPage() {
     api.listDicts().then(setDicts).catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    if (!isInspection) {
+      form.setFieldsValue({ province: undefined, operator: undefined, product: undefined });
+    }
+  }, [form, isInspection]);
+
   const sortedItems = useMemo(() => sortTasksForList(items), [items]);
   const distribution = useMemo(() => getOverviewDistribution(overview), [overview]);
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
@@ -340,7 +350,8 @@ export function TaskListPage() {
     if (packageKindValue === "inspection") {
       if (values.province) fd.append("province", values.province);
       if (values.operator) fd.append("operator", values.operator);
-      if (values.product) fd.append("product", values.product);
+      const product = normalizeProductValue(values.product);
+      if (product) fd.append("product", product);
     }
     return fd;
   };
@@ -402,6 +413,11 @@ export function TaskListPage() {
       message.warning("请选择数据压缩包");
       return;
     }
+    try {
+      await form.validateFields();
+    } catch {
+      return;
+    }
     const fd = buildUploadForm();
     if (!fd) return;
     const previewTaskId = uploadPrecheck?.taskId ?? deriveTaskIdPreview(file.name);
@@ -425,6 +441,11 @@ export function TaskListPage() {
       if (err instanceof ApiError && err.code === "package_checksum_conflict") {
         // 探测未命中的兜底：冲突提示落在弹窗内，覆盖入口与保留现场的动作并列（FR-024）。
         setUploadConflict({ taskId: previewTaskId, message: err.message });
+      } else if (
+        err instanceof ApiError &&
+        ["package_kind_conflict", "package_product_conflict"].includes(err.code)
+      ) {
+        message.error(`${err.code}：${err.message}`);
       } else {
         message.error(err instanceof Error ? err.message : "创建失败");
       }
@@ -1003,6 +1024,7 @@ export function TaskListPage() {
           )}
           <Form.Item label="包类型" name="package_kind" initialValue="inspection">
             <Select
+              aria-label="包类型"
               options={[
                 { value: "inspection", label: "巡检包" },
                 { value: "log_supplement", label: "日志补充包" },
@@ -1011,14 +1033,53 @@ export function TaskListPage() {
           </Form.Item>
           {isInspection ? (
             <>
-              <Form.Item label="省份" name="province" rules={[{ required: true, message: "请选择省份" }]}>
-                <Select allowClear placeholder="选择省份" options={dictOptions(dicts?.province)} />
+              <Form.Item
+                label="省份"
+                name="province"
+                preserve={false}
+                rules={[{ required: true, message: "请选择省份" }]}
+              >
+                <Select
+                  aria-label="省份"
+                  allowClear
+                  placeholder="选择省份"
+                  options={dictOptions(dicts?.province)}
+                />
               </Form.Item>
-              <Form.Item label="运营商" name="operator" rules={[{ required: true, message: "请选择运营商" }]}>
-                <Select allowClear placeholder="选择运营商" options={dictOptions(dicts?.operator)} />
+              <Form.Item
+                label="运营商"
+                name="operator"
+                preserve={false}
+                rules={[{ required: true, message: "请选择运营商" }]}
+              >
+                <Select
+                  aria-label="运营商"
+                  allowClear
+                  placeholder="选择运营商"
+                  options={dictOptions(dicts?.operator)}
+                />
               </Form.Item>
-              <Form.Item label="网元类型" name="product">
-                <Select allowClear placeholder="选择网元类型" options={dictOptions(dicts?.product)} />
+              <Form.Item
+                label="网元类型"
+                name="product"
+                preserve={false}
+                rules={[
+                  { required: true, message: "请选择网元类型" },
+                  {
+                    validator: async (_, value) => {
+                      const product = normalizeProductValue(value);
+                      if (!product || product === "UMF" || product === "CSP") return;
+                      throw new Error("网元类型只支持 UMF 或 CSP");
+                    },
+                  },
+                ]}
+              >
+                <Select
+                  aria-label="网元类型"
+                  allowClear
+                  placeholder="选择网元类型"
+                  options={dictOptions(dicts?.product)}
+                />
               </Form.Item>
             </>
           ) : (
