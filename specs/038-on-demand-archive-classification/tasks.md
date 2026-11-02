@@ -81,14 +81,14 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **独立测试**：分别构造 UMF 告警、CSP `0/Problems/Alarm Data`、缺少 `Problems` 的 CSP 告警、嵌套 ZIP/TAR/GZIP、单文件 GZIP、0 字节、仅表头、零记录和损坏成员；所有合法告警进入同一个 `alarm/`，非告警 `0/` 和 CSP 非告警内容不进入 catalog。
 
-- [ ] T033 [P] [US2] 新建 `tests/test_classification_alarm.py`，先写 `Alarm Information/`、`Alarm Data/` 任意前缀匹配、`Problems` 缺失、目录大小写变化和 `alarm > ignore` 阶段优先级测试（FR-004、FR-023、FR-024、FR-026、SC-007）
-- [ ] T034 [US2] 在 `tests/test_classification_alarm.py` 增加告警普通文件、ZIP、TAR、TAR.GZ、单文件 GZIP、嵌套归档、0 字节、仅表头、零记录、含记录和损坏成员测试（FR-025、FR-027、FR-028、SC-008、SC-011）
-- [ ] T035 [US2] 在 `tests/fixtures/make_real_package.py` 追加固定时间戳的 UMF 告警、CSP `0/Problems/Alarm Data`、缺少 Problems 的 CSP 告警、非告警 `0/`、非告警 CSP 和损坏告警归档样例（FR-023 至 FR-028、SC-002、SC-007、SC-008）
-- [ ] T036 [US2] 更新 `deploy/config/classify_rules.yaml`，增加 `alarm.umf`、`alarm.csp`、`0/` ignore 和 CSP catch-all ignore；告警路线 profiles 为 `[UMF, CSP]`，两种网元告警均落位 `alarm/{member}`，CSP 非告警不得落位（FR-004、FR-005、FR-023 至 FR-026）
-- [ ] T037 [US2] 在 `app/services/extraction/nested.py` 与 `app/services/extraction/classification.py` 实现告警 `expand_recursive`，去掉告警来源目录和归档外层，组合嵌套成员路径，并对不支持或损坏归档写 FailureRecord（FR-025、FR-028、FR-034、FR-035）
-- [ ] T038 [US2] 在 `app/services/extraction/classification.py` 实现局部失败策略：单归档/GZIP 失败产生 `WARN` 和 FailureRecord，其他合法告警继续落位；配置、主包、catalog 或发布失败仍为 `ERROR`（FR-028、FR-035、FR-053、SC-011）
-- [ ] T039 [US2] 扩展 `tests/test_real_package.py`，断言合成包中 UMF 与 CSP 告警共 2 个文件进入同一 `alarm/`、记录数可读取，`0/` 非告警和 CSP 非告警进入 catalog 的数量为 0（FR-005、SC-001、SC-002、SC-007、SC-008）
-- [ ] T040 [US2] 在 `tests/test_executor.py` 验证 classification `WARN` 时 prepare/inspect 继续，损坏子归档不中断任务；classification `ERROR` 时不执行任何普通规则（FR-053、SC-011）
+- [x] T033 [P] [US2] 新建 `tests/test_classification_alarm.py`，先写 `Alarm Information/`、`Alarm Data/` 任意前缀匹配、`Problems` 缺失、目录大小写变化和 `alarm > ignore` 阶段优先级测试（FR-004、FR-023、FR-024、FR-026、SC-007）
+- [x] T034 [US2] 在 `tests/test_classification_alarm.py` 增加告警普通文件、ZIP、TAR、TAR.GZ、单文件 GZIP、嵌套归档、0 字节、仅表头、零记录、含记录和损坏成员测试（FR-025、FR-027、FR-028、SC-008、SC-011）
+- [x] T035 [US2] 在 `tests/fixtures/make_real_package.py` 追加固定时间戳的 UMF 告警、CSP `0/Problems/Alarm Data`、缺少 Problems 的 CSP 告警、非告警 `0/`、非告警 CSP 和损坏告警归档样例（FR-023 至 FR-028、SC-002、SC-007、SC-008）
+- [x] T036 [US2] 更新 `deploy/config/classify_rules.yaml`，增加 `alarm.umf`、`alarm.csp`、`0/` ignore 和 CSP catch-all ignore；告警路线 profiles 为 `[UMF, CSP]`，两种网元告警均落位 `alarm/{member}`，CSP 非告警不得落位（FR-004、FR-005、FR-023 至 FR-026）
+- [x] T037 [US2] 在 `app/services/extraction/nested.py` 与 `app/services/extraction/classification.py` 实现告警 `expand_recursive`，去掉告警来源目录和归档外层，组合嵌套成员路径，并对不支持或损坏归档写 FailureRecord（FR-025、FR-028、FR-034、FR-035）
+- [x] T038 [US2] 在 `app/services/extraction/classification.py` 实现局部失败策略：单归档/GZIP 失败产生 `WARN` 和 FailureRecord，其他合法告警继续落位；配置、主包、catalog 或发布失败仍为 `ERROR`（FR-028、FR-035、FR-053、SC-011）
+- [x] T039 [US2] 扩展 `tests/test_real_package.py`，断言合成包中 UMF 与 CSP 告警共 2 个文件进入同一 `alarm/`、记录数可读取，`0/` 非告警和 CSP 非告警进入 catalog 的数量为 0（FR-005、SC-001、SC-002、SC-007、SC-008）
+- [x] T040 [US2] 在 `tests/test_executor.py` 验证 classification `WARN` 时 prepare/inspect 继续，损坏子归档不中断任务；classification `ERROR` 时不执行任何普通规则（FR-053、SC-011）
 
 **检查点**：仅使用 US2 + 基础层，即可独立验证跨网元告警统一落位、优先级和局部失败隔离。
 
@@ -100,14 +100,14 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **独立测试**：构造 Service Logs 与 CHR 归档，包含全部 include、全部 exclude、未选成员和主机 `.log.gz`；验证最终日志数、CHR 数、解压后缀、目标路径和 ignored 原因，任何排除项不得进入 catalog。
 
-- [ ] T041 [P] [US3] 新建 `tests/test_classification_logs.py`，先写 Service Logs 六类 include、全部 exclude、exclude 优先于 include、未选成员 `member_not_selected`、98 个业务主日志和 85 个 `.log.gz` 解压测试（FR-029、FR-030、FR-031、FR-032、SC-004）
-- [ ] T042 [US3] 在 `tests/test_classification_logs.py` 增加 CHR `**/*.bil.gz` 选择、3 个 `.bil` 落位、`LocalLogReport.csv` 忽略、其他成员未选，以及 Host Debugging/System `DEBUG.tar.gz`/`OS.tar.gz` 的成员 `.log.gz` 解压测试（FR-020、FR-021、SC-005）
-- [ ] T043 [US3] 在 `tests/fixtures/make_real_package.py` 追加固定时间戳、幂等的 98 个业务主日志、85 个 `.log.gz`、全部排除项、3 个 CHR `.bil.gz`、`LocalLogReport.csv`、DEBUG.tar.gz 和 OS.tar.gz 样例（FR-020 至 FR-022、FR-029 至 FR-032）
-- [ ] T044 [US3] 更新 `deploy/config/classify_rules.yaml`，增加 `umf.chr`、`umf.service-logs`、`umf.host-debug`、`umf.host-system` 及 selection include/exclude、service、`name_without_gz` 和 `member_decompress` 配置（FR-020、FR-021、FR-029 至 FR-031）
-- [ ] T045 [US3] 在 `app/services/extraction/nested.py` 实现 `select_and_decompress`、exclude 优先、include/service 唯一匹配、选中 GZIP 去一层 `.gz` 和归档成员 GZIP 解压；在 `app/services/extraction/classification.py` 将未选成员写入 ignored（FR-020、FR-029 至 FR-032）
-- [ ] T046 [US3] 在 `app/services/extraction/audit.py` 为 Service Logs/CHR 排除原因建立稳定 reason（至少 `member_not_selected`、`report_not_log`、RScheck/dblog/UFP/monitor/start/proxy/bbox 原因），确保审计可区分规则未命中与成员未选（FR-031、FR-044、FR-045）
-- [ ] T047 [US3] 扩展 `tests/test_real_package.py`，断言合成包 catalog 中 Service Logs 恰好 98 个、85 个 `.log.gz` 全部变为 `.log`、CHR 恰好 3 个 `.bil`，所有排除项在 ignored 且不在 catalog（SC-004、SC-005）
-- [ ] T048 [US3] 在 `tests/test_kpi_only_rule_library.py` 回归本轮只保留 KPI 普通规则；不得因新增 logs/chr/status/operation 分类恢复已下线业务规则（FR-049、范围外）
+- [x] T041 [P] [US3] 新建 `tests/test_classification_logs.py`，先写 Service Logs 六类 include、全部 exclude、exclude 优先于 include、未选成员 `member_not_selected`、98 个业务主日志和 85 个 `.log.gz` 解压测试（FR-029、FR-030、FR-031、FR-032、SC-004）
+- [x] T042 [US3] 在 `tests/test_classification_logs.py` 增加 CHR `**/*.bil.gz` 选择、3 个 `.bil` 落位、`LocalLogReport.csv` 忽略、其他成员未选，以及 Host Debugging/System `DEBUG.tar.gz`/`OS.tar.gz` 的成员 `.log.gz` 解压测试（FR-020、FR-021、SC-005）
+- [x] T043 [US3] 在 `tests/fixtures/make_real_package.py` 追加固定时间戳、幂等的 98 个业务主日志、85 个 `.log.gz`、全部排除项、3 个 CHR `.bil.gz`、`LocalLogReport.csv`、DEBUG.tar.gz 和 OS.tar.gz 样例（FR-020 至 FR-022、FR-029 至 FR-032）
+- [x] T044 [US3] 更新 `deploy/config/classify_rules.yaml`，增加 `umf.chr`、`umf.service-logs`、`umf.host-debug`、`umf.host-system` 及 selection include/exclude、service、`name_without_gz` 和 `member_decompress` 配置（FR-020、FR-021、FR-029 至 FR-031）
+- [x] T045 [US3] 在 `app/services/extraction/nested.py` 实现 `select_and_decompress`、exclude 优先、include/service 唯一匹配、选中 GZIP 去一层 `.gz` 和归档成员 GZIP 解压；在 `app/services/extraction/classification.py` 将未选成员写入 ignored（FR-020、FR-029 至 FR-032）
+- [x] T046 [US3] 在 `app/services/extraction/audit.py` 为 Service Logs/CHR 排除原因建立稳定 reason（至少 `member_not_selected`、`report_not_log`、RScheck/dblog/UFP/monitor/start/proxy/bbox 原因），确保审计可区分规则未命中与成员未选（FR-031、FR-044、FR-045）
+- [x] T047 [US3] 扩展 `tests/test_real_package.py`，断言合成包 catalog 中 Service Logs 恰好 98 个、85 个 `.log.gz` 全部变为 `.log`、CHR 恰好 3 个 `.bil`，所有排除项在 ignored 且不在 catalog（SC-004、SC-005）
+- [x] T048 [US3] 在 `tests/test_kpi_only_rule_library.py` 回归本轮只保留 KPI 普通规则；不得因新增 logs/chr/status/operation 分类恢复已下线业务规则（FR-049、范围外）
 
 **检查点**：仅使用 US3 + 基础层，即可独立验证 Service Logs、CHR 和主机日志的按需选择与解压。
 
@@ -120,20 +120,20 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 **独立测试**：连续分类两次复用；只改注释/空白/顺序仍复用；改 route/target/product/path limit 触发重建；删除/损坏 manifest 或 `.main` 触发正确重建；失败发布回滚；旧分类根残留不进入 catalog；原包 checksum 前后不变。
 
 - [x] T049 [P] [US4] 在 `tests/test_classification_config.py` 增加 canonical fingerprint 测试，覆盖注释、空白、映射键顺序、route 顺序不变，anchor/pattern/profiles/priority/action/category/target/selection/member_decompress/id 变化，以及 64 位小写十六进制格式（FR-039、SC-009）
-- [ ] T050 [P] [US4] 在 `tests/test_extraction_site.py` 增加证据指纹、`.main/` 链接/内容变化、原包 checksum 冲突和证据损坏重建测试，断言重建前后原始包哈希一致（FR-041、FR-042、SC-006）
-- [ ] T051 [P] [US4] 在 `tests/test_extraction_package.py` 增加 staging 构建、manifest 隐藏、target roots 交换、`os.replace()` 发布、逆序回滚、legacy roots 清理、`.main/prepared/rules/reports` 不被触碰和重复执行无重复目标/分类的幂等测试（FR-043、FR-046、FR-054、SC-009）
+- [x] T050 [P] [US4] 在 `tests/test_extraction_site.py` 增加证据指纹、`.main/` 链接/内容变化、原包 checksum 冲突和证据损坏重建测试，断言重建前后原始包哈希一致（FR-041、FR-042、SC-006）
+- [x] T051 [P] [US4] 在 `tests/test_extraction_package.py` 增加 staging 构建、manifest 隐藏、target roots 交换、`os.replace()` 发布、逆序回滚、legacy roots 清理、`.main/prepared/rules/reports` 不被触碰和重复执行无重复目标/分类的幂等测试（FR-043、FR-046、FR-054、SC-009）
 - [x] T052 [US4] 在 `app/services/extraction/config.py` 实现规范化有效配置 SHA-256，填充默认值、排序集合/route/selection、UTF-8 canonical JSON，并输出 classification snapshot 所需 config fingerprint（FR-039、FR-040）
-- [ ] T053 [US4] 在 `app/services/extraction/site.py` 与 `app/services/extraction/manifest.py` 实现 `.main/` 证据指纹、checksum 复核和复用矩阵；只有 v5 且 checksum/evidence/product/kind/snapshot/path_limit/catalog 全部一致才复用（FR-040、FR-041、FR-042）
-- [ ] T054 [US4] 在 `app/services/extraction/classification.py` 与 `app/services/extraction/manifest.py` 实现 `.classification.staging/`、catalog 摘要预校验、旧 manifest 隐藏、分类根交换、原子发布、回滚、成功后的 legacy allowlist 清理和重复执行幂等发布（FR-043、FR-046、FR-054、SC-009）
-- [ ] T055 [US4] 在 `tests/test_extraction_package.py` 增加配置有效变化、product/kind 变化、path limit 变化、旧 v1-v4 manifest、manifest 损坏、`.main` 缺失和同输入重复执行的复用/重建矩阵测试（FR-039 至 FR-043、FR-054、SC-009）
-- [ ] T056 [P] [US4] 在 `tests/test_api_robustness.py`、`tests/test_task_restore.py` 和 `tests/test_tasks_scene_missing.py` 先写 API 条件必填、`metadata_not_applicable`、checksum → kind → product 冲突顺序、同 checksum 同 kind 同 product 幂等恢复和现场清理后恢复不自动重跑测试（FR-001、FR-002、FR-050、FR-051）
-- [ ] T057 [US4] 更新 `app/api/router.py`，按 T056 契约实现 product trim+upper、巡检包必填、日志补充包禁字段、三类稳定冲突错误码和既有任务恢复矩阵（FR-001、FR-002、FR-050、FR-051）
-- [ ] T058 [P] [US4] 在 `tests/test_task_run_fields.py`、`tests/test_local_run.py`、`tests/test_cli_explain_match.py`、`tests/test_inventory_parser.py` 和 `tests/test_online_identity.py` 先写 product/package kind 从 API/CLI 到 RuleContext/UnitRequest/worker、台账过滤和本地/在线同构的失败测试（FR-003、FR-050、FR-051、SC-013）
-- [ ] T059 [US4] 更新 `app/services/tasks.py`、`app/cli.py`、`app/services/unit_runtime.py`、`app/services/executor.py` 和 `app/services/inventory/parser.py`，传播持久化 product/package kind，台账使用同一规范化 product 比较，`log_supplement` 返回 `not_applicable`，不得从路径或台账反推（FR-001 至 FR-004、FR-050、FR-051）
+- [x] T053 [US4] 在 `app/services/extraction/site.py` 与 `app/services/extraction/manifest.py` 实现 `.main/` 证据指纹、checksum 复核和复用矩阵；只有 v5 且 checksum/evidence/product/kind/snapshot/path_limit/catalog 全部一致才复用（FR-040、FR-041、FR-042）
+- [x] T054 [US4] 在 `app/services/extraction/classification.py` 与 `app/services/extraction/manifest.py` 实现 `.classification.staging/`、catalog 摘要预校验、旧 manifest 隐藏、分类根交换、原子发布、回滚、成功后的 legacy allowlist 清理和重复执行幂等发布（FR-043、FR-046、FR-054、SC-009）
+- [x] T055 [US4] 在 `tests/test_extraction_package.py` 增加配置有效变化、product/kind 变化、path limit 变化、旧 v1-v4 manifest、manifest 损坏、`.main` 缺失和同输入重复执行的复用/重建矩阵测试（FR-039 至 FR-043、FR-054、SC-009）
+- [x] T056 [P] [US4] 在 `tests/test_api_robustness.py`、`tests/test_task_restore.py` 和 `tests/test_tasks_scene_missing.py` 先写 API 条件必填、`metadata_not_applicable`、checksum → kind → product 冲突顺序、同 checksum 同 kind 同 product 幂等恢复和现场清理后恢复不自动重跑测试（FR-001、FR-002、FR-050、FR-051）
+- [x] T057 [US4] 更新 `app/api/router.py`，按 T056 契约实现 product trim+upper、巡检包必填、日志补充包禁字段、三类稳定冲突错误码和既有任务恢复矩阵（FR-001、FR-002、FR-050、FR-051）
+- [x] T058 [P] [US4] 在 `tests/test_task_run_fields.py`、`tests/test_local_run.py`、`tests/test_cli_explain_match.py`、`tests/test_inventory_parser.py` 和 `tests/test_online_identity.py` 先写 product/package kind 从 API/CLI 到 RuleContext/UnitRequest/worker、台账过滤和本地/在线同构的失败测试（FR-003、FR-050、FR-051、SC-013）
+- [x] T059 [US4] 更新 `app/services/tasks.py`、`app/cli.py`、`app/services/unit_runtime.py`、`app/services/executor.py` 和 `app/services/inventory/parser.py`，传播持久化 product/package kind，台账使用同一规范化 product 比较，`log_supplement` 返回 `not_applicable`，不得从路径或台账反推（FR-001 至 FR-004、FR-050、FR-051）
 - [x] T060 [P] [US4] 更新 `web/src/pages/TaskListPage.test.tsx`，先写巡检包 product 必填、提交前 trim+upper、日志补充包隐藏并清空省份/运营商/product、稳定冲突错误可见的失败测试（FR-001、FR-002、FR-050）
 - [x] T061 [US4] 执行 `.venv/bin/python build.py gen-web-api` 更新 `web/src/api/client.ts`，再更新 `web/src/pages/TaskListPage.tsx` 实现条件显示、必填校验、空白/大小写规范化和错误码展示，禁止手写不合契约的请求字段（FR-001、FR-002、FR-050）
-- [ ] T062 [US4] 新建 `web/e2e/archive-classification-upload.spec.ts`，覆盖巡检包上传 product 必填、`umf` 规范化为 `UMF`、日志补充包字段隐藏且不提交、缺 product/冲突错误的完整入口到结果展示（FR-001、FR-002、FR-050、SC-013）
-- [ ] T063 [US4] 在 `tests/test_online_identity.py` 与 `tests/test_cli_explain_match.py` 完成 API/CLI 同 task_id、profile、catalog、ignored/failures 摘要和台账过滤一致性断言，并修正实现直到 SC-013 通过（FR-051、SC-013）
+- [x] T062 [US4] 新建 `web/e2e/archive-classification-upload.spec.ts`，覆盖巡检包上传 product 必填、`umf` 规范化为 `UMF`、日志补充包字段隐藏且不提交、缺 product/冲突错误的完整入口到结果展示（FR-001、FR-002、FR-050、SC-013）
+- [x] T063 [US4] 在 `tests/test_online_identity.py` 与 `tests/test_cli_explain_match.py` 完成 API/CLI 同 task_id、profile、catalog、ignored/failures 摘要和台账过滤一致性断言，并修正实现直到 SC-013 通过（FR-051、SC-013）
 
 **检查点**：仅使用 US4 + 基础层，即可独立验证指纹复用、证据重建、原子发布、product/kind 传播和双模式一致性。
 
@@ -145,16 +145,16 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **独立测试**：构造命中、ignore、fallback、冲突、局部失败和损坏 catalog；验证 manifest 审计逐项存在、summary 计数一致、catalog 仅含有效成功文件、目录扫描不回退，规则无匹配返回非空 skip 理由，`explain-match` 返回 v5 快照和摘要。
 
-- [ ] T064 [P] [US5] 在 `tests/test_classification_runtime.py` 增加命中、未命中 fallback、ignore、resolved conflict、failure、按 route/category/action/status 汇总和逐项 reason 测试，断言 summary 与数组长度一致（FR-044、FR-045、SC-010）
-- [ ] T065 [US5] 在 `app/services/extraction/audit.py` 与 `app/services/extraction/classification.py` 完成审计聚合和结构化分类日志，输出按 route/category/action/status 计数，并逐项列出未命中、忽略、冲突和失败（FR-044、FR-045、SC-010）
-- [ ] T066 [P] [US5] 在 `tests/test_scanning_catalog.py` 重写 catalog 测试，要求只读取 v5 `manifest.json` 的 `catalog[]`，校验路径、普通文件、symlink、size/SHA-256、summary 和顺序，禁止回退扫描 `logs/kpi/alarm/...`（FR-046、FR-047）
-- [ ] T067 [US5] 重写 `app/services/scanning/catalog.py`，只从有效 manifest v5 catalog 构建 `TaskFileCatalog`，拒绝缺失、越界、链接、摘要不符和 summary 不一致，不扫描固定分类目录（FR-046、FR-047）
-- [ ] T068 [P] [US5] 在 `tests/test_executor.py` 和 `tests/test_rule_state_executor.py` 先写普通规则无 catalog 匹配时返回 `skip` 且 skip_reason 包含 patterns/profile/config/ignored/failures 的测试（FR-048）
-- [ ] T069 [US5] 更新 `app/services/executor.py`，让普通规则只匹配 catalog 路径，无匹配返回 `skip` 和非空 `skip_reason`，不得把 `.main/`、prepared、rules、reports、task.json、execution.log 暴露给规则（FR-046 至 FR-048）
-- [ ] T070 [US5] 在 `tests/test_cli_explain_match.py` 增加 explain-match v5 测试，断言返回 classification snapshot、config fingerprint、catalog 匹配、ignored/failures 摘要且不读取旧分类目录（FR-044、FR-045、FR-051）
-- [ ] T071 [US5] 更新 `app/cli.py` 的 `explain-match`，输出 v5 snapshot、route/category/action/status 汇总、catalog 匹配和 ignored/failures 明细，不使用旧 manifest 或目录扫描（FR-044 至 FR-046、FR-051）
-- [ ] T072 [P] [US5] 在 `web/src/utils/preparationDisplay.test.ts` 与 `web/src/pages/TaskDetailPage.test.tsx` 增加准备页只展示 `pkg.extract.main` 和 `pkg.extract.classification`、WARN/ERROR 可解释状态测试（FR-045、FR-053）
-- [ ] T073 [US5] 更新 `web/src/utils/preparationDisplay.ts` 与 `web/src/pages/TaskDetailPage.tsx`，只展示两个隐藏解压单元，显示 classification 摘要、ignored/failures 计数和稳定错误码，不展示旧七分类单元（FR-045、FR-053）
+- [x] T064 [P] [US5] 在 `tests/test_classification_runtime.py` 增加命中、未命中 fallback、ignore、resolved conflict、failure、按 route/category/action/status 汇总和逐项 reason 测试，断言 summary 与数组长度一致（FR-044、FR-045、SC-010）
+- [x] T065 [US5] 在 `app/services/extraction/audit.py` 与 `app/services/extraction/classification.py` 完成审计聚合和结构化分类日志，输出按 route/category/action/status 计数，并逐项列出未命中、忽略、冲突和失败（FR-044、FR-045、SC-010）
+- [x] T066 [P] [US5] 在 `tests/test_scanning_catalog.py` 重写 catalog 测试，要求只读取 v5 `manifest.json` 的 `catalog[]`，校验路径、普通文件、symlink、size/SHA-256、summary 和顺序，禁止回退扫描 `logs/kpi/alarm/...`（FR-046、FR-047）
+- [x] T067 [US5] 重写 `app/services/scanning/catalog.py`，只从有效 manifest v5 catalog 构建 `TaskFileCatalog`，拒绝缺失、越界、链接、摘要不符和 summary 不一致，不扫描固定分类目录（FR-046、FR-047）
+- [x] T068 [P] [US5] 在 `tests/test_executor.py` 和 `tests/test_rule_state_executor.py` 先写普通规则无 catalog 匹配时返回 `skip` 且 skip_reason 包含 patterns/profile/config/ignored/failures 的测试（FR-048）
+- [x] T069 [US5] 更新 `app/services/executor.py`，让普通规则只匹配 catalog 路径，无匹配返回 `skip` 和非空 `skip_reason`，不得把 `.main/`、prepared、rules、reports、task.json、execution.log 暴露给规则（FR-046 至 FR-048）
+- [x] T070 [US5] 在 `tests/test_cli_explain_match.py` 增加 explain-match v5 测试，断言返回 classification snapshot、config fingerprint、catalog 匹配、ignored/failures 摘要且不读取旧分类目录（FR-044、FR-045、FR-051）
+- [x] T071 [US5] 更新 `app/cli.py` 的 `explain-match`，输出 v5 snapshot、route/category/action/status 汇总、catalog 匹配和 ignored/failures 明细，不使用旧 manifest 或目录扫描（FR-044 至 FR-046、FR-051）
+- [x] T072 [P] [US5] 在 `web/src/utils/preparationDisplay.test.ts` 与 `web/src/pages/TaskDetailPage.test.tsx` 增加准备页只展示 `pkg.extract.main` 和 `pkg.extract.classification`、WARN/ERROR 可解释状态测试（FR-045、FR-053）
+- [x] T073 [US5] 更新 `web/src/utils/preparationDisplay.ts` 与 `web/src/pages/TaskDetailPage.tsx`，只展示两个隐藏解压单元，显示 classification 摘要、ignored/failures 计数和稳定错误码，不展示旧七分类单元（FR-045、FR-053）
 
 **检查点**：仅使用 US5 + 基础层，即可独立验证审计、catalog 唯一入口、无匹配 skip 和准备页可解释性。
 
@@ -164,17 +164,17 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **目的**：移除旧分类链路、补齐文档和真实包验收，执行完整质量门禁。
 
-- [ ] T074 [P] 更新 `docs/architecture.md`、`docs/data-model.md` 和 `docs/design/mechanisms.md`，记录 manifest v5、两个隐藏解压单元、按需展开、审计、重建矩阵和 catalog 唯一入口（FR-037 至 FR-048）
-- [ ] T075 [P] 更新 `docs/example/real-package-structure.md` 与 `specs/038-on-demand-archive-classification/quickstart.md` 的最终命令和 fixture 计数，确保文档与实现、真实包基准一致（FR-006、FR-032、SC-001 至 SC-005）
-- [ ] T076 停止生产链路对 `app/core/classify.py`、`app/services/extraction/policy.py` 和 `deploy/config/extract_policy.yaml` 的调用；删除或改写 `tests/test_classify.py`、`tests/test_extract_policy.py`、`tests/test_extraction_policy.py` 为迁移保护测试，确保成员内容嗅探和通用扩展名 fallback 不再进入 v5（FR-006、FR-033、范围外）
-- [ ] T077 检查 `tests/test_kpi_only_rule_library.py` 和注册表，确认除隐藏解压单元外只保留既有 KPI 普通规则，不恢复日志、告警、配置、状态、资源或 CHR 业务规则（FR-049、范围外）
-- [ ] T078 扩展 `tests/test_real_package.py` 和 `tests/fixtures/make_real_package.py` 的展示效果断言，覆盖真实目录正常路径、告警边界、Service Logs/CHR 选择、KPI/MESH、未知归档、损坏归档、0 字节/仅表头/零记录和路径安全边界，并保持固定时间戳与既有样例只增不减（SC-001 至 SC-013）
-- [ ] T079 执行 `.venv/bin/python build.py contract` 与 `.venv/bin/python build.py gen-web-api`，修复 `docs/api/openapi.yaml`、Pydantic schema、生成客户端和测试之间的全部契约漂移（FR-001、FR-002、FR-050、FR-051）
-- [ ] T080 执行 `.venv/bin/python build.py lint` 与 `.venv/bin/python build.py test`，修复全部静态检查、单元、契约和集成测试问题（宪法质量门禁）
-- [ ] T081 执行 `.venv/bin/python build.py verify`，确认 CLI 与 API 全流程、两个隐藏解压单元、分类重建和 KPI 规则执行通过（宪法质量门禁）
-- [ ] T082 执行 `.venv/bin/python build.py web-build` 与 `.venv/bin/python build.py e2e`，验证上传、准备摘要和分类结果在界面中真实可见（宪法展示效果门禁）
-- [ ] T083 按 `specs/038-on-demand-archive-classification/quickstart.md` 对只读真实包 `DataCollect/ALL_20261031173253.zip` 使用隔离临时 HOME/输出运行；运行前后均校验 SHA-256 `df3d09eb065a407193b0178200f195cebf571e7ff1d8ef6266d98e5ccf459687`，核对 2 个告警、73 个 KPI 成员、14 个 MESH CSV、98 个业务日志和 3 个 CHR `.bil`，不得复制、移动、删除、重命名或提交真实包及派生数据（SC-001 至 SC-006）
-- [ ] T084 执行 `git status --short`、`git diff --check` 并人工检查暂存候选，确认 `DataCollect/`、`uploads/`、`output/`、数据库、日志、临时验收目录和真实解压内容均未进入 Git（宪法真实数据隔离）
+- [x] T074 [P] 更新 `docs/architecture.md`、`docs/data-model.md` 和 `docs/design/mechanisms.md`，记录 manifest v5、两个隐藏解压单元、按需展开、审计、重建矩阵和 catalog 唯一入口（FR-037 至 FR-048）
+- [x] T075 [P] 更新 `docs/example/real-package-structure.md` 与 `specs/038-on-demand-archive-classification/quickstart.md` 的最终命令和 fixture 计数，确保文档与实现、真实包基准一致（FR-006、FR-032、SC-001 至 SC-005）
+- [x] T076 停止生产链路对 `app/core/classify.py`、`app/services/extraction/policy.py` 和 `deploy/config/extract_policy.yaml` 的调用；删除或改写 `tests/test_classify.py`、`tests/test_extract_policy.py`、`tests/test_extraction_policy.py` 为迁移保护测试，确保成员内容嗅探和通用扩展名 fallback 不再进入 v5（FR-006、FR-033、范围外）
+- [x] T077 检查 `tests/test_kpi_only_rule_library.py` 和注册表，确认除隐藏解压单元外只保留既有 KPI 普通规则，不恢复日志、告警、配置、状态、资源或 CHR 业务规则（FR-049、范围外）
+- [x] T078 扩展 `tests/test_real_package.py` 和 `tests/fixtures/make_real_package.py` 的展示效果断言，覆盖真实目录正常路径、告警边界、Service Logs/CHR 选择、KPI/MESH、未知归档、损坏归档、0 字节/仅表头/零记录和路径安全边界，并保持固定时间戳与既有样例只增不减（SC-001 至 SC-013）
+- [x] T079 执行 `.venv/bin/python build.py contract` 与 `.venv/bin/python build.py gen-web-api`，修复 `docs/api/openapi.yaml`、Pydantic schema、生成客户端和测试之间的全部契约漂移（FR-001、FR-002、FR-050、FR-051）
+- [x] T080 执行 `.venv/bin/python build.py lint` 与 `.venv/bin/python build.py test`，修复全部静态检查、单元、契约和集成测试问题（宪法质量门禁）
+- [x] T081 执行 `.venv/bin/python build.py verify`，确认 CLI 与 API 全流程、两个隐藏解压单元、分类重建和 KPI 规则执行通过（宪法质量门禁）
+- [x] T082 执行 `.venv/bin/python build.py web-build` 与 `.venv/bin/python build.py e2e`，验证上传、准备摘要和分类结果在界面中真实可见（宪法展示效果门禁）
+- [x] T083 按 `specs/038-on-demand-archive-classification/quickstart.md` 对只读真实包 `DataCollect/ALL_20261031173253.zip` 使用隔离临时 HOME/输出运行；运行前后均校验 SHA-256 `df3d09eb065a407193b0178200f195cebf571e7ff1d8ef6266d98e5ccf459687`，核对 2 个告警、73 个 KPI 成员、14 个 MESH CSV、98 个业务日志和 3 个 CHR `.bil`，不得复制、移动、删除、重命名或提交真实包及派生数据（SC-001 至 SC-006）
+- [x] T084 执行 `git status --short`、`git diff --check` 并人工检查暂存候选，确认 `DataCollect/`、`uploads/`、`output/`、数据库、日志、临时验收目录和真实解压内容均未进入 Git（宪法真实数据隔离）
 
 ---
 
