@@ -39,8 +39,12 @@ test("测量单元支持同设备版本对比", async ({ page }) => {
       ) && response.request().method() === "GET",
   );
   await page.getByRole("combobox", { name: "基线版本" }).click();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
+  const baselineOption = page
+    .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")
+    .locator(".ant-select-item-option")
+    .filter({ hasText: "task-kpi-history-past" });
+  await expect(baselineOption).toBeVisible();
+  await baselineOption.click();
   const compareResponse = await compareResponsePromise;
   expect(compareResponse.status()).toBe(200);
 

@@ -4,7 +4,15 @@ import { App } from "antd";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, type RuleResult, type SystemInspection, type TaskStats, type TaskSummary } from "../api/http";
+import {
+  api,
+  type DataPreparation,
+  type PreparationItem,
+  type RuleResult,
+  type SystemInspection,
+  type TaskStats,
+  type TaskSummary,
+} from "../api/http";
 import { AuthProvider } from "../auth/AuthContext";
 import { TABLE_DENSITY_STORAGE_KEY } from "../hooks/useTableDensity";
 import { TaskDetailPage } from "./TaskDetailPage";
@@ -62,6 +70,37 @@ function makeSystem(overrides: Partial<SystemInspection> = {}): SystemInspection
     rules: [makeRule()],
     ...overrides,
   } as unknown as SystemInspection;
+}
+
+function makePreparationItem(
+  code: string,
+  category: string,
+  status: PreparationItem["status"],
+  summary: string,
+  issues: PreparationItem["issues"] = [],
+): PreparationItem {
+  return {
+    code,
+    name: code,
+    category,
+    status,
+    summary,
+    extracted_count: status === "error" ? 0 : 1,
+    total_count: 1,
+    issues,
+  };
+}
+
+function makePreparation(items: PreparationItem[]): DataPreparation {
+  return {
+    status: items.some((item) => item.status === "error") ? "error" : "warn",
+    items,
+    total: items.length,
+    success_count: items.filter((item) => item.status === "pass").length,
+    warning_count: items.filter((item) => item.status === "warn").length,
+    failure_count: items.filter((item) => ["fail", "error"].includes(item.status)).length,
+    skip_count: items.filter((item) => item.status === "skip").length,
+  };
 }
 
 function renderPage(taskId = "task-001") {
@@ -188,5 +227,47 @@ describe("TaskDetailPage", () => {
       );
     });
     expect(screen.getByTestId("attention-panel")).toBeDefined();
+  });
+
+  it("准备信息只展示两个隐藏解压单元及分类审计详情", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(
+      makeTask({
+        preparation: makePreparation([
+          makePreparationItem("pkg.extract.main", "main", "pass", "主包解压 120 个原始文件"),
+          makePreparationItem(
+            "pkg.extract.classification",
+            "classification",
+            "warn",
+            "落位 98 · 忽略 7 · 失败 2",
+            [
+              {
+                type: "failed",
+                source: "Alarm_Data/broken.zip",
+                reason: "archive_corrupt: 告警归档损坏",
+              },
+            ],
+          ),
+          makePreparationItem("pkg.extract.logs", "logs", "error", "旧日志分类"),
+          makePreparationItem("pkg.extract.kpi", "kpi", "fail", "旧 KPI 分类"),
+        ]),
+      }),
+    );
+    vi.mocked(api.getSystem).mockResolvedValue(makeSystem());
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("conclusion-hero")).toBeDefined();
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByText("执行与技术信息"));
+
+    expect(screen.getByTestId("preparation-units")).toBeDefined();
+    expect(screen.getByTestId("preparation-pkg.extract.main")).toBeDefined();
+    expect(screen.getByTestId("preparation-pkg.extract.classification")).toBeDefined();
+    expect(screen.queryByTestId("preparation-pkg.extract.logs")).toBeNull();
+    expect(screen.queryByTestId("preparation-pkg.extract.kpi")).toBeNull();
+    expect(screen.getByText("落位 98 · 忽略 7 · 失败 2")).toBeDefined();
+    expect(screen.getByText(/archive_corrupt/)).toBeDefined();
   });
 });

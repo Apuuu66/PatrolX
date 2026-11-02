@@ -52,13 +52,14 @@ async function openUpload(page: Page) {
   return page.locator('input[type="file"]');
 }
 
-/** 巡检包必须携带省份 / 运营商，否则后端按 400 拒绝；沿用 E2E 字典项。 */
+/** 巡检包必须携带省份 / 运营商 / 网元类型，否则后端按 400 拒绝；沿用 E2E 字典项。 */
 async function fillInspectionMetadata(page: Page) {
   const selectByLabel = (label: string) =>
     page.locator(".ant-form-item").filter({ hasText: label }).locator(".ant-select");
   for (const [label, option] of [
     ["省份", "江苏"],
     ["运营商", "移动"],
+    ["网元类型", "UMF"],
   ] as const) {
     await selectByLabel(label).click();
     await page

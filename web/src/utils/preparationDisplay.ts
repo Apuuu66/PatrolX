@@ -6,20 +6,16 @@ import type {
 
 const ABNORMAL_STATUSES = new Set<PreparationItem["status"]>(["warn", "fail", "error"]);
 const NORMAL_STATUSES = new Set<PreparationItem["status"]>(["pass", "skip"]);
+const VISIBLE_PREPARATION_CODES = new Set(["pkg.extract.main", "pkg.extract.classification"]);
 const CATEGORY_LABELS: Record<string, string> = {
   main: "主包",
-  logs: "日志",
-  kpi: "KPI",
-  traffic: "流量",
-  alarm: "告警",
-  config: "配置",
-  resource: "资源",
-  other: "其他",
+  classification: "分类落位",
 };
 const MAX_VISIBLE_ABNORMAL_ITEMS = 3;
 const DEFAULT_PATH_LENGTH = 80;
 
 export type PreparationDisplay = {
+  items: PreparationItem[];
   summary: string;
   abnormalItems: PreparationItem[];
   visibleAbnormalItems: PreparationItem[];
@@ -60,8 +56,9 @@ export function getPreparationDisplay(
   preparation: DataPreparation,
   showAllAbnormal = false,
 ): PreparationDisplay {
-  const abnormalItems = preparation.items.filter((item) => ABNORMAL_STATUSES.has(item.status));
-  const normalItems = preparation.items.filter((item) => NORMAL_STATUSES.has(item.status));
+  const items = preparation.items.filter((item) => VISIBLE_PREPARATION_CODES.has(item.code));
+  const abnormalItems = items.filter((item) => ABNORMAL_STATUSES.has(item.status));
+  const normalItems = items.filter((item) => NORMAL_STATUSES.has(item.status));
   const issueCount = abnormalItems.reduce((total, item) => total + (item.issues ?? []).length, 0);
   const hasAbnormal = abnormalItems.length > 0;
   const visibleAbnormalItems = showAllAbnormal
@@ -69,6 +66,7 @@ export function getPreparationDisplay(
     : abnormalItems.slice(0, MAX_VISIBLE_ABNORMAL_ITEMS);
 
   return {
+    items,
     summary: hasAbnormal
       ? `⚠ ${abnormalItems.length} 类异常 · ${issueCount} 个问题 · 正常 ${normalItems.length} 类`
       : `✓ 正常 ${normalItems.length} 类`,

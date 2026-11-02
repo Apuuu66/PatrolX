@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { DataPreparation, PreparationItem } from "../api/http";
 import {
+  categoryLabel,
   formatPreparationIssuePath,
   getPreparationDisplay,
   truncateMiddle,
@@ -41,47 +42,45 @@ function makePreparation(items: PreparationItem[]): DataPreparation {
 
 describe("getPreparationDisplay", () => {
   const preparation = makePreparation([
-    makeItem("extract.warn", "logs", "warn", 2),
-    makeItem("extract.fail", "kpi", "fail", 3),
-    makeItem("extract.error", "traffic", "error", 2),
-    makeItem("extract.pass", "main", "pass"),
-    makeItem("extract.skip", "config", "skip"),
+    makeItem("pkg.extract.main", "main", "pass"),
+    makeItem("pkg.extract.classification", "classification", "warn", 2),
+    makeItem("pkg.extract.logs", "logs", "error", 4),
+    makeItem("pkg.extract.kpi", "kpi", "fail", 3),
   ]);
 
   it("折叠摘要只输出异常分类、问题数量和正常分类数量", () => {
     const display = getPreparationDisplay(preparation);
     assert.equal(display.hasAbnormal, true);
-    assert.equal(display.issueCount, 7);
-    assert.equal(display.summary, "⚠ 3 类异常 · 7 个问题 · 正常 2 类");
+    assert.equal(display.issueCount, 2);
+    assert.equal(display.summary, "⚠ 1 类异常 · 2 个问题 · 正常 1 类");
   });
 
-  it("展开后默认只显示前 3 个异常分类", () => {
+  it("只显示分类落位异常与两个隐藏单元", () => {
     const display = getPreparationDisplay(preparation);
-    assert.deepEqual(display.visibleAbnormalItems.map((item) => item.category), ["logs", "kpi", "traffic"]);
-    assert.equal(display.hiddenAbnormalCount, 0);
-  });
-
-  it("点击展开全部后返回全部异常分类", () => {
-    const manyItems = ["a", "b", "c", "d", "e"].map((category) =>
-      makeItem(`extract.${category}`, category, "warn", 1),
-    );
-    const display = getPreparationDisplay(makePreparation(manyItems), true);
-    assert.equal(display.visibleAbnormalItems.length, 5);
+    assert.deepEqual(display.items.map((item) => item.code), [
+      "pkg.extract.main",
+      "pkg.extract.classification",
+    ]);
+    assert.deepEqual(display.visibleAbnormalItems.map((item) => item.category), ["classification"]);
     assert.equal(display.hiddenAbnormalCount, 0);
   });
 
   it("正常分类合并为一行分类名", () => {
     const display = getPreparationDisplay(preparation);
-    assert.equal(display.normalSummary, "正常：主包 · 配置");
+    assert.equal(display.normalSummary, "正常：主包");
   });
 
   it("没有异常时输出正常摘要", () => {
     const display = getPreparationDisplay(
-      makePreparation([makeItem("extract.main", "main", "pass")]),
+      makePreparation([makeItem("pkg.extract.main", "main", "pass")]),
     );
     assert.equal(display.hasAbnormal, false);
     assert.equal(display.issueCount, 0);
     assert.equal(display.summary, "✓ 正常 1 类");
+  });
+
+  it("分类落位使用面向准备的语义名称", () => {
+    assert.equal(categoryLabel("classification"), "分类落位");
   });
 });
 

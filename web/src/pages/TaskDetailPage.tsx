@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Button, Card, Collapse, Descriptions, Flex, Tabs, Typography } from "antd";
+import { Alert, Button, Card, Collapse, Descriptions, Flex, Tag, Tabs, Typography } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
-import type { RuleStatus } from "../api/http";
+import type { DataPreparation, PreparationItem, RuleStatus } from "../api/http";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { DensitySegmented } from "../components/DensitySegmented";
 import { useTableDensity } from "../hooks/useTableDensity";
@@ -18,7 +18,7 @@ import { TaskLogsPanel } from "../components/task-detail/TaskLogsPanel";
 import { TaskReportPanel } from "../components/task-detail/TaskReportPanel";
 import { TaskInventoryPanel } from "../components/task-detail/TaskInventoryPanel";
 import { DeviceModal, RebuildModal } from "../components/task-detail/TaskActionModals";
-import { getPreparationDisplay } from "../utils/preparationDisplay";
+import { categoryLabel, getPreparationDisplay } from "../utils/preparationDisplay";
 import { latestTaskFailure } from "../utils/taskFailure";
 import {
   filterRuleResults,
@@ -31,6 +31,53 @@ import type { TaskDetailTab } from "../utils/taskDetailFilters.ts";
 
 /** 「重点关注」默认可见条数，其余折叠（FR-016）。 */
 const ATTENTION_PREVIEW_LIMIT = 5;
+
+const PREPARATION_STATUS_LABELS: Record<PreparationItem["status"], string> = {
+  pass: "通过",
+  warn: "警告",
+  fail: "失败",
+  error: "错误",
+  skip: "跳过",
+};
+
+const PREPARATION_STATUS_COLORS: Record<PreparationItem["status"], string> = {
+  pass: "green",
+  warn: "gold",
+  fail: "red",
+  error: "default",
+  skip: "blue",
+};
+
+function PreparationUnits({ preparation }: { preparation: DataPreparation }) {
+  const display = getPreparationDisplay(preparation);
+  return (
+    <div className="task-preparation-units" data-testid="preparation-units">
+      {display.items.map((item) => (
+        <div
+          key={item.code}
+          className="task-preparation-unit"
+          data-testid={`preparation-${item.code}`}
+        >
+          <Flex align="center" gap={8} wrap>
+            <Typography.Text strong>{categoryLabel(item.category)}</Typography.Text>
+            <Tag color={PREPARATION_STATUS_COLORS[item.status]}>{PREPARATION_STATUS_LABELS[item.status]}</Tag>
+            {item.total_count > 0 && (
+              <Typography.Text type="secondary">
+                {item.extracted_count}/{item.total_count}
+              </Typography.Text>
+            )}
+          </Flex>
+          <Typography.Text>{item.summary}</Typography.Text>
+          {(item.issues ?? []).map((issue, index) => (
+            <Typography.Text key={`${issue.type}-${index}`} type="secondary" className="task-preparation-issue">
+              {issue.reason}
+            </Typography.Text>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function TaskDetailPage() {
   const { taskId = "" } = useParams();
@@ -263,7 +310,7 @@ export function TaskDetailPage() {
                     {
                       key: "preparation",
                       label: "数据准备",
-                      children: task.preparation ? getPreparationDisplay(task.preparation).summary : "-",
+                      children: task.preparation ? <PreparationUnits preparation={task.preparation} /> : "-",
                     },
                     {
                       key: "stats",

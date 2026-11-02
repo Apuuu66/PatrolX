@@ -151,35 +151,35 @@ const preparationTask = {
     skip_count: 0,
     items: [
       {
-        code: "prepare.alarm",
-        name: "告警提取",
-        category: "alarm",
+        code: "pkg.extract.main",
+        name: "主包解压",
+        category: "main",
+        status: "pass",
+        summary: "解压完成",
+        duration_ms: 80,
+        extracted_count: 2,
+        total_count: 2,
+        issues: [],
+      },
+      {
+        code: "pkg.extract.classification",
+        name: "分类落位",
+        category: "classification",
         status: "warn",
-        summary: "提取 3/5",
+        summary: "落位 3/5",
         duration_ms: 120,
         extracted_count: 3,
         total_count: 5,
         issues: [
           {
             type: "skipped",
-            source: "raw/alarm/2026-09-21.csv",
-            target: "prepared/alarm/2026-09-21.csv",
+            source: "0/Problems/Alarm Data/2026-09-21.csv",
+            target: "alarm/2026-09-21.csv",
             reason: "来源文件缺失",
             path_length: 118,
             path_limit: 100,
           },
         ],
-      },
-      {
-        code: "prepare.logs",
-        name: "日志提取",
-        category: "logs",
-        status: "pass",
-        summary: "全部提取",
-        duration_ms: 80,
-        extracted_count: 2,
-        total_count: 2,
-        issues: [],
       },
     ],
   },
@@ -223,10 +223,10 @@ test("数据准备摘要就地可见，明细在列内弹层而不是行展开",
 
   // FR-011：问题摘要与问题文件明细仍可查看，只是改为列内弹层
   await summary.click();
-  const popover = page.locator(".ant-popover").filter({ hasText: "告警 3/5" }).first();
+  const popover = page.locator(".ant-popover").filter({ hasText: "分类落位 3/5" }).first();
   await expect(popover).toBeVisible();
   await expect(popover).toContainText("来源文件缺失");
-  await expect(popover).toContainText("正常：日志");
+  await expect(popover).toContainText("正常：主包");
 });
 
 test("手动设备 ID 必须是台账内设备：不存在被拒绝、存在可保存", async ({ page }) => {

@@ -84,6 +84,33 @@ make_inventory_zip(
         header_time=LEDGER_TIME,
     ),
 )
+# 删除台账用例使用独立任务与独立设备，避免与其他用例并发覆盖或删除同一台账。
+make_inventory_zip(
+    base / "inventory-delete-e2e.zip",
+    content=multi_device_lst_me_content(
+        [
+            {
+                "device_name": "E2E-DELETE-901",
+                "network_element_type": "umf",
+                "version": "V900R016C10SPC200",
+            }
+        ],
+        header_time=LEDGER_TIME,
+    ),
+)
+make_inventory_zip(
+    base / "inventory-delete-e2e-rerun.zip",
+    content=multi_device_lst_me_content(
+        [
+            {
+                "device_name": "E2E-DELETE-901",
+                "network_element_type": "umf",
+                "version": "V900R016C10SPC200",
+            }
+        ],
+        header_time=LEDGER_TIME,
+    ),
+)
 # 设备 ID 台账校验用例使用独立包与独立设备，避免与其他用例的台账增删互相干扰。
 make_inventory_zip(
     base / "device-check-e2e.zip",

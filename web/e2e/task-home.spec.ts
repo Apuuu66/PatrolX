@@ -168,6 +168,7 @@ test("概览条弱化通过状态并给出计数与占比 Tooltip", async ({ pag
 test("列表展示最后运行时间与任务时长，未运行任务显示占位", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await showAllTasks(page);
 
   // 已运行任务：最后运行时间为相对时间，任务时长取最近一次运行耗时（FR-008、FR-009、SC-004）
   const failedRow = rowOf(page, FAILED_TASK_ID);
@@ -231,6 +232,7 @@ test("概览统计加载中不渲染 0 值假分布", async ({ page }) => {
 test("1440 视口一屏看全 6 列且表格内部无横向滚动", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await showAllTasks(page);
 
   const table = page.locator(".task-table");
   await expect(table).toBeVisible();
@@ -273,6 +275,7 @@ test("1440 视口一屏看全 6 列且表格内部无横向滚动", async ({ pag
 test("1280 视口下操作列贴右固定且入口不换行", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
+  await showAllTasks(page);
 
   const failedRow = rowOf(page, FAILED_TASK_ID);
   const actionsCell = failedRow.locator("td.ant-table-cell-fix-right").first();
@@ -316,6 +319,7 @@ test("1280 视口下操作列贴右固定且入口不换行", async ({ page }) =
 test("任务列表元数据平铺 3 项，其余收进更多元数据", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await showAllTasks(page);
 
   const failedRow = rowOf(page, FAILED_TASK_ID);
   // 5 项有值元数据：平铺前 3 项，剩余 2 项进"更多元数据（2）"（FR-011、SC-006）
@@ -341,6 +345,7 @@ test("任务列表元数据平铺 3 项，其余收进更多元数据", async ({
 test("任务首页从失败任务行一次点击进入任务详情", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await showAllTasks(page);
 
   const failedRow = rowOf(page, FAILED_TASK_ID);
   await failedRow.getByRole("button", { name: "详情" }).click();

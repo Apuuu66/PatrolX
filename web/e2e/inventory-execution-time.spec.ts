@@ -104,7 +104,7 @@ test("任务详情台账面板展示本次归档使用的执行时间与来源",
   await expect(evidence).toBeVisible();
   await expect(evidence).toContainText("设备执行时间");
   await expect(evidence).toContainText("解析成功");
-  await expect(evidence).toContainText("config/LST ME.txt");
+  await expect(evidence).toContainText("basic/LST ME.txt");
   await expect(evidence).toContainText("第 1 行");
   await expect(evidence).toContainText(LATE_DATE);
   // 原始行原文可回溯（FR-012）。

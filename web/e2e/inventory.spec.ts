@@ -3,7 +3,8 @@ import path from "node:path";
 
 const inspectionZip = path.join(process.cwd(), "e2e", ".tmp", "inventory-e2e.zip");
 const logZip = path.join(process.cwd(), "e2e", ".tmp", "log-supplement-e2e.zip");
-const rerunZip = path.join(process.cwd(), "e2e", ".tmp", "inventory-e2e-rerun.zip");
+const deleteZip = path.join(process.cwd(), "e2e", ".tmp", "inventory-delete-e2e.zip");
+const deleteRerunZip = path.join(process.cwd(), "e2e", ".tmp", "inventory-delete-e2e-rerun.zip");
 
 async function uploadPackage(page: import("@playwright/test").Page, file: string, kind: "inspection" | "log") {
   await page.goto("/");
@@ -119,11 +120,11 @@ test("日志补充包显示不涉及设备台账且不进入设备台账", async
 
 test("设备台账只支持管理员物理删除", async ({ page }) => {
   await loginAdmin(page);
-  await uploadPackage(page, inspectionZip, "inspection");
+  await uploadPackage(page, deleteZip, "inspection");
 
   await page.goto("/inventory");
   await expect(page.getByRole("button", { name: /新增设备/ })).toHaveCount(0);
-  await page.getByText("NJ-AGG-001").first().click();
+  await page.getByText("E2E-DELETE-901").first().click();
   await expect(page).toHaveURL(/\/inventory\/devices\//);
   await expect(page.getByRole("button", { name: "编辑" })).toHaveCount(0);
 
@@ -133,20 +134,20 @@ test("设备台账只支持管理员物理删除", async ({ page }) => {
   await popover.getByRole("button", { name: /^删\s*除$/ }).click();
   await expect(page.getByText("设备台账已删除")).toBeVisible();
   await expect(page).toHaveURL(/\/inventory$/);
-  await expect(page.getByText("NJ-AGG-001")).toHaveCount(0);
+  await expect(page.getByText("E2E-DELETE-901")).toHaveCount(0);
 
-  await uploadPackage(page, rerunZip, "inspection");
+  await uploadPackage(page, deleteRerunZip, "inspection");
   await page.getByRole("tab", { name: "设备台账" }).click();
   // 重新巡检需要重新解压并回填台账，全量并行运行时要给后台留出处理时间。
-  await expect(page.getByText("NJ-AGG-001").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("E2E-DELETE-901").first()).toBeVisible({ timeout: 20_000 });
 
   // 列表页同样提供危险确认删除入口
   await page.goto("/inventory");
-  const listRow = page.getByRole("row").filter({ hasText: "NJ-AGG-001" });
+  const listRow = page.getByRole("row").filter({ hasText: "E2E-DELETE-901" });
   await expect(listRow).toHaveCount(1);
   await listRow.getByRole("button", { name: /^删\s*除$/ }).click();
   const listPopover = page.locator(".ant-popover").filter({ hasText: "确认删除该设备台账？" });
   await listPopover.getByRole("button", { name: /^删\s*除$/ }).click();
   await expect(page.getByText("设备台账已删除")).toBeVisible();
-  await expect(page.getByText("NJ-AGG-001")).toHaveCount(0);
+  await expect(page.getByText("E2E-DELETE-901")).toHaveCount(0);
 });
