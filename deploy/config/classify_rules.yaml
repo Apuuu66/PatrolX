@@ -1,66 +1,189 @@
-# 子包/文件分类规则表（正则/通配符 + 中文别名，可配置调整，不改代码）
-# 支持 {module} 业务变量：如 *Log.zip、*Service.zip 归日志
-category:
-  log:
-    patterns:
-      - "*log*"
-      - "*service*"
-      - "*日志*"
-      - "*fault*"
-    extensions:
-      - .log
-      - .trace
-  kpi:
-    patterns:
-      - "*kpi*"
-      - "*指标*"
-      - "*perf*"
-      - "*call_session*"
-    extensions:
-      - .csv
-      - .xlsx
-  traffic:
-    patterns:
-      - "*traffic*"
-      - "*话统*"
-      - "*call*"
-    extensions: []
-  alarm:
-    patterns:
-      - "*alarm*"
-      - "*告警*"
-    extensions:
-      - .alarm
-  config:
-    patterns:
-      - "^LST ME\\.txt$"
-      - "*config*"
-      - "*配置*"
-      - "*param*"
-    extensions:
-      - .ini
-      - .conf
-      - .xml
-      - .yaml
-      - .yml
-      - .json
-  resource:
-    patterns:
-      - "*resource*"
-      - "*资源*"
-      - "*pod*"
-      - "*mem*"
-      - "*timer*"
-      - "*container*"
-    extensions:
-      - .out
+# 分类配置 v1：来源范围、动作和目标均显式声明，不在代码中硬编码 UMF 业务目录。
+version: 1
+profiles:
+  UMF:
+    scene_anchors:
+      - "Basic Information About the UMF"
+      - "Debugging Commands"
+      - "Equipment Status"
+      - "MESH Information (Problem)"
+      - "System Resources"
+      - "Operation Logs"
+      - "MML Configurations"
+      - "Performance Measurement Results"
+      - "MESH Application Metrics"
+      - "CHR Information"
+      - "Host Debugging Logs"
+      - "Host System Logs"
+      - "Service Logs (Problem)"
+  CSP:
+    scene_anchors:
+      - "Alarm Data"
+  GENERIC:
+    scene_anchors: []
+routes:
+  - id: umf.basic
+    phase: precise
+    priority: 100
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Basic Information About the UMF/**"
+      file: "*"
+      capture_root: "Basic Information About the UMF"
+    action: copy
+    category: config
+    target: "basic/{suffix}"
 
-# 压缩包归组：先按压缩包文件名关键字匹配类别并优先解压；
-# 命中的压缩包内普通成员不再逐个分类，统一进入该类别。
-archive_members:
-  - archive: "*perfresult*"
+  - id: umf.debug
+    phase: precise
+    priority: 90
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Debugging Commands/**"
+      file: "*"
+      capture_root: "Debugging Commands"
+    action: copy
+    category: status
+    target: "debug/{suffix}"
+
+  - id: umf.equipment-status
+    phase: precise
+    priority: 80
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Equipment Status/**"
+      file: "*"
+      capture_root: "Equipment Status"
+    action: copy
+    category: status
+    target: "status/{suffix}"
+
+  - id: umf.mesh-status
+    phase: precise
+    priority: 70
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "MESH Information (Problem)/**"
+      file: "*"
+      capture_root: "MESH Information (Problem)"
+    action: copy
+    category: status
+    target: "status/{suffix}"
+
+  - id: umf.system-resources
+    phase: precise
+    priority: 60
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "System Resources/**"
+      file: "*"
+      capture_root: "System Resources"
+    action: copy
+    category: status
+    target: "status/{suffix}"
+
+  - id: umf.operation-log
+    phase: precise
+    priority: 50
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Operation Logs"
+      file: "operationlog_history_*.csv"
+      capture_root: "Operation Logs"
+    action: copy
+    category: operation
+    target: "operation-log/{suffix}"
+
+  - id: umf.mml-file
+    phase: precise
+    priority: 40
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "MML Configurations"
+      file: "EXP MML.txt"
+      capture_root: "MML Configurations"
+    action: copy
+    category: config
+    target: "mml/{suffix}"
+
+  - id: umf.mml-archive
+    phase: precise
+    priority: 39
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "MML Configurations"
+      file: "EXPMML_*.zip"
+      capture_root: "MML Configurations"
+    action: expand
+    category: config
+    target: "mml/{member}"
+
+  - id: umf.kpi
+    phase: precise
+    priority: 38
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Performance Measurement Results"
+      file: "PerfResult_*.zip"
+      capture_root: "Performance Measurement Results"
+    action: expand
     category: kpi
-  - archive: "*alarm*"
-    category: alarm
-  - archive: "*servicelog*"
+    target: "kpi/{member}"
+
+  - id: umf.mesh-metrics
+    phase: precise
+    priority: 37
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "MESH Application Metrics"
+      file: "CollectExport*.zip"
+      capture_root: "MESH Application Metrics"
+    action: expand
+    category: other
+    target: "other/MESH Application Metrics/{archive_stem}/{member}"
+
+  - id: umf.other
+    phase: fallback
+    priority: 10
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "**"
+      file: "*"
+    action: fallback
+    category: other
+    target: "other/{suffix}"
+
+  - id: csp.ignore-non-alarm
+    phase: fallback
+    priority: 0
+    profiles: [CSP]
+    source:
+      scope: evidence
+      directory: "**"
+      file: "*"
+    action: ignore
+    category: null
+    target: null
+
+  - id: generic.fallback
+    phase: fallback
+    priority: 0
+    profiles: [GENERIC]
+    source:
+      scope: evidence
+      directory: "**"
+      file: "*"
+    action: fallback
     category: log
+    target: "logs/{suffix}"

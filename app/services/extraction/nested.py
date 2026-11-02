@@ -1,9 +1,18 @@
 """子压缩包与日志 gzip 的有界递归展开。"""
 
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
-from app.core.archive import ArchiveError, PathTooLongError, UnpackLimit, is_archive, unpack, unpack_gzip
+from app.core.archive import (
+    ArchiveError,
+    PathTooLongError,
+    UnpackLimit,
+    _normalize_member_path,
+    is_archive,
+    unpack,
+    unpack_gzip,
+)
 from app.core.checksum import sha256_file
 from app.core.classify import classify_name
 from app.models.schemas import RuleCategory
@@ -19,6 +28,58 @@ from app.services.extraction.layout import (
     _safe_destination,
 )
 from app.services.extraction.policy import ExtractPolicyConfig, PolicyDecision, evaluate_extract_policy
+
+
+@dataclass(frozen=True, slots=True)
+class ExpandedArchiveMemberError:
+    """单个展开成员失败及其安全相对路径。"""
+
+    member_relative: str | None
+    error: ArchiveError
+
+
+@dataclass(frozen=True, slots=True)
+class ExpandedArchiveMembers:
+    """单层安全展开后的普通成员及成员级错误。"""
+
+    files: tuple[Path, ...]
+    member_errors: tuple[ExpandedArchiveMemberError, ...]
+
+
+def _safe_member_relative(error: ArchiveError) -> str | None:
+    """从解压错误中提取可用于审计的安全成员相对路径。"""
+    raw_path = error.details.get("member_path")
+    if not isinstance(raw_path, str):
+        return None
+    try:
+        _parts, canonical = _normalize_member_path(raw_path)
+    except ArchiveError:
+        return None
+    return canonical
+
+
+def expand_archive_members(
+    archive: Path,
+    staging_root: Path,
+    limit: UnpackLimit | None = None,
+) -> ExpandedArchiveMembers:
+    """安全展开单个归档；成员只落 staging，不按名称或内容二次分类。"""
+    member_errors: list[ExpandedArchiveMemberError] = []
+
+    def record_member_error(error: ArchiveError) -> None:
+        member_errors.append(
+            ExpandedArchiveMemberError(
+                member_relative=_safe_member_relative(error),
+                error=error,
+            )
+        )
+
+    unpack(archive, staging_root, limit=limit, on_member_error=record_member_error)
+    files = sorted(
+        (path for path in staging_root.rglob("*") if path.is_file() and not path.is_symlink()),
+        key=lambda path: path.relative_to(staging_root).as_posix(),
+    )
+    return ExpandedArchiveMembers(files=tuple(files), member_errors=tuple(member_errors))
 
 
 def _policy_detail(decision: PolicyDecision | None) -> dict[str, object] | None:

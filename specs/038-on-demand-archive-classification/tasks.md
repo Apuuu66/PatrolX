@@ -60,16 +60,16 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **独立测试**：使用不同包装深度、目录大小写变化、重复业务目录段和未命中文件的合成 UMF 包，核对目标路径、业务分类、KPI 73 成员和 MESH 14 CSV；不得依赖文件名或内容嗅探。
 
-- [ ] T023 [P] [US1] 新建 `tests/test_classification_umf.py`，先写 scene root、目录段大小写不敏感、`capture_root` 取最右完整目录段、外层包装剥离和 target template 的失败测试，并覆盖仅含 `Operation Logs`/`MML Configurations` 时仍能推导场景根（FR-006、FR-007、FR-011、FR-012、FR-014、FR-015、FR-016、FR-017）
-- [ ] T024 [US1] 在 `tests/test_classification_umf.py` 增加 precise route 测试，覆盖 Basic、Debugging、Equipment/MESH/System status、Operation Logs、MML 文本、MML ZIP、KPI ZIP、MESH Metrics ZIP 和 `fallback`，并断言 CSP 非告警与 UMF 未命中文件边界（FR-005、FR-012、FR-013、FR-016、FR-017、FR-018、FR-019、FR-033）
-- [ ] T025 [P] [US1] 在 `tests/fixtures/make_real_package.py` 追加固定时间戳、幂等的 UMF 合成目录，覆盖外层设备/问题/包装层、大小写变化、73 个 KPI 成员、14 个 MESH CSV、MML 普通文件和 ZIP、未命中普通文件、`collectandcheck.ini` 和未知 ZIP（FR-006、FR-007、FR-010、FR-018、FR-019）
-- [ ] T026 [US1] 新建 `app/services/extraction/classification.py`，实现 profile anchor 推导 scene root、来源后缀匹配、`capture_root` 截取、固定阶段 `alarm > precise > ignore > fallback` 和 priority 选择（FR-003、FR-007、FR-008、FR-009、FR-040）
-- [ ] T027 [US1] 扩展 `app/services/extraction/classification.py` 与 `app/services/extraction/nested.py`，实现 `copy`、`expand` 和 `fallback`；KPI/MESH/MML 展开成员不得按成员名或扩展名二次分类（FR-010、FR-017、FR-018、FR-019、FR-033）
-- [ ] T028 [US1] 更新 `deploy/config/classify_rules.yaml`，写入 UMF profile anchors 及 `umf.basic`、`umf.debug`、`umf.equipment-status`、`umf.mesh-status`、`umf.system-resources`、`umf.operation-log`、`umf.mml-file`、`umf.mml-archive`、`umf.kpi`、`umf.mesh-metrics`、`umf.other` 路线（FR-012 至 FR-019、FR-033、FR-037）
-- [ ] T029 [US1] 在 `app/services/extraction/layout.py` 与 `app/services/extraction/classification.py` 实现多来源映射同一目标根、目标根 allowlist、同名目标稳定摘要消歧和不可消歧 `target_conflict`，禁止静默覆盖（FR-011、FR-036）
-- [ ] T030 [US1] 扩展 `tests/test_real_package.py`，断言合成 UMF 包的 basic/debug/status/operation-log/mml/kpi/other 物理路径、业务分类、73 个 KPI 成员、14 个 MESH CSV、未命中 ZIP 原样保留及 CSP 非告警不落位（FR-005、FR-010、FR-012 至 FR-019、SC-003）
-- [ ] T031 [US1] 在 `tests/test_kpi_measurement_matching.py` 回归 KPI 规则只消费 `kpi/` catalog 路径且 `rule_version=3.3.0` 不变，禁止为了新分类改写 KPI 判定逻辑（FR-018、FR-049）
-- [ ] T032 [US1] 更新 `docs/example/real-package-structure.md`，记录 UMF 真实目录后缀、`capture_root`、目标路径和未命中归档规则，确保目录调整不再依赖源码硬编码（FR-006、FR-007、FR-037）
+- [x] T023 [P] [US1] 新建 `tests/test_classification_umf.py`，先写 scene root、目录段大小写不敏感、`capture_root` 取最右完整目录段、外层包装剥离和 target template 的失败测试，并覆盖仅含 `Operation Logs`/`MML Configurations` 时仍能推导场景根（FR-006、FR-007、FR-011、FR-012、FR-014、FR-015、FR-016、FR-017）
+- [x] T024 [US1] 在 `tests/test_classification_umf.py` 增加 precise route 测试，覆盖 Basic、Debugging、Equipment/MESH/System status、Operation Logs、MML 文本、MML ZIP、KPI ZIP、MESH Metrics ZIP 和 `fallback`，并断言 CSP 非告警与 UMF 未命中文件边界（FR-005、FR-012、FR-013、FR-016、FR-017、FR-018、FR-019、FR-033）
+- [x] T025 [P] [US1] 在 `tests/fixtures/make_real_package.py` 追加固定时间戳、幂等的 UMF 合成目录，覆盖外层设备/问题/包装层、大小写变化、73 个 KPI 成员、14 个 MESH CSV、MML 普通文件和 ZIP、未命中普通文件、`collectandcheck.ini` 和未知 ZIP（FR-006、FR-007、FR-010、FR-018、FR-019）
+- [x] T026 [US1] 新建 `app/services/extraction/classification.py`，实现 profile anchor 推导 scene root、来源后缀匹配、`capture_root` 截取、固定阶段 `alarm > precise > ignore > fallback` 和 priority 选择（FR-003、FR-007、FR-008、FR-009、FR-040）
+- [x] T027 [US1] 扩展 `app/services/extraction/classification.py` 与 `app/services/extraction/nested.py`，实现 `copy`、`expand` 和 `fallback`；KPI/MESH/MML 展开成员不得按成员名或扩展名二次分类（FR-010、FR-017、FR-018、FR-019、FR-033）
+- [x] T028 [US1] 更新 `deploy/config/classify_rules.yaml`，写入 UMF profile anchors 及 `umf.basic`、`umf.debug`、`umf.equipment-status`、`umf.mesh-status`、`umf.system-resources`、`umf.operation-log`、`umf.mml-file`、`umf.mml-archive`、`umf.kpi`、`umf.mesh-metrics`、`umf.other` 路线（FR-012 至 FR-019、FR-033、FR-037）
+- [x] T029 [US1] 在 `app/services/extraction/layout.py` 与 `app/services/extraction/classification.py` 实现多来源映射同一目标根、目标根 allowlist、同名目标稳定摘要消歧和不可消歧 `target_conflict`，禁止静默覆盖（FR-011、FR-036）
+- [x] T030 [US1] 扩展 `tests/test_real_package.py`，断言合成 UMF 包的 basic/debug/status/operation-log/mml/kpi/other 物理路径、业务分类、73 个 KPI 成员、14 个 MESH CSV、未命中 ZIP 原样保留及 CSP 非告警不落位（FR-005、FR-010、FR-012 至 FR-019、SC-003）
+- [x] T031 [US1] 在 `tests/test_kpi_measurement_matching.py` 回归 KPI 规则只消费 `kpi/` catalog 路径且 `rule_version=3.3.0` 不变，禁止为了新分类改写 KPI 判定逻辑（FR-018、FR-049）
+- [x] T032 [US1] 更新 `docs/example/real-package-structure.md`，记录 UMF 真实目录后缀、`capture_root`、目标路径和未命中归档规则，确保目录调整不再依赖源码硬编码（FR-006、FR-007、FR-037）
 
 **检查点**：仅使用 US1 + 基础层，即可独立验证 UMF basic/debug/status/operation/mml/kpi/MESH/other 分类。
 

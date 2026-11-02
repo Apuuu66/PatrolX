@@ -39,6 +39,60 @@ ZZapp01BCN_app_Problem_scene_333.zip
 
 样例生成器使用固定时间戳 `2026-09-01  10:00:00`。解析器只扫描第一条设备记录之前的头部区域，取首个行尾匹配行；该行不参与设备记录解析，文件内全部设备共用这一执行时间。时间按北京时间（UTC+8）解释并存为 UTC。
 
+## UMF 真实目录分类基准
+
+合成样例在既有主包内容之外加入以下 UMF 目录，用于验证配置驱动的按需分类。外层设备名、问题编号和包装目录只作为不稳定的包装层存在，不进入分类目标：
+
+```text
+Outer Device/
+└── Problem 038/
+    └── wrapper/
+        └── UMF Problem Scene/
+            ├── Basic Information About the UMF/Nested/config.ini
+            ├── debugging commands/Diagnostic.JSON
+            ├── Equipment Status/equipment.csv
+            ├── MESH Information (Problem)/mesh.txt
+            ├── System Resources/resources.txt
+            ├── operation logs/OPERATIONLOG_HISTORY_20260918.CSV
+            ├── MML Configurations/
+            │   ├── EXP MML.txt
+            │   └── EXPMML_20260918.zip
+            ├── Performance Measurement Results/PerfResult_20260918.zip
+            ├── MESH Application Metrics/CollectExport_20260918.zip
+            ├── collectandcheck.ini
+            └── Unlisted/
+                ├── custom.dat
+                └── UnknownBundle.ZIP
+```
+
+### 场景根与目录匹配
+
+`deploy/config/classify_rules.yaml` 为 UMF profile 声明 13 个场景 anchor，包括 `Basic Information About the UMF`、`Operation Logs`、`MML Configurations` 和 `Performance Measurement Results` 等。分类器扫描 `.main/` 中命中 anchor 的完整目录段，以这些 anchor 父目录的最长公共父目录推导 scene root。因此即使包中只有 `Operation Logs` 和 `MML Configurations`，也能剥离设备名、问题编号和包装层。
+
+目录段和文件名 glob 匹配不区分大小写，落位时保留来源原始大小写。`capture_root` 使用命中路径中最右侧的完整同名目录段，`{suffix}` 从该段之后开始。例如重复出现 `Basic Information About the UMF/.../basic information about the umf/Sub/Config.TXT` 时，目标为 `basic/Sub/Config.TXT`。
+
+### UMF 目标映射
+
+| route | 来源（scene 相对） | 动作 | category | target |
+| --- | --- | --- | --- | --- |
+| `umf.basic` | `Basic Information About the UMF/**` / `*` | copy | `config` | `basic/{suffix}` |
+| `umf.debug` | `Debugging Commands/**` / `*` | copy | `status` | `debug/{suffix}` |
+| `umf.equipment-status` | `Equipment Status/**` / `*` | copy | `status` | `status/{suffix}` |
+| `umf.mesh-status` | `MESH Information (Problem)/**` / `*` | copy | `status` | `status/{suffix}` |
+| `umf.system-resources` | `System Resources/**` / `*` | copy | `status` | `status/{suffix}` |
+| `umf.operation-log` | `Operation Logs` / `operationlog_history_*.csv` | copy | `operation` | `operation-log/{suffix}` |
+| `umf.mml-file` | `MML Configurations` / `EXP MML.txt` | copy | `config` | `mml/{suffix}` |
+| `umf.mml-archive` | `MML Configurations` / `EXPMML_*.zip` | expand | `config` | `mml/{member}` |
+| `umf.kpi` | `Performance Measurement Results` / `PerfResult_*.zip` | expand | `kpi` | `kpi/{member}` |
+| `umf.mesh-metrics` | `MESH Application Metrics` / `CollectExport*.zip` | expand | `other` | `other/MESH Application Metrics/{archive_stem}/{member}` |
+| `umf.other` | `**` / `*` | fallback | `other` | `other/{suffix}` |
+
+`PerfResult_*.zip` 的全部 73 个成员直接进入 `kpi/`，不按成员文件名或扩展名二次分类。`CollectExport*.zip` 的 14 个 CSV 进入以归档 stem 命名的 `other/MESH Application Metrics/<archive_stem>/` 命名空间。MML ZIP 同样按单一 `expand` 路线进入 `mml/`。
+
+未声明的 `UnknownBundle.ZIP` 按 `umf.other` 原样复制，不读取或推断其成员；`collectandcheck.ini` 和未命中普通文件也保留场景相对路径。CSP 非告警内容命中 `csp.ignore-non-alarm`，只写忽略审计，不进入工作分类现场。
+
+这些目录后缀、文件模式和目标模板均位于部署配置中；调整真实目录时只需修改配置，不在分类器中新增 UMF 目录分支。
+
 ## 嵌套子包结构
 
 ### 告警包

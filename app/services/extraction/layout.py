@@ -9,6 +9,7 @@ from pathlib import Path
 from app.core.archive import ArchiveError, PathTooLongError
 from app.core.classify import classify_content, classify_member, classify_name
 from app.models.schemas import RuleCategory
+from app.services.extraction.manifest import TARGET_ROOT_ALLOWLIST
 
 MANIFEST_NAME = ".patrolx-extracted.json"
 MAIN_EVIDENCE_DIR = ".main"
@@ -112,6 +113,18 @@ def _safe_destination(data_dir: Path, relative: Path, path_policy: PathLimitPoli
     if path_policy is not None:
         path_policy.check(destination)
     return destination
+
+
+def destination_for_target(data_dir: Path, target: str) -> Path:
+    """解析分类目标；仅允许 manifest v5 可发布的目标根。"""
+    relative = Path(target)
+    if relative.is_absolute() or not relative.parts:
+        raise ArchiveError(f"分类目标必须是相对路径: {target}", "unsafe_path")
+    if any(part in {"", ".", ".."} for part in relative.parts):
+        raise ArchiveError(f"分类目标路径非法: {target}", "unsafe_path")
+    if relative.parts[0] not in TARGET_ROOT_ALLOWLIST:
+        raise ArchiveError(f"分类目标根不在 manifest allowlist: {relative.parts[0]}", "target_conflict")
+    return _safe_destination(data_dir, relative)
 
 
 def _unique_work_path(root: Path, relative: Path, checksum: str) -> Path:

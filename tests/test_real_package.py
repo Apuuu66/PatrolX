@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import re
+import shutil
+import zipfile
 from pathlib import Path
 
 from app.core.checksum import sha256_file
@@ -12,9 +15,9 @@ from app.inspectors.registry import registry
 from app.models.schemas import RuleCategory
 from app.services.extraction import extract_main_site
 from app.services.inventory.parser import parse_inventory
-from tests.fixtures.make_real_package import LST_ME_TXT, build_real_package
+from tests.fixtures.make_real_package import FIXED_DATE, LST_ME_TXT, build_real_package
 
-DEFAULT_FIXTURE_SHA256 = "a2a8265f5971d66899951187e5ff2634081fc2bf82c25eb9a3b00ad94f69b7cb"
+DEFAULT_FIXTURE_SHA256 = "5957469f9e836f23a24bbeab5147b635ec659265d36835e3e896cb5d812d936a"
 
 
 def _extract(tmp_path: Path):
@@ -82,7 +85,7 @@ def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Pat
     locked_members = [item for item in manifest["files"] if "Container_Metric_Unit" in item["target"]]
     assert locked_members
     assert all(item["classification_reason"] == "archive:member" for item in locked_members)
-    assert manifest["main"]["count"] == 6
+    assert manifest["main"]["count"] == 20
     assert not manifest["rejected"]
 
 
@@ -167,3 +170,154 @@ def test_real_package_fixture_variants_are_repeatable(tmp_path: Path) -> None:
     assert sha256_file(second) == DEFAULT_FIXTURE_SHA256
     assert missing.name.endswith("_without_kpi.zip")
     assert sha256_file(missing) != DEFAULT_FIXTURE_SHA256
+    with zipfile.ZipFile(missing) as archive:
+        assert not any(
+            name.endswith("/Performance Measurement Results/PerfResult_20260918.zip") for name in archive.namelist()
+        )
+
+
+def test_umf_fixture_covers_real_directory_routes_and_archive_members(tmp_path: Path) -> None:
+    """UMF 合成目录覆盖外层包装、大小写、73 KPI、14 MESH 和未命中文件。"""
+    package = build_real_package(tmp_path / "first")
+    repeated = build_real_package(tmp_path / "second")
+    assert sha256_file(package) == sha256_file(repeated)
+
+    base = "Outer Device/Problem 038/wrapper/UMF Problem Scene"
+    expected_members = {
+        f"{base}/Basic Information About the UMF/Nested/config.ini",
+        f"{base}/debugging commands/Diagnostic.JSON",
+        f"{base}/Equipment Status/equipment.csv",
+        f"{base}/MESH Information (Problem)/mesh.txt",
+        f"{base}/System Resources/resources.txt",
+        f"{base}/operation logs/OPERATIONLOG_HISTORY_20260918.CSV",
+        f"{base}/MML Configurations/EXP MML.txt",
+        f"{base}/MML Configurations/EXPMML_20260918.zip",
+        f"{base}/Performance Measurement Results/PerfResult_20260918.zip",
+        f"{base}/MESH Application Metrics/CollectExport_20260918.zip",
+        f"{base}/collectandcheck.ini",
+        f"{base}/Unlisted/custom.dat",
+        f"{base}/Unlisted/UnknownBundle.ZIP",
+        "csp-device/0/Problems/Inventory/inventory.csv",
+    }
+
+    with zipfile.ZipFile(package) as archive:
+        names = set(archive.namelist())
+        assert expected_members <= names
+        assert all(info.date_time == FIXED_DATE for info in archive.infolist())
+
+        kpi_name = f"{base}/Performance Measurement Results/PerfResult_20260918.zip"
+        with zipfile.ZipFile(io.BytesIO(archive.read(kpi_name))) as kpi_archive:
+            assert len(kpi_archive.infolist()) == 73
+            assert all(info.date_time == FIXED_DATE for info in kpi_archive.infolist())
+
+        mesh_name = f"{base}/MESH Application Metrics/CollectExport_20260918.zip"
+        with zipfile.ZipFile(io.BytesIO(archive.read(mesh_name))) as mesh_archive:
+            mesh_members = mesh_archive.infolist()
+            assert len(mesh_members) == 14
+            assert all(info.filename.endswith(".csv") for info in mesh_members)
+            assert all(info.date_time == FIXED_DATE for info in mesh_members)
+
+        for nested_name in (
+            f"{base}/MML Configurations/EXPMML_20260918.zip",
+            f"{base}/Unlisted/UnknownBundle.ZIP",
+        ):
+            with zipfile.ZipFile(io.BytesIO(archive.read(nested_name))) as nested_archive:
+                assert nested_archive.infolist()
+                assert all(info.date_time == FIXED_DATE for info in nested_archive.infolist())
+
+
+def test_umf_fixture_classifies_into_rule_ready_catalog(tmp_path: Path) -> None:
+    """合成 UMF 证据按真实目录落位，KPI/MESH 成员和未知 ZIP 均保持路线语义。"""
+    from app.core.archive import unpack
+    from app.services.extraction.classification import classify_main_evidence
+
+    package = build_real_package(tmp_path / "input")
+    extracted = tmp_path / "extracted"
+    unpack(package, extracted)
+
+    base = "Outer Device/Problem 038/wrapper/UMF Problem Scene"
+    data_dir = tmp_path / "task"
+    evidence_root = data_dir / ".main"
+    shutil.copytree(extracted / base, evidence_root / base)
+    inventory_source = "csp-device/0/Problems/Inventory/inventory.csv"
+    inventory_target = evidence_root / inventory_source
+    inventory_target.parent.mkdir(parents=True)
+    shutil.copy2(extracted / inventory_source, inventory_target)
+
+    run = classify_main_evidence(data_dir, product="UMF")
+    entries = {entry.source_relative: entry for entry in run.entries}
+
+    expected_routes = {
+        f"{base}/Basic Information About the UMF/Nested/config.ini": (
+            "umf.basic",
+            "config",
+            "basic/Nested/config.ini",
+        ),
+        f"{base}/debugging commands/Diagnostic.JSON": ("umf.debug", "status", "debug/Diagnostic.JSON"),
+        f"{base}/Equipment Status/equipment.csv": (
+            "umf.equipment-status",
+            "status",
+            "status/equipment.csv",
+        ),
+        f"{base}/MESH Information (Problem)/mesh.txt": ("umf.mesh-status", "status", "status/mesh.txt"),
+        f"{base}/System Resources/resources.txt": (
+            "umf.system-resources",
+            "status",
+            "status/resources.txt",
+        ),
+        f"{base}/operation logs/OPERATIONLOG_HISTORY_20260918.CSV": (
+            "umf.operation-log",
+            "operation",
+            "operation-log/OPERATIONLOG_HISTORY_20260918.CSV",
+        ),
+        f"{base}/MML Configurations/EXP MML.txt": ("umf.mml-file", "config", "mml/EXP MML.txt"),
+        f"{base}/collectandcheck.ini": ("umf.other", "other", "other/collectandcheck.ini"),
+        f"{base}/Unlisted/custom.dat": ("umf.other", "other", "other/Unlisted/custom.dat"),
+    }
+    assert {
+        source: (entry.route_id, entry.category, entry.target)
+        for source, entry in entries.items()
+        if source in expected_routes
+    } == expected_routes
+    assert all((data_dir / entry.target).is_file() for entry in run.entries)
+
+    kpi_entries = [entry for entry in run.entries if entry.route_id == "umf.kpi"]
+    assert len(kpi_entries) == 73
+    assert all(entry.category == "kpi" and entry.target.startswith("kpi/") for entry in kpi_entries)
+    assert len({entry.target for entry in kpi_entries}) == 73
+
+    mml_entries = [entry for entry in run.entries if entry.route_id == "umf.mml-archive"]
+    assert {entry.member_relative for entry in mml_entries} == {
+        "Config/Fragment.txt",
+        "Config/Parameters.cfg",
+    }
+    assert all(entry.category == "config" and entry.target.startswith("mml/") for entry in mml_entries)
+    assert all((data_dir / entry.target).is_file() for entry in mml_entries)
+
+    mesh_entries = [entry for entry in run.entries if entry.route_id == "umf.mesh-metrics"]
+    assert len(mesh_entries) == 14
+    assert all(
+        entry.category == "other" and entry.target.startswith("other/MESH Application Metrics/CollectExport_20260918/")
+        for entry in mesh_entries
+    )
+
+    unknown_source = f"{base}/Unlisted/UnknownBundle.ZIP"
+    unknown_entry = entries[unknown_source]
+    assert (unknown_entry.route_id, unknown_entry.category, unknown_entry.action) == (
+        "umf.other",
+        "other",
+        "fallback",
+    )
+    assert (data_dir / unknown_entry.target).read_bytes() == (extracted / unknown_source).read_bytes()
+    kpi_catalog_paths = {entry.path for entry in run.catalog if entry.path.startswith("kpi/")}
+    assert kpi_catalog_paths == {entry.target for entry in kpi_entries}
+
+    csp_data_dir = tmp_path / "csp-task"
+    csp_source = csp_data_dir / ".main" / inventory_source
+    csp_source.parent.mkdir(parents=True)
+    shutil.copy2(extracted / inventory_source, csp_source)
+    csp_run = classify_main_evidence(csp_data_dir, product="CSP")
+    assert csp_run.entries == ()
+    assert [(item.source_relative, item.route_id) for item in csp_run.ignored] == [
+        (inventory_source, "csp.ignore-non-alarm")
+    ]

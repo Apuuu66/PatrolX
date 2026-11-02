@@ -254,8 +254,10 @@ def _validate_zip_metadata(member: zipfile.ZipInfo, limit: UnpackLimit) -> None:
 def _record_member_error(
     handler: MemberErrorHandler | None,
     error: ArchiveError,
+    member_path: str,
 ) -> None:
     """记录单个成员错误；未提供记录器时保持整体抛出的兼容行为。"""
+    error.details.setdefault("member_path", member_path)
     if handler is None:
         raise error
     handler(error)
@@ -305,7 +307,7 @@ def unpack_zip(
                 try:
                     prepared = _validate_zip_member(member, limit)
                 except ArchiveError as member_error:
-                    _record_member_error(on_member_error, member_error)
+                    _record_member_error(on_member_error, member_error, member.filename)
                     continue
                 if prepared is not None:
                     prepared_members.append((member, prepared[0], prepared[1]))
@@ -345,7 +347,7 @@ def unpack_zip(
                 except ArchiveError as member_error:
                     total_written -= member_written
                     _delete_partial_target(target)
-                    _record_member_error(on_member_error, member_error)
+                    _record_member_error(on_member_error, member_error, member.filename)
                 except (
                     zipfile.BadZipFile,
                     zlib.error,
@@ -362,7 +364,7 @@ def unpack_zip(
                         "archive_corrupt",
                     )
                     error.__cause__ = exc
-                    _record_member_error(on_member_error, error)
+                    _record_member_error(on_member_error, error, member.filename)
     except ArchiveError:
         raise
     except (
@@ -426,7 +428,7 @@ def unpack_tar(
                 try:
                     prepared = _validate_tar_member(member)
                 except ArchiveError as member_error:
-                    _record_member_error(on_member_error, member_error)
+                    _record_member_error(on_member_error, member_error, member.name)
                     continue
                 if prepared is not None:
                     prepared_members.append((member, prepared[0], prepared[1]))
@@ -469,7 +471,7 @@ def unpack_tar(
                 except ArchiveError as member_error:
                     total_written -= member_written
                     _delete_partial_target(target)
-                    _record_member_error(on_member_error, member_error)
+                    _record_member_error(on_member_error, member_error, member.name)
                 except (
                     tarfile.TarError,
                     zlib.error,
@@ -486,7 +488,7 @@ def unpack_tar(
                         "archive_corrupt",
                     )
                     error.__cause__ = exc
-                    _record_member_error(on_member_error, error)
+                    _record_member_error(on_member_error, error, member.name)
     except ArchiveError:
         raise
     except (

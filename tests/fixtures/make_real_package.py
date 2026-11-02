@@ -232,6 +232,15 @@ def _gzip_bytes(text: str) -> bytes:
     return gzip.compress(text.encode("utf-8"), mtime=0)
 
 
+def _zip_bytes(members: dict[str, bytes]) -> bytes:
+    """生成成员时间戳固定的 ZIP，供分类边界夹具复用。"""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, content in members.items():
+            _add_bytes(archive, name, content)
+    return buffer.getvalue()
+
+
 def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:
     """生成固定内容的真实结构样例包；``include_kpi=False`` 生成 KPI 缺失边界包。"""
     alarm_buffer = io.BytesIO()
@@ -303,6 +312,32 @@ def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:
             UMFACC_LOG_STANDBY.encode("utf-8"),
         )
 
+    umf_base = "Outer Device/Problem 038/wrapper/UMF Problem Scene"
+    umf_kpi_buffer = _zip_bytes(
+        {
+            f"ne333_Call_Session_API_Statistics_15_{index:02d}_202609180000.csv": _call_kpi(15).encode("utf-8")
+            for index in range(73)
+        }
+    )
+    mesh_metrics_buffer = _zip_bytes(
+        {
+            f"mesh-metric-{index:02d}.csv": (
+                f"采集时间,指标名称,指标值\n2026-09-18 09:{index:02d}:00Z,mesh_connections,{100 + index}\n"
+            ).encode()
+            for index in range(14)
+        }
+    )
+    mml_buffer = _zip_bytes(
+        {
+            "Config/Fragment.txt": b"ADD UMF:UNIT=1;\n",
+            "Config/Parameters.cfg": b"parameter=value\n",
+        }
+    )
+    unknown_buffer = _zip_bytes(
+        {
+            "PerfResult_should_not_route.csv": b"not,a,classified,kpi\nfixture,only\n",
+        }
+    )
     directory.mkdir(parents=True, exist_ok=True)
     output = directory / (PACKAGE_NAME if include_kpi else NO_KPI_PACKAGE_NAME)
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -336,6 +371,77 @@ def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:
             zf,
             f"{BASE}/Service Logs (Problem)/ServiceLog_20260901011314.zip",
             service_buffer.getvalue(),
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/Basic Information About the UMF/Nested/config.ini",
+            b"[umf]\nname=UMF Problem Scene\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/debugging commands/Diagnostic.JSON",
+            b'{"status":"synthetic","node":"umf-01"}\n',
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/Equipment Status/equipment.csv",
+            b"slot,board,status\n1,UMF-BOARD-01,normal\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/MESH Information (Problem)/mesh.txt",
+            b"mesh peer umf-02 state=normal\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/System Resources/resources.txt",
+            b"cpu=32% memory=41%\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/operation logs/OPERATIONLOG_HISTORY_20260918.CSV",
+            b"time,user,operation\n2026-09-18T09:00:00Z,admin,query\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/MML Configurations/EXP MML.txt",
+            b"LST UMF:;\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/MML Configurations/EXPMML_20260918.zip",
+            mml_buffer,
+        )
+        if include_kpi:
+            _add_bytes(
+                zf,
+                f"{umf_base}/Performance Measurement Results/PerfResult_20260918.zip",
+                umf_kpi_buffer,
+            )
+        _add_bytes(
+            zf,
+            f"{umf_base}/MESH Application Metrics/CollectExport_20260918.zip",
+            mesh_metrics_buffer,
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/collectandcheck.ini",
+            b"[collect]\ncheck=all\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/Unlisted/custom.dat",
+            b"synthetic unknown file\n",
+        )
+        _add_bytes(
+            zf,
+            f"{umf_base}/Unlisted/UnknownBundle.ZIP",
+            unknown_buffer,
+        )
+        _add_bytes(
+            zf,
+            "csp-device/0/Problems/Inventory/inventory.csv",
+            b"device,type\ncsp-01,CSP\n",
         )
     return output
 

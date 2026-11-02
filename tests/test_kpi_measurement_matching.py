@@ -55,3 +55,36 @@ def test_disabled_measurement_unit_file_is_visible_but_skipped(tmp_path: Path) -
     path.write_text("a,b,c\n", encoding="utf-8")
     result = match_measurement_files([("ne333_Call_Statistics_15_0_202609020000.csv", path)])
     assert result["files"][0]["status"] == "disabled"
+
+
+def test_kpi_rule_consumes_only_classified_kpi_catalog_paths(tmp_path: Path) -> None:
+    """分类只稳定 KPI 输入路径，既有规则版本、扫描模式和判定入口保持不变。"""
+    import shutil
+
+    from app.core.archive import unpack
+    from app.inspectors.registry import registry
+    from app.services.extraction.classification import classify_main_evidence
+    from app.services.scanning import TaskFileCatalog
+    from tests.fixtures.make_real_package import build_real_package
+
+    package = build_real_package(tmp_path / "input")
+    extracted = tmp_path / "extracted"
+    unpack(package, extracted)
+
+    base = "Outer Device/Problem 038/wrapper/UMF Problem Scene"
+    data_dir = tmp_path / "task"
+    shutil.copytree(extracted / base, data_dir / ".main" / base)
+    run = classify_main_evidence(data_dir, product="UMF")
+
+    kpi_paths = {Path(entry.path) for entry in run.catalog if entry.path.startswith("kpi/")}
+    assert len(kpi_paths) == 73
+
+    catalog_paths = TaskFileCatalog.build(data_dir).paths()
+    assert any(path.parts[0] == "other" for path in catalog_paths)
+
+    registry.load_all()
+    kpi_rule = registry.get("kpi.measurement_units")
+    assert kpi_rule.rule_version == "3.3.0"
+    assert kpi_rule.source_patterns == [r"^kpi/.*\.csv$", r"^traffic/.*\.csv$"]
+    assert set(TaskFileCatalog.build(data_dir).match(kpi_rule.source_patterns or [])) == kpi_paths
+    assert all(path.parts[0] == "kpi" for path in kpi_paths)

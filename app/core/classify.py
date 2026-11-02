@@ -12,7 +12,10 @@ from app.models.schemas import RuleCategory
 
 
 def _load_rules() -> dict[str, dict]:
-    path = settings.config / "classify_rules.yaml"
+    """读取旧 v4 名称规则；v5 分类配置由 extraction.config 单独严格解析。"""
+    configured = settings.config / "classify_rules_legacy.yaml"
+    fallback = Path(__file__).resolve().parents[2] / "deploy" / "config" / "classify_rules_legacy.yaml"
+    path = configured if configured.is_file() else fallback
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
