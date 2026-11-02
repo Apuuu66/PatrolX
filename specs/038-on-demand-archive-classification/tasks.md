@@ -119,10 +119,10 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 
 **独立测试**：连续分类两次复用；只改注释/空白/顺序仍复用；改 route/target/product/path limit 触发重建；删除/损坏 manifest 或 `.main` 触发正确重建；失败发布回滚；旧分类根残留不进入 catalog；原包 checksum 前后不变。
 
-- [ ] T049 [P] [US4] 在 `tests/test_classification_config.py` 增加 canonical fingerprint 测试，覆盖注释、空白、映射键顺序、route 顺序不变，anchor/pattern/profiles/priority/action/category/target/selection/member_decompress/id 变化，以及 64 位小写十六进制格式（FR-039、SC-009）
+- [x] T049 [P] [US4] 在 `tests/test_classification_config.py` 增加 canonical fingerprint 测试，覆盖注释、空白、映射键顺序、route 顺序不变，anchor/pattern/profiles/priority/action/category/target/selection/member_decompress/id 变化，以及 64 位小写十六进制格式（FR-039、SC-009）
 - [ ] T050 [P] [US4] 在 `tests/test_extraction_site.py` 增加证据指纹、`.main/` 链接/内容变化、原包 checksum 冲突和证据损坏重建测试，断言重建前后原始包哈希一致（FR-041、FR-042、SC-006）
 - [ ] T051 [P] [US4] 在 `tests/test_extraction_package.py` 增加 staging 构建、manifest 隐藏、target roots 交换、`os.replace()` 发布、逆序回滚、legacy roots 清理、`.main/prepared/rules/reports` 不被触碰和重复执行无重复目标/分类的幂等测试（FR-043、FR-046、FR-054、SC-009）
-- [ ] T052 [US4] 在 `app/services/extraction/config.py` 实现规范化有效配置 SHA-256，填充默认值、排序集合/route/selection、UTF-8 canonical JSON，并输出 classification snapshot 所需 config fingerprint（FR-039、FR-040）
+- [x] T052 [US4] 在 `app/services/extraction/config.py` 实现规范化有效配置 SHA-256，填充默认值、排序集合/route/selection、UTF-8 canonical JSON，并输出 classification snapshot 所需 config fingerprint（FR-039、FR-040）
 - [ ] T053 [US4] 在 `app/services/extraction/site.py` 与 `app/services/extraction/manifest.py` 实现 `.main/` 证据指纹、checksum 复核和复用矩阵；只有 v5 且 checksum/evidence/product/kind/snapshot/path_limit/catalog 全部一致才复用（FR-040、FR-041、FR-042）
 - [ ] T054 [US4] 在 `app/services/extraction/classification.py` 与 `app/services/extraction/manifest.py` 实现 `.classification.staging/`、catalog 摘要预校验、旧 manifest 隐藏、分类根交换、原子发布、回滚、成功后的 legacy allowlist 清理和重复执行幂等发布（FR-043、FR-046、FR-054、SC-009）
 - [ ] T055 [US4] 在 `tests/test_extraction_package.py` 增加配置有效变化、product/kind 变化、path limit 变化、旧 v1-v4 manifest、manifest 损坏、`.main` 缺失和同输入重复执行的复用/重建矩阵测试（FR-039 至 FR-043、FR-054、SC-009）

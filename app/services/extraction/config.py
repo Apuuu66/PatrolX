@@ -1016,10 +1016,15 @@ def _validate_route_overlaps(routes: tuple[Route, ...]) -> None:
             )
 
 
+def _normalized_path_pattern(pattern: str) -> str:
+    """返回按 `/` 分段去空白并大写的 canonical pattern。"""
+    return "/".join(_directory_segments(pattern))
+
+
 def _normalized_source(source: SourcePattern) -> dict[str, object]:
     return {
         "scope": source.scope,
-        "directory": "/".join(_directory_segments(source.directory)),
+        "directory": _normalized_path_pattern(source.directory),
         "file": source.file.upper(),
         "capture_root": None if source.capture_root is None else source.capture_root.upper(),
     }
@@ -1029,10 +1034,10 @@ def _normalized_selection(selection: Selection | None) -> dict[str, object] | No
     if selection is None:
         return None
     include_values = {
-        (item.pattern.strip().upper(), None if item.service is None else item.service.strip().upper())
+        (_normalized_path_pattern(item.pattern), None if item.service is None else item.service.strip().upper())
         for item in selection.include
     }
-    exclude_values = {(item.pattern.strip().upper(), item.reason.strip()) for item in selection.exclude}
+    exclude_values = {(_normalized_path_pattern(item.pattern), item.reason.strip()) for item in selection.exclude}
     include = [{"pattern": pattern, "service": service} for pattern, service in include_values]
     exclude = [{"pattern": pattern, "reason": reason} for pattern, reason in exclude_values]
     include.sort(key=lambda item: (item["pattern"], item["service"] or ""))
@@ -1057,7 +1062,7 @@ def _fingerprint_data(
                 "category": route.category,
                 "target": route.target,
                 "selection": _normalized_selection(route.selection),
-                "member_decompress": sorted({pattern.strip().upper() for pattern in route.member_decompress}),
+                "member_decompress": sorted({_normalized_path_pattern(pattern) for pattern in route.member_decompress}),
             }
         )
     normalized_profiles = {

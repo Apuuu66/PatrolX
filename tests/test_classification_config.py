@@ -1,5 +1,6 @@
 """分类配置严格 schema、默认行为与冲突校验测试。"""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -810,3 +811,274 @@ def test_target_rejects_extra_closing_brace() -> None:
 
     assert exc_info.value.path == "routes[0].target"
     assert "}" in exc_info.value.message
+
+
+def _fingerprint_yaml() -> str:
+    """返回覆盖 selection 与 member_decompress 的指纹测试配置。"""
+    return _config_with_routes(
+        [
+            """
+  - id: expand.a
+    phase: precise
+    priority: 40
+    profiles: [UMF]
+    source:
+      scope: evidence
+      directory: "bundle"
+      file: "*.tar.gz"
+    action: expand
+    category: log
+    target: "logs/{member}"
+    member_decompress: ["**/*.gz"]
+""",
+            """
+  - id: select.a
+    phase: precise
+    priority: 30
+    profiles: [UMF]
+    source:
+      scope: evidence
+      directory: "bundle2"
+      file: "*.zip"
+    action: select_and_decompress
+    category: chr
+    target: "chr/{member}"
+    selection:
+      include:
+        - pattern: "**/*.bil.gz"
+          service: chr
+      exclude:
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+""",
+        ]
+    )
+
+
+def _reverse_route_order(text: str) -> str:
+    """仅反转 route 声明顺序，保留 profile 与路由块内容不变。"""
+    prefix, separator, routes = text.partition("routes:\n")
+    blocks = [block for block in re.split(r"(?=^  - id: )", routes, flags=re.MULTILINE) if block]
+    return f"{prefix}{separator}{''.join(reversed(blocks))}"
+
+
+def test_fingerprint_is_64_lowercase_hexadecimal_characters() -> None:
+    """语义指纹固定为 64 位小写十六进制 SHA-256。"""
+    fingerprint = loads_classification_config(_valid_yaml()).fingerprint
+
+    assert re.fullmatch(r"[0-9a-f]{64}", fingerprint)
+
+
+def test_fingerprint_ignores_comments_and_yaml_whitespace() -> None:
+    """注释、空行和非语义 YAML 空白不得改变指纹。"""
+    base = _valid_yaml()
+    commented = base.replace("version: 1", "# 配置注释\nversion: 1 # 行内注释", 1).replace(
+        "    priority: 100\n",
+        "    priority: 100 # 优先级注释\n",
+        1,
+    )
+    whitespace = (
+        base.replace("version: 1", "version:    1", 1)
+        .replace(
+            "profiles:\n",
+            "profiles:   \n\n",
+            1,
+        )
+        .replace("routes:\n", "\nroutes:\n\n", 1)
+    )
+
+    expected = loads_classification_config(base).fingerprint
+    assert loads_classification_config(commented).fingerprint == expected
+    assert loads_classification_config(whitespace).fingerprint == expected
+
+
+def test_fingerprint_ignores_mapping_key_order() -> None:
+    """YAML mapping 的键顺序不是有效配置语义。"""
+    base = _valid_yaml()
+    reordered = base.replace(
+        """    source:
+      scope: scene
+      directory: "UMF Root/**"
+      file: "*"
+      capture_root: "UMF Root"
+""",
+        """    source:
+      capture_root: "UMF Root"
+      file: "*"
+      directory: "UMF Root/**"
+      scope: scene
+""",
+        1,
+    )
+
+    assert loads_classification_config(reordered).fingerprint == loads_classification_config(base).fingerprint
+
+
+def test_fingerprint_ignores_profile_declaration_order() -> None:
+    """profile mapping 的声明顺序不参与指纹，必须由 canonical JSON 排序。"""
+    base = _fingerprint_yaml()
+    umf = _profile_block("UMF", ["UMF Root"])
+    csp = _profile_block("CSP", ["CSP Root"])
+    generic = _profile_block("GENERIC")
+    original_profiles = f"  {umf}\n  {csp}\n  {generic}\n"
+    reordered_profiles = f"  {generic}\n  {csp}\n  {umf}\n"
+    reordered = base.replace(original_profiles, reordered_profiles, 1)
+
+    assert reordered != base
+    assert loads_classification_config(reordered).fingerprint == loads_classification_config(base).fingerprint
+
+
+def test_fingerprint_ignores_route_declaration_order() -> None:
+    """route 指纹按 id 排序，不受 YAML 声明顺序影响。"""
+    base = _fingerprint_yaml()
+    reordered = _reverse_route_order(base)
+
+    assert loads_classification_config(reordered).fingerprint == loads_classification_config(base).fingerprint
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ('scene_anchors: ["UMF Root"]', 'scene_anchors: ["UMF Root Changed"]'),
+        ('file: "*.tar.gz"', 'file: "*.tgz"'),
+        ("profiles: [UMF]", "profiles: [UMF, CSP]"),
+        ("priority: 100", "priority: 99"),
+        ("action: expand\n", "action: expand_recursive\n"),
+        ("category: log\n", "category: status\n"),
+        ('target: "logs/{member}"', 'target: "other/{member}"'),
+        ('pattern: "**/*.bil.gz"', 'pattern: "**/*.log.gz"'),
+        ('member_decompress: ["**/*.gz"]', 'member_decompress: ["**/*.gzip"]'),
+        ("id: expand.a", "id: expand.b"),
+    ],
+    ids=[
+        "anchor",
+        "pattern",
+        "profiles",
+        "priority",
+        "action",
+        "category",
+        "target",
+        "selection",
+        "member-decompress",
+        "id",
+    ],
+)
+def test_semantic_change_changes_fingerprint(old: str, new: str) -> None:
+    """任一有效语义字段变化必须产生不同的配置指纹。"""
+    base = _fingerprint_yaml()
+    changed = base.replace(old, new, 1)
+
+    assert changed != base
+    assert loads_classification_config(changed).fingerprint != loads_classification_config(base).fingerprint
+
+
+def test_fingerprint_canonicalizes_case_and_unordered_sets() -> None:
+    """schema 枚举、profile、pattern 与无序集合按契约生成同一语义输入。"""
+    base = _fingerprint_yaml()
+    canonical_variant = (
+        base.replace("  UMF:", "  umf:")
+        .replace("  CSP:", "  csp:")
+        .replace("  GENERIC:", "  generic:")
+        .replace('scene_anchors: ["UMF Root"]', 'scene_anchors: [" umf root "]')
+        .replace("profiles: [UMF]", "profiles: [umf, UMF, UMF]", 1)
+        .replace("phase: precise", "phase: PRECISE")
+        .replace("action: copy", "action: COPY")
+        .replace("category: config", "category: CONFIG")
+        .replace("scope: scene", "scope: SCENE")
+        .replace('directory: "UMF Root/**"', 'directory: " umf root / ** "', 1)
+        .replace('file: "*.tar.gz"', 'file: "*.TAR.GZ"', 1)
+        .replace('member_decompress: ["**/*.gz"]', 'member_decompress: [" **/*.GZ "]', 1)
+        .replace('pattern: "**/*.bil.gz"', 'pattern: "**/*.BIL.GZ"', 1)
+        .replace("service: chr", "service: CHR", 1)
+        .replace('pattern: "**/LocalLogReport.csv"', 'pattern: "**/locallogreport.csv"', 1)
+    )
+
+    assert canonical_variant != base
+    assert loads_classification_config(canonical_variant).fingerprint == loads_classification_config(base).fingerprint
+
+
+def test_fingerprint_default_values_equal_explicit_defaults() -> None:
+    """省略 capture_root 与 member_decompress 等于显式 null/空列表。"""
+    base = _fingerprint_yaml().replace('    member_decompress: ["**/*.gz"]\n', "", 1)
+    explicit = base.replace(
+        '      file: "*.tar.gz"',
+        '      file: "*.tar.gz"\n      capture_root: null',
+        1,
+    ).replace(
+        '    target: "logs/{member}"\n',
+        '    target: "logs/{member}"\n    member_decompress: []\n',
+        1,
+    )
+
+    assert loads_classification_config(explicit).fingerprint == loads_classification_config(base).fingerprint
+
+
+def test_fingerprint_sorts_dict_entries_by_canonical_tuples() -> None:
+    """selection include/exclude 按规范化 tuple 排序，不依赖声明顺序。"""
+    base = _fingerprint_yaml()
+    original = """    selection:
+      include:
+        - pattern: "**/*.bil.gz"
+          service: chr
+      exclude:
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+"""
+    first = """    selection:
+      include:
+        - pattern: "**/*.bil.gz"
+          service: chr
+        - pattern: "**/*.log.gz"
+          service: umf
+      exclude:
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+        - pattern: "**/debug.txt"
+          reason: debug_not_log
+"""
+    reversed_entries = """    selection:
+      include:
+        - pattern: "**/*.log.gz"
+          service: umf
+        - pattern: "**/*.bil.gz"
+          service: chr
+      exclude:
+        - pattern: "**/debug.txt"
+          reason: debug_not_log
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+"""
+
+    first_config = loads_classification_config(base.replace(original, first, 1))
+    reversed_config = loads_classification_config(base.replace(original, reversed_entries, 1))
+
+    assert first_config.fingerprint == reversed_config.fingerprint
+
+
+def test_fingerprint_normalizes_member_pattern_segment_whitespace() -> None:
+    """member_decompress 各段两侧空白不参与匹配语义，也不得影响指纹。"""
+    base = _fingerprint_yaml()
+    padded = base.replace(
+        'member_decompress: ["**/*.gz"]',
+        'member_decompress: [" ** / *.gz "]',
+        1,
+    )
+
+    assert loads_classification_config(padded).fingerprint == loads_classification_config(base).fingerprint
+
+
+def test_fingerprint_normalizes_selection_pattern_segment_whitespace() -> None:
+    """selection pattern 各段两侧空白不参与匹配语义，也不得影响指纹。"""
+    base = _fingerprint_yaml()
+    padded = base.replace('pattern: "**/*.bil.gz"', 'pattern: " ** / *.bil.gz "', 1)
+
+    assert loads_classification_config(padded).fingerprint == loads_classification_config(base).fingerprint
+
+
+def test_fingerprint_uses_utf8_canonical_json_with_defaults() -> None:
+    """非 ASCII anchor 使用 UTF-8 原字符序列化，并锁定 canonical payload 摘要。"""
+    text = _valid_yaml().replace("UMF Root", "UMF 根")
+
+    assert loads_classification_config(text).fingerprint == (
+        "0e6f25166ded6fbb50fae51158c2e30d6e4494c7f3ef7505d7be34d7eb48f51d"
+    )
