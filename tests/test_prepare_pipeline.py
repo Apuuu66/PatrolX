@@ -11,6 +11,7 @@ from app.inspectors.registry import RuleRegistry, registry
 from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext, make_result
 from app.services.scanning import match_paths
+from tests.manifest_helpers import write_catalog_manifest
 
 
 def make_registry() -> tuple[RuleRegistry, list[str]]:
@@ -52,6 +53,8 @@ def make_context(tmp_path: Path, registry: RuleRegistry, events: list[str], file
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    if files:
+        write_catalog_manifest(tmp_path, sorted(files))
 
     def log(_level: str, _message: str, _detail: dict | None = None) -> None:
         return None
@@ -79,6 +82,9 @@ def test_extract_prepare_and_inspect_use_fixed_phase_barriers(tmp_path: Path) ->
         events.append("extract:pkg.extract.classification")
         (ctx.data_dir / "logs").mkdir(exist_ok=True)
         (ctx.data_dir / "logs/app.log").write_text("ok", encoding="utf-8")
+        from tests.manifest_helpers import write_catalog_manifest
+
+        write_catalog_manifest(ctx.data_dir, ["logs/app.log"])
         return make_result(
             registry.get("pkg.extract.classification"),
             status=RuleStatus.PASS,
@@ -410,7 +416,11 @@ def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch)
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_task
 
-    task = run_task(SAMPLE, task_id="task-sample")
+    task = run_task(
+        SAMPLE,
+        task_id="task-sample",
+        customer={"product": "UMF"},
+    )
     task_dir = env.task_dir(task.task_id)
     prepared_dir = task_dir / "prepared"
     assert not (prepared_dir / "log.umf_acc").exists()

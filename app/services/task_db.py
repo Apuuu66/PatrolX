@@ -266,6 +266,34 @@ def get_package_file(task_id: str) -> str | None:
         return record.package_file
 
 
+@dataclass(frozen=True, slots=True)
+class TaskIdentity:
+    """同名任务恢复所需的任务首次创建身份。"""
+
+    package_kind: PackageKind
+    product: str | None
+
+
+def get_task_identity(task_id: str) -> TaskIdentity | None:
+    """返回兼容读取后的任务包类型与规范化网元类型，避免 API 直接访问持久化模型。"""
+    with session_factory() as session:
+        record = session.get(TaskRecord, task_id)
+        if record is None:
+            return None
+        raw_kind = getattr(record, "package_kind", None) or PackageKind.INSPECTION.value
+        try:
+            package_kind = PackageKind(str(raw_kind))
+        except ValueError:
+            package_kind = PackageKind.INSPECTION
+        customer = record.customer if isinstance(record.customer, dict) else {}
+        raw_product = customer.get("product")
+        if raw_product is None:
+            product = None
+        else:
+            product = str(raw_product).strip().upper() or None
+        return TaskIdentity(package_kind=package_kind, product=product)
+
+
 def set_package_checksum(task_id: str, checksum: str) -> None:
     """写入首次接收的原始包校验和；已有值不覆盖。"""
     with session_factory() as session:

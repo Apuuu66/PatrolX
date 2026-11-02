@@ -7,18 +7,17 @@ PREPARE / INSPECT 阶段内按 :class:`~app.services.parallel.ParallelPolicy` �
 
 import shutil
 import time
+from collections import Counter
 from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Any
 
-from app.core.archive import ArchiveError
-from app.core.checksum import sha256_file
 from app.core.metrics import RULES_TOTAL
 from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
-from app.models.schemas import RuleCategory, RuleResult, RuleStatus
-from app.services import extraction
+from app.models.schemas import RuleResult, RuleStatus
+from app.services.extraction.manifest import read_manifest as read_manifest_v5
 from app.services.parallel import STAGE_INSPECT, STAGE_PREPARE, ParallelPolicy, StageRunner, UnitPlan
 from app.services.prepare import marker_path, rule_file_sha256
 from app.services.scanning import validate_patterns
@@ -143,15 +142,24 @@ class Executor:
         return total
 
     def _no_match_reason(self, rule: Inspector, ctx: RuleContext) -> str:
-        """无匹配可跳过原因；沿用现行的项目级解压策略补充说明。"""
-        skip_reason = f"source_patterns 未匹配到文件: {', '.join(rule.source_patterns or [])}"
-        category = "logs" if rule.category == RuleCategory.LOG else rule.category.value
-        manifest = extraction.read_manifest(ctx.data_dir)
-        skipped = extraction.policy_skipped_summary(manifest, category)
-        if skipped:
-            names = ", ".join(str(item["name"]) for item in skipped)
-            skip_reason += f"；项目级解压策略保留了压缩项: {names}"
-        return skip_reason
+        """无匹配可跳过原因；只使用 manifest v5 的审计摘要，不回退扫描目录。"""
+        manifest = read_manifest_v5(ctx.data_dir)
+        profile = manifest["classification"]["profile"]
+        config_fingerprint = manifest["classification"]["config_fingerprint"]
+        ignored = manifest["ignored"]
+        failures = manifest["failures"]
+        ignored_reasons = Counter(str(item["reason"]) for item in ignored)
+        failure_codes = Counter(str(item["error_code"]) for item in failures)
+
+        def format_counts(counts: Counter[str]) -> str:
+            return ", ".join(f"{key}={counts[key]}" for key in sorted(counts)) or "none"
+
+        return (
+            f"source_patterns 未匹配到文件: patterns={', '.join(rule.source_patterns or [])}；"
+            f"profile={profile}；config={config_fingerprint}；"
+            f"ignored={len(ignored)} ({format_counts(ignored_reasons)})；"
+            f"failures={len(failures)} ({format_counts(failure_codes)})"
+        )
 
     def _plan_prepare(
         self,
@@ -405,19 +413,15 @@ class Executor:
         return results
 
     def _ensure_extraction_site(self, ctx: RuleContext) -> None:
-        """单规则重跑前确保主包解压现场与 manifest 可复用。"""
+        """单规则重跑前只经生产主包单元确保证据现场与 v5 复用矩阵。"""
         if ctx.package_path is None or not ctx.package_path.exists():
             return
-        checksum = ctx.package_checksum
-        if checksum is None:
-            checksum = sha256_file(ctx.package_path)
-            ctx.package_checksum = checksum
-        if extraction.reusable_manifest(ctx.data_dir, checksum) is not None:
+        main_code = "pkg.extract.main"
+        if main_code not in self.registry.codes():
             return
-        try:
-            extraction.extract_main_site(ctx.package_path, ctx.data_dir, checksum, log=ctx.log)
-        except ArchiveError as exc:
-            raise ValueError(f"单规则重跑前主包解压失败: {exc}") from exc
+        result = self.run_one(main_code, ctx, collect=False)
+        if result.status == RuleStatus.ERROR:
+            raise ValueError(f"单规则重跑前主包解压失败: {result.summary or 'pkg.extract.main error'}")
 
     def ensure_rule_dependencies(self, code: str, ctx: RuleContext) -> None:
         """确保普通规则执行前的解压与分类 catalog 门禁一致通过。"""

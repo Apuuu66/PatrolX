@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.fixtures.inventory.builder import make_inventory_zip
+from tests.fixtures.inventory.builder import lst_me_content, make_inventory_zip
 
 client = TestClient(app)
 
@@ -117,7 +117,7 @@ def test_deleted_device_is_recreated_by_task(tmp_path: Path) -> None:
     assert client.delete("/api/v2/inventory/devices/js-nj-agg-001").status_code == 204
 
     package = tmp_path / "deleted-recreate.zip"
-    make_inventory_zip(package)
+    make_inventory_zip(package, content=lst_me_content(network_element_type="UMF"))
     with package.open("rb") as fh:
         created = client.post(
             "/api/v3/tasks",
@@ -126,7 +126,7 @@ def test_deleted_device_is_recreated_by_task(tmp_path: Path) -> None:
                 "package_kind": "inspection",
                 "province": "江苏",
                 "operator": "移动",
-                "product": "UMF2020",
+                "product": "UMF",
             },
         )
     assert created.status_code == 202

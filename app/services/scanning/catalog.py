@@ -1,50 +1,56 @@
 """任务最终可巡检文件的执行期内存清单。"""
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.services.extraction.layout import WORK_CATEGORIES
+from app.services.extraction.manifest import ManifestV5Error, read_manifest, sha256_file
 from app.services.scanning.matcher import match_paths
 
 
 @dataclass(frozen=True, slots=True)
 class TaskFileCatalog:
-    """任务现场只读文件清单；不持久化，也不复制文件。"""
+    """任务现场只读文件清单；只信任 manifest v5 的 catalog。"""
 
     root: Path
     _paths: tuple[Path, ...]
 
     @classmethod
     def build(cls, data_dir: Path) -> "TaskFileCatalog":
-        """构建一次最终可巡检文件清单。"""
+        """从已发布 manifest v5 构建 catalog，不回退扫描分类目录。"""
+        if data_dir.is_symlink():
+            raise ManifestV5Error(f"任务目录不得是链接: {data_dir}")
         root = data_dir.resolve()
-        collected: set[Path] = set()
-        for category in WORK_CATEGORIES:
-            category_root = root / category
-            if not category_root.exists():
-                continue
-            if category_root.is_symlink() or not category_root.is_dir():
-                raise ValueError(f"分类目录不是合法目录: {category_root}")
-            for current, directories, files in os.walk(category_root, followlinks=False):
-                current_path = Path(current)
-                for name in directories:
-                    directory = current_path / name
-                    if directory.is_symlink():
-                        raise ValueError(f"目录链接被拒绝: {directory}")
-                for name in files:
-                    path = current_path / name
-                    if path.is_symlink():
-                        raise ValueError(f"文件链接被拒绝: {path}")
-                    if not path.is_file():
-                        continue
-                    relative = path.relative_to(root)
-                    resolved = path.resolve()
-                    if not resolved.is_relative_to(root) or ".." in relative.parts:
-                        raise ValueError(f"匹配路径越界: {relative.as_posix()}")
-                    collected.add(relative)
-        paths = tuple(sorted(collected, key=lambda path: path.as_posix()))
-        return cls(root=root, _paths=paths)
+        manifest = read_manifest(root)
+        collected: list[Path] = []
+        for item in manifest["catalog"]:
+            relative = Path(item["path"])
+            cls._validate_regular_file_chain(root, relative)
+            path = root / relative
+            if not path.is_file():
+                raise ManifestV5Error(f"catalog 条目不是普通文件: {relative.as_posix()}")
+            try:
+                size = path.stat().st_size
+                digest = sha256_file(path)
+            except OSError as exc:
+                raise ManifestV5Error(f"无法读取 catalog 文件: {relative.as_posix()}") from exc
+            if size != item["size"] or digest != item["sha256"]:
+                raise ManifestV5Error(f"catalog 文件摘要或大小不一致: {relative.as_posix()}")
+            resolved = path.resolve()
+            if not resolved.is_relative_to(root):
+                raise ManifestV5Error(f"catalog 路径越界: {relative.as_posix()}")
+            collected.append(relative)
+        return cls(root=root, _paths=tuple(collected))
+
+    @staticmethod
+    def _validate_regular_file_chain(root: Path, relative: Path) -> None:
+        """拒绝 catalog 路径任一段为链接，避免 manifest 之外的现场泄漏。"""
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ManifestV5Error(f"catalog 路径越界: {relative.as_posix()}")
+        current = root
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                raise ManifestV5Error(f"catalog 路径包含链接: {relative.as_posix()}")
 
     def paths(self) -> list[Path]:
         """返回稳定排序的相对路径副本。"""
@@ -55,12 +61,13 @@ class TaskFileCatalog:
         return match_paths(list(self._paths), source_patterns)
 
     def resolve(self, relative: Path) -> Path:
-        """将相对路径解析到任务根内；拒绝越界路径。"""
+        """将相对路径解析到任务根内；拒绝越界或未发布路径。"""
         if relative.is_absolute() or ".." in relative.parts:
-            raise ValueError(f"匹配路径越界: {relative.as_posix()}")
-        resolved = (self.root / relative).resolve()
-        if not resolved.is_relative_to(self.root):
             raise ValueError(f"匹配路径越界: {relative.as_posix()}")
         if relative not in self._paths:
             raise ValueError(f"路径不在任务文件清单中: {relative.as_posix()}")
+        self._validate_regular_file_chain(self.root, relative)
+        resolved = (self.root / relative).resolve()
+        if not resolved.is_relative_to(self.root):
+            raise ValueError(f"匹配路径越界: {relative.as_posix()}")
         return resolved

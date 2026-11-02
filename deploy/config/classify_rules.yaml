@@ -22,6 +22,32 @@ profiles:
   GENERIC:
     scene_anchors: []
 routes:
+  - id: alarm.umf
+    phase: alarm
+    priority: 1001
+    profiles: [UMF, CSP]
+    source:
+      scope: evidence
+      directory: "**/Alarm Information/**"
+      file: "*"
+      capture_root: "Alarm Information"
+    action: expand_recursive
+    category: alarm
+    target: "alarm/{member}"
+
+  - id: alarm.csp
+    phase: alarm
+    priority: 1000
+    profiles: [UMF, CSP]
+    source:
+      scope: evidence
+      directory: "**/Alarm Data/**"
+      file: "*"
+      capture_root: "Alarm Data"
+    action: expand_recursive
+    category: alarm
+    target: "alarm/{member}"
+
   - id: umf.basic
     phase: precise
     priority: 100
@@ -152,6 +178,106 @@ routes:
     category: other
     target: "other/MESH Application Metrics/{archive_stem}/{member}"
 
+  - id: umf.service-logs
+    phase: precise
+    priority: 36
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Service Logs (Problem)"
+      file: "ServiceLogs_*.zip"
+      capture_root: "Service Logs (Problem)"
+    action: select_and_decompress
+    category: log
+    target: "logs/{service}/{node_path}/{name_without_gz}"
+    selection:
+      include:
+        - pattern: "**/UMFAcc.log"
+          service: UMFACC
+        - pattern: "**/UMFAcc_*.log.gz"
+          service: UMFACC
+        - pattern: "**/UmfService.log"
+          service: UMFSERVICE
+        - pattern: "**/UmfService_*.log.gz"
+          service: UMFSERVICE
+        - pattern: "**/CacheService.log"
+          service: CACHESERVICE
+        - pattern: "**/ResourceManageService.log"
+          service: RESOURCEMANAGESERVICE
+      exclude:
+        - pattern: "**/RScheck/**"
+          reason: service_check_script
+        - pattern: "**/rscheck*.gz"
+          reason: service_check_script
+        - pattern: "**/dblog.tar.gz"
+          reason: runtime_database_archive
+        - pattern: "**/UFP_*.log"
+          reason: ufp_log
+        - pattern: "**/UFP_MSS_2_0.zip"
+          reason: ufp_archive
+        - pattern: "**/monitor_detect.log"
+          reason: monitor_log
+        - pattern: "**/UmfService_monitor.log"
+          reason: umf_service_monitor_log
+        - pattern: "**/start/**/*.log"
+          reason: service_startup_log
+        - pattern: "**/proxy/**/*.log"
+          reason: proxy_log
+        - pattern: "**/bbox*.dat.txt"
+          reason: bbox_data
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+
+  - id: umf.chr
+    phase: precise
+    priority: 35
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "CHR Information"
+      file: "ServiceLogs_*.zip"
+      capture_root: "CHR Information"
+    action: select_and_decompress
+    category: chr
+    target: "chr/{member}"
+    selection:
+      include:
+        - pattern: "**/*.bil.gz"
+          service: chr
+      exclude:
+        - pattern: "**/LocalLogReport.csv"
+          reason: report_not_log
+
+  - id: umf.host-debug
+    phase: precise
+    priority: 34
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Host Debugging Logs"
+      file: "DEBUG.tar.gz"
+      capture_root: "Host Debugging Logs"
+    action: expand
+    category: log
+    target: "host-debug/{member}"
+    member_decompress:
+      - "**/*.log.gz"
+
+  - id: umf.host-system
+    phase: precise
+    priority: 33
+    profiles: [UMF]
+    source:
+      scope: scene
+      directory: "Host System Logs"
+      file: "OS.tar.gz"
+      capture_root: "Host System Logs"
+    action: expand
+    category: log
+    target: "host-system/{member}"
+    member_decompress:
+      - "**/*.log.gz"
+
   - id: umf.other
     phase: fallback
     priority: 10
@@ -163,6 +289,30 @@ routes:
     action: fallback
     category: other
     target: "other/{suffix}"
+
+  - id: umf.ignore-outside-scene
+    phase: fallback
+    priority: 9
+    profiles: [UMF]
+    source:
+      scope: evidence
+      directory: "**"
+      file: "*"
+    action: ignore
+    category: null
+    target: null
+
+  - id: ignore.zero
+    phase: ignore
+    priority: 100
+    profiles: [UMF, CSP]
+    source:
+      scope: evidence
+      directory: "**/0/**"
+      file: "*"
+    action: ignore
+    category: null
+    target: null
 
   - id: csp.ignore-non-alarm
     phase: fallback

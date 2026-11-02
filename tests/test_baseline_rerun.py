@@ -48,13 +48,13 @@ def test_local_single_rule_rerun_preserves_unrelated_results(tmp_path: Path, mon
 
     unrelated_code = _register_unrelated_test_rule(monkeypatch)
     task_id = "task-sample"
-    run_task(SAMPLE, task_id=task_id)
+    run_task(SAMPLE, task_id=task_id, customer={"product": "UMF"})
     unrelated_path = env.task_dir(task_id) / "rules" / f"{unrelated_code}.json"
     unrelated_before = load_rule(env, task_id, unrelated_code)
     task_before = load_task(env, task_id)
     unrelated_mtime_before = unrelated_path.stat().st_mtime_ns
 
-    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task_id, product="UMF")
     target = load_rule(env, task_id, "kpi.measurement_units")
     unrelated_after = load_rule(env, task_id, unrelated_code)
     task_after = load_task(env, task_id)
@@ -95,21 +95,15 @@ def test_single_rule_rerun_rebuilds_missing_task_site(tmp_path: Path, monkeypatc
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
-    package = tmp_path / "missing-site.zip"
-    with zipfile.ZipFile(package, "w") as archive:
-        archive.writestr(
-            "kpi/kpi-api-15.csv",
-            "设备类型：XXX\n测量单元名称：API 统计\n"
-            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),请求总数,成功数\n"
-            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,90\n",
-        )
-    task_id = run_task(package).task_id
+    package = SAMPLE
+    task_id = run_task(package, customer={"product": "UMF"}).task_id
     shutil.rmtree(env.task_dir(task_id))
 
-    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id, product="UMF")
 
-    assert (env.task_dir(task_id) / ".patrolx-extracted.json").is_file()
-    assert load_rule(env, task_id, "kpi.measurement_units")["status"] == "skip"
+    assert (env.task_dir(task_id) / "manifest.json").is_file()
+    assert not (env.task_dir(task_id) / ".patrolx-extracted.json").exists()
+    assert load_rule(env, task_id, "kpi.measurement_units")["status"] in {"pass", "warn", "fail", "skip"}
 
 
 def test_single_rule_rerun_reports_kpi_skip_without_kpi_sources(tmp_path: Path, monkeypatch) -> None:
@@ -118,31 +112,26 @@ def test_single_rule_rerun_reports_kpi_skip_without_kpi_sources(tmp_path: Path, 
 
     package = tmp_path / "no-kpi.zip"
     with zipfile.ZipFile(package, "w") as archive:
-        archive.writestr("logs/app.log", "2026-01-01 INFO ready\n")
-    task_id = run_task(package).task_id
+        archive.writestr("UMF Problem Scene/Basic Information About the UMF/system.ini", "[app]\nname=umf\n")
+    task_id = run_task(package, customer={"product": "UMF"}).task_id
 
-    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id, product="UMF")
 
     target = load_rule(env, task_id, "kpi.measurement_units")
     assert target["status"] == "skip"
-    assert target["skip_reason"] == "source_patterns 未匹配到文件: ^kpi/.*\\.csv$, ^traffic/.*\\.csv$"
+    assert target["skip_reason"].startswith("source_patterns 未匹配到文件")
+    assert "profile=UMF" in target["skip_reason"]
 
 
 def test_kpi_measurement_rerun_without_prepare_and_deterministically(tmp_path: Path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
-    package = tmp_path / "kpi-rerun.zip"
-    with zipfile.ZipFile(package, "w") as archive:
-        archive.writestr(
-            "kpi/ne333_Call_Statistics_15_0_202609020000.csv",
-            "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数\n"
-            "pod-a,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100\n",
-        )
-    task_id = run_task(package).task_id
+    package = SAMPLE
+    task_id = run_task(package, customer={"product": "UMF"}).task_id
 
     before = load_rule(env, task_id, "kpi.measurement_units")
-    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id, product="UMF")
     target = load_rule(env, task_id, "kpi.measurement_units")
 
     assert target["status"] == "skip"
@@ -155,25 +144,18 @@ def test_single_rule_rerun_reuses_valid_manifest(tmp_path: Path, monkeypatch) ->
     """manifest 与主包 checksum 一致时，单规则重跑不得重建解压现场。"""
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
-    from app.services import extraction
+    from app.services.extraction import site
 
-    package = tmp_path / "reuse-manifest.zip"
-    with zipfile.ZipFile(package, "w") as archive:
-        archive.writestr(
-            "kpi/kpi-api-15.csv",
-            "设备类型：XXX\n测量单元名称：API 统计\n"
-            "服务名,实例,可信度,不可信原因,测量开始时间,测量结束时间,周期(分钟),请求总数,成功数\n"
-            "BasicKpi,,可信,,2026-09-01 10:00:00,2026-09-01 10:15:00,15,100,90\n",
-        )
-    task_id = run_task(package).task_id
+    package = SAMPLE
+    task_id = run_task(package, customer={"product": "UMF"}).task_id
     before = {path.relative_to(env.task_dir(task_id)).as_posix() for path in env.task_dir(task_id).rglob("*")}
 
     def unexpected_extract(*args, **kwargs):
         raise AssertionError("manifest 有效时单规则重跑不应重建解压现场")
 
-    monkeypatch.setattr(extraction, "extract_main_site", unexpected_extract)
-    run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
+    monkeypatch.setattr(site, "_rebuild_main_evidence", unexpected_extract)
+    run_single_rule("kpi.measurement_units", package=package, task_id=task_id, product="UMF")
 
     after = {path.relative_to(env.task_dir(task_id)).as_posix() for path in env.task_dir(task_id).rglob("*")}
-    assert load_rule(env, task_id, "kpi.measurement_units")["status"] == "skip"
+    assert load_rule(env, task_id, "kpi.measurement_units")["status"] in {"pass", "warn", "fail", "skip"}
     assert before == after

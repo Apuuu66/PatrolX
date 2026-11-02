@@ -178,14 +178,24 @@ def test_measurement_rule_end_to_end_with_task_and_single_rerun(tmp_path: Path, 
     env = setup_env(tmp_path, monkeypatch)
     _import_resources()
     package = tmp_path / "measurement-e2e.zip"
+    performance_archive = io.BytesIO()
+    with zipfile.ZipFile(performance_archive, "w") as archive:
+        archive.writestr(
+            "ne333_Call_Statistics_15_0_202609020000.csv",
+            HEADER + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
+        )
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr(
-            "kpi/ne333_Call_Statistics_15_0_202609020000.csv",
-            HEADER + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
+            "UMF Problem Scene/Basic Information About the UMF/version.ini",
+            "[version]\nproduct=UMF\n",
+        )
+        archive.writestr(
+            "UMF Problem Scene/Performance Measurement Results/PerfResult_20260902.zip",
+            performance_archive.getvalue(),
         )
     from app.cli import run_single_rule, run_task
 
-    task_id = run_task(package).task_id
+    task_id = run_task(package, customer={"product": "UMF"}).task_id
     first = load_rule(env, task_id, "kpi.measurement_units")
     assert first["status"] == "pass"
     assert first["metadata"]["measurement_units"][0]["objects"]["pod-a"]["avg_value"] == 100.0

@@ -11,6 +11,7 @@ from app.inspectors.registry import RuleRegistry
 from app.models.schemas import PackageKind, Priority, Product, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext, make_result
 from app.services.scanning import TaskFileCatalog
+from tests.manifest_helpers import write_catalog_manifest
 
 
 def _context(tmp_path: Path) -> RuleContext:
@@ -60,6 +61,7 @@ def _rule(
 
 def test_run_all_builds_catalog_once_after_extract_barrier(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     build_calls: list[Path] = []
     original_build = TaskFileCatalog.build.__func__
 
@@ -130,6 +132,7 @@ def test_extract_errors_run_all_extract_units_and_block_followup(
         prepare=PrepareSpec(code="prepare.owner", owner_code="rule.owner", run=prepare),
     )
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     ctx = RuleContext(
         task_id="task-extract-gate",
         data_dir=tmp_path,
@@ -242,6 +245,7 @@ def test_classification_warn_allows_prepare_and_inspect(tmp_path: Path) -> None:
         prepare=PrepareSpec(code="prepare.owner", owner_code="rule.owner", run=prepare),
     )
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
 
     results = Executor(registry).run_all(
         _context(tmp_path),
@@ -258,7 +262,7 @@ def test_prepare_and_inspect_match_same_catalog_and_exclude_infrastructure(
     _file(tmp_path, "logs/a.log")
     _file(tmp_path, "prepared/rule.owner/old.csv")
     _file(tmp_path, ".main/evidence.log")
-    _file(tmp_path, ".patrolx-extracted.json")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     seen: list[list[Path]] = []
 
     def prepare(ctx: RuleContext) -> None:
@@ -286,6 +290,8 @@ def test_prepare_and_inspect_match_same_catalog_and_exclude_infrastructure(
 
 
 def test_no_catalog_match_returns_skip(tmp_path: Path) -> None:
+    _file(tmp_path, "basic/a.txt")
+    write_catalog_manifest(tmp_path, ["basic/a.txt"])
     registry = RuleRegistry()
 
     def inspect(_ctx: RuleContext) -> object:
@@ -296,7 +302,8 @@ def test_no_catalog_match_returns_skip(tmp_path: Path) -> None:
     result = Executor(registry).run_all(ctx)["rule.none"]
 
     assert result.status == RuleStatus.SKIP
-    assert result.skip_reason == "source_patterns 未匹配到文件: logs/.*\\.log"
+    assert "patterns=logs/.*\\.log" in (result.skip_reason or "")
+    assert "profile=UMF" in (result.skip_reason or "")
 
 
 def test_single_rule_rerun_ensures_extraction_then_catalog(
@@ -304,6 +311,7 @@ def test_single_rule_rerun_ensures_extraction_then_catalog(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     calls: list[str] = []
     monkeypatch.setattr(
         Executor,
@@ -354,6 +362,7 @@ def test_single_rule_rerun_is_blocked_by_classification_error(
     _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
     _rule(registry, "rule.target", inspect, source_patterns=[r"logs/.*"])
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
 
     with pytest.raises(ValueError, match="pkg.extract.classification"):
@@ -394,6 +403,7 @@ def test_single_rule_rerun_allows_classification_warn(
         prepare=PrepareSpec(code="prepare.target", owner_code="rule.target", run=prepare),
     )
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
 
     result = Executor(registry).run_rule_with_deps("rule.target", _context(tmp_path))
@@ -422,6 +432,7 @@ def test_single_rule_rerun_does_not_collect_classification_gate(
     _rule(registry, "pkg.extract.classification", classification, source_patterns=None)
     _rule(registry, "rule.target", inspect, source_patterns=[r"logs/.*"])
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
     executor = Executor(registry)
 
@@ -470,6 +481,7 @@ def test_single_rule_rerun_does_not_require_classification_unit(
 
     _rule(registry, "rule.target", inspect, source_patterns=[r"logs/.*"])
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     monkeypatch.setattr(Executor, "_ensure_extraction_site", lambda self, ctx: None)
 
     result = Executor(registry).run_rule_with_deps("rule.target", _context(tmp_path))
@@ -481,6 +493,7 @@ def test_inspect_request_propagates_task_product_and_package_kind(tmp_path: Path
     registry = RuleRegistry()
     _rule(registry, "rule.meta", lambda _ctx: None, source_patterns=[r"logs/.*"])
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     ctx = RuleContext(
         task_id="task-meta",
         data_dir=tmp_path,
@@ -498,6 +511,8 @@ def test_inspect_request_propagates_task_product_and_package_kind(tmp_path: Path
 
 
 def test_ensure_catalog_reuses_existing_context_catalog(tmp_path: Path) -> None:
+    _file(tmp_path, "basic/a.txt")
+    write_catalog_manifest(tmp_path, ["basic/a.txt"])
     ctx = _context(tmp_path)
     ctx.catalog = TaskFileCatalog.build(tmp_path)
 
@@ -538,6 +553,7 @@ def test_pattern_rejection_is_logged_and_rule_error(tmp_path: Path) -> None:
         logs.append((level, message, detail or {}))
 
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     registry = RuleRegistry()
 
     def inspect(_ctx: RuleContext) -> object:
@@ -570,6 +586,7 @@ def test_prepare_pattern_rejection_is_logged_and_skips_owner(tmp_path: Path) -> 
         logs.append((level, message, detail or {}))
 
     _file(tmp_path, "logs/a.log")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
     registry = RuleRegistry()
 
     def prepare(_ctx: RuleContext) -> None:
@@ -603,28 +620,35 @@ def test_prepare_pattern_rejection_is_logged_and_skips_owner(tmp_path: Path) -> 
 
 
 def test_single_rule_rerun_hashes_package_once_per_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """单规则重跑只经 pkg.extract.main，且每个上下文 checksum 只算一次。"""
+    import app.core.checksum as checksum_module
+
     package = tmp_path / "package.zip"
     package.write_bytes(b"package")
     checksum_calls: list[Path] = []
-    original_sha256_file = sha256_file.__wrapped__ if hasattr(sha256_file, "__wrapped__") else sha256_file
+    main_calls: list[str] = []
+    original_sha256_file = checksum_module.sha256_file
 
     def counting_sha256_file(path: Path) -> str:
         checksum_calls.append(path)
         return original_sha256_file(path)
 
-    monkeypatch.setattr("app.services.executor.sha256_file", counting_sha256_file)
-    monkeypatch.setattr(
-        "app.services.executor.extraction.reusable_manifest",
-        lambda _data_dir, checksum: {"main": {"checksum": checksum}},
-    )
+    monkeypatch.setattr(checksum_module, "sha256_file", counting_sha256_file)
 
     registry = RuleRegistry()
+
+    def main_extract(ctx: RuleContext) -> object:
+        main_calls.append(ctx.ensure_package_checksum())
+        return make_result(registry.get("pkg.extract.main"), status=RuleStatus.PASS, summary="ok")
 
     def run(_ctx: RuleContext) -> object:
         return make_result(registry.get("rule.first"), status=RuleStatus.PASS, summary="ok")
 
+    _rule(registry, "pkg.extract.main", main_extract, source_patterns=None)
     _rule(registry, "rule.first", run, source_patterns=[r"logs/.*"])
     _rule(registry, "rule.second", run, source_patterns=[r"kpi/.*"])
+    _file(tmp_path, "basic/a.txt")
+    write_catalog_manifest(tmp_path, ["basic/a.txt"])
     ctx = _context(tmp_path)
     ctx.package_path = package
     executor = Executor(registry)
@@ -633,33 +657,42 @@ def test_single_rule_rerun_hashes_package_once_per_context(tmp_path: Path, monke
     executor.run_rule_with_deps("rule.second", ctx)
 
     assert checksum_calls == [package]
+    assert main_calls == [sha256_file(package), sha256_file(package)]
 
 
-def test_no_match_skip_reason_reports_policy_skipped_items(tmp_path: Path) -> None:
-    """同分类存在策略保留项时，无匹配规则补充可读原因。"""
-    import json
-
-    manifest = {
-        "version": 3,
-        "main": {"checksum": "a", "count": 1, "evidence_path": ".main", "reused": False},
-        "subpackages": [
+def test_no_match_skip_reason_reports_v5_context(tmp_path: Path) -> None:
+    """无匹配 skip_reason 必须来自 manifest v5 的 profile、配置指纹和审计摘要。"""
+    _file(tmp_path, "basic/a.txt")
+    write_catalog_manifest(
+        tmp_path,
+        ["basic/a.txt"],
+        ignored=[
             {
-                "source": ".main/0/a.zip",
-                "parent": None,
-                "category": "other",
-                "classification_reason": "policy:name",
-                "depth": 1,
-                "checksum": "a",
-                "target": "other/0/a.zip",
-                "status": "skipped",
-                "error": None,
-                "policy": {"action": "skip", "reason": "skip_path", "scope": "0/", "keyword": None},
+                "source_relative": "source/ignored.log",
+                "member_relative": None,
+                "route_id": "route.ignore",
+                "product": "UMF",
+                "category": "log",
+                "original_target": None,
+                "target": None,
+                "action": "ignore",
+                "status": "ignored",
+                "reason": "member_not_selected",
+                "error_code": None,
             }
         ],
-        "log_gz": [],
-        "rejected": [],
-    }
-    (tmp_path / ".patrolx-extracted.json").write_text(json.dumps(manifest), encoding="utf-8")
+        failures=[
+            {
+                "source_relative": "source/broken.zip",
+                "member_relative": "nested/alarm.log",
+                "route_id": "route.alarm",
+                "category": "alarm",
+                "action": "expand_recursive",
+                "error_code": "archive_corrupt",
+                "reason": "损坏归档",
+            }
+        ],
+    )
     registry = RuleRegistry()
 
     def inspect(_ctx: RuleContext) -> object:
@@ -669,4 +702,11 @@ def test_no_match_skip_reason_reports_policy_skipped_items(tmp_path: Path) -> No
     result = Executor(registry).run_all(_context(tmp_path))["rule.none"]
 
     assert result.status == RuleStatus.SKIP
-    assert "项目级解压策略保留了压缩项: a.zip" in (result.skip_reason or "")
+    skip_reason = result.skip_reason or ""
+    assert "patterns=other/.*\\.log" in skip_reason
+    assert "profile=UMF" in skip_reason
+    assert f"config={'a' * 64}" in skip_reason
+    assert "ignored=1" in skip_reason
+    assert "member_not_selected" in skip_reason
+    assert "failures=1" in skip_reason
+    assert "archive_corrupt" in skip_reason

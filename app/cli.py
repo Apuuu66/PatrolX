@@ -34,14 +34,16 @@ from app.models.schemas import (
     TaskStatus,
     TaskTrigger,
 )
-from app.services import extraction, store, task_db
+from app.services import store, task_db
 from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext, RuleDependencyError
-from app.services.extraction import WORK_CATEGORIES
+from app.services.extraction.manifest import LEGACY_TARGET_ROOTS
+from app.services.extraction.manifest import read_manifest as read_manifest_v5
 from app.services.inventory.ledger import archive_inventory
 from app.services.inventory.parser import parse_inventory
 from app.services.report import render_report
 from app.services.rule_states import assert_rule_enabled, get_enabled_rule_codes
+from app.services.scanning import TaskFileCatalog
 
 
 def _now() -> datetime:
@@ -71,6 +73,7 @@ def _resolve_task_metadata(
     existing: dict | None = None,
     task_id: str | None = None,
     require_product_when_new: bool = True,
+    require_product_for_existing: bool = False,
 ) -> tuple[Product | str | None, PackageKind]:
     """按 API 语义合并显式与持久化元数据，并拒绝同任务冲突。"""
     customer = ((existing or {}).get("system") or {}).get("customer") or {}
@@ -137,20 +140,21 @@ def _resolve_task_metadata(
         # 日志补充包的 product 在契约中固定为 null；历史脏值不得继续传播到执行上下文。
         return None, requested_kind
 
-    if existing is not None and explicit_product is not None:
-        if persisted_product is None or explicit_product.value != str(persisted_product):
+    if existing is not None and explicit_product is not None and persisted_product is not None:
+        if explicit_product.value != str(persisted_product):
             raise CliMetadataError(
                 "package_product_conflict",
                 "同一任务的网元类型与已有任务冲突",
                 detail={
                     "task_id": task_id,
-                    "existing": str(persisted_product) if persisted_product is not None else None,
+                    "existing": str(persisted_product),
                     "requested": explicit_product.value,
                 },
             )
 
     resolved_product = explicit_product if explicit_product is not None else persisted_product
-    if resolved_product is None and existing is None and require_product_when_new:
+    product_required = (existing is None and require_product_when_new) or require_product_for_existing
+    if resolved_product is None and product_required:
         raise CliMetadataError(
             "missing_product",
             "巡检包必须提供网元类型",
@@ -489,7 +493,7 @@ def run_incremental_rebuild(
     # 只删除解压 manifest 和工作分类目录；规则结果、prepared 数据与任务元数据保留。
     extraction_manifest = task_dir / EXTRACT_MANIFEST
     extraction_manifest.unlink(missing_ok=True)
-    for category in WORK_CATEGORIES:
+    for category in LEGACY_TARGET_ROOTS:
         shutil.rmtree(task_dir / category, ignore_errors=True)
 
     extraction = executor.run_rule("pkg.extract.main", ctx)
@@ -637,7 +641,7 @@ def explain_match(
     product: Product | str | None = None,
     package_kind: PackageKind | str | None = None,
 ) -> dict:
-    """输出规则匹配诊断：解压终态、任务清单和每个 pattern 的命中明细。"""
+    """只读输出 v5 分类快照、任务清单和每个 pattern 的命中明细。"""
     registry.load_all()
     rule = registry.get(code)
     if rule.hidden:
@@ -645,44 +649,62 @@ def explain_match(
     if not rule.source_patterns:
         raise ValueError(f"规则 {code} 没有可解释的 source_patterns")
     enabled_rules = get_enabled_rule_codes()
-    package = package or latest_package()
-    task_id = task_id or generate_task_id(package.name)
+    if task_id is None:
+        package = package or latest_package()
+        task_id = generate_task_id(package.name)
+    task_dir = settings.output / task_id
+    existing = _load_old_task(task_id)
     resolved_product, resolved_package_kind = _resolve_task_metadata(
         product,
         package_kind,
-        existing=_load_old_task(task_id),
+        existing=existing,
         task_id=task_id,
         require_product_when_new=False,
     )
-    ctx = _new_context(
-        task_id,
-        package,
-        package_checksum,
-        product=resolved_product,
-        package_kind=resolved_package_kind,
-    )
-    executor = Executor(registry, enabled_rules)
-    executor.ensure_rule_dependencies(code, ctx)
-    manifest = extraction.read_manifest(ctx.data_dir)
-    catalog = ctx.ensure_catalog()
+    try:
+        manifest = read_manifest_v5(task_dir)
+    except Exception as exc:  # noqa: BLE001 - 统一转换为稳定诊断错误
+        summary = f"分类清单无法读取或解析: {exc}"
+        raise _classification_diagnostic_error(summary, exc) from exc
+    snapshot = manifest["classification"]["snapshot"]
+    if resolved_product is not None and str(resolved_product) != snapshot["product"]:
+        raise CliMetadataError(
+            "package_product_conflict",
+            "同一任务的网元类型与已有分类现场冲突",
+            detail={
+                "task_id": task_id,
+                "existing": snapshot["product"],
+                "requested": str(resolved_product),
+            },
+        )
+    if resolved_package_kind.value != snapshot["package_kind"]:
+        raise CliMetadataError(
+            "package_kind_conflict",
+            "同一任务的包类型与已有分类现场冲突",
+            detail={
+                "task_id": task_id,
+                "existing": snapshot["package_kind"],
+                "requested": resolved_package_kind.value,
+            },
+        )
+    try:
+        catalog = TaskFileCatalog.build(task_dir)
+    except Exception as exc:  # noqa: BLE001 - catalog 失败同样按分类门禁失败返回
+        summary = f"catalog 构建失败: {exc}"
+        raise _classification_diagnostic_error(summary, exc) from exc
     matched = catalog.match(rule.source_patterns)
     pattern_matches = {
         pattern: [path.as_posix() for path in catalog.match([pattern])] for pattern in rule.source_patterns
     }
     category = "logs" if rule.category == RuleCategory.LOG else rule.category.value
-    category_entries = [
-        *[item for item in manifest.get("files", []) if item.get("category") == category],
-        *[item for item in manifest.get("subpackages", []) if item.get("category") == category],
-    ]
-    if category == "logs":
-        category_entries.extend(manifest.get("log_gz", []))
-    status_counts: dict[str, int] = {}
-    for item in category_entries:
-        status = str(item.get("status", "unknown"))
-        status_counts[status] = status_counts.get(status, 0) + 1
+    summary = manifest["summary"]
+    package_file = package.name if package is not None else None
+    if package_file is None and existing is not None:
+        package_file = (existing.get("system") or {}).get("package_file")
     return {
         "task_id": task_id,
-        "package_file": package.name,
+        "package_file": package_file,
+        "package_checksum": package_checksum or manifest["main"]["checksum"],
         "rule": {
             "code": rule.code,
             "name": rule.name,
@@ -696,14 +718,41 @@ def explain_match(
         "matched_files": [path.as_posix() for path in matched],
         "catalog_paths": [path.as_posix() for path in catalog.paths()],
         "manifest": {
-            "version": manifest.get("version"),
-            "main": manifest.get("main"),
+            "version": manifest["version"],
+            "main": manifest["main"],
+            "classification": manifest["classification"],
+            "path_limit": manifest["path_limit"],
+            "summary": summary,
+            "route_counts": dict(summary["by_route"]),
+            "category_counts": dict(summary["by_category"]),
+            "action_counts": dict(summary["by_action"]),
+            "ignored": manifest["ignored"],
+            "failures": manifest["failures"],
+            "conflicts": manifest["conflicts"],
             "category": category,
-            "status_counts": status_counts,
-            "failures": extraction.category_failures(manifest, category),
-            "policy_skipped": extraction.policy_skipped_summary(manifest, category),
+            "status_counts": dict(summary["by_status"]),
         },
     }
+
+
+def _classification_diagnostic_error(summary: str, exc: Exception) -> RuleDependencyError:
+    """把任务现场读取失败转换为 CLI 可稳定展示的分类门禁错误。"""
+    classification_code = "pkg.extract.classification"
+    return RuleDependencyError(
+        "classification_error",
+        f"解压分类门禁失败，阻断诊断: failed_units=[{classification_code}] | {summary}",
+        detail={
+            "failed_units": [classification_code],
+            "classification": {
+                "code": classification_code,
+                "name": "分类落位终态校验",
+                "category": "classification",
+                "status": "error",
+                "summary": summary,
+                "metadata": {"error": str(exc)},
+            },
+        },
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -789,21 +838,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "explain-match":
         root = Path(args.package_dir) if args.package_dir else None
         packages = find_packages(root)
-        if not packages:
-            raise SystemExit("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
         try:
-            for pkg in packages:
-                lookup_task_id = args.task_id or generate_task_id(pkg.name)
+            if packages:
+                runs = [(pkg, args.task_id or generate_task_id(pkg.name), True) for pkg in packages]
+            elif args.task_id and (settings.output / args.task_id / EXTRACT_MANIFEST).exists():
+                runs = [(None, args.task_id, False)]
+            else:
+                raise SystemExit("未找到数据包或任务现场：请提供 zip/tar.gz 或已有 --task-id")
+            for pkg, lookup_task_id, require_product_when_new in runs:
                 product, package_kind = _resolve_task_metadata(
                     args.product,
                     args.package_kind,
                     existing=_load_old_task(lookup_task_id),
                     task_id=lookup_task_id,
+                    require_product_when_new=require_product_when_new,
                 )
                 report = explain_match(
                     args.rule,
                     package=pkg,
-                    task_id=args.task_id,
+                    task_id=lookup_task_id if pkg is None else args.task_id,
                     product=product,
                     package_kind=package_kind,
                 )
@@ -838,6 +891,7 @@ def main(argv: list[str] | None = None) -> int:
     if not packages:
         print("未找到数据包：请将 zip/tar.gz 放入 uploads/ 根目录")
         return 1
+    failed = False
     for pkg in packages:
         if args.cmd == "run":
             lookup_task_id = args.task_id or generate_task_id(pkg.name)
@@ -847,19 +901,22 @@ def main(argv: list[str] | None = None) -> int:
                     args.package_kind,
                     existing=_load_old_task(lookup_task_id),
                     task_id=lookup_task_id,
+                    require_product_for_existing=True,
                 )
             except CliMetadataError as exc:
                 _print_cli_error(exc)
                 return 1
-            run_task(
+            executed = run_task(
                 pkg,
                 task_id=args.task_id,
                 customer={"product": product} if product is not None else {},
                 package_kind=package_kind,
             )
         else:
-            run_task(pkg, task_id=args.task_id)
-    return 0
+            executed = run_task(pkg, task_id=args.task_id)
+        if executed is not None and executed.status == TaskStatus.FAILED:
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

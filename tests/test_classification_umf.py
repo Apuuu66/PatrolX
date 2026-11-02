@@ -81,8 +81,8 @@ def _scene(anchor: str = "UMF Problem scene") -> str:
     return f"Outer Network/Problem 333/{anchor}"
 
 
-def test_infer_scene_root_uses_anchor_parents_and_common_parent(tmp_path: Path) -> None:
-    """多层包装下，场景根由 profile anchors 的父目录最长公共父目录推导。"""
+def test_infer_scene_root_clusters_anchor_parents(tmp_path: Path) -> None:
+    """多层包装下，场景根按 profile anchor 父目录聚类推导。"""
     evidence_root = tmp_path / "task" / ".main"
     _write(evidence_root / _scene() / "Operation Logs/operationlog_history_01.csv")
     _write(evidence_root / _scene() / "MML Configurations/EXP MML.txt")
@@ -129,6 +129,31 @@ def test_scene_root_uses_only_current_profile_anchors(tmp_path: Path) -> None:
 
     assert scene_root.relative_to_evidence == Path(_scene())
     assert scene_root.matched_anchors == ("Basic Information About the UMF",)
+
+
+def test_scene_root_ignores_isolated_shared_anchor_in_other_tree(tmp_path: Path) -> None:
+    """其他网元树中的孤立共享 anchor 不得把真实 UMF 场景根拉回证据根。"""
+    evidence_root = tmp_path / "task" / ".main"
+    _write(evidence_root / _scene() / "Basic Information About the UMF/config.ini")
+    _write(evidence_root / _scene() / "Operation Logs/operationlog_history_01.csv")
+    _write(evidence_root / _scene() / "Performance Measurement Results/PerfResult_01.zip")
+    _write(evidence_root / "csp-device/0/Problems/Operation Logs/operationlog_history_other.csv")
+
+    scene_root = infer_scene_root(
+        evidence_root,
+        (
+            "Basic Information About the UMF",
+            "Operation Logs",
+            "Performance Measurement Results",
+        ),
+    )
+
+    assert scene_root.relative_to_evidence == Path(_scene())
+    assert scene_root.matched_anchors == (
+        "Basic Information About the UMF",
+        "Operation Logs",
+        "Performance Measurement Results",
+    )
 
 
 def test_capture_root_uses_rightmost_complete_segment_and_preserves_case(tmp_path: Path) -> None:
@@ -360,9 +385,35 @@ def test_umf_fallback_keeps_collectandcheck_and_unmatched_file(tmp_path: Path) -
     }
 
 
+def test_umf_file_outside_scene_uses_explicit_ignore_route(tmp_path: Path) -> None:
+    """真实包中场景根上一级的 collectandcheck 必须有稳定 ignore route，不能产生 null route。"""
+    scene = Path("device/331/UMF Problem scene")
+    outside = Path("device/331/collectandcheck.ini")
+    run = _classify(
+        tmp_path,
+        {
+            (scene / "Basic Information About the UMF/config.ini").as_posix(): "anchor",
+            outside.as_posix(): "outside",
+        },
+    )
+
+    assert [entry.target for entry in run.entries] == ["basic/config.ini"]
+    assert len(run.ignored) == 1
+    ignored = run.ignored[0]
+    assert (
+        ignored.source_relative,
+        ignored.route_id,
+        ignored.product,
+        ignored.action,
+        ignored.reason,
+    ) == (outside.as_posix(), "umf.ignore-outside-scene", "UMF", "ignore", "route_ignored")
+    assert (ignored.category, ignored.original_target, ignored.target) == (None, None, None)
+    assert not (run.data_dir / "other/collectandcheck.ini").exists()
+
+
 def test_csp_non_alarm_is_ignored_and_not_published(tmp_path: Path) -> None:
     """CSP 非告警内容只写 ignore 审计，不进入工作分类现场。"""
-    source = "csp-device/0/Problems/Inventory/inventory.csv"
+    source = "csp-device/configuration/Inventory/inventory.csv"
     run = _classify(tmp_path, {source: "csp"}, product="CSP")
 
     assert run.entries == ()
@@ -511,8 +562,8 @@ routes:
     assert (run.ignored[0].source_relative, run.ignored[0].route_id) == ("Outer/Scene/Unlisted/data.bin", "test.ignore")
 
 
-def test_deployed_config_contains_only_us1_umf_routes_and_profile_defaults() -> None:
-    """部署配置声明完整 UMF anchors、US1 路线及 CSP/GENERIC 可达默认行为。"""
+def test_deployed_config_contains_us1_us2_and_us3_routes_and_profile_defaults() -> None:
+    """部署配置声明完整 anchors、US1-US3 路线及 CSP/GENERIC 可达默认行为。"""
     config = load_classification_config()
 
     assert config.profiles["UMF"].scene_anchors == tuple(
@@ -535,6 +586,9 @@ def test_deployed_config_contains_only_us1_umf_routes_and_profile_defaults() -> 
         )
     )
     assert {route.id for route in config.routes} == {
+        "alarm.umf",
+        "alarm.csp",
+        "ignore.zero",
         "umf.basic",
         "umf.debug",
         "umf.equipment-status",
@@ -545,7 +599,12 @@ def test_deployed_config_contains_only_us1_umf_routes_and_profile_defaults() -> 
         "umf.mml-archive",
         "umf.kpi",
         "umf.mesh-metrics",
+        "umf.service-logs",
+        "umf.chr",
+        "umf.host-debug",
+        "umf.host-system",
         "umf.other",
+        "umf.ignore-outside-scene",
         "csp.ignore-non-alarm",
         "generic.fallback",
     }
@@ -631,3 +690,29 @@ routes:
         "target_conflict",
     )
     assert not (run.data_dir / "config").exists()
+
+
+def test_classification_can_write_to_explicit_staging_output(tmp_path: Path) -> None:
+    """证据根与分类输出根可分离，分类器不得把 staging 结果直接写入任务根。"""
+    data_dir = tmp_path / "task"
+    output_dir = data_dir / ".classification.staging"
+    source = f"{_scene()}/Basic Information About the UMF/system.ini"
+    _write(data_dir / ".main" / source, b"[app]\n")
+
+    run = classify_main_evidence(data_dir, product="UMF", output_dir=output_dir)
+
+    assert run.data_dir == output_dir
+    assert run.entries[0].target == "basic/system.ini"
+    assert (output_dir / "basic/system.ini").read_bytes() == b"[app]\n"
+    assert not (data_dir / "basic").exists()
+
+
+def test_log_supplement_without_product_uses_generic_audit_and_profile(tmp_path: Path) -> None:
+    """日志补充包没有 product，必须使用 GENERIC profile 且审计 product 为 null。"""
+    source = "supplement/node/app.log"
+    run = _classify(tmp_path, {source: "log\n"}, product=None)
+
+    assert run.entries[0].route_id == "generic.fallback"
+    assert run.entries[0].product is None
+    assert run.entries[0].target == f"logs/{source}"
+    assert (run.data_dir / run.entries[0].target).read_bytes() == b"log\n"

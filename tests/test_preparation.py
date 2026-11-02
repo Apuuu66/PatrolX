@@ -5,27 +5,18 @@ from pathlib import Path
 
 from app.models.schemas import PreparationStatus
 from app.services.preparation import load_preparation
+from tests.manifest_helpers import write_catalog_manifest
 
 
-def _manifest() -> dict:
-    return {
-        "version": 4,
-        "main": {"checksum": "a", "count": 1, "evidence_path": ".main", "reused": False},
-        "files": [
-            {
-                "source": ".main/KPI/kpi.csv",
-                "category": "kpi",
-                "target": "kpi/kpi.csv",
-                "depth": 1,
-                "status": "conflict",
-                "error": "目标文件已存在",
-                "error_code": "target_conflict",
-            }
-        ],
-        "subpackages": [],
-        "log_gz": [],
-        "rejected": [],
-    }
+def _write_manifest(tmp_path: Path, *, resolved_conflict: bool = False) -> dict:
+    target = tmp_path / "kpi" / "kpi.csv"
+    target.parent.mkdir(parents=True)
+    target.write_text("metric,value\n", encoding="utf-8")
+    return write_catalog_manifest(
+        tmp_path,
+        ["kpi/kpi.csv"],
+        resolved_conflicts=1 if resolved_conflict else 0,
+    )
 
 
 def test_missing_manifest_returns_none(tmp_path: Path) -> None:
@@ -45,7 +36,7 @@ def test_registry_exposes_only_main_and_classification_extract_units() -> None:
 
 def test_valid_manifest_builds_main_and_classification(tmp_path: Path) -> None:
     """清单明细只组装主包与分类两项，冲突使分类状态为 WARN。"""
-    (tmp_path / ".patrolx-extracted.json").write_text(json.dumps(_manifest()), encoding="utf-8")
+    _write_manifest(tmp_path, resolved_conflict=True)
     preparation = load_preparation(tmp_path)
 
     assert preparation is not None
@@ -55,7 +46,7 @@ def test_valid_manifest_builds_main_and_classification(tmp_path: Path) -> None:
     assert classification.code == "pkg.extract.classification"
     assert classification.status == PreparationStatus.WARN
     assert classification.total_count == 1
-    assert classification.extracted_count == 0
+    assert classification.extracted_count == 1
     assert classification.issues[0].type == "conflict"
     assert classification.issues[0].target == "kpi/kpi.csv"
     assert preparation.success_count == 1
@@ -64,11 +55,7 @@ def test_valid_manifest_builds_main_and_classification(tmp_path: Path) -> None:
 
 
 def test_valid_manifest_without_failures_builds_two_passed_items(tmp_path: Path) -> None:
-    manifest = _manifest()
-    manifest["files"][0]["status"] = "extracted"
-    manifest["files"][0].pop("error")
-    manifest["files"][0].pop("error_code")
-    (tmp_path / ".patrolx-extracted.json").write_text(json.dumps(manifest), encoding="utf-8")
+    _write_manifest(tmp_path)
 
     preparation = load_preparation(tmp_path)
 
@@ -83,7 +70,7 @@ def test_valid_manifest_without_failures_builds_two_passed_items(tmp_path: Path)
 
 def test_persisted_classification_error_is_not_recomputed_from_manifest(tmp_path: Path) -> None:
     """持久化 ERROR 必须原样展示，不能被看似有效的 manifest 重算成 PASS/WARN。"""
-    (tmp_path / ".patrolx-extracted.json").write_text(json.dumps(_manifest()), encoding="utf-8")
+    _write_manifest(tmp_path)
     rules_dir = tmp_path / "rules"
     rules_dir.mkdir()
     (rules_dir / "pkg.extract.classification.json").write_text(
@@ -114,7 +101,7 @@ def test_persisted_classification_error_is_not_recomputed_from_manifest(tmp_path
 
 def test_invalid_manifest_is_error_not_crash(tmp_path: Path) -> None:
     """清单损坏时返回结构化 error，任务读取不被中断。"""
-    (tmp_path / ".patrolx-extracted.json").write_text("{bad", encoding="utf-8")
+    (tmp_path / "manifest.json").write_text("{bad", encoding="utf-8")
     preparation = load_preparation(tmp_path)
 
     assert preparation is not None
@@ -129,7 +116,7 @@ def test_invalid_manifest_is_error_not_crash(tmp_path: Path) -> None:
 
 def test_corrupt_manifest_preserves_persisted_classification_error(tmp_path: Path) -> None:
     """manifest 本身损坏时仍应优先展示已保存的 classification 错误详情。"""
-    (tmp_path / ".patrolx-extracted.json").write_bytes(b"\xff")
+    (tmp_path / "manifest.json").write_bytes(b"\xff")
     rules_dir = tmp_path / "rules"
     rules_dir.mkdir()
     (rules_dir / "pkg.extract.classification.json").write_text(

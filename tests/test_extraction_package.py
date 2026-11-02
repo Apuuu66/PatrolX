@@ -9,9 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from app.core.archive import ArchiveError
 from app.core.checksum import sha256_file
-from app.services import extraction
+from app.core.config import settings
+from app.models.schemas import RuleStatus
+from app.services.executor import RuleContext
 from app.services.scanning import TaskFileCatalog
 from tests.baseline_helpers import Env, setup_env
 
@@ -27,187 +28,159 @@ def _gz_bytes(content: str) -> bytes:
     return gzip.compress(content.encode("utf-8"))
 
 
-def _nested_package(env: Env) -> Path:
-    kpi_zip = env.uploads / "_build/kpi_data.zip"
-    _zip(kpi_zip, {"kpi/inner.csv": "metric,value\nsuccess,99\n"})
-    log_zip = env.uploads / "_build/ServiceLog_inner.zip"
-    _zip(log_zip, {"InnerService/logs/node/error.log": "ERROR inner\n"})
-    package = env.uploads / "nested-package.zip"
-    _zip(
-        package,
-        {
-            "kpi_outer.zip": kpi_zip.read_bytes(),
-            "ServiceLog_inner.zip": log_zip.read_bytes(),
-            "config/system.ini": "[app]\nname=app\n",
-        },
+def _use_classification_config(monkeypatch) -> None:
+    """在临时 cwd 中固定使用当前 worktree 的分类配置。"""
+    monkeypatch.setattr(settings, "config_dir", Path(__file__).resolve().parents[1] / "deploy/config")
+
+
+def _context(env: Env, package: Path, task_id: str) -> RuleContext:
+    """构造真实巡检包上下文，不从路径推断 product。"""
+    return RuleContext(
+        task_id=task_id,
+        data_dir=env.task_dir(task_id),
+        log=lambda *_args, **_kwargs: None,
+        package_path=package,
+        package_checksum=sha256_file(package),
+        product="UMF",
     )
-    return package
 
 
-def test_large_main_package_expands_nested_log_and_kpi(tmp_path, monkeypatch) -> None:
+def _run_units(ctx: RuleContext) -> object:
+    """串行执行两个隐藏解压单元并返回分类结果。"""
+    from app.inspectors.pkg import classification_inspector, main_inspector
+
+    main_result = main_inspector.run(ctx)
+    assert main_result.status == RuleStatus.PASS
+    return classification_inspector.run(ctx)
+
+
+def test_kpi_archive_expands_from_real_umf_directory(tmp_path, monkeypatch) -> None:
+    """KPI 归档只在真实 Performance Measurement Results 目录中被展开。"""
     env: Env = setup_env(tmp_path, monkeypatch)
-    package = _nested_package(env)
-    data_dir = env.task_dir("task-large")
-
-    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
-    catalog = TaskFileCatalog.build(data_dir)
-
-    assert manifest["main"]["count"] == 3
-    assert any(item["category"] == "kpi" for item in manifest["subpackages"])
-    assert (data_dir / ".main/kpi_outer.zip").is_file()
-    assert (data_dir / "kpi/kpi/inner.csv").is_file()
-    assert (data_dir / "logs/InnerService/logs/node/error.log").is_file()
-    assert {path.as_posix() for path in catalog.paths()} >= {
-        "config/system.ini",
-        "kpi/kpi/inner.csv",
-        "logs/InnerService/logs/node/error.log",
-    }
-
-
-def test_small_single_category_package_expands_directly(tmp_path, monkeypatch) -> None:
-    env: Env = setup_env(tmp_path, monkeypatch)
+    _use_classification_config(monkeypatch)
+    inner = env.uploads / "_build/PerfResult_inner.zip"
+    _zip(inner, {"kpi/inner.csv": "metric,value\nsuccess,99\n"})
     package = env.uploads / "kpi-only.zip"
-    _zip(package, {"kpi/kpi-api-5.csv": "metric,value\nsuccess,99\n"})
-    data_dir = env.task_dir("task-small")
+    _zip(package, {"Performance Measurement Results/PerfResult_202609.zip": inner.read_bytes()})
+    ctx = _context(env, package, "task-kpi")
 
-    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
-    catalog = TaskFileCatalog.build(data_dir)
+    result = _run_units(ctx)
 
-    assert manifest["main"]["count"] == 1
-    assert [path.as_posix() for path in catalog.paths()] == ["kpi/kpi-api-5.csv"]
+    assert result.status == RuleStatus.PASS
+    assert (ctx.data_dir / ".main/Performance Measurement Results/PerfResult_202609.zip").is_file()
+    assert (ctx.data_dir / "kpi/kpi/inner.csv").is_file()
+    assert TaskFileCatalog.build(ctx.data_dir).paths() == [Path("kpi/kpi/inner.csv")]
 
 
-def test_repeat_extraction_reuses_manifest_and_site(tmp_path, monkeypatch) -> None:
+def test_repeat_units_reuse_manifest_and_site(tmp_path, monkeypatch) -> None:
+    """相同输入重复执行时分类单元复用 v5 manifest 且不重写现场。"""
     env: Env = setup_env(tmp_path, monkeypatch)
-    package = _nested_package(env)
-    checksum = sha256_file(package)
-    data_dir = env.task_dir("task-repeat")
-    before = {path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*")}
+    _use_classification_config(monkeypatch)
+    inner = env.uploads / "_build/PerfResult_repeat.zip"
+    _zip(inner, {"inner.csv": "metric,value\nsuccess,99\n"})
+    package = env.uploads / "repeat.zip"
+    _zip(package, {"Performance Measurement Results/PerfResult_202609.zip": inner.read_bytes()})
+    ctx = _context(env, package, "task-repeat")
+    from app.inspectors.pkg import classification_inspector
 
-    first = extraction.extract_main_site(package, data_dir, checksum)
-    first_snapshot = {path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*")}
-    first_manifest = (data_dir / extraction.MANIFEST_NAME).read_text(encoding="utf-8")
-    messages: list[str] = []
+    first = _run_units(ctx)
+    assert first.status == RuleStatus.PASS
+    assert first.metadata["reused"] is False
+    first_manifest = (ctx.data_dir / "manifest.json").read_bytes()
+    first_snapshot = {path.relative_to(ctx.data_dir).as_posix() for path in ctx.data_dir.rglob("*")}
 
-    second = extraction.extract_main_site(
-        package,
-        data_dir,
-        checksum,
-        log=lambda _level, message, **_detail: messages.append(message),
-    )
-    after = {path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*")}
+    second = classification_inspector.run(ctx)
 
-    assert first["main"]["reused"] is False
-    assert second["main"]["reused"] is True
-    assert messages == ["解压现场复用"]
-    assert (data_dir / extraction.MANIFEST_NAME).read_text(encoding="utf-8") == first_manifest
-    assert after == first_snapshot
-    del before
+    assert second.status == RuleStatus.PASS
+    assert second.metadata["reused"] is True
+    assert (ctx.data_dir / "manifest.json").read_bytes() == first_manifest
+    assert {path.relative_to(ctx.data_dir).as_posix() for path in ctx.data_dir.rglob("*")} == first_snapshot
 
 
-def test_corrupt_manifest_is_rebuilt_with_same_evidence(tmp_path, monkeypatch) -> None:
+def test_corrupt_manifest_is_rebuilt_from_unchanged_evidence(tmp_path, monkeypatch) -> None:
+    """损坏 manifest v5 时从 `.main/` 重建分类，但不得重解压或修改原包。"""
     env: Env = setup_env(tmp_path, monkeypatch)
-    package = _nested_package(env)
-    checksum = sha256_file(package)
-    data_dir = env.task_dir("task-corrupt")
-    extraction.extract_main_site(package, data_dir, checksum)
-    evidence = {path.name for path in (data_dir / ".main").iterdir()}
-    manifest_path = data_dir / extraction.MANIFEST_NAME
-    manifest_path.write_text("{broken", encoding="utf-8")
+    _use_classification_config(monkeypatch)
+    inner = env.uploads / "_build/PerfResult_corrupt.zip"
+    _zip(inner, {"inner.csv": "metric,value\nsuccess,99\n"})
+    package = env.uploads / "corrupt.zip"
+    _zip(package, {"Performance Measurement Results/PerfResult_202609.zip": inner.read_bytes()})
+    ctx = _context(env, package, "task-corrupt")
+    from app.inspectors.pkg import classification_inspector
 
-    manifest = extraction.extract_main_site(package, data_dir, checksum)
+    assert _run_units(ctx).status == RuleStatus.PASS
+    evidence = {path.relative_to(ctx.data_dir / ".main").as_posix() for path in (ctx.data_dir / ".main").rglob("*")}
+    package_digest = sha256_file(package)
+    (ctx.data_dir / "manifest.json").write_text("{broken", encoding="utf-8")
 
-    assert manifest["main"]["reused"] is False
-    assert {path.name for path in (data_dir / ".main").iterdir()} == evidence
-    assert extraction.reusable_manifest(data_dir, checksum) is not None
+    result = classification_inspector.run(ctx)
+
+    assert result.status == RuleStatus.PASS
+    assert result.metadata["reused"] is False
+    actual_evidence = {
+        path.relative_to(ctx.data_dir / ".main").as_posix() for path in (ctx.data_dir / ".main").rglob("*")
+    }
+    assert actual_evidence == evidence
+    assert sha256_file(package) == package_digest
 
 
-def test_failed_main_package_is_blocked(tmp_path, monkeypatch) -> None:
+def test_failed_main_package_is_blocked_without_evidence(tmp_path, monkeypatch) -> None:
+    """主包损坏时 main 单元返回 ERROR，不留下 `.main/` 或 manifest。"""
     env: Env = setup_env(tmp_path, monkeypatch)
+    _use_classification_config(monkeypatch)
     package = env.uploads / "bad-main.zip"
     package.write_text("not archive", encoding="utf-8")
-    data_dir = env.task_dir("task-failed")
+    ctx = _context(env, package, "task-failed")
+    from app.inspectors.pkg import main_inspector
 
-    with pytest.raises(ArchiveError, match="压缩包读取失败"):
-        extraction.extract_main_site(package, data_dir, sha256_file(package))
+    result = main_inspector.run(ctx)
 
-    assert not (data_dir / extraction.MANIFEST_NAME).exists()
-    assert not (data_dir / ".main").exists()
+    assert result.status == RuleStatus.ERROR
+    assert result.metadata["error_code"] == "archive_corrupt"
+    assert not (ctx.data_dir / ".main").exists()
+    assert not (ctx.data_dir / "manifest.json").exists()
 
 
-def test_nested_and_gzip_local_failures_continue(tmp_path, monkeypatch) -> None:
+def test_local_archive_failures_continue_and_catalog_contains_valid_files(tmp_path, monkeypatch) -> None:
+    """单个坏 KPI 归档产生 WARN，合法 basic 文件仍发布到 catalog。"""
     env: Env = setup_env(tmp_path, monkeypatch)
+    _use_classification_config(monkeypatch)
     package = env.uploads / "partial-failures.zip"
     _zip(
         package,
         {
-            "ServiceLog_bad.zip": b"not archive",
-            "logs/node/bad.log.gz": b"not gzip",
-            "config/system.ini": "[app]\nname=app\n",
+            "Performance Measurement Results/PerfResult_bad.zip": b"not archive",
+            "Basic Information About the UMF/system.ini": "[app]\nname=app\n",
         },
     )
-    data_dir = env.task_dir("task-partial")
+    ctx = _context(env, package, "task-partial")
 
-    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
+    result = _run_units(ctx)
 
-    assert (data_dir / "config/system.ini").is_file()
-    assert any(item["status"] == "failed" for item in manifest["subpackages"])
-    assert any(item["status"] == "failed" for item in manifest["log_gz"])
-    assert extraction.category_failures(manifest, "logs")
-    assert TaskFileCatalog.build(data_dir).paths() == [Path("config/system.ini")]
+    assert result.status == RuleStatus.WARN
+    assert (ctx.data_dir / "basic/system.ini").is_file()
+    assert TaskFileCatalog.build(ctx.data_dir).paths() == [Path("basic/system.ini")]
+    assert result.metadata["failures"][0]["route_id"] == "umf.kpi"
 
 
 def test_nested_package_rejects_bad_member_and_ingests_valid_member(tmp_path, monkeypatch) -> None:
-    """子包单成员穿越失败不能中断同包子包中其他合法成员的落位。"""
+    """KPI 归档单成员穿越失败不能中断同包中其他合法成员落位。"""
     env: Env = setup_env(tmp_path, monkeypatch)
+    _use_classification_config(monkeypatch)
     child = env.uploads / "_build/partial-nested.zip"
-    _zip(
-        child,
-        {
-            "../evil.txt": "must not escape",
-            "config/safe.ini": "[app]\nname=safe\n",
-        },
-    )
+    _zip(child, {"../evil.txt": "must not escape", "safe/kpi-media.csv": "metric,value\nsuccess,99\n"})
     package = env.uploads / "nested-member-isolation.zip"
-    _zip(package, {"config/partial-nested.zip": child.read_bytes()})
-    data_dir = env.task_dir("task-nested-member-isolation")
+    _zip(package, {"Performance Measurement Results/PerfResult_partial.zip": child.read_bytes()})
+    ctx = _context(env, package, "task-nested-member-isolation")
 
-    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
+    result = _run_units(ctx)
 
-    assert (data_dir / "config/config/safe.ini").is_file()
-    assert Path("config/config/safe.ini") in TaskFileCatalog.build(data_dir).paths()
-    assert any(
-        item["source"] == "config/partial-nested.zip"
-        and item.get("error_code") == "unsafe_path"
-        and "evil.txt" in item["reason"]
-        for item in manifest["rejected"]
-    )
-    assert not (data_dir / "evil.txt").exists()
+    assert result.status == RuleStatus.WARN
+    assert (ctx.data_dir / "kpi/safe/kpi-media.csv").is_file()
+    assert TaskFileCatalog.build(ctx.data_dir).paths() == [Path("kpi/safe/kpi-media.csv")]
+    assert result.metadata["failures"][0]["error_code"] == "unsafe_path"
+    assert not (ctx.data_dir / "evil.txt").exists()
     assert not (tmp_path / "evil.txt").exists()
-
-
-def test_nested_package_members_place_directly_in_category(tmp_path, monkeypatch) -> None:
-    """嵌套子包成员不再保留来源包目录层。"""
-    import hashlib
-
-    from app.core.checksum import sha256_file
-    from app.services import extraction
-
-    env: Env = setup_env(tmp_path, monkeypatch)
-    package = env.uploads / "kpi-nested-direct.zip"
-    _zip(package, {"kpi/nested/kpi-media.csv": "metric,value\nsuccess,99\n"})
-    before = package.read_bytes()
-    data_dir = env.task_dir("task-kpi-direct")
-
-    manifest = extraction.extract_main_site(package, data_dir, sha256_file(package))
-
-    assert hashlib.sha256(package.read_bytes()).hexdigest() == hashlib.sha256(before).hexdigest()
-    assert (data_dir / "kpi/nested/kpi-media.csv").is_file()
-    assert not (data_dir / "kpi/kpi-nested-direct").exists()
-    assert any(
-        item["target"] == "kpi/nested/kpi-media.csv" and item["source"] == ".main/kpi/nested/kpi-media.csv"
-        for item in manifest["files"]
-    )
 
 
 # Manifest v5 严格契约测试
@@ -219,6 +192,7 @@ from app.services.extraction.manifest import (  # noqa: E402
     ManifestV5Error,
     evidence_fingerprint,
     loads_manifest,
+    publish_classification_run,
     read_manifest,
     reusable_manifest,
     validate_manifest,
@@ -462,6 +436,217 @@ def _v5_manifest_with_records() -> dict:
         "by_status": {"failed": 1, "ignored": 1, "landed": 1},
     }
     return manifest
+
+
+def _publication_manifest(staging_dir: Path, targets: tuple[str, ...]) -> dict:
+    """在 staging 中构造与 catalog 摘要一致的合法发布候选。"""
+    manifest = _v5_manifest()
+    entries: list[dict] = []
+    catalog: list[dict] = []
+    category_by_root = {"alarm": "alarm", "basic": "config"}
+    for index, target in enumerate(targets):
+        path = staging_dir / target
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{target}\n", encoding="utf-8")
+        digest = manifest_sha256_file(path)
+        size = path.stat().st_size
+        root = Path(target).parts[0]
+        category = category_by_root[root]
+        entry = {
+            "source_relative": f"source/{index}.bin",
+            "member_relative": None,
+            "route_id": "route.a",
+            "product": "UMF",
+            "category": category,
+            "original_target": target,
+            "target": target,
+            "action": "copy",
+            "status": "landed",
+            "reason": None,
+            "error_code": None,
+            "sha256": digest,
+            "size": size,
+        }
+        entries.append(entry)
+        catalog.append(
+            {
+                "path": target,
+                "category": category,
+                "route_id": "route.a",
+                "source_relative": entry["source_relative"],
+                "sha256": digest,
+                "size": size,
+            }
+        )
+    target_roots = sorted({Path(item["path"]).parts[0] for item in catalog})
+    manifest["classification"]["snapshot"]["target_roots"] = target_roots
+    manifest["entries"] = entries
+    manifest["catalog"] = catalog
+    by_category: dict[str, int] = {}
+    for item in entries:
+        by_category[item["category"]] = by_category.get(item["category"], 0) + 1
+    manifest["summary"] = {
+        "counts": {
+            "landed": len(entries),
+            "ignored": 0,
+            "conflicts": 0,
+            "failures": 0,
+            "catalog": len(catalog),
+        },
+        "by_route": {"route.a": len(entries)},
+        "by_category": dict(sorted(by_category.items())),
+        "by_action": {"copy": len(entries)},
+        "by_status": {"failed": 0, "ignored": 0, "landed": len(entries)},
+    }
+    assert validate_manifest(manifest)
+    return manifest
+
+
+def _write_protected_sentinels(data_dir: Path) -> dict[str, bytes]:
+    """写入发布不得触碰的任务现场文件。"""
+    paths = {
+        ".main/evidence.txt": b"evidence",
+        ".rules/rule.txt": b"rules",
+        "prepared/value.txt": b"prepared",
+        "rules/result.json": b"result",
+        "reports/report.html": b"report",
+        "task.json": b"task",
+        "execution.log": b"log",
+        "data/raw.bin": b"data",
+    }
+    for relative, content in paths.items():
+        path = data_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    return paths
+
+
+def test_publish_classification_run_swaps_roots_and_cleans_legacy(tmp_path: Path) -> None:
+    """发布后只保留新目标根，并清理上一有效根和已知 v4 legacy 根。"""
+    data_dir = tmp_path / "task"
+    data_dir.mkdir()
+    old_manifest = _v5_manifest()
+    old_manifest["classification"]["snapshot"]["target_roots"] = ["basic", "status"]
+    write_manifest(data_dir, old_manifest)
+    (data_dir / "basic").mkdir()
+    (data_dir / "basic/old.txt").write_text("old", encoding="utf-8")
+    (data_dir / "status").mkdir()
+    (data_dir / "status/old.txt").write_text("status", encoding="utf-8")
+    for root in ("logs", "kpi", "traffic", "config", "resource", "other"):
+        (data_dir / root).mkdir()
+        (data_dir / root / "legacy.txt").write_text(root, encoding="utf-8")
+    protected = _write_protected_sentinels(data_dir)
+
+    staging = data_dir / ".classification.staging"
+    staging.mkdir()
+    candidate = _publication_manifest(staging, ("alarm/new.txt", "basic/new.txt"))
+    publish_classification_run(data_dir, candidate, staging_dir=staging)
+
+    assert read_manifest(data_dir) == candidate
+    assert (data_dir / "alarm/new.txt").read_text(encoding="utf-8") == "alarm/new.txt\n"
+    assert (data_dir / "basic/new.txt").read_text(encoding="utf-8") == "basic/new.txt\n"
+    assert not (data_dir / "basic/old.txt").exists()
+    for root in ("status", "logs", "kpi", "traffic", "config", "resource", "other"):
+        assert not (data_dir / root).exists()
+    assert not staging.exists()
+    assert not (data_dir / ".classification.backup").exists()
+    assert not (data_dir / ".manifest.previous.json").exists()
+    assert not (data_dir / ".manifest.staging.json").exists()
+    for relative, content in protected.items():
+        assert (data_dir / relative).read_bytes() == content
+
+
+def test_publish_classification_run_rejects_staged_digest_mismatch_without_publishing(
+    tmp_path: Path,
+) -> None:
+    """staging catalog 摘要不符时旧 manifest 和旧分类根必须保持不变。"""
+    data_dir = tmp_path / "task"
+    data_dir.mkdir()
+    old_manifest = _v5_manifest()
+    old_manifest["classification"]["snapshot"]["target_roots"] = ["basic"]
+    write_manifest(data_dir, old_manifest)
+    (data_dir / "basic").mkdir()
+    (data_dir / "basic/old.txt").write_text("old", encoding="utf-8")
+    staging = data_dir / ".classification.staging"
+    staging.mkdir()
+    candidate = _publication_manifest(staging, ("basic/new.txt",))
+    (staging / "basic/new.txt").write_text("tampered", encoding="utf-8")
+
+    with pytest.raises(ManifestV5Error, match="catalog"):
+        publish_classification_run(data_dir, candidate, staging_dir=staging)
+
+    assert read_manifest(data_dir) == old_manifest
+    assert (data_dir / "basic/old.txt").read_text(encoding="utf-8") == "old"
+    assert not (data_dir / "basic/new.txt").exists()
+
+
+def test_publish_classification_run_rolls_back_when_manifest_replace_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """manifest.json 原子发布失败时按逆序恢复旧根、旧 manifest 和 legacy 根。"""
+    data_dir = tmp_path / "task"
+    data_dir.mkdir()
+    old_manifest = _v5_manifest()
+    old_manifest["classification"]["snapshot"]["target_roots"] = ["basic", "status"]
+    write_manifest(data_dir, old_manifest)
+    (data_dir / "basic").mkdir()
+    (data_dir / "basic/old.txt").write_text("old", encoding="utf-8")
+    (data_dir / "status").mkdir()
+    (data_dir / "status/old.txt").write_text("status", encoding="utf-8")
+    (data_dir / "traffic").mkdir()
+    (data_dir / "traffic/old.txt").write_text("traffic", encoding="utf-8")
+    protected = _write_protected_sentinels(data_dir)
+    staging = data_dir / ".classification.staging"
+    staging.mkdir()
+    candidate = _publication_manifest(staging, ("alarm/new.txt", "basic/new.txt"))
+    real_replace = os.replace
+
+    def failing_replace(source, destination) -> None:
+        if Path(source).name == ".manifest.staging.json" and Path(destination).name == "manifest.json":
+            raise OSError("manifest replace failed")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(manifest_module.os, "replace", failing_replace)
+
+    with pytest.raises(ManifestV5Error, match="manifest"):
+        publish_classification_run(data_dir, candidate, staging_dir=staging)
+
+    assert read_manifest(data_dir) == old_manifest
+    assert (data_dir / "basic/old.txt").read_text(encoding="utf-8") == "old"
+    assert (data_dir / "status/old.txt").read_text(encoding="utf-8") == "status"
+    assert (data_dir / "traffic/old.txt").read_text(encoding="utf-8") == "traffic"
+    for relative, content in protected.items():
+        assert (data_dir / relative).read_bytes() == content
+    assert not (data_dir / ".manifest.previous.json").exists()
+    assert not (data_dir / ".manifest.staging.json").exists()
+    assert not (data_dir / ".classification.backup").exists()
+    assert not staging.exists()
+
+
+def test_publish_classification_run_is_idempotent_with_same_candidate(tmp_path: Path) -> None:
+    """同一候选重复发布不得产生重复文件、随机路径或临时目录残留。"""
+    data_dir = tmp_path / "task"
+    data_dir.mkdir()
+    write_manifest(data_dir, _v5_manifest())
+    protected = _write_protected_sentinels(data_dir)
+    staging = data_dir / ".classification.staging"
+    staging.mkdir()
+    candidate = _publication_manifest(staging, ("alarm/new.txt", "basic/new.txt"))
+    publish_classification_run(data_dir, candidate, staging_dir=staging)
+
+    staging.mkdir()
+    repeated = _publication_manifest(staging, ("alarm/new.txt", "basic/new.txt"))
+    publish_classification_run(data_dir, repeated, staging_dir=staging)
+
+    assert read_manifest(data_dir) == repeated
+    assert sorted(path.relative_to(data_dir).as_posix() for path in (data_dir / "basic").iterdir()) == ["basic/new.txt"]
+    assert sorted(path.relative_to(data_dir).as_posix() for path in (data_dir / "alarm").iterdir()) == ["alarm/new.txt"]
+    assert not staging.exists()
+    assert not (data_dir / ".classification.backup").exists()
+    assert not (data_dir / ".manifest.previous.json").exists()
+    for relative, content in protected.items():
+        assert (data_dir / relative).read_bytes() == content
 
 
 def test_manifest_v5_constants_and_empty_payload_are_valid() -> None:

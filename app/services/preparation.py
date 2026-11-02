@@ -10,8 +10,7 @@ from app.models.schemas import (
     PreparationItem,
     PreparationStatus,
 )
-from app.services.extraction import manifest_path
-from app.services.extraction.legacy_manifest import validate_manifest
+from app.services.extraction import manifest as manifest_v5
 
 _MAIN_CODE = "pkg.extract.main"
 _CLASSIFICATION_CODE = "pkg.extract.classification"
@@ -35,13 +34,13 @@ def _rule_result(data_dir: Path, code: str) -> dict[str, Any]:
 
 def _manifest(data_dir: Path) -> dict[str, Any] | None:
     """返回有效 manifest；不存在时返回 None。"""
-    path = manifest_path(data_dir)
-    if not path.exists():
+    path = manifest_v5.manifest_path(data_dir)
+    if not path.exists() and not path.is_symlink():
         return None
-    value = _read_json(path)
-    if value is None or not validate_manifest(value):
+    try:
+        return manifest_v5.read_manifest(data_dir)
+    except (manifest_v5.ManifestV5Error, OSError):
         return {}
-    return value
 
 
 def _aggregate_status(statuses: list[PreparationStatus]) -> PreparationStatus:
@@ -56,15 +55,17 @@ def _aggregate_status(statuses: list[PreparationStatus]) -> PreparationStatus:
     return PreparationStatus.PASS
 
 
-def _issue(item: dict[str, Any], source: str | None, *, status: str | None = None) -> PreparationIssue | None:
+def _issue(item: dict[str, Any], *, status: str | None = None) -> PreparationIssue | None:
     issue_status = status or str(item.get("status", ""))
     if issue_status not in _FAILED_STATUSES:
         return None
     reason = item.get("error") or item.get("reason") or "数据准备项未成功"
     return PreparationIssue(
         type=issue_status,  # type: ignore[arg-type]
-        source=source,
-        target=str(item.get("target")) if item.get("target") is not None else None,
+        source=item.get("source_relative") or item.get("source"),
+        target=str(item.get("original_target") or item.get("target"))
+        if item.get("original_target") is not None or item.get("target") is not None
+        else None,
         reason=str(reason),
         path_length=item.get("path_length"),
         path_limit=item.get("path_limit"),
@@ -77,43 +78,31 @@ def _saved_issue(result: dict[str, Any]) -> PreparationIssue:
     return PreparationIssue(type="rejected", reason=str(reason))
 
 
-def _classification_sources(manifest: dict[str, Any]) -> list[tuple[dict[str, Any], str | None, str]]:
-    sources = [
-        (item, item.get("source"), str(item.get("status", "")))
-        for item in manifest.get("files", [])
-        if isinstance(item, dict)
-    ]
-    sources.extend(
-        (item, item.get("source"), str(item.get("status", "")))
-        for item in manifest.get("subpackages", [])
-        if isinstance(item, dict)
-    )
-    sources.extend(
-        (item, item.get("source_relative_path"), str(item.get("status", "")))
-        for item in manifest.get("log_gz", [])
-        if isinstance(item, dict)
-    )
-    sources.extend(
-        (item, item.get("source"), "rejected") for item in manifest.get("rejected", []) if isinstance(item, dict)
-    )
-    return sources
-
-
 def _classification_item(data_dir: Path, manifest: dict[str, Any]) -> PreparationItem:
     result = _rule_result(data_dir, _CLASSIFICATION_CODE)
     saved_status = str(result.get("status", ""))
-    sources = _classification_sources(manifest)
-    issues = [issue for item, source, status in sources if (issue := _issue(item, source, status=status)) is not None]
-    extracted = sum(status == "extracted" for _item, _source, status in sources)
-    total = len(sources)
+    entries = manifest["entries"]
+    ignored = manifest["ignored"]
+    conflicts = manifest["conflicts"]
+    failures = manifest["failures"]
+    issues = [
+        issue
+        for item, status in [
+            *((record, "conflict") for record in conflicts),
+            *((record, "failed") for record in failures),
+        ]
+        if (issue := _issue(item, status=status)) is not None
+    ]
+    extracted = len(entries)
+    total = len(entries) + len(ignored) + len(failures)
     if saved_status == "error":
         status = PreparationStatus.ERROR
         issues = [_saved_issue(result), *issues]
-    elif saved_status == "warn" or issues:
+    elif saved_status == "warn" or failures or conflicts:
         status = PreparationStatus.WARN
     else:
         status = PreparationStatus.PASS
-    summary = str(result.get("summary")) if result.get("summary") else f"分类完成 {extracted}/{total}"
+    summary = str(result.get("summary")) if result.get("summary") else f"分类完成，{extracted} 项可巡检"
     return PreparationItem(
         code=_CLASSIFICATION_CODE,
         name=str(result.get("name") or "分类落位终态校验"),

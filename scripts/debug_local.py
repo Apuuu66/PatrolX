@@ -9,11 +9,10 @@ from typing import Any
 from app.core.config import settings
 from app.inspectors.registry import registry
 from app.models.schemas import RuleCategory
-from app.services import extraction
+from app.services.extraction import manifest as manifest_v5
 from app.services.scanning import TaskFileCatalog
 
 ATTENTION_STATUSES = {"warn", "fail", "error", "skip"}
-MANIFEST_NAME = ".patrolx-extracted.json"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -56,57 +55,54 @@ def _status_counts(entries: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _manifest_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    """提取 manifest 中的 source→target 映射，便于核对解压现场。"""
+    """汇总 manifest v5 的成功、忽略和失败记录，便于核对分类现场。"""
     entries: list[dict[str, Any]] = []
     sections = (
-        ("files", "source"),
-        ("subpackages", "source"),
-        ("log_gz", "source_relative_path"),
+        ("entries", "landed"),
+        ("ignored", "ignored"),
+        ("failures", "failed"),
     )
-    for section, source_key in sections:
+    for section, _default_status in sections:
         for item in manifest.get(section, []):
             if not isinstance(item, dict):
                 continue
             entries.append(
                 {
-                    "source": item.get(source_key) or item.get("source"),
+                    "source": item.get("source_relative"),
+                    "member": item.get("member_relative"),
                     "target": item.get("target"),
-                    "category": item.get("category", "other"),
-                    "status": item.get("status", "unknown"),
+                    "category": item.get("category"),
+                    "route_id": item.get("route_id"),
+                    "action": item.get("action"),
+                    "status": item.get("status", _default_status),
+                    "reason": item.get("reason"),
+                    "error_code": item.get("error_code"),
                 }
             )
-    for item in manifest.get("rejected", []):
-        if not isinstance(item, dict):
-            continue
-        entries.append(
-            {
-                "source": item.get("source") or item.get("source_relative_path"),
-                "target": item.get("target"),
-                "category": item.get("category", "rejected"),
-                "status": item.get("status", "rejected"),
-            }
-        )
     return entries
 
 
 def _manifest_report(task_dir: Path) -> dict[str, Any]:
-    manifest = extraction.read_manifest(task_dir)
-    grouped: dict[str, list[dict[str, Any]]] = {
-        category: [] for category in ("logs", "kpi", "traffic", "alarm", "config", "resource", "other")
-    }
-    for key in ("files", "subpackages", "log_gz"):
-        for item in manifest.get(key, []):
-            category = str(item.get("category", "other"))
-            grouped.setdefault(category, []).append(item)
+    """读取并汇总 manifest v5；唯一事实来源是 manifest.json。"""
+    manifest = manifest_v5.read_manifest(task_dir)
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for section in ("entries", "ignored", "failures"):
+        for item in manifest.get(section, []):
+            category = str(item.get("category") or "uncategorized")
+            grouped[category].append(item)
     return {
-        "version": manifest.get("version"),
-        "main": manifest.get("main"),
+        "version": manifest["version"],
+        "main": manifest["main"],
+        "product": manifest["product"],
+        "classification": manifest["classification"],
+        "path_limit": manifest["path_limit"],
         "categories": {category: _status_counts(items) for category, items in sorted(grouped.items())},
         "entries": _manifest_entries(manifest),
-        "failures": {category: extraction.category_failures(manifest, category) for category in sorted(grouped)},
-        "policy_skipped": {
-            category: extraction.policy_skipped_summary(manifest, category) for category in sorted(grouped)
-        },
+        "ignored": manifest["ignored"],
+        "conflicts": manifest["conflicts"],
+        "failures": manifest["failures"],
+        "catalog_paths": [item["path"] for item in manifest["catalog"]],
+        "summary": manifest["summary"],
     }
 
 

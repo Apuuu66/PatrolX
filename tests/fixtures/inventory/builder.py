@@ -145,7 +145,7 @@ def make_inventory_zip(
     path: Path,
     *,
     content: bytes | None = None,
-    member_path: str = f"config/{LST_ME_FILENAME}",
+    member_path: str = f"Basic Information About the UMF/{LST_ME_FILENAME}",
     include_lst_me: bool = True,
 ) -> Path:
     """创建最小巡检包；默认包含台账来源文件。"""
@@ -166,7 +166,7 @@ def make_log_supplement_zip(
     """创建显式日志补充包样例；默认不含台账来源文件。"""
     with zipfile.ZipFile(path, "w") as archive:
         if include_lst_me:
-            archive.writestr(f"config/{LST_ME_FILENAME}", content or lst_me_content())
+            archive.writestr(f"Basic Information About the UMF/{LST_ME_FILENAME}", content or lst_me_content())
         archive.writestr("logs/service.log", "service log\n")
         if content is not None:
             archive.writestr("extra.txt", content)
@@ -178,6 +178,6 @@ def zip_bytes(*, content: bytes | None = None, include_lst_me: bool = True) -> b
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         if include_lst_me:
-            archive.writestr(f"config/{LST_ME_FILENAME}", content or lst_me_content())
+            archive.writestr(f"Basic Information About the UMF/{LST_ME_FILENAME}", content or lst_me_content())
         archive.writestr("config/readme.txt", "inventory fixture\n")
     return buffer.getvalue()

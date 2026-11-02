@@ -18,7 +18,13 @@ def _upload_and_wait() -> str:
         resp = client.post(
             "/api/v3/tasks",
             files={"package_file": ("observability_sample.zip", fh, "application/zip")},
-            data={"package_kind": "inspection", "name": "可观测性", "province": "北京", "operator": "移动"},
+            data={
+                "package_kind": "inspection",
+                "name": "可观测性",
+                "province": "北京",
+                "operator": "移动",
+                "product": "UMF",
+            },
         )
     task_id = resp.json()["task_id"]
     deadline = time.time() + 30
@@ -49,7 +55,7 @@ def test_task_lifecycle_logs() -> None:
     assert any("任务完成" in m for m in messages)
 
 
-def _policy_zip(path: Path, files: dict[str, str | bytes]) -> Path:
+def _zip(path: Path, files: dict[str, str | bytes]) -> Path:
     import zipfile
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -59,85 +65,48 @@ def _policy_zip(path: Path, files: dict[str, str | bytes]) -> Path:
     return path
 
 
-def _configure_policy(tmp_path: Path, monkeypatch) -> None:
-    import shutil
-
-    import yaml
-
-    config_dir = tmp_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(
-        Path(__file__).resolve().parents[1] / "deploy/config/classify_rules.yaml",
-        config_dir / "classify_rules.yaml",
-    )
-    (config_dir / "extract_policy.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "nested": {"skip_paths": ["/skip/"]},
-                "whitelist": {"name_keywords": ["alarm"]},
-            },
-            allow_unicode=True,
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(settings, "config_dir", config_dir)
-
-
-def test_policy_extraction_logs_include_task_and_path_context(tmp_path, monkeypatch) -> None:
-    """策略保留、白名单恢复、普通文件命中和目标冲突都有可审计日志。"""
+def test_classification_audit_logs_include_task_and_path_context(tmp_path, monkeypatch) -> None:
+    """分类审计日志必须携带任务、规则、源路径、忽略原因和稳定错误码。"""
     from tests.baseline_helpers import setup_env
 
     setup_env(tmp_path, monkeypatch)
-    _configure_policy(tmp_path, monkeypatch)
-
-    alarm_inner = _policy_zip(tmp_path / "_build/alarm-inner.zip", {"inner.txt": "alarm"})
-    conflict_inner = _policy_zip(
-        tmp_path / "_build/conflict.zip",
+    service_logs = _zip(
+        tmp_path / "_build/ServiceLogs_observability.zip",
         {
-            "conflict.log": "plain log",
-            "conflict.log.gz": b"not-real-gzip",
+            "UMFACC/logs/node-1/UMFAcc.log": "2026-09-01T10:00:00Z INFO ready\n",
+            "Unmatched/notes.txt": "ignored\n",
         },
     )
-    package = _policy_zip(
-        tmp_path / "uploads/policy-observability.zip",
+    service_name = "UMF Problem Scene/Service Logs (Problem)/ServiceLogs_observability.zip"
+    corrupt_name = "UMF Problem Scene/Performance Measurement Results/PerfResult_corrupt.zip"
+    package = _zip(
+        tmp_path / "uploads/classification-observability.zip",
         {
-            "skip/normal.zip": _policy_zip(tmp_path / "_build/normal.zip", {"normal": "normal"}).read_bytes(),
-            "skip/service_ALARM.zip": _policy_zip(
-                tmp_path / "_build/alarm-outer.zip", {"inner.zip": alarm_inner.read_bytes()}
-            ).read_bytes(),
-            "skip/alarm.txt": "alarm",
-            "alarm/conflict.zip": conflict_inner.read_bytes(),
+            "UMF Problem Scene/Basic Information About the UMF/system.ini": "[app]\nname=umf\n",
+            service_name: service_logs.read_bytes(),
+            corrupt_name: b"not-a-zip",
         },
     )
 
     from app.cli import run_task
 
-    task = run_task(package, task_id="policy-observability")
+    task = run_task(package, task_id="classification-observability", customer={"product": "UMF"})
     lines = [
         json.loads(line)
         for line in (settings.output / task.task_id / "execution.log").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
 
-    skipped = next(item for item in lines if item["message"] == "压缩项按策略保留")
-    assert skipped["task_id"] == task.task_id
-    assert skipped["source"] == "skip/normal.zip"
-    assert skipped["target"] == "other/skip/normal.zip"
+    audit = next(item for item in lines if item["message"] == "classification_audit")
+    assert audit["task_id"] == task.task_id
+    assert audit["rule_code"] == "pkg.extract.classification"
+    assert audit["counts"]["ignored"] >= 1
+    assert audit["counts"]["failures"] == 1
 
-    restored = next(
-        item for item in lines if item["message"] == "压缩项按白名单恢复" and item["source"] == "skip/service_ALARM.zip"
-    )
-    assert restored["task_id"] == task.task_id
-    assert restored["source"] == "skip/service_ALARM.zip"
-    assert restored["target"] == "alarm"
-    assert restored["keyword"] == "alarm"
+    ignored = next(item for item in audit["ignored"] if item["member_relative"] == "Unmatched/notes.txt")
+    assert ignored["source_relative"] == service_name
+    assert ignored["reason"] == "member_not_selected"
 
-    hit = next(item for item in lines if item["message"] == "extract.policy.whitelist")
-    assert hit["task_id"] == task.task_id
-    assert hit["source"] == "skip/alarm.txt"
-    assert hit["target"] == "alarm/alarm.txt"
-
-    conflict = next(item for item in lines if item["message"] == "日志 gzip 目标冲突")
-    assert conflict["task_id"] == task.task_id
-    assert conflict["source"] == "conflict.log.gz"
-    assert conflict["target"] == "logs/conflict.log"
+    failure = audit["failures"][0]
+    assert failure["source_relative"] == corrupt_name
+    assert failure["error_code"] == "archive_corrupt"

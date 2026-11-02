@@ -1,4 +1,4 @@
-"""生成单日 App Problem Scene 样例包 tests/fixtures/sample/sample.zip。"""
+"""生成单日 UMF Problem Scene 样例包 tests/fixtures/sample/sample.zip。"""
 
 import gzip
 import io
@@ -10,7 +10,7 @@ from pathlib import Path
 SAMPLE_DIR = Path(__file__).resolve().parent / "sample"
 OUTPUT = SAMPLE_DIR / "sample.zip"
 
-BASE = "ZZapp01BCN_app_Problem_scene_333/333/app Problem scene"
+BASE = "ZZapp01BCN_app_Problem_scene_333/333/UMF Problem Scene"
 
 
 def _call_kpi_5_csv() -> str:
@@ -126,7 +126,26 @@ def _call_kpi_5_csv() -> str:
     return "\n".join(lines) + "\n"
 
 
-FILES: dict[str, str] = {
+def _zip_bytes(members: dict[str, bytes]) -> bytes:
+    """生成固定时间戳的 ZIP 成员，保证样例可重复构建。"""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, content in members.items():
+            info = zipfile.ZipInfo(name, date_time=(2026, 9, 1, 10, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, content)
+    return buffer.getvalue()
+
+
+PERF_RESULT_ARCHIVE = _zip_bytes(
+    {
+        "ne333_Call_Session_API_Statistics_5_0_202609020000.csv": _call_kpi_5_csv().encode("utf-8"),
+    }
+)
+
+
+FILES: dict[str, bytes] = {
     f"{BASE}/Alarm Information/alarm_history_202609010101137101.csv": (
         "告警流水号,应用ID,应用名称,告警ID,告警名称,告警级别,发生时间,清除时间,清除类型,事件类型,告警重复次数,"
         "定位信息\n"
@@ -134,13 +153,15 @@ FILES: dict[str, str] = {
         "1002,9001,应用服务,1002,SCTP链路中断,严重,2026-09-01 10:00:04,2026-09-01 10:00:30,自动清除,通信告警,1,"
         "app-node-01\n"
         "1003,9001,应用服务,1003,CPU使用率偏高,重要,2026-09-01 10:02:11,,,性能告警,1,pod-app-1\n"
+    ).encode(),
+    f"{BASE}/Basic Information About the UMF/system_info.ini": (
+        b"[app]\nname=app\nlog_level=INFO\n\n[system]\nnode_id=app-node-01\nregion=gd\ncollect_time=2026-09-01T10:00:00Z\n"
     ),
-    f"{BASE}/Basic Information/system_info.ini": (
-        "[app]\nname=app\nlog_level=INFO\n\n[system]\nnode_id=app-node-01\nregion=gd\ncollect_time=2026-09-01T10:00:00Z\n"
+    f"{BASE}/Basic Information About the UMF/version.ini": (
+        b"[version]\nproduct=UMF\nrelease=R24.1\npatch=SP03\nbuild=20260901.01\n"
     ),
-    f"{BASE}/Basic Information/version.ini": ("[version]\nproduct=app\nrelease=R24.1\npatch=SP03\nbuild=20260901.01\n"),
-    f"{BASE}/Traffic/call_stat_202609010101137101.txt": ("total_calls 12345\nanswer_rate 93.8\n"),
-    "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv": _call_kpi_5_csv(),
+    f"{BASE}/Equipment Status/call_stat_202609010101137101.txt": b"total_calls 12345\nanswer_rate 93.8\n",
+    f"{BASE}/Performance Measurement Results/PerfResult_202609020000.zip": PERF_RESULT_ARCHIVE,
 }
 
 # 保留 API 解析容错样例。
@@ -151,7 +172,7 @@ FILES.update(
             "测量周期,开始时间,结束时间,请求总数,成功数\n"
             "15,2026-09-01 10:00:00,2026-09-01 10:15:00,5000,4800\n"
             "15,bad-time,2026-09-01 10:30:00,5200,4950\n"
-        ),
+        ).encode(),
     }
 )
 
@@ -184,19 +205,18 @@ APP_ERROR = (
 )
 APP_HISTORY = "2026-09-01T10:07:00Z ERROR app history connection timeout\n"
 
-SUB_PACKAGE = io.BytesIO()
-with zipfile.ZipFile(SUB_PACKAGE, "w") as zf:
-    zf.writestr("AAAService/logs/paas-192.168.2.2/aaa_service_20260901011314.log", AAA_CURRENT)
-    zf.writestr(
-        "AAAService/logs/paas-192.168.2.2/aaa_service_history_20260901011314.log.gz",
-        gzip.compress(AAA_HISTORY.encode("utf-8")),
-    )
-    zf.writestr("AppService/logs/paas-192.168.2.2/app_service_20260901011314.log", APP_CURRENT)
-    zf.writestr("AppService/logs/paas-192.168.2.2/app_service_error_20260901011314.log", APP_ERROR)
-    zf.writestr(
-        "AppService/logs/paas-192.168.2.2/app_service_history_20260901011314.log.gz",
-        gzip.compress(APP_HISTORY.encode("utf-8")),
-    )
+SUB_PACKAGE = _zip_bytes(
+    {
+        "UMFAcc/logs/node-01/pod-01/UMFAcc.log": AAA_CURRENT.encode("utf-8"),
+        "UMFAcc/logs/node-01/pod-01/UMFAcc_20260901011314.log.gz": gzip.compress(
+            AAA_HISTORY.encode("utf-8"),
+            mtime=0,
+        ),
+        "UmfService/logs/node-02/pod-01/UmfService.log": APP_CURRENT.encode("utf-8"),
+        "UmfService/logs/node-02/proxy/UmfService.log": b"excluded proxy log\n",
+        "Unmatched/notes.txt": b"not selected\n",
+    }
+)
 
 
 def main() -> None:
@@ -204,7 +224,10 @@ def main() -> None:
     with zipfile.ZipFile(OUTPUT, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, content in FILES.items():
             zf.writestr(name, content)
-        zf.writestr(f"{BASE}/Service Logs (Problem)/ServiceLog_20260901011314.zip", SUB_PACKAGE.getvalue())
+        zf.writestr(
+            f"{BASE}/Service Logs (Problem)/ServiceLogs_20260901011314.zip",
+            SUB_PACKAGE,
+        )
     print(f"已生成样例包: {OUTPUT} ({OUTPUT.stat().st_size} bytes)")
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from scripts.debug_local import build_report, select_task
+from tests.manifest_helpers import write_catalog_manifest
 
 
 def _write_task(output: Path, task_id: str, *, mode: str, completed_at: str) -> Path:
@@ -50,10 +51,7 @@ def test_build_report_matches_rule_from_existing_task_site(tmp_path: Path, monke
     task_dir = _write_task(tmp_path, "task-local-new", mode="local", completed_at="2026-01-03T00:00:00Z")
     (task_dir / "kpi").mkdir()
     (task_dir / "kpi" / "stat.csv").write_text("a,b\n1,2\n", encoding="utf-8")
-    (task_dir / ".patrolx-extracted.json").write_text(
-        json.dumps({"version": 4, "main": {"count": 1}, "files": []}),
-        encoding="utf-8",
-    )
+    write_catalog_manifest(task_dir, ["kpi/stat.csv"])
     task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
 
     report = build_report(task_dir, task, rule_code="kpi.measurement_units")
@@ -69,22 +67,35 @@ def test_build_report_lists_extraction_entries_and_all_rule_matches(tmp_path: Pa
     task_dir = _write_task(tmp_path, "task-local-new", mode="local", completed_at="2026-01-03T00:00:00Z")
     (task_dir / "kpi").mkdir()
     (task_dir / "kpi" / "stat.csv").write_text("a,b\n1,2\n", encoding="utf-8")
-    (task_dir / ".patrolx-extracted.json").write_text(
-        json.dumps(
+    write_catalog_manifest(
+        task_dir,
+        ["kpi/stat.csv"],
+        ignored=[
             {
-                "version": 4,
-                "main": {"count": 1},
-                "files": [
-                    {
-                        "source": "stat.csv",
-                        "target": "kpi/stat.csv",
-                        "category": "kpi",
-                        "status": "extracted",
-                    }
-                ],
+                "source_relative": "source/ignored.bin",
+                "member_relative": None,
+                "route_id": "ignore.test",
+                "product": "UMF",
+                "category": None,
+                "original_target": None,
+                "target": None,
+                "action": "ignore",
+                "status": "ignored",
+                "reason": "not_required",
+                "error_code": None,
             }
-        ),
-        encoding="utf-8",
+        ],
+        failures=[
+            {
+                "source_relative": "source/broken.zip",
+                "member_relative": None,
+                "route_id": "route.archive",
+                "category": "other",
+                "action": "expand",
+                "error_code": "archive_corrupt",
+                "reason": "压缩包损坏",
+            }
+        ],
     )
     task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
 
@@ -92,12 +103,41 @@ def test_build_report_lists_extraction_entries_and_all_rule_matches(tmp_path: Pa
 
     assert report["manifest"]["entries"] == [
         {
-            "source": "stat.csv",
+            "source": "source/0.bin",
+            "member": None,
             "target": "kpi/stat.csv",
             "category": "kpi",
-            "status": "extracted",
-        }
+            "route_id": "route.test",
+            "action": "copy",
+            "status": "landed",
+            "reason": None,
+            "error_code": None,
+        },
+        {
+            "source": "source/ignored.bin",
+            "member": None,
+            "target": None,
+            "category": None,
+            "route_id": "ignore.test",
+            "action": "ignore",
+            "status": "ignored",
+            "reason": "not_required",
+            "error_code": None,
+        },
+        {
+            "source": "source/broken.zip",
+            "member": None,
+            "target": None,
+            "category": "other",
+            "route_id": "route.archive",
+            "action": "expand",
+            "status": "failed",
+            "reason": "压缩包损坏",
+            "error_code": "archive_corrupt",
+        },
     ]
+    assert report["manifest"]["summary"]["counts"]["catalog"] == 1
+    assert report["manifest"]["catalog_paths"] == ["kpi/stat.csv"]
     assert report["catalog_paths"] == ["kpi/stat.csv"]
     match = next(item for item in report["rule_matches"] if item["code"] == "kpi.measurement_units")
     assert match["matched_files"] == ["kpi/stat.csv"]
@@ -108,23 +148,7 @@ def test_human_report_shows_extraction_entries_and_rule_hits(tmp_path: Path, mon
     task_dir = _write_task(tmp_path, "task-local-new", mode="local", completed_at="2026-01-03T00:00:00Z")
     (task_dir / "kpi").mkdir()
     (task_dir / "kpi" / "stat.csv").write_text("a,b\n1,2\n", encoding="utf-8")
-    (task_dir / ".patrolx-extracted.json").write_text(
-        json.dumps(
-            {
-                "version": 4,
-                "main": {"count": 1},
-                "files": [
-                    {
-                        "source": "stat.csv",
-                        "target": "kpi/stat.csv",
-                        "category": "kpi",
-                        "status": "extracted",
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+    write_catalog_manifest(task_dir, ["kpi/stat.csv"])
     task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     report = build_report(task_dir, task)
 
@@ -134,7 +158,7 @@ def test_human_report_shows_extraction_entries_and_rule_hits(tmp_path: Path, mon
     output = capsys.readouterr().out
 
     assert "解压条目" in output
-    assert "kpi/stat.csv <- stat.csv" in output
+    assert "landed kpi/stat.csv <- source/0.bin" in output
     assert "规则命中" in output
     assert "HIT kpi/stat.csv" in output
 

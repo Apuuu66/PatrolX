@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.extraction import read_manifest
+from app.services.extraction.manifest import read_manifest
 from tests.baseline_helpers import (
     SAMPLE,
     load_logs,
@@ -26,7 +26,7 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
     local_task = run_task(
         SAMPLE,
         name="一致性",
-        customer={"province": "北京", "operator": "移动"},
+        customer={"province": "北京", "operator": "移动", "product": "UMF"},
     )
     local_system = local_task.system.model_dump(by_alias=True, mode="json")
 
@@ -37,6 +37,7 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
         name="一致性",
         province="北京",
         operator="移动",
+        product="UMF",
     )
     wait_for_task(client, task_id)
     task_response = client.get(f"/api/v2/tasks/{task_id}")
@@ -73,9 +74,8 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
 
     local_manifest = read_manifest(local_env.task_dir(task_id))
     online_manifest = read_manifest(online_env.task_dir(task_id))
-    assert local_manifest["policy"] == online_manifest["policy"]
-    assert local_manifest["subpackages"] == online_manifest["subpackages"]
-    assert local_manifest["log_gz"] == online_manifest["log_gz"]
+    for key in ("classification", "entries", "ignored", "conflicts", "failures", "catalog", "summary"):
+        assert local_manifest[key] == online_manifest[key]
 
 
 def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> None:
@@ -93,6 +93,7 @@ def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> 
         name="同一元数据",
         province="北京",
         operator="移动",
+        product="UMF",
     )
     second_id = upload_package(
         env,
@@ -101,6 +102,7 @@ def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> 
         name="同一元数据",
         province="北京",
         operator="移动",
+        product="UMF",
     )
     assert first_id != second_id
     wait_for_task(client, first_id)

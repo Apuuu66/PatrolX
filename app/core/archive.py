@@ -518,7 +518,7 @@ def unpack_gzip(
 
     parts, _canonical = _normalize_member_path(target.name)
     safe_target = _resolve_member_target(target.parent, parts, target.name)
-    if safe_target.is_symlink() or any(parent.is_symlink() for parent in safe_target.parents):
+    if safe_target.is_symlink():
         raise ArchiveError(f"目标路径是链接: {target.name}", "link_rejected")
     safe_target.parent.mkdir(parents=True, exist_ok=True)
     total = 0

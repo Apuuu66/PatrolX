@@ -66,6 +66,7 @@ def test_kpi_rule_consumes_only_classified_kpi_catalog_paths(tmp_path: Path) -> 
     from app.services.extraction.classification import classify_main_evidence
     from app.services.scanning import TaskFileCatalog
     from tests.fixtures.make_real_package import build_real_package
+    from tests.manifest_helpers import write_catalog_manifest
 
     package = build_real_package(tmp_path / "input")
     extracted = tmp_path / "extracted"
@@ -75,6 +76,7 @@ def test_kpi_rule_consumes_only_classified_kpi_catalog_paths(tmp_path: Path) -> 
     data_dir = tmp_path / "task"
     shutil.copytree(extracted / base, data_dir / ".main" / base)
     run = classify_main_evidence(data_dir, product="UMF")
+    write_catalog_manifest(data_dir, [entry.path for entry in run.catalog])
 
     kpi_paths = {Path(entry.path) for entry in run.catalog if entry.path.startswith("kpi/")}
     assert len(kpi_paths) == 73

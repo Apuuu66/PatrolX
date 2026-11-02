@@ -7,8 +7,9 @@ import pytest
 
 from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
-from app.models.schemas import Priority, RuleCategory, Severity
+from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext
+from tests.manifest_helpers import write_catalog_manifest
 
 
 def _rule(
@@ -72,3 +73,20 @@ def test_run_rule_rejects_disabled_rule() -> None:
 
     with pytest.raises(ValueError, match="规则已停用"):
         executor.run_rule("rule.disabled", ctx)
+
+
+def test_no_match_skip_reason_uses_v5_manifest_context(tmp_path: Path) -> None:
+    """启用集合中的规则无命中时仍返回带 v5 审计上下文的 skip。"""
+    (tmp_path / "basic").mkdir()
+    (tmp_path / "basic" / "a.txt").write_text("ok", encoding="utf-8")
+    write_catalog_manifest(tmp_path, ["basic/a.txt"])
+    target = RuleRegistry()
+    _rule(target, "rule.enabled", lambda _ctx: None)
+
+    ctx = RuleContext(task_id="task-x", data_dir=tmp_path, log=lambda *_: None)
+    result = Executor(target, enabled_rules={"rule.enabled"}).run_all(ctx)["rule.enabled"]
+
+    assert result.status == RuleStatus.SKIP
+    assert "profile=UMF" in (result.skip_reason or "")
+    assert "ignored=0" in (result.skip_reason or "")
+    assert "failures=0" in (result.skip_reason or "")

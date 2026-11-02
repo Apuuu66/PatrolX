@@ -59,6 +59,7 @@ from app.models.schemas import (
     MeasurementVersionComparison,
     OverviewSummary,
     PackageKind,
+    Product,
     RebuildRequest,
     RerunRequest,
     RuleResult,
@@ -176,48 +177,97 @@ async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
 # ---- /api/v2 契约路由 ----
 
 
+def _hash_existing_package(path: Path) -> str:
+    """读取既有包 checksum；不可读时转换为可恢复判定的稳定冲突。"""
+    try:
+        return sha256_file(path)
+    except OSError as exc:
+        raise AppError(
+            "package_checksum_conflict",
+            "同名任务已存在，但历史数据包不可读，无法校验原始包，拒绝恢复现场",
+            409,
+        ) from exc
+
+
 def _resolve_existing_task(
     *,
     task_id: str,
     filename: str,
     checksum: str,
+    package_kind: PackageKind,
+    product: str | None,
     temp_path: Path,
     response: Response,
 ) -> TaskCreated:
-    """同名任务已存在：校验 checksum；现场已清理时写回原始包恢复现场。
+    """同名任务已存在：按 checksum、包类型、网元类型顺序校验并恢复现场。
 
     恢复只重建磁盘现场，不重跑、不改任务历史数据、不触发留存清理；内容不一致仍按冲突拒绝。
     """
     stored_name = task_db.get_package_file(task_id) or filename
     scene_package = settings.uploads / task_id / stored_name
-    if scene_package.is_file():
-        if sha256_file(scene_package) != checksum:
-            raise AppError("package_checksum_conflict", "同名任务已存在，但数据包 checksum 不同", 409)
-        # 升级前历史任务缺失 checksum 时机会式回填，作为后续恢复与冲突判定的依据。
-        task_db.set_package_checksum(task_id, checksum)
-        response.headers["Location"] = f"/api/v3/tasks/{task_id}"
-        return TaskCreated(task_id=task_id)
-
-    restore_checksum = task_db.get_run_fields(task_id)[2]
-    if restore_checksum is None:
+    stored_checksum = task_db.get_run_fields(task_id)[2]
+    scene_checksum = _hash_existing_package(scene_package) if scene_package.is_file() else None
+    legacy_checksum: str | None = None
+    if stored_checksum is None and scene_checksum is None:
         legacy_package = settings.uploads / stored_name
         if legacy_package.is_file():
-            restore_checksum = sha256_file(legacy_package)
-            task_db.set_package_checksum(task_id, restore_checksum)
-    if restore_checksum is None:
-        raise AppError(
-            "package_checksum_conflict",
-            "同名任务已存在，但系统未记录首次接收的 checksum 且无可读历史包，无法校验原始包，拒绝恢复现场",
-            409,
-        )
-    if restore_checksum != checksum:
+            legacy_checksum = _hash_existing_package(legacy_package)
+    if stored_checksum is None:
+        observed_checksum = scene_checksum if scene_checksum is not None else legacy_checksum
+        if observed_checksum is None:
+            raise AppError(
+                "package_checksum_conflict",
+                "同名任务已存在，但系统未记录首次接收的 checksum 且无可读历史包，无法校验原始包，拒绝恢复现场",
+                409,
+            )
+        if observed_checksum != checksum:
+            raise AppError(
+                "package_checksum_conflict",
+                "同名任务已存在，但数据包 checksum 不同，内容不一致，拒绝恢复现场",
+                409,
+            )
+        # 只有历史现场与本次上传完全一致时才回填，冲突现场不得污染首次接收 checksum。
+        task_db.set_package_checksum(task_id, checksum)
+        stored_checksum = checksum
+    if scene_checksum is not None and scene_checksum != stored_checksum:
+        raise AppError("package_checksum_conflict", "同名任务已存在，但数据包 checksum 不同", 409)
+    if stored_checksum != checksum:
         raise AppError(
             "package_checksum_conflict",
             "同名任务已存在，但数据包 checksum 不同，内容不一致，拒绝恢复现场",
             409,
         )
-    scene_package.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(temp_path, scene_package)
+
+    identity = task_db.get_task_identity(task_id)
+    existing_kind = identity.package_kind if identity is not None else PackageKind.INSPECTION
+    existing_product = identity.product if identity is not None else None
+
+    if package_kind != existing_kind:
+        raise AppError(
+            "package_kind_conflict",
+            "同名任务已存在，但包类型与首次创建时不同",
+            409,
+            detail={
+                "task_id": task_id,
+                "existing": existing_kind.value,
+                "requested": package_kind.value,
+            },
+        )
+    if package_kind == PackageKind.INSPECTION and product != existing_product:
+        raise AppError(
+            "package_product_conflict",
+            "同名巡检包已存在，但网元类型不同或历史任务缺少网元类型",
+            409,
+            detail={
+                "task_id": task_id,
+                "existing": existing_product,
+                "requested": product,
+            },
+        )
+
+    if not scene_package.is_file():
+        scene_package.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(temp_path, scene_package)
     response.headers["Location"] = f"/api/v3/tasks/{task_id}"
     return TaskCreated(task_id=task_id)
 
@@ -238,17 +288,6 @@ async def create_task_v3(
         raise AppError("invalid_filename", "数据包文件名过长，请限制在 255 字节内", 400)
     if not filename.lower().endswith((".zip", ".tar", ".gz", ".tgz")):
         raise AppError("invalid_package", "仅支持 zip/tar.gz 数据包", 400)
-    province_value = province.strip() if province else ""
-    operator_value = operator.strip() if operator else ""
-    product_value = product.strip() if product else ""
-    if package_kind == PackageKind.INSPECTION:
-        if not province_value:
-            raise AppError("missing_province", "巡检包必须选择省份", 400)
-        if not operator_value:
-            raise AppError("missing_operator", "巡检包必须选择运营商", 400)
-    elif province_value or operator_value or product_value:
-        raise AppError("metadata_not_applicable", "日志补充包不允许携带局点或产品元数据", 400)
-
     task_id = generate_task_id(filename)
     temp_path: Path | None = None
     created: TaskCreated | None = None
@@ -258,11 +297,55 @@ async def create_task_v3(
             raise AppError("invalid_package", "数据包不能为空", 400)
         if size > settings.max_upload_mb * 1024 * 1024:
             raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
+        province_value = province.strip() if province else ""
+        operator_value = operator.strip() if operator else ""
+        product_value = product.strip() if product else ""
+        normalized_product: str | None = None
+        if package_kind == PackageKind.INSPECTION:
+            if not province_value:
+                raise AppError("missing_province", "巡检包必须选择省份", 400)
+            if not operator_value:
+                raise AppError("missing_operator", "巡检包必须选择运营商", 400)
+            if not product_value:
+                raise AppError(
+                    "missing_product",
+                    "巡检包必须选择网元类型",
+                    400,
+                    detail={"package_kind": PackageKind.INSPECTION.value, "field": "product"},
+                )
+            try:
+                normalized_product = Product(product_value).value
+            except ValueError as exc:
+                raise AppError(
+                    "invalid_product",
+                    "巡检包网元类型仅支持 UMF 或 CSP",
+                    400,
+                    detail={"value": product, "allowed": [Product.UMF.value, Product.CSP.value]},
+                ) from exc
+        else:
+            forbidden_fields = [
+                field
+                for field, value in (
+                    ("province", province_value),
+                    ("operator", operator_value),
+                    ("product", product_value),
+                )
+                if value
+            ]
+            if forbidden_fields:
+                raise AppError(
+                    "metadata_not_applicable",
+                    "日志补充包不允许携带省份、运营商或网元类型",
+                    400,
+                    detail={"package_kind": PackageKind.LOG_SUPPLEMENT.value, "fields": forbidden_fields},
+                )
         if task_service.exists(task_id):
             return _resolve_existing_task(
                 task_id=task_id,
                 filename=filename,
                 checksum=checksum,
+                package_kind=package_kind,
+                product=normalized_product,
                 temp_path=temp_path,
                 response=response,
             )
@@ -272,7 +355,7 @@ async def create_task_v3(
             province_value or None,
             operator_value or None,
             None,
-            product=product_value or None,
+            product=normalized_product,
             package_kind=package_kind,
         )
         task_dir = settings.uploads / created.task_id

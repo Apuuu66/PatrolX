@@ -6,6 +6,7 @@ from app.inspectors.base import Inspector
 from app.inspectors.registry import RuleRegistry
 from app.models.schemas import Priority, RuleCategory, RuleResult, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext, make_result
+from tests.manifest_helpers import write_catalog_manifest
 
 
 def _inspector(code: str, run, *, source_patterns: list[str] | None = None, hidden: bool = False) -> Inspector:
@@ -25,10 +26,10 @@ def _inspector(code: str, run, *, source_patterns: list[str] | None = None, hidd
 
 
 def _context(tmp_path: Path) -> RuleContext:
-    for name in ("logs/a.log",):
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("log", encoding="utf-8")
+    path = tmp_path / "logs" / "a.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("log", encoding="utf-8")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
 
     def log(_level: str, _message: str, _detail: dict | None = None) -> None:
         return None

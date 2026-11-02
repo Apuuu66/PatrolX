@@ -1,33 +1,20 @@
 """子压缩包与日志 gzip 的有界递归展开。"""
 
 import shutil
+import tempfile
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from app.core.archive import (
     ArchiveError,
-    PathTooLongError,
     UnpackLimit,
     _normalize_member_path,
-    is_archive,
     unpack,
     unpack_gzip,
 )
-from app.core.checksum import sha256_file
-from app.core.classify import classify_name
-from app.models.schemas import RuleCategory
-from app.services.extraction.budget import ExtractionBudget, ExtractionLogger, _log_extract
-from app.services.extraction.layout import (
-    CATEGORY_DIRECTORIES,
-    MAIN_EVIDENCE_DIR,
-    PathLimitPolicy,
-    _category_of,
-    _destination_relative,
-    _register_rejected,
-    _relative_files,
-    _safe_destination,
-)
-from app.services.extraction.policy import ExtractPolicyConfig, PolicyDecision, evaluate_extract_policy
+from app.services.extraction.audit import MEMBER_NOT_SELECTED
+from app.services.extraction.config import SelectionExclude, SelectionInclude
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +31,50 @@ class ExpandedArchiveMembers:
 
     files: tuple[Path, ...]
     member_errors: tuple[ExpandedArchiveMemberError, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedArchiveMember:
+    """按配置选中的归档成员及其最终相对路径。"""
+
+    path: Path
+    member_relative: str
+    service: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class IgnoredArchiveMember:
+    """未选或明确排除的归档成员及稳定原因。"""
+
+    member_relative: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedArchiveMembers:
+    """一次成员选择、GZIP 解压后的成功项与审计项。"""
+
+    files: tuple[SelectedArchiveMember, ...]
+    ignored: tuple[IgnoredArchiveMember, ...]
+    member_errors: tuple[ExpandedArchiveMemberError, ...]
+
+
+_RECURSIVE_ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".zip", ".tar")
+_UNSUPPORTED_ARCHIVE_SUFFIXES = (
+    ".tar.bz",
+    ".tar.bz2",
+    ".tar.lz",
+    ".tar.lzma",
+    ".tar.xz",
+    ".tar.zst",
+    ".tbz",
+    ".tbz2",
+    ".rar",
+    ".7z",
+    ".bz2",
+    ".xz",
+    ".zst",
+)
 
 
 def _safe_member_relative(error: ArchiveError) -> str | None:
@@ -82,625 +113,392 @@ def expand_archive_members(
     return ExpandedArchiveMembers(files=tuple(files), member_errors=tuple(member_errors))
 
 
-def _policy_detail(decision: PolicyDecision | None) -> dict[str, object] | None:
-    if decision is None:
-        return None
-    return {
-        "action": decision.action,
-        "reason": decision.reason,
-        "scope": decision.scope,
-        "keyword": decision.keyword,
-    }
+def _is_recursive_archive(path: Path) -> bool:
+    """判断文件是否属于 expand_recursive 支持的归档格式。"""
+    return path.name.casefold().endswith(_RECURSIVE_ARCHIVE_SUFFIXES)
 
 
-def _name_category(source: Path, parent_category: str) -> str:
-    """策略跳过只按名称分类，避免读取压缩成员或触发损坏包解析。"""
-    category = classify_name(source.name)
-    if category is not None:
-        return category.value
-    return parent_category or "other"
+def _is_single_file_gzip(path: Path) -> bool:
+    """识别普通 GZIP；TAR.GZ 仍按归档处理。"""
+    name = path.name.casefold()
+    return name.endswith(".gz") and not name.endswith(".tar.gz")
 
 
-def _source_display(source_relative: Path, source_kind: str) -> str:
-    if source_kind == "evidence":
-        return f"{MAIN_EVIDENCE_DIR}/{source_relative.as_posix()}"
-    return source_relative.as_posix()
+def _is_unsupported_archive(path: Path) -> bool:
+    """识别明确的归档后缀，避免把不支持的归档静默当作普通文件落位。"""
+    return path.name.casefold().endswith(_UNSUPPORTED_ARCHIVE_SUFFIXES)
 
 
-def _set_path_error(state: dict[str, object], exc: Exception) -> None:
-    state["status"] = "failed"
-    state["error"] = str(exc)
-    error_code = getattr(exc, "error_code", None)
-    if error_code is not None:
-        state["error_code"] = error_code
-    if isinstance(exc, PathTooLongError):
-        state["error_code"] = "unsafe_path"
-        state["path_length"] = exc.length
-        state["path_limit"] = exc.limit
+def is_recursive_archive_source(path: Path) -> bool:
+    """判断来源是否必须交给告警递归展开，包括需要局部报错的不支持格式。"""
+    return _is_recursive_archive(path) or _is_single_file_gzip(path) or _is_unsupported_archive(path)
 
 
-def _retain_evidence(
-    source: Path,
-    source_relative: Path,
-    category: str,
-    data_dir: Path,
-    manifest: dict,
-    budget: ExtractionBudget,
-    depth: int,
-    decision: PolicyDecision,
-    log: ExtractionLogger | None,
-    path_policy: PathLimitPolicy | None = None,
-) -> dict[str, object]:
-    """把策略命中的压缩项按原文件保留到 category 现场。"""
-    relative = _destination_relative(source_relative, "evidence", category)
-    state: dict[str, object] = {
-        "target": relative.as_posix(),
-        "status": "skipped",
-        "error": None,
-        "error_code": "policy_skip",
-        "policy": _policy_detail(decision),
-    }
-    try:
-        target = _safe_destination(data_dir, relative, path_policy)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            raise ArchiveError("目标文件已存在，未覆盖")
-        shutil.copy2(source, target)
-        budget.charge_file(target)
-        _log_extract(
-            log,
-            "info",
-            "压缩项按策略保留",
-            task_id=data_dir.name,
-            source=source_relative.as_posix(),
-            target=relative.as_posix(),
-            status="skipped",
-            reason=decision.reason,
-            scope=decision.scope,
-            keyword=decision.keyword,
-        )
-    except (ArchiveError, OSError) as exc:
-        target = locals().get("target")
-        if target is not None:
-            target.unlink(missing_ok=True)
-        _set_path_error(state, exc)
-        _register_rejected(
-            manifest,
-            source_relative.as_posix(),
-            str(exc),
-            category,
-            depth,
-            getattr(exc, "error_code", None),
-        )
-        _log_extract(
-            log,
-            "error",
-            "策略保留压缩项失败",
-            task_id=data_dir.name,
-            source=source_relative.as_posix(),
-            target=relative.as_posix(),
-            status="failed",
-            reason=decision.reason,
-            scope=decision.scope,
-            keyword=decision.keyword,
-            error=str(exc),
-        )
-    return state
+def _gzip_output_relative(member_relative: str) -> str:
+    """把 GZIP 来源路径去掉最后一层 ``.gz``，并保持安全相对路径。"""
+    parts, canonical = _normalize_member_path(member_relative)
+    if not canonical.casefold().endswith(".gz") or canonical.casefold().endswith(".tar.gz"):
+        raise ArchiveError(f"不支持的 GZIP 路径: {member_relative}", "archive_corrupt")
+    parts[-1] = parts[-1][:-3]
+    if not parts[-1]:
+        raise ArchiveError(f"GZIP 输出路径为空: {member_relative}", "unsafe_path")
+    return "/".join(parts)
 
 
-def _evidence_policy(
-    source_relative: Path,
-    policy: ExtractPolicyConfig | None,
-    is_compressed: bool,
-) -> PolicyDecision | None:
-    if policy is None:
-        return None
-    return evaluate_extract_policy(policy, source_relative.as_posix(), is_compressed=is_compressed)
+def _member_pattern_matches(pattern: str, member_relative: str) -> bool:
+    """按目录段和最后一段文件 glob 匹配成员，且大小写不敏感。"""
+    pattern_parts = tuple(part.strip().casefold() for part in pattern.split("/") if part.strip())
+    _parts, canonical = _normalize_member_path(member_relative)
+    actual_parts = tuple(part.casefold() for part in canonical.split("/"))
+    if not pattern_parts:
+        return False
 
-
-def _extract_log_gzip(
-    source: Path,
-    source_relative: Path,
-    source_kind: str,
-    data_dir: Path,
-    manifest: dict,
-    budget: ExtractionBudget,
-    depth: int,
-    log: ExtractionLogger | None = None,
-    policy: ExtractPolicyConfig | None = None,
-    path_policy: PathLimitPolicy | None = None,
-) -> None:
-    category = RuleCategory.LOG.value
-    decision = _evidence_policy(source_relative, policy, True) if source_kind == "evidence" else None
-    if decision is not None and decision.action == "skip":
-        state = {
-            "source_evidence": _source_display(source_relative, source_kind),
-            "source_relative_path": source_relative.as_posix(),
-            "category": CATEGORY_DIRECTORIES[category],
-            "depth": depth,
-            **_retain_evidence(
-                source,
-                source_relative,
-                category,
-                data_dir,
-                manifest,
-                budget,
-                depth,
-                decision,
-                log,
-                path_policy,
-            ),
-        }
-        manifest["log_gz"].append(state)
-        return
-    relative = _destination_relative(source_relative.with_suffix(""), source_kind, category)
-    source_state = _source_display(source_relative, source_kind)
-    state: dict[str, object] = {
-        "source_relative_path": source_relative.as_posix(),
-        "source": source_state,
-        "category": CATEGORY_DIRECTORIES[category],
-        "target": relative.as_posix(),
-        "depth": depth,
-        "status": "extracted",
-        "error": None,
-    }
-    if decision is not None:
-        state["policy"] = _policy_detail(decision)
-    if decision is not None and decision.action == "whitelist":
-        _log_extract(
-            log,
-            "info",
-            "压缩项按白名单恢复",
-            task_id=data_dir.name,
-            source=source_relative.as_posix(),
-            target=relative.as_posix(),
-            reason=decision.reason,
-            scope=decision.scope,
-            keyword=decision.keyword,
-        )
-    try:
-        target = _safe_destination(data_dir, relative, path_policy)
-        if target.exists():
-            state["status"] = "conflict"
-            state["error"] = "目标日志已存在，未覆盖"
-            state["error_code"] = "target_conflict"
-        else:
-            budget.charge_gzip_chunk(0)
-            unpack_gzip(
-                source,
-                target,
-                charge=budget.charge_gzip_chunk,
+    def match(pattern_index: int, actual_index: int) -> bool:
+        if pattern_index == len(pattern_parts):
+            return actual_index == len(actual_parts)
+        segment = pattern_parts[pattern_index]
+        if segment == "**":
+            if pattern_index == len(pattern_parts) - 1:
+                return actual_index < len(actual_parts)
+            return match(pattern_index + 1, actual_index) or (
+                actual_index < len(actual_parts) and match(pattern_index, actual_index + 1)
             )
-            if budget.files + 1 > budget.max_files:
-                raise ArchiveError(
-                    "任务累计文件数超限",
-                    "task_file_count_exceeded",
-                    count=budget.files + 1,
-                    limit=budget.max_files,
+        if actual_index >= len(actual_parts):
+            return False
+        if pattern_index == len(pattern_parts) - 1:
+            return actual_index == len(actual_parts) - 1 and fnmatchcase(
+                actual_parts[actual_index],
+                segment,
+            )
+        return actual_parts[actual_index] == segment and match(pattern_index + 1, actual_index + 1)
+
+    return match(0, 0)
+
+
+def _selected_include(
+    member_relative: str,
+    include: tuple[SelectionInclude, ...],
+) -> SelectionInclude | None:
+    """返回唯一 include；不同 service 的重叠配置视为配置错误，不静默取一条。"""
+    matches = [item for item in include if _member_pattern_matches(item.pattern, member_relative)]
+    if not matches:
+        return None
+    services = {item.service for item in matches}
+    if len(services) > 1:
+        raise ArchiveError(
+            f"成员同时命中不同 service 的 include: {member_relative}",
+            "invalid_classification_config",
+        )
+    return matches[0]
+
+
+def _decompress_member_gzip(
+    member: Path,
+    staging_root: Path,
+    member_relative: str,
+    limit: UnpackLimit,
+) -> tuple[Path, str]:
+    """解压单个入选 GZIP 一层，返回去掉 .gz 后的路径和相对路径。"""
+    output_relative = _gzip_output_relative(member_relative)
+    target = staging_root / output_relative
+    try:
+        unpack_gzip(member, target, limit=limit)
+        member.unlink()
+    except ArchiveError:
+        raise
+    except OSError as exc:
+        raise ArchiveError(f"GZIP 成员解压失败: {member_relative}", "unsafe_path") from exc
+    return target, output_relative
+
+
+def select_and_decompress(
+    archive: Path,
+    staging_root: Path,
+    *,
+    include: tuple[SelectionInclude, ...],
+    exclude: tuple[SelectionExclude, ...],
+    limit: UnpackLimit | None = None,
+) -> SelectedArchiveMembers:
+    """安全展开归档，先排除后选择，并仅解压入选的单文件 GZIP。"""
+    active_limit = limit or UnpackLimit()
+    expanded = expand_archive_members(archive, staging_root, limit=active_limit)
+    selected: list[SelectedArchiveMember] = []
+    ignored: list[IgnoredArchiveMember] = []
+    member_errors = list(expanded.member_errors)
+
+    for member in expanded.files:
+        member_relative = member.relative_to(staging_root).as_posix()
+        exclusion = next(
+            (item for item in exclude if _member_pattern_matches(item.pattern, member_relative)),
+            None,
+        )
+        if exclusion is not None:
+            ignored.append(IgnoredArchiveMember(member_relative=member_relative, reason=exclusion.reason))
+            continue
+        selected_include = _selected_include(member_relative, include)
+        if selected_include is None:
+            ignored.append(IgnoredArchiveMember(member_relative=member_relative, reason=MEMBER_NOT_SELECTED))
+            continue
+        try:
+            if _is_single_file_gzip(member):
+                member, member_relative = _decompress_member_gzip(
+                    member,
+                    staging_root,
+                    member_relative,
+                    active_limit,
                 )
-            budget.files += 1
-            if source_kind != "evidence":
-                source.unlink(missing_ok=True)
-    except (ArchiveError, OSError) as exc:
-        target = locals().get("target")
-        if target is not None:
-            target.unlink(missing_ok=True)
-        _set_path_error(state, exc)
-        if state["status"] != "conflict":
-            _register_rejected(
-                manifest,
-                source_relative.as_posix(),
-                str(exc),
-                category,
-                depth,
-                getattr(exc, "error_code", None),
+        except ArchiveError as exc:
+            member_errors.append(
+                ExpandedArchiveMemberError(
+                    member_relative=member_relative,
+                    error=exc,
+                )
             )
-    task_id = data_dir.name
-    if state["status"] == "extracted":
-        _log_extract(
-            log,
-            "info",
-            "日志 gzip 解压完成",
-            task_id=task_id,
-            source=source_relative.as_posix(),
-            target=relative.as_posix(),
-            depth=depth,
+            continue
+        selected.append(
+            SelectedArchiveMember(
+                path=member,
+                member_relative=member_relative,
+                service=selected_include.service,
+            )
         )
-    elif state["status"] == "conflict":
-        _log_extract(
-            log,
-            "warn",
-            "日志 gzip 目标冲突",
-            task_id=task_id,
-            source=source_relative.as_posix(),
-            target=relative.as_posix(),
-            depth=depth,
-            error=state["error"],
+
+    return SelectedArchiveMembers(
+        files=tuple(selected),
+        ignored=tuple(ignored),
+        member_errors=tuple(member_errors),
+    )
+
+
+def decompress_matching_members(
+    files: tuple[Path, ...],
+    staging_root: Path,
+    *,
+    patterns: tuple[str, ...],
+    limit: UnpackLimit | None = None,
+) -> ExpandedArchiveMembers:
+    """对 expand 路线的匹配成员 GZIP 解压；失败文件不进入最终落位集合。"""
+    active_limit = limit or UnpackLimit()
+    output: list[Path] = []
+    member_errors: list[ExpandedArchiveMemberError] = []
+    for member in sorted(files, key=lambda path: path.relative_to(staging_root).as_posix()):
+        member_relative = member.relative_to(staging_root).as_posix()
+        if _is_single_file_gzip(member) and any(
+            _member_pattern_matches(pattern, member_relative) for pattern in patterns
+        ):
+            try:
+                member, _output_relative = _decompress_member_gzip(
+                    member,
+                    staging_root,
+                    member_relative,
+                    active_limit,
+                )
+            except ArchiveError as exc:
+                member_errors.append(
+                    ExpandedArchiveMemberError(
+                        member_relative=member_relative,
+                        error=exc,
+                    )
+                )
+                continue
+        output.append(member)
+    return ExpandedArchiveMembers(files=tuple(output), member_errors=tuple(member_errors))
+
+
+def _prefix_member_path(prefix: Path, member_relative: str | None) -> str | None:
+    """把嵌套成员路径拼接到其所在归档的父目录。"""
+    prefix_text = "" if prefix == Path(".") else prefix.as_posix()
+    if not prefix_text:
+        return member_relative
+    if member_relative is None:
+        return prefix_text
+    return f"{prefix_text}/{member_relative}"
+
+
+def _recursive_files(root: Path) -> tuple[Path, ...]:
+    """返回递归展开后仍存在的普通文件，排除链接。"""
+    return tuple(
+        sorted(
+            (path for path in root.rglob("*") if path.is_file() and not path.is_symlink()),
+            key=lambda path: path.relative_to(root).as_posix(),
+        )
+    )
+
+
+def _expand_nested_archives(
+    root: Path,
+    *,
+    depth: int,
+    limit: UnpackLimit,
+    member_errors: list[ExpandedArchiveMemberError],
+) -> None:
+    """递归展开当前输出根内的嵌套归档；单个成员失败不阻断其他文件。"""
+    for child in _recursive_files(root):
+        if not (_is_recursive_archive(child) or _is_single_file_gzip(child) or _is_unsupported_archive(child)):
+            continue
+        child_relative = child.relative_to(root)
+        if _is_unsupported_archive(child):
+            member_errors.append(
+                ExpandedArchiveMemberError(
+                    member_relative=child_relative.as_posix(),
+                    error=ArchiveError(f"不支持的压缩格式: {child.name}", "archive_corrupt"),
+                )
+            )
+            child.unlink(missing_ok=True)
+            continue
+        if depth + 1 > limit.max_depth:
+            member_errors.append(
+                ExpandedArchiveMemberError(
+                    member_relative=child_relative.as_posix(),
+                    error=ArchiveError(
+                        f"嵌套归档深度超限: {child.name}",
+                        "archive_depth_exceeded",
+                        depth=depth + 1,
+                        limit=limit.max_depth,
+                    ),
+                )
+            )
+            child.unlink(missing_ok=True)
+            continue
+
+        with tempfile.TemporaryDirectory(prefix=".recursive-expand-", dir=root) as temporary:
+            nested_root = Path(temporary)
+            nested = _expand_recursive_tree(
+                child,
+                nested_root,
+                gzip_member_relative=None,
+                error_member_relative=child.name,
+                depth=depth + 1,
+                limit=limit,
+            )
+            for nested_error in nested.member_errors:
+                member_errors.append(
+                    ExpandedArchiveMemberError(
+                        member_relative=_prefix_member_path(child_relative.parent, nested_error.member_relative),
+                        error=nested_error.error,
+                    )
+                )
+            destination_root = root / child_relative.parent
+            for nested_file in nested.files:
+                nested_relative = nested_file.relative_to(nested_root)
+                destination = destination_root / nested_relative
+                destination_member = _prefix_member_path(child_relative.parent, nested_relative.as_posix())
+                try:
+                    if destination.exists():
+                        raise ArchiveError(f"嵌套归档成员目标已存在: {destination_member}", "target_conflict")
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(nested_file), destination)
+                except (ArchiveError, OSError) as exc:
+                    error = (
+                        exc
+                        if isinstance(exc, ArchiveError)
+                        else ArchiveError(
+                            f"嵌套归档成员写入失败: {exc}",
+                            "unsafe_path",
+                        )
+                    )
+                    member_errors.append(
+                        ExpandedArchiveMemberError(
+                            member_relative=destination_member,
+                            error=error,
+                        )
+                    )
+        child.unlink(missing_ok=True)
+
+
+def _expand_recursive_tree(
+    source: Path,
+    output_root: Path,
+    *,
+    gzip_member_relative: str | None,
+    error_member_relative: str | None,
+    depth: int,
+    limit: UnpackLimit,
+) -> ExpandedArchiveMembers:
+    """递归展开一个来源，返回最终普通文件和组合后的成员错误。"""
+    output_root.mkdir(parents=True, exist_ok=True)
+    member_errors: list[ExpandedArchiveMemberError] = []
+
+    if _is_single_file_gzip(source):
+        gzip_relative = gzip_member_relative or source.name
+        try:
+            output_relative = _gzip_output_relative(gzip_relative)
+            target = output_root / output_relative
+            unpack_gzip(source, target, limit=limit)
+        except ArchiveError as exc:
+            member_errors.append(
+                ExpandedArchiveMemberError(
+                    member_relative=gzip_relative,
+                    error=exc,
+                )
+            )
+        except OSError as exc:
+            member_errors.append(
+                ExpandedArchiveMemberError(
+                    member_relative=gzip_relative,
+                    error=ArchiveError(f"GZIP 输出失败: {exc}", "unsafe_path"),
+                )
+            )
+        else:
+            _expand_nested_archives(
+                output_root,
+                depth=depth,
+                limit=limit,
+                member_errors=member_errors,
+            )
+        return ExpandedArchiveMembers(files=_recursive_files(output_root), member_errors=tuple(member_errors))
+
+    if not _is_recursive_archive(source):
+        member_errors.append(
+            ExpandedArchiveMemberError(
+                member_relative=error_member_relative,
+                error=ArchiveError(f"不支持的压缩格式: {source.name}", "archive_corrupt"),
+            )
+        )
+        return ExpandedArchiveMembers(files=(), member_errors=tuple(member_errors))
+
+    def record_member_error(error: ArchiveError) -> None:
+        member_errors.append(
+            ExpandedArchiveMemberError(
+                member_relative=_safe_member_relative(error),
+                error=error,
+            )
+        )
+
+    try:
+        unpack(source, output_root, limit=limit, on_member_error=record_member_error)
+    except ArchiveError as exc:
+        member_errors.append(
+            ExpandedArchiveMemberError(
+                member_relative=error_member_relative,
+                error=exc,
+            )
         )
     else:
-        _log_extract(
-            log,
-            "error",
-            "日志 gzip 解压失败",
-            task_id=task_id,
-            source=source_relative.as_posix(),
-            target=relative.as_posix(),
+        _expand_nested_archives(
+            output_root,
             depth=depth,
-            error=state["error"],
+            limit=limit,
+            member_errors=member_errors,
         )
-    manifest["log_gz"].append(state)
+    return ExpandedArchiveMembers(files=_recursive_files(output_root), member_errors=tuple(member_errors))
 
 
-def _extract_subpackage(
+def expand_recursive(
     source: Path,
-    source_relative: Path,
-    source_kind: str,
-    parent_category: str,
-    data_dir: Path,
-    manifest: dict,
-    budget: ExtractionBudget,
-    seen_checksums: set[str],
-    depth: int,
-    log: ExtractionLogger | None = None,
-    policy: ExtractPolicyConfig | None = None,
-    path_policy: PathLimitPolicy | None = None,
-) -> None:
-    limit = UnpackLimit()
-    checksum = sha256_file(source)
-    decision = _evidence_policy(source_relative, policy, True) if source_kind == "evidence" else None
-    if decision is not None and decision.action == "skip":
-        category = _name_category(source, parent_category)
-        state: dict[str, object] = {
-            "source": _source_display(source_relative, source_kind),
-            "parent": None,
-            "category": CATEGORY_DIRECTORIES[category],
-            "classification_reason": "policy:name",
-            "depth": depth,
-            "checksum": checksum,
-            **_retain_evidence(
-                source,
-                source_relative,
-                category,
-                data_dir,
-                manifest,
-                budget,
-                depth,
-                decision,
-                log,
-                path_policy,
-            ),
-        }
-        manifest["subpackages"].append(state)
-        return
-    # 先按压缩包关键字段匹配分类，再展开。
-    category, reason = _category_of(source, parent_category, archive_name=source.name)
-    state: dict[str, object] = {
-        "source": _source_display(source_relative, source_kind),
-        "parent": None,
-        "category": CATEGORY_DIRECTORIES[category],
-        "classification_reason": reason,
-        "depth": depth,
-        "checksum": checksum,
-        "target": CATEGORY_DIRECTORIES[category],
-        "status": "extracted",
-        "error": None,
-    }
-    if decision is not None:
-        state["policy"] = _policy_detail(decision)
-    if depth > budget.max_depth or depth > limit.max_depth:
-        state["status"] = "rejected"
-        state["error"] = "嵌套深度超限"
-        state["error_code"] = "archive_depth_exceeded"
-        manifest["subpackages"].append(state)
-        _register_rejected(
-            manifest,
-            source_relative.as_posix(),
-            str(state["error"]),
-            category,
-            depth,
-            "archive_depth_exceeded",
-        )
-        if source_kind != "evidence":
-            source.unlink(missing_ok=True)
-        _log_extract(
-            log,
-            "error",
-            "子包解压拒绝",
-            task_id=data_dir.name,
-            source=source_relative.as_posix(),
-            category=CATEGORY_DIRECTORIES[category],
-            depth=depth,
-            error=state["error"],
-        )
-        return
-    if checksum in seen_checksums:
-        state["status"] = "duplicate"
-        state["error"] = "相同 checksum 子包已展开"
-        state["error_code"] = "duplicate"
-        manifest["subpackages"].append(state)
-        if source_kind != "evidence":
-            source.unlink(missing_ok=True)
-        _log_extract(
-            log,
-            "info",
-            "子包重复，跳过解压",
-            task_id=data_dir.name,
-            source=source_relative.as_posix(),
-            category=CATEGORY_DIRECTORIES[category],
-            depth=depth,
-            checksum=checksum,
-        )
-        return
-    seen_checksums.add(checksum)
-    target_relative = CATEGORY_DIRECTORIES[category]
-    staging = data_dir / f".extract-{checksum[:12]}"
-    shutil.rmtree(staging, ignore_errors=True)
-    if decision is not None and decision.action == "whitelist":
-        _log_extract(
-            log,
-            "info",
-            "压缩项按白名单恢复",
-            task_id=data_dir.name,
-            source=source_relative.as_posix(),
-            target=target_relative,
-            reason=decision.reason,
-            scope=decision.scope,
-            keyword=decision.keyword,
-        )
-    _log_extract(
-        log,
-        "info",
-        "子包解压开始",
-        task_id=data_dir.name,
-        source=source_relative.as_posix(),
-        target=target_relative,
-        category=state["category"],
-        depth=depth,
-        checksum=checksum,
+    staging_root: Path,
+    *,
+    source_member_relative: str | None = None,
+    limit: UnpackLimit | None = None,
+) -> ExpandedArchiveMembers:
+    """递归展开告警归档和 GZIP，返回去掉归档外层后的安全成员路径。"""
+    active_limit = limit or UnpackLimit()
+    staging_root.mkdir(parents=True, exist_ok=True)
+    return _expand_recursive_tree(
+        source,
+        staging_root,
+        gzip_member_relative=source_member_relative,
+        error_member_relative=None,
+        depth=0,
+        limit=active_limit,
     )
-    rejected_before = len(manifest["rejected"])
-    try:
-        remaining_files = min(limit.max_files, budget.max_files - budget.files)
-        remaining_bytes = min(limit.max_total_bytes, budget.max_total_bytes - budget.bytes)
-        if remaining_files <= 0:
-            raise ArchiveError(
-                "任务累计文件数超限",
-                "task_file_count_exceeded",
-                count=budget.files,
-                limit=budget.max_files,
-            )
-        if remaining_bytes <= 0:
-            raise ArchiveError(
-                "任务累计解压总量超限",
-                "total_bytes_exceeded",
-                bytes=budget.bytes,
-                limit=budget.max_total_bytes,
-            )
-        limit.max_files = remaining_files
-        limit.max_total_bytes = remaining_bytes
-        member_errors: list[ArchiveError] = []
-        unpack(
-            source,
-            staging,
-            limit,
-            path_policy.check if path_policy is not None else None,
-            on_member_error=member_errors.append,
-        )
-        for error in member_errors:
-            _register_rejected(
-                manifest,
-                source_relative.as_posix(),
-                str(error),
-                category,
-                depth + 1,
-                error.error_code,
-            )
-        extracted_files = _relative_files(staging)
-        if member_errors and not extracted_files:
-            raise member_errors[0]
-        if budget.files + len(extracted_files) > budget.max_files:
-            raise ArchiveError(
-                "任务累计文件数超限",
-                "task_file_count_exceeded",
-                count=budget.files + len(extracted_files),
-                limit=budget.max_files,
-            )
-        for extracted_file in extracted_files:
-            budget.charge_file(extracted_file)
-        for member in extracted_files:
-            member_relative = member.relative_to(staging)
-            _ingest_file(
-                member,
-                member_relative,
-                "work",
-                category,
-                data_dir,
-                manifest,
-                budget,
-                seen_checksums,
-                depth + 1,
-                log,
-                policy,
-                path_policy,
-                source.name,
-            )
-        shutil.rmtree(staging, ignore_errors=True)
-        if source_kind != "evidence":
-            source.unlink(missing_ok=True)
-    except (ArchiveError, OSError) as exc:
-        shutil.rmtree(staging, ignore_errors=True)
-        _set_path_error(state, exc)
-        if len(manifest["rejected"]) == rejected_before:
-            _register_rejected(
-                manifest,
-                source_relative.as_posix(),
-                str(exc),
-                category,
-                depth,
-                getattr(exc, "error_code", None),
-            )
-        if source_kind != "evidence":
-            source.unlink(missing_ok=True)
-    task_id = data_dir.name
-    if state["status"] == "extracted":
-        _log_extract(
-            log,
-            "info",
-            "子包解压完成",
-            task_id=task_id,
-            source=source_relative.as_posix(),
-            target=state["target"],
-            category=state["category"],
-            depth=depth,
-        )
-    elif state["status"] != "duplicate":
-        _log_extract(
-            log,
-            "error",
-            "子包解压失败",
-            task_id=task_id,
-            source=source_relative.as_posix(),
-            category=state["category"],
-            depth=depth,
-            error=state["error"],
-        )
-    manifest["subpackages"].append(state)
-
-
-def _ingest_file(
-    source: Path,
-    source_relative: Path,
-    source_kind: str,
-    parent_category: str,
-    data_dir: Path,
-    manifest: dict,
-    budget: ExtractionBudget,
-    seen_checksums: set[str],
-    depth: int,
-    log: ExtractionLogger | None = None,
-    policy: ExtractPolicyConfig | None = None,
-    path_policy: PathLimitPolicy | None = None,
-    archive_name: str | None = None,
-) -> None:
-    name = source.name.lower()
-    if name.endswith(".log.gz"):
-        _extract_log_gzip(
-            source,
-            source_relative,
-            source_kind,
-            data_dir,
-            manifest,
-            budget,
-            depth,
-            log,
-            policy,
-            path_policy,
-        )
-        return
-    if is_archive(source):
-        _extract_subpackage(
-            source,
-            source_relative,
-            source_kind,
-            parent_category,
-            data_dir,
-            manifest,
-            budget,
-            seen_checksums,
-            depth,
-            log,
-            policy,
-            path_policy,
-        )
-        return
-
-    decision = _evidence_policy(source_relative, policy, False) if source_kind == "evidence" else None
-    category, reason = _category_of(source, parent_category, archive_name)
-    # 主包内非语义根目录下的普通文件平铺；完整原始路径仍保留在 .main 证据现场。
-    destination_source = source_relative
-    if (
-        source_kind == "evidence"
-        and category != RuleCategory.LOG.value
-        and source_relative.parts[:-1]
-        and source_relative.parts[0] != CATEGORY_DIRECTORIES[category]
-    ):
-        destination_source = Path(source_relative.name)
-    relative = _destination_relative(destination_source, source_kind, category)
-    state: dict[str, object] = {
-        "source": _source_display(source_relative, source_kind),
-        "category": CATEGORY_DIRECTORIES[category],
-        "target": relative.as_posix(),
-        "depth": depth,
-        "classification_reason": reason,
-        "status": "extracted",
-        "error": None,
-    }
-    try:
-        target = _safe_destination(data_dir, relative, path_policy)
-        if target == source.resolve():
-            budget.charge_file(target)
-            return
-        if target.exists():
-            reason_text = "目标文件已存在，未覆盖"
-            state["status"] = "conflict"
-            state["error"] = reason_text
-            state["error_code"] = "target_conflict"
-            manifest["files"].append(state)
-            _register_rejected(manifest, source_relative.as_posix(), reason_text, category, depth)
-            _log_extract(
-                log,
-                "warn",
-                "普通文件目标冲突",
-                task_id=data_dir.name,
-                source=source_relative.as_posix(),
-                target=relative.as_posix(),
-                category=CATEGORY_DIRECTORIES[category],
-                depth=depth,
-            )
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-            budget.charge_file(target)
-            if source_kind == "work":
-                source.unlink(missing_ok=True)
-            manifest["files"].append(state)
-            if decision is not None and decision.action == "whitelist":
-                counters = (manifest.get("policy") or {}).setdefault("counters", {})
-                if isinstance(counters, dict):
-                    counters["whitelisted_files"] = int(counters.get("whitelisted_files", 0)) + 1
-                _log_extract(
-                    log,
-                    "info",
-                    "extract.policy.whitelist",
-                    task_id=data_dir.name,
-                    source=source_relative.as_posix(),
-                    target=relative.as_posix(),
-                    reason=decision.reason,
-                    scope=decision.scope,
-                    keyword=decision.keyword,
-                )
-    except (ArchiveError, OSError) as exc:
-        target = locals().get("target")
-        if target is not None and state["status"] == "extracted":
-            target.unlink(missing_ok=True)
-        _set_path_error(state, exc)
-        manifest["files"].append(state)
-        _register_rejected(
-            manifest,
-            source_relative.as_posix(),
-            str(exc),
-            category,
-            depth,
-            getattr(exc, "error_code", None),
-        )
-        _log_extract(
-            log,
-            "error",
-            "普通文件处理失败",
-            task_id=data_dir.name,
-            source=source_relative.as_posix(),
-            target=relative.as_posix(),
-            category=CATEGORY_DIRECTORIES[category],
-            depth=depth,
-            error=str(exc),
-        )

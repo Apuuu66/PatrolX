@@ -14,11 +14,14 @@ from unicodedata import normalize
 
 from app.core.encoding import decode_text_with_fallback
 from app.models.schemas import PackageKind
+from app.services.scanning.catalog import TaskFileCatalog
 
 PARSER_ID = "site_device_lst_me"
 PARSER_VERSION = "5"
 SCHEMA_VERSION = 3
-SOURCE_PATTERN = re.compile(r"^config/(?:.*/)?LST ME\.txt$", re.IGNORECASE)
+CLASSIFIED_SOURCE_PATTERN = re.compile(r"^basic/(?:.*/)?LST ME\.txt$", re.IGNORECASE)
+LEGACY_SOURCE_PATTERN = re.compile(r"^config/(?:.*/)?LST ME\.txt$", re.IGNORECASE)
+DIRECT_SOURCE_PATTERNS = (CLASSIFIED_SOURCE_PATTERN, LEGACY_SOURCE_PATTERN)
 HEADER_TIME_PATTERN = re.compile(r"(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>\d{2}:\d{2}:\d{2})\s*$")
 TABLE_COLUMN_SEPARATOR = re.compile(r"\s{2,}")
 BEIJING_TZ = timezone(timedelta(hours=8))
@@ -116,6 +119,27 @@ def _empty_evidence(task_id: str, package_kind: PackageKind, *, now: datetime) -
         "created_at": timestamp,
         "updated_at": timestamp,
     }
+
+
+def _inventory_sources(task_dir: Path) -> list[tuple[Path, str]]:
+    """返回台账来源文件；v5 现场只信任已发布 catalog。"""
+    manifest_path = task_dir / "manifest.json"
+    if manifest_path.is_file():
+        catalog = TaskFileCatalog.build(task_dir)
+        return [
+            (task_dir / relative, relative.as_posix())
+            for relative in catalog.paths()
+            if CLASSIFIED_SOURCE_PATTERN.fullmatch(relative.as_posix())
+        ]
+
+    sources: list[tuple[Path, str]] = []
+    for path in sorted(task_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(task_dir).as_posix()
+        if any(pattern.fullmatch(relative) for pattern in DIRECT_SOURCE_PATTERNS):
+            sources.append((path, relative))
+    return sources
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -486,13 +510,7 @@ def parse_inventory(
     requested_product = product.strip() if product and product.strip() else None
     normalized_product = normalize_network_element_type(requested_product) if requested_product else None
 
-    sources: list[tuple[Path, str]] = []
-    for path in sorted(task_dir.rglob("*")):
-        if not path.is_file() or path.name == ".patrolx-extracted.json":
-            continue
-        relative = path.relative_to(task_dir).as_posix()
-        if SOURCE_PATTERN.fullmatch(relative):
-            sources.append((path, relative))
+    sources = _inventory_sources(task_dir)
 
     if not sources:
         evidence["network_element_type_filter"] = {

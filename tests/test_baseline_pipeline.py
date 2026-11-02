@@ -12,14 +12,17 @@ def test_single_package_creates_single_task_site(tmp_path: Path, monkeypatch) ->
     env: Env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_task
 
-    task = run_task(SAMPLE, name="基线任务", customer={"province": "北京"}, version="v1")
+    task = run_task(
+        SAMPLE,
+        name="基线任务",
+        customer={"province": "北京", "product": "UMF"},
+        version="v1",
+    )
     task_dir = env.task_dir(task.task_id)
 
     assert task.task_id == "task-sample"
-    for name in ("task.json", "system.json", "report.html", "execution.log", ".patrolx-extracted.json"):
+    for name in ("task.json", "system.json", "report.html", "execution.log", "manifest.json"):
         assert (task_dir / name).is_file(), f"缺少 {name}"
-    for category in ("logs", "kpi", "traffic", "alarm", "config", "resource", "other"):
-        assert (task_dir / category).is_dir()
     for code in NORMAL_RULES:
         assert (task_dir / "rules" / f"{code}.json").is_file()
         assert load_rule(env, task.task_id, code)["code"] == code
@@ -37,7 +40,7 @@ def test_package_name_derives_isolated_task_ids(tmp_path: Path, monkeypatch) -> 
     second_package = env.uploads / "package-b.zip"
     shutil.copyfile(SAMPLE, first_package)
     shutil.copyfile(SAMPLE, second_package)
-    metadata = {"customer": {"province": "北京"}, "version": "v1"}
+    metadata = {"customer": {"province": "北京", "product": "UMF"}, "version": "v1"}
 
     first = run_task(first_package, name="相同系统", task_id=None, **metadata)
     second = run_task(second_package, name="相同系统", task_id=None, **metadata)
@@ -63,7 +66,13 @@ def test_same_name_reuses_site_and_checksum_conflict_is_rejected(tmp_path: Path,
         first = client.post(
             "/api/v3/tasks",
             files={"package_file": ("sample.zip", fh, "application/zip")},
-            data={"package_kind": "inspection", "name": "同名校验", "province": "北京", "operator": "移动"},
+            data={
+                "package_kind": "inspection",
+                "name": "同名校验",
+                "province": "北京",
+                "operator": "移动",
+                "product": "UMF",
+            },
         )
     assert first.status_code == 202, first.text
     task_id = first.json()["task_id"]
@@ -75,7 +84,13 @@ def test_same_name_reuses_site_and_checksum_conflict_is_rejected(tmp_path: Path,
         reuse = client.post(
             "/api/v3/tasks",
             files={"package_file": ("sample.zip", fh, "application/zip")},
-            data={"package_kind": "inspection", "name": "同名校验", "province": "北京", "operator": "移动"},
+            data={
+                "package_kind": "inspection",
+                "name": "同名校验",
+                "province": "北京",
+                "operator": "移动",
+                "product": "UMF",
+            },
         )
     assert reuse.status_code == 202, reuse.text
     assert reuse.json()["task_id"] == task_id
@@ -88,7 +103,7 @@ def test_same_name_reuses_site_and_checksum_conflict_is_rejected(tmp_path: Path,
         conflict = client.post(
             "/api/v3/tasks",
             files={"package_file": ("sample.zip", fh, "application/zip")},
-            data={"package_kind": "inspection", "province": "北京", "operator": "移动"},
+            data={"package_kind": "inspection", "province": "北京", "operator": "移动", "product": "UMF"},
         )
     assert conflict.status_code == 409, conflict.text
     assert conflict.json()["code"] == "package_checksum_conflict"
@@ -121,7 +136,7 @@ def test_rule_exception_becomes_error_and_task_completes(tmp_path: Path, monkeyp
     )
     monkeypatch.setitem(registry._rules, rule.code, rule)
 
-    task = run_task(SAMPLE, task_id="task-sample")
+    task = run_task(SAMPLE, task_id="task-sample", customer={"product": "UMF"})
     result = load_rule(env, task.task_id, rule.code)
     logs = load_logs(env, task.task_id)
 

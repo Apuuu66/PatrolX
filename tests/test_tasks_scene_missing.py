@@ -12,14 +12,14 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.baseline_helpers import Env, setup_env, upload_package, wait_for_task
+from tests.baseline_helpers import SAMPLE, Env, setup_env, upload_package, wait_for_task
 
 client = TestClient(app)
 REBUILD_BODY = {"mode": "full", "confirmed": True, "trigger_source": "api"}
 
 
 def _completed_task(env: Env, name: str = "现场缺失") -> str:
-    task_id = upload_package(env, client, name=name)
+    task_id = upload_package(env, client, name=name, product="UMF")
     wait_for_task(client, task_id)
     return task_id
 
@@ -114,3 +114,38 @@ def test_output_dir_present_but_package_missing_keeps_409(monkeypatch, tmp_path:
     rebuild = client.post(f"/api/v2/tasks/{task_id}/rebuild", json=REBUILD_BODY)
     assert rebuild.status_code == 409, rebuild.text
     assert rebuild.json()["code"] == "package_missing"
+
+
+def test_reupload_after_scene_cleanup_restores_without_rerun(monkeypatch, tmp_path: Path) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+    task_id = upload_package(env, client, name="清理后恢复", product=" umf ")
+    wait_for_task(client, task_id)
+
+    listed = client.get("/api/v2/tasks").json()["items"]
+    task = next(item for item in listed if item["task_id"] == task_id)
+    assert task["customer_product"] == "UMF"
+    before = client.get(f"/api/v2/tasks/{task_id}").json()
+
+    _remove_scene(env, task_id)
+    with SAMPLE.open("rb") as package:
+        response = client.post(
+            "/api/v3/tasks",
+            files={"package_file": (SAMPLE.name, package, "application/zip")},
+            data={
+                "package_kind": "inspection",
+                "name": "清理后恢复",
+                "province": "北京",
+                "operator": "移动",
+                "product": "umf",
+            },
+        )
+
+    assert response.status_code == 202, response.text
+    assert response.json()["task_id"] == task_id
+    assert response.headers["location"] == f"/api/v3/tasks/{task_id}"
+    assert (env.uploads / task_id / SAMPLE.name).read_bytes() == SAMPLE.read_bytes()
+    assert not env.task_dir(task_id).exists(), "恢复只写回原始包，不得自动重跑生成现场"
+
+    after = client.get(f"/api/v2/tasks/{task_id}").json()
+    for field in ("status", "created_at", "completed_at", "last_run_at", "duration_ms"):
+        assert after[field] == before[field], f"恢复不得自动重跑或改写历史字段 {field}"

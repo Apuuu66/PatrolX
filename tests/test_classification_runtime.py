@@ -5,6 +5,7 @@ import pytest
 from app.services.extraction.audit import (
     ConflictRecord,
     LandedEntry,
+    build_audit_event,
     build_summary,
     canonical_json,
     conflict_digest,
@@ -366,3 +367,105 @@ def test_build_summary_uses_explicit_catalog_count() -> None:
     )
 
     assert summary.counts.catalog == 0
+
+
+def test_audit_event_lists_each_non_landed_decision_with_reason() -> None:
+    """结构化分类事件必须汇总计数并逐项保留未命中、忽略、冲突和失败原因。"""
+    landed = make_landed_entry(
+        source_relative="Basic Information About the UMF/config.txt",
+        route_id="umf.basic",
+        product="UMF",
+        category="config",
+        original_target="basic/config.txt",
+        target="basic/config.txt",
+        action="copy",
+        sha256=SHA256_A,
+        size=1,
+    )
+    fallback = make_landed_entry(
+        source_relative="unknown.txt",
+        route_id="umf.other",
+        product="UMF",
+        category="other",
+        original_target="other/unknown.txt",
+        target="other/unknown.txt",
+        action="fallback",
+        sha256=SHA256_B,
+        size=2,
+        reason="fallback_relative_path",
+    )
+    digest = conflict_digest("UMF", "duplicate/config.txt", "")
+    conflicted_entry = make_landed_entry(
+        source_relative="duplicate/config.txt",
+        route_id="umf.basic",
+        product="UMF",
+        category="config",
+        original_target="basic/config.txt",
+        target=f"basic/config__{digest}.txt",
+        action="copy",
+        sha256=SHA256_B,
+        size=2,
+    )
+    conflict = make_conflict_record(conflicted_entry, digest)
+    unmatched = make_ignored_record(
+        source_relative="unknown/not-matched.bin",
+        route_id=None,
+        action="ignore",
+        reason="route_not_matched",
+        product="UMF",
+    )
+    ignored = make_ignored_record(
+        source_relative="0/non-alarm.txt",
+        route_id="umf.ignore-zero",
+        action="ignore",
+        reason="route_ignored",
+        product="UMF",
+    )
+    failure = make_failure_record(
+        source_relative="Performance Measurement Results/PerfResult_bad.zip",
+        route_id="umf.kpi",
+        category="kpi",
+        action="expand",
+        error_code="archive_corrupt",
+        reason="压缩包已损坏",
+    )
+    entries = [landed, fallback, conflicted_entry]
+    ignored_records = [unmatched, ignored]
+    failures = [failure]
+    summary = build_summary(
+        entries=entries,
+        ignored=ignored_records,
+        conflicts_count=1,
+        failures=failures,
+        catalog_count=len(entries),
+    )
+
+    event = build_audit_event(
+        entries=entries,
+        ignored=ignored_records,
+        conflicts=[conflict],
+        failures=failures,
+        catalog_count=len(entries),
+        summary=summary,
+    )
+
+    assert event["counts"] == {
+        "landed": 3,
+        "ignored": 2,
+        "conflicts": 1,
+        "failures": 1,
+        "catalog": 3,
+    }
+    assert event["by_route"]["umf.basic"] == 2
+    assert event["by_route"]["umf.ignore-zero"] == 1
+    assert event["by_category"]["other"] == 1
+    assert event["by_action"]["fallback"] == 1
+    assert event["by_status"] == {"failed": 1, "ignored": 2, "landed": 3}
+    assert [item["source_relative"] for item in event["unmatched"]] == ["unknown/not-matched.bin"]
+    assert [item["reason"] for item in event["ignored"]] == ["route_ignored"]
+    assert [item["reason"] for item in event["fallbacks"]] == ["fallback_relative_path"]
+    assert [item["digest"] for item in event["conflicts"]] == [digest]
+    assert [item["reason"] for item in event["failures"]] == ["压缩包已损坏"]
+    assert event["counts"]["landed"] == len(entries)
+    assert event["counts"]["ignored"] == len(ignored_records)
+    assert event["counts"]["failures"] == len(failures)

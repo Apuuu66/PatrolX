@@ -6,16 +6,22 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.services.extraction.audit import conflict_digest
+from app.services.extraction.audit import canonical_json, conflict_digest
 
 MANIFEST_NAME = "manifest.json"
 MANIFEST_VERSION = 5
 MAIN_EVIDENCE_DIR = ".main"
+MANIFEST_STAGING_NAME = ".manifest.staging.json"
+MANIFEST_PREVIOUS_NAME = ".manifest.previous.json"
+CLASSIFICATION_STAGING_NAME = ".classification.staging"
+CLASSIFICATION_BACKUP_NAME = ".classification.backup"
+LEGACY_TARGET_ROOTS = frozenset({"logs", "kpi", "traffic", "alarm", "config", "resource", "other"})
 
 PRODUCTS = frozenset({"UMF", "CSP"})
 PROFILES = frozenset({"UMF", "CSP", "GENERIC"})
@@ -128,6 +134,18 @@ CATALOG_KEYS = frozenset({"path", "category", "route_id", "source_relative", "sh
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _ROUTE_ID_RE = re.compile(r"[a-z0-9._-]+")
 _DIGEST_RE = re.compile(r"[0-9a-f]{12}")
+
+
+def extraction_policy_fingerprint() -> str:
+    """返回解压动作、预算、错误分类与原子发布语义的稳定指纹。"""
+    payload = {
+        "version": 1,
+        "actions": sorted(LANDED_ACTIONS | IGNORE_ACTIONS),
+        "budgets": FIXED_BUDGETS,
+        "error_codes": sorted(ERROR_CODES),
+        "publication": "manifest-v5:staging+atomic-replace",
+    }
+    return hashlib.sha256(canonical_json(payload)).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -608,6 +626,225 @@ def loads_manifest(text: str | bytes) -> dict[str, Any]:
     return manifest
 
 
+def _remove_control_path(path: Path) -> None:
+    """清理发布控制文件或目录，不跟随链接。"""
+    if path.is_symlink() or path.is_file():
+        path.unlink(missing_ok=True)
+    elif path.exists():
+        shutil.rmtree(path)
+
+
+def _path_present(path: Path) -> bool:
+    """存在性判断同时覆盖悬空链接。"""
+    return path.exists() or path.is_symlink()
+
+
+def _fsync_directory(path: Path) -> None:
+    """在支持目录 fsync 的平台上持久化目录项变更。"""
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _write_staged_manifest(path: Path, manifest: dict[str, Any]) -> None:
+    """把完整校验过的候选写入固定 staging manifest 并立即回读验证。"""
+    _remove_control_path(path)
+    payload = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+    with path.open("x", encoding="utf-8") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    if loads_manifest(path.read_text(encoding="utf-8")) != manifest:
+        raise ManifestV5Error("staging manifest 回读内容不一致")
+
+
+def _validate_staging_tree(staging_dir: Path, manifest: dict[str, Any]) -> None:
+    """拒绝 staging 中的额外根、链接、特殊文件及未进入 catalog 的文件。"""
+    if staging_dir.is_symlink() or not staging_dir.is_dir():
+        raise ManifestV5Error("classification staging 不存在或不是普通目录")
+    target_roots = set(manifest["classification"]["snapshot"]["target_roots"])
+    catalog_paths = {item["path"] for item in manifest["catalog"]}
+    seen_files: set[str] = set()
+    for child in sorted(staging_dir.iterdir(), key=lambda item: item.name.encode("utf-8")):
+        if child.name not in target_roots or child.name not in TARGET_ROOT_ALLOWLIST:
+            raise ManifestV5Error(f"classification staging 包含未声明目标根: {child.name}")
+        if child.is_symlink() or not child.is_dir():
+            raise ManifestV5Error(f"classification staging 目标根不是普通目录: {child}")
+    for path in staging_dir.rglob("*"):
+        if path.is_symlink():
+            raise ManifestV5Error(f"classification staging 包含链接: {path}")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise ManifestV5Error(f"classification staging 包含非普通文件: {path}")
+        relative = path.relative_to(staging_dir).as_posix()
+        if relative not in catalog_paths:
+            raise ManifestV5Error(f"classification staging 包含未进入 catalog 的文件: {relative}")
+        seen_files.add(relative)
+    if seen_files != catalog_paths:
+        missing = sorted(catalog_paths - seen_files)
+        raise ManifestV5Error(f"classification staging 缺少 catalog 文件: {', '.join(missing)}")
+
+
+def _target_roots_from_previous_manifest(data_dir: Path) -> set[str]:
+    """读取上一有效 v5 manifest 的 target roots；无效 manifest 不提供事实。"""
+    try:
+        previous = read_manifest(data_dir)
+    except ManifestV5Error:
+        return set()
+    return set(previous["classification"]["snapshot"]["target_roots"])
+
+
+def _swap_target_roots(
+    data_dir: Path,
+    staging_dir: Path,
+    backup_dir: Path,
+    roots: tuple[str, ...],
+) -> list[dict[str, object]]:
+    """逐根 staging/backup 交换，并记录足够逆序回滚的状态。"""
+    records: list[dict[str, object]] = []
+    for root_name in roots:
+        target = data_dir / root_name
+        staged = staging_dir / root_name
+        backup = backup_dir / root_name
+        record: dict[str, object] = {
+            "root": root_name,
+            "target_backed_up": False,
+            "staging_published": False,
+        }
+        records.append(record)
+        if _path_present(target):
+            os.replace(target, backup)
+            record["target_backed_up"] = True
+        if _path_present(staged):
+            os.replace(staged, target)
+            record["staging_published"] = True
+    return records
+
+
+def _rollback_target_roots(
+    data_dir: Path,
+    staging_dir: Path,
+    backup_dir: Path,
+    records: list[dict[str, object]],
+) -> list[str]:
+    """逆序恢复分类根；返回无法恢复的错误说明。"""
+    errors: list[str] = []
+    for record in reversed(records):
+        root_name = str(record["root"])
+        target = data_dir / root_name
+        staged = staging_dir / root_name
+        backup = backup_dir / root_name
+        try:
+            if bool(record["staging_published"]) and _path_present(target):
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(target, staged)
+            if bool(record["target_backed_up"]) and _path_present(backup):
+                os.replace(backup, target)
+        except OSError as exc:
+            errors.append(f"{root_name}: {exc}")
+    return errors
+
+
+def _restore_previous_manifest(
+    data_dir: Path,
+    *,
+    previous_path: Path,
+    previous_hidden: bool,
+) -> list[str]:
+    """恢复被隐藏的旧 manifest；旧 manifest 不存在时移除新发布凭据。"""
+    errors: list[str] = []
+    current = manifest_path(data_dir)
+    try:
+        if previous_hidden and _path_present(previous_path):
+            os.replace(previous_path, current)
+        elif not previous_hidden and _path_present(current):
+            _remove_control_path(current)
+    except OSError as exc:
+        errors.append(f"manifest: {exc}")
+    return errors
+
+
+def publish_classification_run(
+    data_dir: Path | str,
+    manifest: dict[str, Any],
+    *,
+    staging_dir: Path | str,
+) -> None:
+    """校验 staging catalog 后原子发布分类根与 manifest v5，失败时逆序回滚。"""
+    root = Path(data_dir)
+    staging = Path(staging_dir)
+    if root.is_symlink() or not root.is_dir():
+        raise ManifestV5Error("任务根目录不存在或包含链接")
+    if staging.parent != root or staging.name != CLASSIFICATION_STAGING_NAME:
+        raise ManifestV5Error(f"classification staging 路径非法: {staging}")
+    if not validate_manifest(manifest):
+        raise ManifestV5Error("拒绝发布无效 manifest v5")
+    if not _verify_catalog_files(staging, manifest):
+        raise ManifestV5Error("classification staging catalog 文件缺失、损坏、非普通文件或包含链接")
+    _validate_staging_tree(staging, manifest)
+
+    manifest_staging = root / MANIFEST_STAGING_NAME
+    manifest_previous = root / MANIFEST_PREVIOUS_NAME
+    backup_dir = root / CLASSIFICATION_BACKUP_NAME
+    current_manifest = manifest_path(root)
+    old_roots = _target_roots_from_previous_manifest(root)
+    existing_roots = {child.name for child in root.iterdir() if child.name in TARGET_ROOT_ALLOWLIST}
+    new_roots = set(manifest["classification"]["snapshot"]["target_roots"])
+    swap_roots = tuple(
+        sorted(
+            new_roots | old_roots | LEGACY_TARGET_ROOTS | existing_roots,
+            key=lambda item: item.encode("utf-8"),
+        )
+    )
+
+    _remove_control_path(manifest_staging)
+    _remove_control_path(manifest_previous)
+    _remove_control_path(backup_dir)
+    try:
+        _write_staged_manifest(manifest_staging, manifest)
+        backup_dir.mkdir()
+    except OSError as exc:
+        _remove_control_path(manifest_staging)
+        _remove_control_path(backup_dir)
+        raise ManifestV5Error(f"无法准备 manifest v5 staging: {exc}") from exc
+
+    previous_hidden = False
+    records: list[dict[str, object]] = []
+    try:
+        if _path_present(current_manifest):
+            os.replace(current_manifest, manifest_previous)
+            previous_hidden = True
+        records = _swap_target_roots(root, staging, backup_dir, swap_roots)
+        os.replace(manifest_staging, current_manifest)
+        _fsync_directory(root)
+    except (OSError, ManifestV5Error) as exc:
+        rollback_errors = _rollback_target_roots(root, staging, backup_dir, records)
+        rollback_errors.extend(
+            _restore_previous_manifest(
+                root,
+                previous_path=manifest_previous,
+                previous_hidden=previous_hidden,
+            )
+        )
+        _remove_control_path(manifest_staging)
+        _remove_control_path(manifest_previous)
+        _remove_control_path(backup_dir)
+        _remove_control_path(staging)
+        if rollback_errors:
+            raise ManifestV5Error(f"manifest v5 发布失败且回滚不完整: {exc}; {'; '.join(rollback_errors)}") from exc
+        raise ManifestV5Error(f"无法原子发布 manifest v5: {exc}") from exc
+
+    _remove_control_path(backup_dir)
+    _remove_control_path(staging)
+    _remove_control_path(manifest_previous)
+
+
 def read_manifest(data_dir: Path | str) -> dict[str, Any]:
     """读取并严格校验 manifest.json；缺失或损坏均抛出 ManifestV5Error。"""
     path = manifest_path(data_dir)
@@ -615,7 +852,7 @@ def read_manifest(data_dir: Path | str) -> dict[str, Any]:
         raise ManifestV5Error(f"manifest v5 不得是链接: {path}")
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise ManifestV5Error(f"无法读取 manifest v5: {path}") from exc
     return loads_manifest(text)
 
@@ -686,8 +923,8 @@ def _scan_evidence(root: Path) -> tuple[int, str]:
                     raise ManifestV5Error(f"证据现场包含非普通文件: {path}")
 
     scan(root)
-    files.sort(key=lambda item: item["path"])
-    payload = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    files.sort(key=lambda item: str(item["path"]).encode("utf-8"))
+    payload = canonical_json(files)
     return len(files), hashlib.sha256(payload).hexdigest()
 
 
@@ -703,9 +940,32 @@ def sha256_file(path: Path) -> str:
 def evidence_fingerprint(data_dir: Path | str) -> tuple[int, str]:
     """计算 `.main/` 证据现场的普通文件数与内容指纹。"""
     root = Path(data_dir) / MAIN_EVIDENCE_DIR
-    if not root.is_dir() or root.is_symlink():
+    if root.is_symlink() or not root.is_dir():
         raise ManifestV5Error("证据现场 .main 不存在或不是普通目录")
     return _scan_evidence(root)
+
+
+def _evidence_matches_manifest(data_dir: Path, manifest: dict[str, Any]) -> bool:
+    """确认当前 `.main/` 与已验证 manifest 记录的数量和指纹一致。"""
+    try:
+        count, fingerprint = evidence_fingerprint(data_dir)
+    except ManifestV5Error:
+        return False
+    return manifest["main"]["count"] == count and manifest["main"]["evidence_fingerprint"] == fingerprint
+
+
+def reusable_evidence_manifest(data_dir: Path | str, checksum: str) -> dict[str, Any] | None:
+    """仅当 v5 manifest 有效且 checksum、证据指纹一致时返回主包现场。"""
+    root = Path(data_dir)
+    try:
+        if root.is_symlink():
+            return None
+        manifest = read_manifest(root)
+        if manifest["main"]["checksum"] != checksum or not _evidence_matches_manifest(root, manifest):
+            return None
+    except (ManifestV5Error, OSError):
+        return None
+    return manifest
 
 
 def _verify_catalog_files(data_dir: Path, manifest: dict[str, Any]) -> bool:
@@ -760,13 +1020,8 @@ def reusable_manifest(data_dir: Path | str, context: ManifestReuseContext) -> di
     """仅在 v5 schema、主包校验和、证据指纹与 catalog 摘要全部一致时复用。"""
     root = Path(data_dir)
     try:
-        if root.is_symlink():
-            return None
-        manifest = read_manifest(root)
-        if not _context_matches_manifest(manifest, context):
-            return None
-        count, fingerprint = evidence_fingerprint(root)
-        if manifest["main"]["count"] != count or manifest["main"]["evidence_fingerprint"] != fingerprint:
+        manifest = reusable_evidence_manifest(root, context.checksum)
+        if manifest is None or not _context_matches_manifest(manifest, context):
             return None
         if not _verify_catalog_files(root, manifest):
             return None
@@ -776,4 +1031,5 @@ def reusable_manifest(data_dir: Path | str, context: ManifestReuseContext) -> di
                 return None
     except (ManifestV5Error, OSError):
         return None
+    manifest["main"]["reused"] = True
     return manifest

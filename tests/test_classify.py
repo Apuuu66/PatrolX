@@ -1,40 +1,42 @@
-"""分类规则表测试（名称规律 + 内容嗅探）。"""
+"""迁移保护：生产代码不得恢复文件名、扩展名或内容嗅探分类。"""
 
-from app.core.classify import classify_member, classify_name
-from app.models.schemas import RuleCategory
+from __future__ import annotations
 
+import ast
+from pathlib import Path
 
-def test_classify_lst_me_to_config() -> None:
-    assert classify_name("LST ME.txt") == RuleCategory.CONFIG
-    assert classify_name("lst me.TXT") == RuleCategory.CONFIG
-
-
-def test_classify_by_pattern() -> None:
-    assert classify_name("AAAService.zip") == RuleCategory.LOG
-    assert classify_name("ServiceLog.zip") == RuleCategory.LOG
-    assert classify_name("kpi_export.csv") == RuleCategory.KPI
-    assert classify_name("kpi-api-5.csv") == RuleCategory.KPI
-    assert classify_name("kpi-media-60.csv") == RuleCategory.KPI
-    assert classify_name("ne333_Call_Session_API_Statistics_15_0_202609020000.csv") == RuleCategory.KPI
-    assert classify_name("alarm_export.txt") == RuleCategory.ALARM
-    assert classify_name("alarm_history.csv") == RuleCategory.ALARM
-    assert classify_name("alarm_summary.json") == RuleCategory.ALARM
-    assert classify_name("app.conf") == RuleCategory.CONFIG
-    assert classify_name("pod_cpu.txt") == RuleCategory.RESOURCE
-    assert classify_name("ne333_Call_Session_API_Statistics_5_0_202609020000.csv") == RuleCategory.KPI
-    assert classify_name("ne333_Container_Metric_Unit_5_0_202609020000.csv") == RuleCategory.RESOURCE
-    assert classify_name("unknown.dat") is None
+APP_ROOT = Path(__file__).resolve().parents[1] / "app"
+FORBIDDEN_MODULES = {
+    "app.core.classify",
+}
+FORBIDDEN_NAMES = {
+    "classify_content",
+    "classify_member",
+    "classify_name",
+}
 
 
-def test_archive_member_lock_overrides_member_name() -> None:
-    assert classify_member("PerfResult_202609010101137101.zip") == RuleCategory.KPI
-    assert classify_member("unknown.zip") is None
-    assert classify_member("*invalid-[.zip") is None
+def _imported_names(tree: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            names.add(node.module)
+            names.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return names
 
 
-def test_lst_me_not_matched_by_config_rule_group() -> None:
-    import re
+def test_production_code_does_not_import_legacy_filename_or_content_classifier() -> None:
+    """v5 生产链路只能按配置路线分类，不能导入旧分类模块或嗅探函数。"""
+    violations: list[str] = []
+    for path in sorted(APP_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        names = _imported_names(tree)
+        legacy = sorted(
+            name for name in names if name in FORBIDDEN_MODULES or name.rsplit(".", 1)[-1] in FORBIDDEN_NAMES
+        )
+        if legacy:
+            violations.append(f"{path.relative_to(APP_ROOT)}: {', '.join(legacy)}")
 
-    pattern = "^config/(?!.*LST ME\\.txt$).*$"
-    assert re.fullmatch(pattern, "config/app.ini")
-    assert re.fullmatch(pattern, "config/LST ME.txt") is None
+    assert violations == []

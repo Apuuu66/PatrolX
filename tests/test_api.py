@@ -23,6 +23,7 @@ def _upload(package_name: str = "sample.zip") -> str:
                 "name": "API 样例任务",
                 "province": "北京",
                 "operator": "移动",
+                "product": "UMF",
             },
         )
     assert resp.status_code == 202, resp.text

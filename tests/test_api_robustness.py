@@ -16,14 +16,103 @@ from tests.baseline_helpers import SAMPLE, setup_env, wait_for_task
 client = TestClient(app)
 
 
-def _upload(env, *, filename: str = "sample.zip", content: bytes | None = None, **data: str):
-    payload = {"package_kind": "inspection", "province": "北京", "operator": "移动", **data}
+def _upload(
+    env,
+    *,
+    filename: str = "sample.zip",
+    content: bytes | None = None,
+    product: str | None = "UMF",
+    **data: str,
+):
+    payload = {"package_kind": "inspection", **data}
+    if payload["package_kind"] == "inspection":
+        payload.setdefault("province", "北京")
+        payload.setdefault("operator", "移动")
+    if product is not None:
+        payload["product"] = product
     with io.BytesIO(content) if content is not None else SAMPLE.open("rb") as package:
         return client.post(
             "/api/v3/tasks",
             files={"package_file": (filename, package, "application/zip")},
             data=payload,
         )
+
+
+def _assert_error(response, *, status_code: int, code: str) -> dict:
+    assert response.status_code == status_code, response.text
+    body = response.json()
+    assert set(body) == {"code", "message", "detail"}, body
+    assert body["code"] == code, body
+    assert body["message"], body
+    return body
+
+
+def test_upload_product_is_conditionally_required_and_normalized(tmp_path, monkeypatch) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+
+    missing = _upload(env, product=None)
+    assert missing.status_code == 400, missing.text
+    missing_body = missing.json()
+    assert missing_body["code"] == "missing_product"
+    assert missing_body["detail"]["package_kind"] == "inspection"
+
+    blank = _upload(env, product="  ")
+    assert blank.status_code == 400, blank.text
+    assert blank.json()["code"] == "missing_product"
+
+    invalid = _upload(env, product=" xyz ")
+    assert invalid.status_code == 400, invalid.text
+    invalid_body = invalid.json()
+    assert invalid_body["code"] == "invalid_product"
+    assert invalid_body["detail"] == {
+        "value": " xyz ",
+        "allowed": ["UMF", "CSP"],
+    }
+
+    normalized = _upload(env, product=" umf ")
+    assert normalized.status_code == 202, normalized.text
+    task_id = normalized.json()["task_id"]
+    wait_for_task(client, task_id)
+
+    listed = client.get("/api/v2/tasks").json()["items"]
+    task = next(item for item in listed if item["task_id"] == task_id)
+    assert task["customer_product"] == "UMF"
+    detail = client.get(f"/api/v2/tasks/{task_id}").json()
+    assert detail["system"]["customer"]["product"] == "UMF"
+
+
+def test_log_supplement_rejects_inspection_metadata(tmp_path, monkeypatch) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+
+    for field, value in (("province", "北京"), ("operator", "移动"), ("product", " UMF ")):
+        metadata: dict[str, str | None] = {"package_kind": "log_supplement", "product": None}
+        metadata[field] = value
+        response = _upload(env, **metadata)
+        assert response.status_code == 400, (field, response.text)
+        body = response.json()
+        assert body["code"] == "metadata_not_applicable", (field, body)
+        assert body["detail"]["fields"] == [field], (field, body)
+
+
+def test_log_supplement_treats_whitespace_metadata_as_absent(tmp_path, monkeypatch) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+
+    response = _upload(
+        env,
+        filename="whitespace-log.zip",
+        package_kind="log_supplement",
+        province="   ",
+        operator="\t",
+        product="  ",
+    )
+
+    assert response.status_code == 202, response.text
+    task_id = response.json()["task_id"]
+    wait_for_task(client, task_id)
+    listed = client.get("/api/v2/tasks").json()["items"]
+    task = next(item for item in listed if item["task_id"] == task_id)
+    assert task["package_kind"] == "log_supplement"
+    assert task["customer_product"] is None
 
 
 def test_upload_filename_and_empty_package_boundaries(tmp_path, monkeypatch) -> None:
@@ -48,6 +137,8 @@ def test_upload_filename_and_empty_package_boundaries(tmp_path, monkeypatch) -> 
         'Content-Disposition: form-data; name="province"\r\n\r\nbeijing\r\n'
         f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="operator"\r\n\r\nmobile\r\n'
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="product"\r\n\r\nUMF\r\n'
         f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="package_file"; filename=""\r\n'
         "Content-Type: application/zip\r\n\r\n" + SAMPLE.read_text(encoding="latin-1") + f"\r\n--{boundary}--\r\n"
@@ -85,6 +176,73 @@ def test_upload_size_boundary_and_temp_cleanup(tmp_path, monkeypatch) -> None:
     assert not list(env.uploads.glob(".upload-*"))
 
 
+def test_upload_validation_order_is_frozen_from_package_kind_through_product(tmp_path, monkeypatch) -> None:
+    """组合错误必须按 package_kind → 包文件 → province → operator → product 报错。"""
+    env = setup_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(settings, "max_upload_mb", 1)
+
+    for package_kind in (None, "not-a-package-kind"):
+        data = {} if package_kind is None else {"package_kind": package_kind}
+        response = client.post(
+            "/api/v3/tasks",
+            files={"package_file": ("bad.zip.exe", io.BytesIO(b""), "application/zip")},
+            data=data,
+        )
+        _assert_error(response, status_code=422, code="validation_error")
+
+    invalid_filename = _upload(
+        env,
+        filename="a" * 252 + ".zip",
+        content=b"",
+        product=None,
+        province="",
+        operator="",
+    )
+    _assert_error(invalid_filename, status_code=400, code="invalid_filename")
+
+    invalid_extension_missing_product = _upload(
+        env,
+        filename="missing-product.zip.exe",
+        content=b"not-an-archive",
+        product=None,
+        province="",
+        operator="",
+    )
+    _assert_error(invalid_extension_missing_product, status_code=400, code="invalid_package")
+
+    empty_missing_product = _upload(
+        env,
+        filename="empty-missing-product.zip",
+        content=b"",
+        product=None,
+        province="",
+        operator="",
+    )
+    _assert_error(empty_missing_product, status_code=400, code="invalid_package")
+
+    oversized_missing_product = _upload(
+        env,
+        filename="oversized-missing-product.zip",
+        content=b"x" * (1024 * 1024 + 1),
+        product=None,
+        province="",
+        operator="",
+    )
+    _assert_error(oversized_missing_product, status_code=413, code="package_too_large")
+
+    missing_province = _upload(env, product=None, province="  ", operator="")
+    _assert_error(missing_province, status_code=400, code="missing_province")
+
+    missing_operator = _upload(env, product=None, province="北京", operator="\t")
+    _assert_error(missing_operator, status_code=400, code="missing_operator")
+
+    missing_product = _upload(env, product=None)
+    _assert_error(missing_product, status_code=400, code="missing_product")
+
+    assert not list(env.uploads.glob(".upload-*")), "所有失败路径都必须清理上传临时文件"
+    assert not list(env.uploads.glob("task-*")), "元数据校验失败不得创建任务现场"
+
+
 def test_same_name_same_checksum_is_reused_and_conflict_is_rejected(tmp_path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     first = _upload(env)
@@ -100,6 +258,47 @@ def test_same_name_same_checksum_is_reused_and_conflict_is_rejected(tmp_path, mo
     conflict = _upload(env, content=SAMPLE.read_bytes() + b"different")
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "package_checksum_conflict"
+
+
+def test_same_name_conflicts_follow_checksum_kind_product_order(tmp_path, monkeypatch) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+    first = _upload(env, product="UMF")
+    assert first.status_code == 202, first.text
+    task_id = first.json()["task_id"]
+    completed = wait_for_task(client, task_id)
+
+    checksum_conflict = _upload(
+        env,
+        content=SAMPLE.read_bytes() + b"different",
+        package_kind="log_supplement",
+        province="",
+        operator="",
+        product=None,
+    )
+    assert checksum_conflict.status_code == 409, checksum_conflict.text
+    assert checksum_conflict.json()["code"] == "package_checksum_conflict"
+
+    kind_conflict = _upload(
+        env,
+        package_kind="log_supplement",
+        province="",
+        operator="",
+        product=None,
+    )
+    assert kind_conflict.status_code == 409, kind_conflict.text
+    assert kind_conflict.json()["code"] == "package_kind_conflict"
+
+    product_conflict = _upload(env, product="CSP")
+    assert product_conflict.status_code == 409, product_conflict.text
+    assert product_conflict.json()["code"] == "package_product_conflict"
+
+    idempotent = _upload(env, product=" umf ")
+    assert idempotent.status_code == 202, idempotent.text
+    assert idempotent.json()["task_id"] == task_id
+    assert idempotent.headers["location"] == f"/api/v3/tasks/{task_id}"
+    unchanged = client.get(f"/api/v2/tasks/{task_id}").json()
+    assert unchanged["status"] == completed["status"] == "completed"
+    assert unchanged["last_run_at"] == completed["last_run_at"]
 
 
 def test_pagination_validates_query_bounds(tmp_path, monkeypatch) -> None:

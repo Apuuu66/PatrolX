@@ -170,6 +170,53 @@ def test_cli_run_infers_persisted_log_supplement_kind(tmp_path, monkeypatch, cap
     capsys.readouterr()
 
 
+def test_cli_run_can_supply_product_for_existing_failed_task(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """失败任务沿用同一 task_id 时，显式 product 应补齐缺失元数据而不是误报冲突。"""
+    setup_env(tmp_path, monkeypatch)
+    from app.cli import run_task
+
+    failed = run_task(SAMPLE, task_id="task-failed-without-product")
+    assert failed.status == "failed"
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    monkeypatch.setattr(cli, "find_packages", lambda root=None: [SAMPLE])
+    monkeypatch.setattr(cli, "run_task", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    assert cli.main(["run", "--task-id", failed.task_id, "--product", "UMF"]) == 0
+
+    assert calls == [
+        (
+            (SAMPLE,),
+            {
+                "task_id": failed.task_id,
+                "customer": {"product": Product.UMF},
+                "package_kind": PackageKind.INSPECTION,
+            },
+        )
+    ]
+    capsys.readouterr()
+
+
+def test_cli_run_returns_nonzero_when_task_fails_after_metadata_validation(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """全量运行必须把任务失败传播为命令退出码，避免门禁假通过。"""
+    setup_env(tmp_path, monkeypatch)
+    broken = tmp_path / "broken.zip"
+    broken.write_bytes(b"not a zip archive")
+    monkeypatch.setattr(cli, "find_packages", lambda root=None: [broken])
+
+    assert cli.main(["run", "--task-id", "task-broken-package", "--product", "UMF"]) == 1
+
+    output = capsys.readouterr().out
+    assert "任务 task-broken-package 失败" in output
+
+
 def test_cli_rejects_product_for_persisted_log_supplement(tmp_path, monkeypatch, capsys) -> None:
     """已有日志补充包任务不得因为默认 kind 而误报冲突，应稳定返回元数据不适用。"""
     setup_env(tmp_path, monkeypatch)

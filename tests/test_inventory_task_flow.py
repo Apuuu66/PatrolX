@@ -8,7 +8,7 @@ import pytest
 
 from app.models.db import InventoryObservation, InventoryParseResult, session_factory
 from app.models.schemas import PackageKind, TaskMode, TaskStatus, TaskTrigger
-from tests.fixtures.inventory.builder import make_inventory_zip, make_log_supplement_zip
+from tests.fixtures.inventory.builder import lst_me_content, make_inventory_zip, make_log_supplement_zip
 
 
 @pytest.fixture(autouse=True)
@@ -25,11 +25,11 @@ def test_full_run_archives_inventory(tmp_path: Path) -> None:
     from app.cli import run_task
 
     package = tmp_path / "inventory-package.zip"
-    make_inventory_zip(package)
+    make_inventory_zip(package, content=lst_me_content(network_element_type="UMF"))
     task = run_task(
         package,
         name="台账任务",
-        customer={"province": "江苏", "operator": "移动", "product": "UMF2020"},
+        customer={"province": "江苏", "operator": "移动", "product": "UMF"},
         task_id="task-flow-ok",
         mode=TaskMode.LOCAL,
         trigger=TaskTrigger.CLI,

@@ -37,7 +37,7 @@ def test_file_storage_layout_is_single_task_directory(tmp_path: Path, monkeypatc
     from app.cli import run_task
 
     env: Env = setup_env(tmp_path, monkeypatch)
-    task = run_task(SAMPLE, task_id="task-sample")
+    task = run_task(SAMPLE, task_id="task-sample", customer={"product": "UMF"})
 
     assert task.task_id == "task-sample"
     task_dir = env.task_dir("task-sample")
@@ -46,14 +46,21 @@ def test_file_storage_layout_is_single_task_directory(tmp_path: Path, monkeypatc
         "system.json",
         "report.html",
         "execution.log",
-        ".patrolx-extracted.json",
+        "manifest.json",
     }
     for name in expected_files:
         assert (task_dir / name).is_file(), f"缺少 {name}"
     assert (task_dir / "rules" / "kpi.measurement_units.json").is_file()
     assert load_rule(env, "task-sample", "kpi.measurement_units")["code"] == "kpi.measurement_units"
     assert load_task(env, "task-sample")["task_id"] == "task-sample"
-    for category in {"logs", "kpi", "traffic", "alarm", "config", "resource", "other"}:
+    manifest = json.loads((task_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["version"] == 5
+    assert manifest["product"] == "UMF"
+    configured_roots = {Path(path).parts[0] for path in manifest["classification"]["snapshot"]["target_roots"]}
+    catalog_roots = {Path(item["path"]).parts[0] for item in manifest["catalog"]}
+    assert catalog_roots
+    assert catalog_roots <= configured_roots
+    for category in catalog_roots:
         assert (task_dir / category).is_dir(), f"缺少类别目录 {category}"
 
     for path in task_dir.rglob("*"):
@@ -252,7 +259,7 @@ def test_single_rule_rerun_keeps_task_system_summary_only(tmp_path: Path, monkey
 
     env: Env = setup_env(tmp_path, monkeypatch)
     task_id = "task-single-summary"
-    run_task(SAMPLE, task_id=task_id)
+    run_task(SAMPLE, task_id=task_id, customer={"product": "UMF"})
     task_path = env.task_dir(task_id) / "task.json"
 
     def metadata_size(payload: dict) -> int:
@@ -262,7 +269,7 @@ def test_single_rule_rerun_keeps_task_system_summary_only(tmp_path: Path, monkey
     before = json.loads(task_path.read_text(encoding="utf-8"))
     assert metadata_size(before) <= 2
 
-    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task_id)
+    run_single_rule("kpi.measurement_units", package=SAMPLE, task_id=task_id, product="UMF")
 
     after = json.loads(task_path.read_text(encoding="utf-8"))
     assert metadata_size(after) <= 2

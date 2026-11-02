@@ -183,7 +183,12 @@ class TestAuthAPI:
         upload = client.post(
             "/api/v3/tasks",
             files={"package_file": ("guest.zip", b"guest-package", "application/zip")},
-            data={"package_kind": "inspection", "province": "北京", "operator": "移动"},
+            data={
+                "package_kind": "inspection",
+                "province": "北京",
+                "operator": "移动",
+                "product": "UMF",
+            },
         )
         assert upload.status_code == 202
 

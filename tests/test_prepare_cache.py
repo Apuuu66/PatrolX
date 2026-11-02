@@ -9,6 +9,7 @@ from app.inspectors.base import Inspector, PrepareSpec
 from app.inspectors.registry import RuleRegistry
 from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext
+from tests.manifest_helpers import write_catalog_manifest
 
 
 def make_rule(registry: RuleRegistry, calls: list[str]) -> Inspector:
@@ -53,10 +54,10 @@ def test_prepare_cache_hit_rebuild_on_rule_file_change_and_ignore_output_missing
     owner_file.write_text("version = 1\n", encoding="utf-8")
     monkeypatch.setitem(prepare_globals(rule), "__file__", str(owner_file))
 
-    for name in ("logs/a.log",):
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("log", encoding="utf-8")
+    path = tmp_path / "logs" / "a.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("log", encoding="utf-8")
+    write_catalog_manifest(tmp_path, ["logs/a.log"])
 
     def log(_level: str, message: str, _detail: dict | None = None) -> None:
         return None

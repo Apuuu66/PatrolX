@@ -59,14 +59,17 @@ def _create_v3(path: Path, **data: str) -> str:
 
 def test_v3_inspection_and_inventory_endpoints(tmp_path: Path) -> None:
     package = tmp_path / "inventory-api.zip"
-    make_inventory_zip(package, content=lst_me_content(header_time=HEADER_TIME_SAMPLE))
+    make_inventory_zip(
+        package,
+        content=lst_me_content(network_element_type="UMF", header_time=HEADER_TIME_SAMPLE),
+    )
     task_id = _create_v3(
         package,
         package_kind="inspection",
         name="台账 API",
         province="江苏",
         operator="移动",
-        product="UMF2020",
+        product="UMF",
     )
     task = _wait(task_id)
     assert task["status"] == "completed"
@@ -122,11 +125,11 @@ def test_v3_log_supplement_validation_and_not_applicable(tmp_path: Path) -> None
 
 def test_cli_and_api_inventory_semantics_are_consistent(tmp_path: Path) -> None:
     cli_package = tmp_path / "inventory-cli-consistency.zip"
-    make_inventory_zip(cli_package)
+    make_inventory_zip(cli_package, content=lst_me_content(network_element_type="UMF"))
     cli_task = run_task(
         cli_package,
         name="CLI 台账一致性",
-        customer={"province": "江苏", "operator": "移动", "product": "UMF2020"},
+        customer={"province": "江苏", "operator": "移动", "product": "UMF"},
         mode=TaskMode.LOCAL,
         trigger=TaskTrigger.CLI,
     )
@@ -134,14 +137,14 @@ def test_cli_and_api_inventory_semantics_are_consistent(tmp_path: Path) -> None:
     assert cli_task.inventory.status == "archived"
 
     api_package = tmp_path / "inventory-api-consistency.zip"
-    make_inventory_zip(api_package)
+    make_inventory_zip(api_package, content=lst_me_content(network_element_type="UMF"))
     task_id = _create_v3(
         api_package,
         package_kind="inspection",
         name="API 台账一致性",
         province="江苏",
         operator="移动",
-        product="UMF2020",
+        product="UMF",
     )
     api_task = _wait(task_id)
     cli_inventory = cli_task.inventory
@@ -160,24 +163,27 @@ def test_cli_and_api_inventory_semantics_are_consistent(tmp_path: Path) -> None:
 
 def test_version_history_and_quality_issues(tmp_path: Path) -> None:
     package = tmp_path / "history.zip"
-    make_inventory_zip(package)
+    make_inventory_zip(package, content=lst_me_content(network_element_type="UMF"))
     first = _create_v3(
         package,
         package_kind="inspection",
         province="江苏",
         operator="移动",
-        product="UMF2020",
+        product="UMF",
     )
     _wait(first)
 
     second_package = tmp_path / "history-2.zip"
-    make_inventory_zip(second_package, content=lst_me_content(version="V900R016C10SPC199"))
+    make_inventory_zip(
+        second_package,
+        content=lst_me_content(network_element_type="UMF", version="V900R016C10SPC199"),
+    )
     second = _create_v3(
         second_package,
         package_kind="inspection",
         province="江苏",
         operator="移动",
-        product="UMF2020",
+        product="UMF",
     )
     _wait(second)
     assert client.get("/api/v2/inventory/devices").json()["total"] == 1
@@ -186,13 +192,16 @@ def test_version_history_and_quality_issues(tmp_path: Path) -> None:
     assert [point["direction"] for point in points] == [None, "downgrade"]
 
     missing_package = tmp_path / "missing-version.zip"
-    make_inventory_zip(missing_package, content=lst_me_content(version=None))
+    make_inventory_zip(
+        missing_package,
+        content=lst_me_content(network_element_type="UMF", version=None),
+    )
     missing = _create_v3(
         missing_package,
         package_kind="inspection",
         province="江苏",
         operator="移动",
-        product="UMF2020",
+        product="UMF",
     )
     _wait(missing)
     quality = client.get("/api/v2/inventory/quality-issues", params={"issue_type": "missing_version"}).json()

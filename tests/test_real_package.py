@@ -2,30 +2,36 @@
 
 from __future__ import annotations
 
+import csv
 import io
 import re
 import shutil
 import zipfile
 from pathlib import Path
 
+from app.core.archive import unpack
 from app.core.checksum import sha256_file
-from app.core.classify import classify_name
 from app.core.dicts import load_dicts
 from app.inspectors.registry import registry
-from app.models.schemas import RuleCategory
-from app.services.extraction import extract_main_site
+from app.services.extraction.classification import classify_main_evidence
 from app.services.inventory.parser import parse_inventory
-from tests.fixtures.make_real_package import FIXED_DATE, LST_ME_TXT, build_real_package
+from tests.fixtures.make_real_package import BASE, FIXED_DATE, LST_ME_TXT, build_real_package
 
-DEFAULT_FIXTURE_SHA256 = "5957469f9e836f23a24bbeab5147b635ec659265d36835e3e896cb5d812d936a"
+DEFAULT_FIXTURE_SHA256 = "5da4306883b84e63cb961a313a98646930691108a95733652342353d3ff68a6d"
 
 
-def _extract(tmp_path: Path):
+def _extract(tmp_path: Path, *, copy_base_only: bool = False):
     package_dir = tmp_path / "input"
     package = build_real_package(package_dir)
     data_dir = tmp_path / "task-333"
-    manifest = extract_main_site(package, data_dir, sha256_file(package))
-    return data_dir, manifest
+    unpack(package, data_dir / ".main")
+    if copy_base_only:
+        isolated = tmp_path / "isolated-base"
+        shutil.copytree(data_dir / ".main" / BASE, isolated)
+        shutil.rmtree(data_dir / ".main")
+        shutil.copytree(isolated, data_dir / ".main" / BASE)
+    run = classify_main_evidence(data_dir, product="UMF")
+    return data_dir, run
 
 
 def test_real_package_member_names_match_reference(tmp_path: Path) -> None:
@@ -49,58 +55,26 @@ def test_alarm_subpackage_contains_only_multiple_alarm_csvs(tmp_path: Path) -> N
     assert not any(name.endswith(".json") for name in members)
 
 
-def test_real_package_names_are_classified_by_semantics() -> None:
-    assert classify_name("alarm_history_202609010101137101.zip") == RuleCategory.ALARM
-    assert classify_name("PerfResult_202609010101137101.zip") == RuleCategory.KPI
-    assert classify_name("ServiceLog_20260901011314.zip") == RuleCategory.LOG
-    assert classify_name("ne333_Call_Session_API_Statistics_5_0_202609020000.csv") == RuleCategory.KPI
-    assert classify_name("ne333_Container_Metric_Unit_5_0_202609020000.csv") == RuleCategory.RESOURCE
+def test_real_package_without_scene_anchor_uses_relative_other_fallback(tmp_path: Path) -> None:
+    """旧语义文件名不能绕过目录路由；未命中场景锚点时按相对路径进入 other。"""
+    data_dir, run = _extract(tmp_path, copy_base_only=True)
 
-
-def test_real_package_extraction_places_files_by_semantic_category(tmp_path: Path) -> None:
-    data_dir, manifest = _extract(tmp_path)
-
-    expected = {
-        "alarm/alarm_history_202609010101137101_001.csv",
-        "alarm/alarm_history_202609010101137101_002.csv",
-        "alarm/alarm_history_202609010101137101_003.csv",
-        "config/LST ME.txt",
-        "config/system_info.ini",
-        "config/version.ini",
-        "kpi/ne333_Call_Session_API_Statistics_5_0_202609020000.csv",
-        "kpi/ne333_Container_Metric_Unit_5_0_202609020000.csv",
-        "logs/CspService/logs/paas-192.168.2.2/CspService.log",
-        "logs/CspService/logs/paas-192.168.2.2/CspService_20260901011314.log",
-        "logs/CspService/logs/paas-192.168.2.3/CspService.log",
-        "logs/UmfService/logs/paas-192.168.2.2/UmfService.log",
-        "logs/UmfService/logs/paas-192.168.2.2/UmfService_20260901011314.log",
-        "logs/UmfService/logs/paas-192.168.2.3/UmfService.log",
-        "logs/UMFAcc/logs/paas-192.168.2.2/UMFAcc.log",
-        "logs/UMFAcc/logs/paas-192.168.2.2/UMFAcc_20260901011314.log",
-        "logs/UMFAcc/logs/paas-192.168.2.3/UMFAcc.log",
+    non_alarm_entries = [entry for entry in run.entries if entry.route_id != "alarm.umf"]
+    assert {entry.route_id for entry in non_alarm_entries} == {"umf.other"}
+    assert {entry.category for entry in non_alarm_entries} == {"other"}
+    assert not any(entry.target.startswith(("kpi/", "logs/", "basic/")) for entry in run.entries)
+    assert {path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*") if path.is_file()} >= {
+        entry.target for entry in run.entries
     }
-    actual = {path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*") if path.is_file()}
-    missing = expected - actual
-    assert not missing, f"解压现场缺少目标文件: {sorted(missing)}"
-    locked_members = [item for item in manifest["files"] if "Container_Metric_Unit" in item["target"]]
-    assert locked_members
-    assert all(item["classification_reason"] == "archive:member" for item in locked_members)
-    assert manifest["main"]["count"] == 20
-    assert not manifest["rejected"]
 
 
 def test_real_non_kpi_files_are_preserved_without_active_rules(tmp_path: Path) -> None:
     """非 KPI 数据继续安全落盘，但已下线的业务规则不得重新进入活动目录。"""
-    data_dir, manifest = _extract(tmp_path)
+    _data_dir, run = _extract(tmp_path, copy_base_only=True)
     registry.load_all()
 
-    targets = {item["target"] for item in manifest["files"]}
-    for prefix in ("alarm/", "config/", "logs/"):
-        assert any(target.startswith(prefix) for target in targets)
-        assert any(
-            path.relative_to(data_dir).as_posix().startswith(prefix) for path in data_dir.rglob("*") if path.is_file()
-        )
-
+    assert run.entries
+    assert {entry.category for entry in run.entries} == {"alarm", "other"}
     active_codes = {rule.code for rule in registry.all()}
     assert active_codes == {"kpi.measurement_units"}
     assert {"alarm.stat", "alarm.flapping", "resource.check"}.isdisjoint(active_codes)
@@ -122,8 +96,10 @@ def test_real_package_network_element_types_match_product_dict() -> None:
 
 
 def test_real_package_lst_me_feeds_device_ledger(tmp_path: Path) -> None:
-    """样例包同时覆盖键值与表格式清单，并统一按上传网元类型筛选。"""
-    data_dir, _ = _extract(tmp_path)
+    """样例清单按上传网元类型筛选；每个任务只使用自己的 basic 来源。"""
+    data_dir = tmp_path / "ledger"
+    (data_dir / "basic").mkdir(parents=True)
+    (data_dir / "basic" / "LST ME.txt").write_text(LST_ME_TXT, encoding="utf-8")
     csp = parse_inventory(data_dir, task_id="task-333", province="江苏", operator="移动", product="csp")
     assert csp["status"] == "archived"
     assert csp["execution_time"]["status"] == "ok"
@@ -220,6 +196,7 @@ def test_umf_fixture_covers_real_directory_routes_and_archive_members(tmp_path: 
         for nested_name in (
             f"{base}/MML Configurations/EXPMML_20260918.zip",
             f"{base}/Unlisted/UnknownBundle.ZIP",
+            "csp-device/0/Alarm Data/path-security/alarms.zip",
         ):
             with zipfile.ZipFile(io.BytesIO(archive.read(nested_name))) as nested_archive:
                 assert nested_archive.infolist()
@@ -318,6 +295,211 @@ def test_umf_fixture_classifies_into_rule_ready_catalog(tmp_path: Path) -> None:
     shutil.copy2(extracted / inventory_source, csp_source)
     csp_run = classify_main_evidence(csp_data_dir, product="CSP")
     assert csp_run.entries == ()
-    assert [(item.source_relative, item.route_id) for item in csp_run.ignored] == [
-        (inventory_source, "csp.ignore-non-alarm")
+    assert [(item.source_relative, item.route_id) for item in csp_run.ignored] == [(inventory_source, "ignore.zero")]
+
+
+def test_us3_real_fixture_keeps_98_logs_three_chr_and_decompresses_host_logs(tmp_path: Path) -> None:
+    """固定样例覆盖 98 个业务日志、85 个轮转 GZIP、3 个 CHR 和主机日志解压。"""
+    from app.core.archive import unpack
+    from app.services.extraction.classification import classify_main_evidence
+
+    package = build_real_package(tmp_path / "input")
+    extracted = tmp_path / "extracted"
+    unpack(package, extracted)
+
+    base = "Outer Device/Problem 038/wrapper/UMF Problem Scene"
+    data_dir = tmp_path / "task"
+    evidence_root = data_dir / ".main"
+    shutil.copytree(extracted / base, evidence_root / base)
+
+    run = classify_main_evidence(data_dir, product="UMF")
+    service_source = f"{base}/Service Logs (Problem)/ServiceLogs_20260918.zip"
+    service_entries = [entry for entry in run.entries if entry.route_id == "umf.service-logs"]
+    assert len(service_entries) == 98
+    assert all(entry.source_relative == service_source for entry in service_entries)
+    assert all(entry.target.endswith(".log") for entry in service_entries)
+    assert not any(entry.target.endswith(".log.gz") for entry in service_entries)
+    assert len({entry.target for entry in service_entries}) == 98
+
+    with zipfile.ZipFile(extracted / service_source) as archive:
+        archived_members = archive.namelist()
+    rotated_logs = [name for name in archived_members if name.endswith(".log.gz")]
+    plain_originals = {name for name in archived_members if name.endswith(".log")}
+    rotated_targets = {name.removesuffix(".gz") for name in rotated_logs}
+    assert len(rotated_logs) == 85
+    assert len(plain_originals) == 19
+
+    selected_members = {entry.member_relative for entry in service_entries}
+    assert rotated_targets <= selected_members
+    assert len(selected_members & plain_originals) == 13
+    assert selected_members - rotated_targets == selected_members & plain_originals
+    assert not any(name.endswith(".log.gz") for name in selected_members)
+    assert all((data_dir / entry.target).is_file() for entry in service_entries)
+
+    service_ignored = {
+        record.member_relative: record.reason for record in run.ignored if record.source_relative == service_source
+    }
+    expected_ignored = {
+        "UMFAcc/logs/node-01/proxy/UMFAcc.log": "proxy_log",
+        "UMFAcc/logs/node-01/RScheck/script.sh": "service_check_script",
+        "UMFAcc/logs/node-01/rscheck_20260918.gz": "service_check_script",
+        "UMFAcc/logs/node-01/dblog.tar.gz": "runtime_database_archive",
+        "UMFAcc/logs/node-01/UFP_other.log": "ufp_log",
+        "UMFAcc/logs/node-01/UFP_MSS_2_0.zip": "ufp_archive",
+        "UMFAcc/logs/node-01/monitor_detect.log": "monitor_log",
+        "UmfService/logs/node-02/UmfService_monitor.log": "umf_service_monitor_log",
+        "UmfService/logs/node-02/start/boot.log": "service_startup_log",
+        "UmfService/logs/node-02/proxy/request.log": "proxy_log",
+        "CacheService/logs/node-03/bbox.dat.txt": "bbox_data",
+        "LocalLogReport.csv": "report_not_log",
+        "Unmatched/notes.txt": "member_not_selected",
+    }
+    assert service_ignored == expected_ignored
+    assert not any(entry.member_relative in expected_ignored for entry in service_entries)
+
+    chr_source = f"{base}/CHR Information/ServiceLogs_20260918.zip"
+    chr_entries = [entry for entry in run.entries if entry.route_id == "umf.chr"]
+    assert len(chr_entries) == 3
+    assert {entry.target for entry in chr_entries} == {
+        "chr/nodes/paas-01/health.bil",
+        "chr/nodes/paas-02/health_2.bil",
+        "chr/nodes/paas-03/health_3.bil",
+    }
+    assert all(entry.source_relative == chr_source and entry.category == "chr" for entry in chr_entries)
+    assert all((data_dir / entry.target).is_file() for entry in chr_entries)
+    chr_ignored = {
+        record.member_relative: record.reason for record in run.ignored if record.source_relative == chr_source
+    }
+    assert chr_ignored == {
+        "nodes/paas-01/LocalLogReport.csv": "report_not_log",
+        "nodes/paas-01/notes.txt": "member_not_selected",
+    }
+
+    host_expectations = {
+        "umf.host-debug": (
+            f"{base}/Host Debugging Logs/DEBUG.tar.gz",
+            "host-debug/nodes/paas-01/DEBUG.log",
+        ),
+        "umf.host-system": (
+            f"{base}/Host System Logs/OS.tar.gz",
+            "host-system/nodes/paas-01/OS.log",
+        ),
+    }
+    for route_id, (source, target) in host_expectations.items():
+        entries = [entry for entry in run.entries if entry.route_id == route_id]
+        assert {entry.target for entry in entries} >= {target}
+        assert all(entry.source_relative == source and entry.action == "expand" for entry in entries)
+        assert not any(entry.target.endswith(".gz") for entry in entries)
+        assert (data_dir / target).is_file()
+
+
+def test_real_package_alarm_fixture_lands_two_alarm_files_and_ignores_non_alarm(tmp_path: Path) -> None:
+    """US2 合成包只将 UMF/CSP 告警送入 catalog，非告警 0/ 与 CSP 文件不得落位。"""
+    from app.core.archive import unpack
+    from app.services.extraction.classification import classify_main_evidence
+
+    package = build_real_package(tmp_path / "input")
+    extracted = tmp_path / "extracted"
+    unpack(package, extracted)
+
+    umf_source = f"{BASE}/Alarm Information/boundary/umf_alarm_boundary.csv"
+    csp_source = "csp-device/0/Problems/Alarm Data/current/csp_alarm_primary.csv"
+    inventory_source = "csp-device/0/Problems/Inventory/runtime-inventory.csv"
+    service_source = "csp-device/configuration/service.ini"
+
+    for product in ("UMF", "CSP"):
+        data_dir = tmp_path / f"alarm-{product.casefold()}"
+        evidence_root = data_dir / ".main"
+        for source in (umf_source, csp_source, inventory_source):
+            target = evidence_root / source
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(extracted / source, target)
+
+        run = classify_main_evidence(data_dir, product=product)
+
+        assert {entry.path for entry in run.catalog} == {
+            "alarm/boundary/umf_alarm_boundary.csv",
+            "alarm/current/csp_alarm_primary.csv",
+        }
+        assert {entry.category for entry in run.entries} == {"alarm"}
+        assert not any(entry.path == inventory_source for entry in run.catalog)
+        assert any(record.source_relative == inventory_source for record in run.ignored)
+        for target in ("alarm/boundary/umf_alarm_boundary.csv", "alarm/current/csp_alarm_primary.csv"):
+            with (data_dir / target).open(encoding="utf-8", newline="") as stream:
+                assert list(csv.DictReader(stream))
+
+    csp_data_dir = tmp_path / "csp-non-alarm"
+    csp_service = csp_data_dir / ".main" / service_source
+    csp_service.parent.mkdir(parents=True)
+    shutil.copy2(extracted / service_source, csp_service)
+    csp_run = classify_main_evidence(csp_data_dir, product="CSP")
+    assert csp_run.catalog == ()
+    assert [record.source_relative for record in csp_run.ignored] == [service_source]
+
+
+def test_real_package_alarm_boundary_preserves_empty_files_and_rejects_unsafe_member(tmp_path: Path) -> None:
+    """固定样例中的 0 字节、仅表头、零记录告警原样落位，路径穿越只产生局部失败。"""
+    package = build_real_package(tmp_path / "input")
+    extracted = tmp_path / "extracted"
+    unpack(package, extracted)
+
+    umf_alarm_dir = f"{BASE}/Alarm Information/boundary"
+    umf_sources = [
+        f"{umf_alarm_dir}/umf_alarm_empty.csv",
+        f"{umf_alarm_dir}/umf_alarm_header_only.csv",
+        f"{umf_alarm_dir}/umf_alarm_zero_records.csv",
+        f"{umf_alarm_dir}/umf_alarm_boundary.csv",
     ]
+    csp_source = "csp-device/0/Alarm Data/current/csp_alarm_without_problems.csv"
+    unsafe_source = "csp-device/0/Alarm Data/path-security/alarms.zip"
+    sources = [*umf_sources, csp_source, unsafe_source]
+
+    for product in ("UMF", "CSP"):
+        data_dir = tmp_path / f"alarm-boundary-{product.casefold()}"
+        evidence_root = data_dir / ".main"
+        for source in sources:
+            target = evidence_root / source
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(extracted / source, target)
+
+        run = classify_main_evidence(data_dir, product=product)
+        entries = {entry.source_relative: entry for entry in run.entries}
+
+        for source in umf_sources:
+            entry = entries[source]
+            assert (entry.route_id, entry.category) == ("alarm.umf", "alarm")
+            assert entry.target == f"alarm/boundary/{Path(source).name}"
+            assert (data_dir / entry.target).read_bytes() == (extracted / source).read_bytes()
+
+        csp_entry = entries[csp_source]
+        assert (csp_entry.route_id, csp_entry.category) == ("alarm.csp", "alarm")
+        assert csp_entry.target == "alarm/current/csp_alarm_without_problems.csv"
+        assert (data_dir / csp_entry.target).read_bytes() == (extracted / csp_source).read_bytes()
+
+        assert unsafe_source not in entries
+        failures = [failure for failure in run.failures if failure.source_relative == unsafe_source]
+        assert len(failures) == 1
+        assert failures[0].member_relative is None
+        assert failures[0].error_code == "unsafe_path"
+        assert "../escape.csv" in failures[0].reason
+        assert not (data_dir.parent / "escape.csv").exists()
+
+
+def test_real_package_corrupt_alarm_archive_keeps_valid_sibling(tmp_path: Path) -> None:
+    """固定损坏归档产生可审计局部失败，同一归档的合法成员仍进入 catalog。"""
+    package = build_real_package(tmp_path / "input")
+    extracted = tmp_path / "extracted"
+    unpack(package, extracted)
+
+    source = "csp-device/0/Problems/Alarm Data/archive/alarm_corrupt_member.zip"
+    data_dir = tmp_path / "corrupt-alarm"
+    target_source = data_dir / ".main" / source
+    target_source.parent.mkdir(parents=True)
+    shutil.copy2(extracted / source, target_source)
+
+    run = classify_main_evidence(data_dir, product="CSP")
+
+    assert {entry.path for entry in run.catalog} == {"alarm/archive/valid_alarm.csv"}
+    assert {(failure.member_relative, failure.error_code) for failure in run.failures} == {
+        ("archive/corrupted_alarm.csv", "archive_corrupt")
+    }

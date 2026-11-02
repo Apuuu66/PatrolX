@@ -3,10 +3,39 @@
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 PRODUCTS = frozenset({"UMF", "CSP"})
+
+ROUTE_NOT_MATCHED = "route_not_matched"
+ROUTE_IGNORED = "route_ignored"
+MEMBER_NOT_SELECTED = "member_not_selected"
+REPORT_NOT_LOG = "report_not_log"
+SERVICE_CHECK_SCRIPT = "service_check_script"
+RUNTIME_DATABASE_ARCHIVE = "runtime_database_archive"
+UFP_LOG = "ufp_log"
+UFP_ARCHIVE = "ufp_archive"
+MONITOR_LOG = "monitor_log"
+UMF_SERVICE_MONITOR_LOG = "umf_service_monitor_log"
+SERVICE_STARTUP_LOG = "service_startup_log"
+PROXY_LOG = "proxy_log"
+BBOX_DATA = "bbox_data"
+SELECTION_IGNORE_REASONS = frozenset(
+    {
+        MEMBER_NOT_SELECTED,
+        REPORT_NOT_LOG,
+        SERVICE_CHECK_SCRIPT,
+        RUNTIME_DATABASE_ARCHIVE,
+        UFP_LOG,
+        UFP_ARCHIVE,
+        MONITOR_LOG,
+        UMF_SERVICE_MONITOR_LOG,
+        SERVICE_STARTUP_LOG,
+        PROXY_LOG,
+        BBOX_DATA,
+    }
+)
 ACTIONS = frozenset(
     {
         "copy",
@@ -514,6 +543,43 @@ def build_summary(
         by_action=dict(sorted(by_action.items())),
         by_status={"failed": len(failures), "ignored": len(ignored), "landed": len(entries)},
     )
+
+
+def build_audit_event(
+    *,
+    entries: list[LandedEntry],
+    ignored: list[IgnoredRecord],
+    conflicts: list[ConflictRecord],
+    failures: list[FailureRecord],
+    catalog_count: int,
+    summary: Summary,
+) -> dict[str, Any]:
+    """构造可逐项追溯的分类审计日志载荷。"""
+    expected_counts = {
+        "landed": len(entries),
+        "ignored": len(ignored),
+        "conflicts": len(conflicts),
+        "failures": len(failures),
+        "catalog": catalog_count,
+    }
+    if asdict(summary.counts) != expected_counts:
+        raise ValueError("summary 计数与审计数组长度不一致")
+
+    unmatched = [asdict(record) for record in ignored if record.reason == ROUTE_NOT_MATCHED]
+    ignored_items = [asdict(record) for record in ignored if record.reason != ROUTE_NOT_MATCHED]
+    fallbacks = [asdict(entry) for entry in entries if entry.action == "fallback"]
+    return {
+        "counts": expected_counts,
+        "by_route": dict(summary.by_route),
+        "by_category": dict(summary.by_category),
+        "by_action": dict(summary.by_action),
+        "by_status": dict(summary.by_status),
+        "unmatched": unmatched,
+        "ignored": ignored_items,
+        "fallbacks": fallbacks,
+        "conflicts": [asdict(record) for record in conflicts],
+        "failures": [asdict(record) for record in failures],
+    }
 
 
 def canonical_json(payload: Any) -> bytes:

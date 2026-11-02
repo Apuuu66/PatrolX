@@ -85,6 +85,7 @@ def _setup_task(tmp_path, monkeypatch):
                     "name": "重建任务",
                     "province": "北京",
                     "operator": "移动",
+                    "product": "UMF",
                 },
             )
         assert response.status_code == 202, response.text
@@ -240,7 +241,13 @@ def test_full_rebuild_keeps_local_task_visible(tmp_path, monkeypatch) -> None:
     uploads_dir.mkdir(parents=True)
     package = uploads_dir / "rebuild-sample.zip"
     shutil.copyfile(Path(__file__).parent / "fixtures" / "sample" / "sample.zip", package)
-    created = run_task(package, task_id="local-rebuild-visible", mode=TaskMode.LOCAL, trigger=TaskTrigger.CLI)
+    created = run_task(
+        package,
+        task_id="local-rebuild-visible",
+        customer={"product": "UMF"},
+        mode=TaskMode.LOCAL,
+        trigger=TaskTrigger.CLI,
+    )
     assert created.status == TaskStatus.COMPLETED
 
     entered = threading.Event()

@@ -76,20 +76,24 @@ def upload_package(
     *,
     package: Path = SAMPLE,
     name: str | None = None,
+    product: str | None = "UMF",
     **metadata: str,
 ) -> str:
-    """以在线 API 创建任务并返回 task_id。"""
+    """以在线 API 创建正向任务并返回 task_id；product=None 可显式构造缺失负例。"""
+    data = {
+        "package_kind": "inspection",
+        "name": name or "基线任务",
+        "province": "北京",
+        "operator": "移动",
+        **metadata,
+    }
+    if data["package_kind"] == "inspection" and product is not None:
+        data["product"] = product
     with package.open("rb") as fh:
         response = client.post(
             "/api/v3/tasks",
             files={"package_file": (package.name, fh, "application/zip")},
-            data={
-                "package_kind": "inspection",
-                "name": name or "基线任务",
-                "province": "北京",
-                "operator": "移动",
-                **metadata,
-            },
+            data=data,
         )
     assert response.status_code == 202, response.text
     return response.json()["task_id"]

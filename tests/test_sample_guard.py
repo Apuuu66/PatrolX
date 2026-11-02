@@ -5,7 +5,7 @@ from app.services.executor import Executor
 from app.services.kpi_measurement_units import import_resource_csv, io
 from app.services.rule_states import get_enabled_rule_codes
 from tests.baseline_helpers import load_rule, setup_env
-from tests.fixtures.make_real_package import build_real_package
+from tests.fixtures.make_real_package import build_real_package, isolate_umf_scene
 
 CALL_KPI_RULES = {"kpi.measurement_units"}
 
@@ -21,13 +21,23 @@ def test_real_package_covers_app_scene_rules(tmp_path, monkeypatch) -> None:
     assert expected_codes, "普通规则计划不能为空"
     assert CALL_KPI_RULES == expected_codes
 
-    package = build_real_package(env.uploads)
-    task = run_task(package, name=package.stem)
+    package = isolate_umf_scene(build_real_package(env.uploads), env.uploads / "sample-umf-scene.zip")
+    task = run_task(package, name=package.stem, customer={"product": "UMF"})
     actual_results = {result.code: result for result in task.system.rules}
     assert task.status.value == "completed"
     assert set(actual_results) == expected_codes
     assert actual_results["kpi.measurement_units"].status.value != "skip"
-    for category in ("alarm", "config", "logs", "resource", "traffic"):
-        assert (env.task_dir(task.task_id) / category).is_dir()
+    for category in (
+        "basic",
+        "chr",
+        "host-debug",
+        "host-system",
+        "kpi",
+        "logs",
+        "mml",
+        "other",
+        "status",
+    ):
+        assert (env.task_dir(task.task_id) / category).is_dir(), category
     assert not (env.rules_dir(task.task_id) / "alarm.flapping.json").exists()
     assert load_rule(env, task.task_id, "kpi.measurement_units")["code"] == "kpi.measurement_units"

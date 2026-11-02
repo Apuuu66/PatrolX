@@ -19,6 +19,7 @@ from app.inspectors.registry import registry as runtime_registry
 from app.models.schemas import Finding, Metric, PackageKind, Priority, Product, RuleCategory, RuleStatus, Severity
 from app.services.executor import Executor, RuleContext
 from app.services.parallel import ParallelPolicy
+from tests.manifest_helpers import write_catalog_manifest
 
 TRACE_DIR_ENV = "PATROLX_TEST_TRACE_DIR"
 RULES_ENV = "PATROLX_TEST_FAKE_RULES"
@@ -117,6 +118,9 @@ def _read_index(ctx: RuleContext) -> dict[str, int]:
 def _run_extract(ctx: RuleContext) -> Any:
     started = time.time()
     trace("pkg.extract.main", started=started, task_id=ctx.task_id)
+    logs_root = ctx.data_dir / "logs"
+    paths = sorted(path.relative_to(ctx.data_dir).as_posix() for path in logs_root.rglob("*") if path.is_file())
+    write_catalog_manifest(ctx.data_dir, paths, product=ctx.product or "UMF")
     ctx.log("info", "fake_extract_done", task_id=ctx.task_id, pid=os.getpid())
     return make_fake_result(EXTRACT_CODE, status=RuleStatus.PASS, summary="测试解压完成")
 

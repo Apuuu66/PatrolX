@@ -420,7 +420,7 @@ def cmd_lock(context: BuildContext, *, check: bool = False) -> int:
 
 def cmd_verify(context: BuildContext) -> int:
     python = ensure_backend(context)
-    return context.run([str(python), "-m", "app.cli", "run"], context.root)
+    return context.run([str(python), "-m", "app.cli", "run", "--product", "UMF"], context.root)
 
 
 def cmd_verify_one(context: BuildContext, *, rule: str) -> int:

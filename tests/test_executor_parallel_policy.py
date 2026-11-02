@@ -143,7 +143,11 @@ def test_single_rule_rerun_never_builds_pool_and_preserves_other_results(tmp_pat
     unrelated.run = lambda _ctx: make_result(unrelated, status=RuleStatus.PASS, summary="无关结果")
     monkeypatch.setitem(registry._rules, unrelated.code, unrelated)
 
-    task_id = run_task(SAMPLE, task_id="task-policy-rerun").task_id
+    task_id = run_task(
+        SAMPLE,
+        task_id="task-policy-rerun",
+        customer={"product": "UMF"},
+    ).task_id
     unrelated_path = env.rules_dir(task_id) / f"{unrelated.code}.json"
     unrelated_before = unrelated_path.read_bytes()
     unrelated_mtime_before = unrelated_path.stat().st_mtime_ns
@@ -182,7 +186,7 @@ def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monke
     local_task = run_task(
         SAMPLE,
         name="并行一致性",
-        customer={"province": "北京", "operator": "移动"},
+        customer={"province": "北京", "operator": "移动", "product": "UMF"},
     )
     local_system = load_system(local_env, local_task.task_id)
     assert local_system["rules"]
@@ -195,6 +199,7 @@ def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monke
         name="并行一致性",
         province="北京",
         operator="移动",
+        product="UMF",
     )
     wait_for_task(client, task_id)
 
@@ -210,7 +215,7 @@ def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monke
 def test_busy_and_rebuild_paths_are_unaffected_by_parallel(tmp_path: Path, monkeypatch: Any) -> None:
     """删除 / BUSY / 全量重建：任务运行中仍拒绝操作，重建后结果与首轮一致（边界情况）。"""
     env = setup_env(tmp_path, monkeypatch)
-    task_id = upload_package(env, client, name="并行重建")
+    task_id = upload_package(env, client, name="并行重建", product="UMF")
     wait_for_task(client, task_id)
 
     original_active = task_service._active_task

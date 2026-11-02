@@ -19,6 +19,7 @@ from tests.fixtures.inventory.builder import (
     multi_device_lst_me_content,
     tabular_lst_me_content,
 )
+from tests.manifest_helpers import write_catalog_manifest
 
 
 @pytest.fixture()
@@ -49,6 +50,30 @@ def test_parse_success_and_normalization(task_dir: Path) -> None:
     assert evidence["version"]["status"] == "ok"
     assert evidence["version"]["raw_version"] == "V900R016C10SPC200"
     assert evidence["source_files"] == [f"config/{LST_ME_FILENAME}"]
+
+
+def test_parse_classified_basic_source_uses_published_catalog(tmp_path: Path) -> None:
+    """v5 台账只读取已发布 catalog 中成功落位的 basic 来源文件。"""
+    basic = tmp_path / "basic"
+    basic.mkdir()
+    published = basic / LST_ME_FILENAME
+    published.write_bytes(lst_me_content(device_name="PUBLISHED-UMF", network_element_type="UMF"))
+    unlisted = basic / "stale"
+    unlisted.mkdir()
+    (unlisted / LST_ME_FILENAME).write_bytes(lst_me_content(device_name="UNLISTED-UMF", network_element_type="UMF"))
+    write_catalog_manifest(tmp_path, [f"basic/{LST_ME_FILENAME}"])
+
+    evidence = parse_inventory(
+        tmp_path,
+        task_id="task-catalog",
+        province="江苏",
+        operator="移动",
+        product="umf",
+    )
+
+    assert evidence["status"] == "archived"
+    assert evidence["source_files"] == [f"basic/{LST_ME_FILENAME}"]
+    assert evidence["device"]["normalized_name"] == "PUBLISHED-UMF"
 
 
 def test_parse_field_aliases_and_repeated_values(tmp_path: Path) -> None:

@@ -122,7 +122,11 @@ def test_local_cli_run_task_writes_run_fields(tmp_path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_task
 
-    task = run_task(SAMPLE, name="本地运行字段", customer={"province": "北京", "operator": "移动"})
+    task = run_task(
+        SAMPLE,
+        name="本地运行字段",
+        customer={"province": "北京", "operator": "移动", "product": "UMF"},
+    )
     assert task.last_run_at is not None
     assert task.duration_ms is not None and task.duration_ms >= 0
 
@@ -140,7 +144,11 @@ def test_local_cli_single_rule_rerun_refreshes_run_fields(tmp_path, monkeypatch)
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
-    task = run_task(SAMPLE, name="本地单规则重跑", customer={"province": "北京", "operator": "移动"})
+    task = run_task(
+        SAMPLE,
+        name="本地单规则重跑",
+        customer={"province": "北京", "operator": "移动", "product": "UMF"},
+    )
     first_last_run_at = task.last_run_at
     assert first_last_run_at is not None
 
@@ -223,7 +231,7 @@ def test_cli_single_rule_does_not_rewrite_classification_result(tmp_path, monkey
     env = setup_env(tmp_path, monkeypatch)
     from app.cli import run_single_rule, run_task
 
-    task = run_task(SAMPLE)
+    task = run_task(SAMPLE, customer={"product": "UMF"})
     classification_path = env.rules_dir(task.task_id) / "pkg.extract.classification.json"
     before = classification_path.read_bytes()
 

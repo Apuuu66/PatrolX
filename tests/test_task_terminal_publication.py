@@ -87,7 +87,7 @@ def test_terminal_record_converges_before_task_file(monkeypatch) -> None:
 def test_terminal_fallback_read_carries_inventory_and_package_kind(monkeypatch, tmp_path: Path) -> None:
     """发布窗口内（记录已终态、task.json 尚未写出）的兜底读必须携带完整元数据。"""
     from app.services.tasks import task_service
-    from tests.fixtures.inventory.builder import make_inventory_zip
+    from tests.fixtures.inventory.builder import lst_me_content, make_inventory_zip
 
     observed: dict[str, object] = {}
     original = store.save_task_meta
@@ -101,7 +101,7 @@ def test_terminal_fallback_read_carries_inventory_and_package_kind(monkeypatch, 
     monkeypatch.setattr(store, "save_task_meta", spy)
     client = TestClient(app)
     package = tmp_path / "inventory-publish-window.zip"
-    make_inventory_zip(package)
+    make_inventory_zip(package, content=lst_me_content(network_element_type="UMF"))
     with package.open("rb") as fh:
         response = client.post(
             "/api/v3/tasks",
@@ -111,7 +111,7 @@ def test_terminal_fallback_read_carries_inventory_and_package_kind(monkeypatch, 
                 "name": "台账发布窗口",
                 "province": "江苏",
                 "operator": "移动",
-                "product": "UMF2020",
+                "product": "UMF",
             },
         )
     assert response.status_code == 202, response.text

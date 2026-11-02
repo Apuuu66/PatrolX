@@ -9,7 +9,7 @@ def test_report_exposes_contract_results(tmp_path: Path, monkeypatch) -> None:
     setup_env(tmp_path, monkeypatch)
     from app.cli import run_task
 
-    task = run_task(SAMPLE, task_id="task-sample")
+    task = run_task(SAMPLE, task_id="task-sample", customer={"product": "UMF"})
     report = (tmp_path / "output" / "task-sample" / "report.html").read_text(encoding="utf-8")
     summary = task.system.summary
 

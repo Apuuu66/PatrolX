@@ -1,5 +1,6 @@
-"""解压现场分类落位与安全路径 helper。"""
+"""解压现场安全路径与路径长度限制 helper。"""
 
+import hashlib
 import json
 import os
 import sys
@@ -7,23 +8,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.archive import ArchiveError, PathTooLongError
-from app.core.classify import classify_content, classify_member, classify_name
-from app.models.schemas import RuleCategory
-from app.services.extraction.manifest import TARGET_ROOT_ALLOWLIST
+from app.services.extraction.manifest import MAIN_EVIDENCE_DIR, TARGET_ROOT_ALLOWLIST
 
-MANIFEST_NAME = ".patrolx-extracted.json"
-MAIN_EVIDENCE_DIR = ".main"
-MANIFEST_VERSION = 4
-CATEGORY_DIRECTORIES = {
-    RuleCategory.LOG.value: "logs",
-    RuleCategory.KPI.value: "kpi",
-    RuleCategory.TRAFFIC.value: "traffic",
-    RuleCategory.ALARM.value: "alarm",
-    RuleCategory.CONFIG.value: "config",
-    RuleCategory.RESOURCE.value: "resource",
-    RuleCategory.OTHER.value: "other",
-}
-WORK_CATEGORIES = list(CATEGORY_DIRECTORIES.values())
+__all__ = [
+    "MAIN_EVIDENCE_DIR",
+    "PathLimitPolicy",
+    "_relative_files",
+    "_safe_destination",
+    "destination_for_target",
+]
 
 
 @dataclass(frozen=True)
@@ -58,8 +51,6 @@ class PathLimitPolicy:
         """返回用于 manifest 复用判断的稳定指纹。"""
         payload = {"enabled": self.enabled, "limit": self.limit}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        import hashlib
-
         return hashlib.sha256(encoded).hexdigest()
 
     def snapshot(self) -> dict[str, object]:
@@ -77,6 +68,7 @@ class PathLimitPolicy:
 
 
 def _relative_files(root: Path) -> list[Path]:
+    """返回目录下按相对路径稳定排序的普通文件。"""
     return sorted(path for path in root.rglob("*") if path.is_file())
 
 
@@ -125,86 +117,3 @@ def destination_for_target(data_dir: Path, target: str) -> Path:
     if relative.parts[0] not in TARGET_ROOT_ALLOWLIST:
         raise ArchiveError(f"分类目标根不在 manifest allowlist: {relative.parts[0]}", "target_conflict")
     return _safe_destination(data_dir, relative)
-
-
-def _unique_work_path(root: Path, relative: Path, checksum: str) -> Path:
-    candidate = root / relative
-    if not candidate.exists():
-        return candidate
-    return root / relative.with_name(f"{relative.name}-{checksum[:8]}")
-
-
-def _remove_empty_work_site(work_path: Path, category_root: Path) -> None:
-    """子包成员已移走后，自底向上清理空工作目录及其空父目录。"""
-    descendants = sorted(work_path.rglob("*"), key=lambda path: len(path.parts), reverse=True)
-    for path in descendants:
-        if not path.is_dir():
-            return
-        try:
-            path.rmdir()
-        except OSError:
-            return
-    try:
-        work_path.rmdir()
-    except OSError:
-        return
-    current = work_path.parent.resolve()
-    root = category_root.resolve()
-    while current != root and current.is_relative_to(root):
-        try:
-            current.rmdir()
-        except OSError:
-            return
-        current = current.parent
-
-
-def _category_of(path: Path, parent_category: str, archive_name: str | None = None) -> tuple[str, str]:
-    """旧 v4 链路的分类入口；内容嗅探失败时回退父类或 other，后续展开仍会记录损坏。"""
-    locked_category = classify_member(archive_name)
-    if locked_category is not None:
-        return locked_category.value, "archive:member"
-    name_category = classify_name(path.name)
-    if name_category is not None:
-        return name_category.value, "self:name"
-    try:
-        content_category = classify_content(path)
-    except ArchiveError:
-        content_category = None
-    if content_category is not None:
-        return content_category.value, "self:content"
-    if parent_category:
-        return parent_category, "parent:category"
-    return RuleCategory.OTHER.value, "fallback:other"
-
-
-def _destination_relative(
-    source_relative: Path,
-    source_kind: str,
-    category: str,
-) -> Path:
-    category_root = Path(CATEGORY_DIRECTORIES[category])
-    if source_kind == "evidence":
-        parts = source_relative.parts
-        if parts and len(parts) > 1 and parts[0] == CATEGORY_DIRECTORIES[category]:
-            return category_root / Path(*parts[1:])
-        return category_root / source_relative
-    return category_root / source_relative
-
-
-def _register_rejected(
-    manifest: dict,
-    source: str,
-    reason: str,
-    category: str,
-    depth: int,
-    error_code: str | None = None,
-) -> None:
-    item: dict[str, object] = {
-        "source": source,
-        "category": category,
-        "reason": reason,
-        "depth": depth,
-    }
-    if error_code is not None:
-        item["error_code"] = error_code
-    manifest["rejected"].append(item)
