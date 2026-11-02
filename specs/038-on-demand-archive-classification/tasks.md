@@ -130,8 +130,8 @@ description: "功能实现任务列表：按真实目录进行按需归档分类
 - [ ] T057 [US4] 更新 `app/api/router.py`，按 T056 契约实现 product trim+upper、巡检包必填、日志补充包禁字段、三类稳定冲突错误码和既有任务恢复矩阵（FR-001、FR-002、FR-050、FR-051）
 - [ ] T058 [P] [US4] 在 `tests/test_task_run_fields.py`、`tests/test_local_run.py`、`tests/test_cli_explain_match.py`、`tests/test_inventory_parser.py` 和 `tests/test_online_identity.py` 先写 product/package kind 从 API/CLI 到 RuleContext/UnitRequest/worker、台账过滤和本地/在线同构的失败测试（FR-003、FR-050、FR-051、SC-013）
 - [ ] T059 [US4] 更新 `app/services/tasks.py`、`app/cli.py`、`app/services/unit_runtime.py`、`app/services/executor.py` 和 `app/services/inventory/parser.py`，传播持久化 product/package kind，台账使用同一规范化 product 比较，`log_supplement` 返回 `not_applicable`，不得从路径或台账反推（FR-001 至 FR-004、FR-050、FR-051）
-- [ ] T060 [P] [US4] 更新 `web/src/pages/TaskListPage.test.tsx`，先写巡检包 product 必填、提交前 trim+upper、日志补充包隐藏并清空省份/运营商/product、稳定冲突错误可见的失败测试（FR-001、FR-002、FR-050）
-- [ ] T061 [US4] 执行 `.venv/bin/python build.py gen-web-api` 更新 `web/src/api/client.ts`，再更新 `web/src/pages/TaskListPage.tsx` 实现条件显示、必填校验、空白/大小写规范化和错误码展示，禁止手写不合契约的请求字段（FR-001、FR-002、FR-050）
+- [x] T060 [P] [US4] 更新 `web/src/pages/TaskListPage.test.tsx`，先写巡检包 product 必填、提交前 trim+upper、日志补充包隐藏并清空省份/运营商/product、稳定冲突错误可见的失败测试（FR-001、FR-002、FR-050）
+- [x] T061 [US4] 执行 `.venv/bin/python build.py gen-web-api` 更新 `web/src/api/client.ts`，再更新 `web/src/pages/TaskListPage.tsx` 实现条件显示、必填校验、空白/大小写规范化和错误码展示，禁止手写不合契约的请求字段（FR-001、FR-002、FR-050）
 - [ ] T062 [US4] 新建 `web/e2e/archive-classification-upload.spec.ts`，覆盖巡检包上传 product 必填、`umf` 规范化为 `UMF`、日志补充包字段隐藏且不提交、缺 product/冲突错误的完整入口到结果展示（FR-001、FR-002、FR-050、SC-013）
 - [ ] T063 [US4] 在 `tests/test_online_identity.py` 与 `tests/test_cli_explain_match.py` 完成 API/CLI 同 task_id、profile、catalog、ignored/failures 摘要和台账过滤一致性断言，并修正实现直到 SC-013 通过（FR-051、SC-013）
 
