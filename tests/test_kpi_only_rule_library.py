@@ -12,6 +12,9 @@ from app.services.rule_states import get_enabled_rule_codes
 from tests.baseline_helpers import SAMPLE, load_rule, setup_env
 from tests.fixtures.make_real_package import build_real_package, isolate_umf_scene
 
+ACTIVE_RULES = {"alarm.active_state", "alarm.recurrence", "kpi.measurement_units"}
+ACTIVE_RULE_CODES = ["alarm.active_state", "alarm.recurrence", "kpi.measurement_units"]
+
 
 def test_sample_task_runs_only_kpi_and_preserves_package(tmp_path: Path, monkeypatch) -> None:
     from app.cli import run_task
@@ -28,8 +31,8 @@ def test_sample_task_runs_only_kpi_and_preserves_package(tmp_path: Path, monkeyp
         customer={"province": "北京", "operator": "移动", "product": "UMF"},
     )
 
-    assert expected == {"kpi.measurement_units"}
-    assert [rule.code for rule in task.system.rules] == ["kpi.measurement_units"]
+    assert expected == ACTIVE_RULES
+    assert [rule.code for rule in task.system.rules] == ACTIVE_RULE_CODES
     result = load_rule(env, task.task_id, "kpi.measurement_units")
     assert result["code"] == "kpi.measurement_units"
     assert result["status"] == "skip"
@@ -62,7 +65,7 @@ def test_task_without_kpi_returns_skip_and_preserves_non_kpi_files(tmp_path: Pat
     assert task.inventory.network_element_type_filter is not None
     assert task.inventory.network_element_type_filter.normalized == "CSP"
     assert task.inventory.network_element_type_filter.matched_count == 0
-    assert [rule.code for rule in task.system.rules] == ["kpi.measurement_units"]
+    assert [rule.code for rule in task.system.rules] == ACTIVE_RULE_CODES
     result = load_rule(env, task.task_id, "kpi.measurement_units")
     assert result["status"] == "skip"
     assert result["skip_reason"]
@@ -76,7 +79,7 @@ def test_task_without_kpi_returns_skip_and_preserves_non_kpi_files(tmp_path: Pat
     assert any(item["error_code"] == "archive_corrupt" for item in manifest["failures"])
     rule_files = {path.stem for path in env.rules_dir(task.task_id).glob("*.json")}
     assert "kpi.measurement_units" in rule_files
-    assert all(name.startswith(("kpi.", "pkg.extract.")) for name in rule_files)
+    assert not any(name.startswith(("log.", "traffic.", "resource.")) for name in rule_files)
     assert sha256_file(package) == checksum
 
 
@@ -104,7 +107,7 @@ def test_real_structure_umf_package_runs_kpi_from_scene(tmp_path: Path, monkeypa
     )
 
     assert task.status.value == "completed"
-    assert [rule.code for rule in task.system.rules] == ["kpi.measurement_units"]
+    assert [rule.code for rule in task.system.rules] == ACTIVE_RULE_CODES
     assert load_rule(env, task.task_id, "kpi.measurement_units")["status"] != "skip"
     manifest = json.loads((env.task_dir(task.task_id) / "manifest.json").read_text(encoding="utf-8"))
     assert len([item for item in manifest["catalog"] if item["path"].startswith("kpi/")]) == 73
@@ -131,9 +134,9 @@ def test_us3_log_and_chr_categories_do_not_restore_non_kpi_rules(tmp_path: Path)
         entry.route_id for entry in run.entries
     }
     registry.load_all()
-    assert {rule.code for rule in registry.all()} == {"kpi.measurement_units"}
+    assert {rule.code for rule in registry.all()} == ACTIVE_RULES
     assert {rule.code for rule in registry.all(include_hidden=True)} == {
-        "kpi.measurement_units",
+        *ACTIVE_RULES,
         "pkg.extract.main",
         "pkg.extract.classification",
     }

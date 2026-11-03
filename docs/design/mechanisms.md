@@ -304,7 +304,10 @@ GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元
 
 ### 差异
 
-当前活动普通规则只有 `kpi.measurement_units`，隐藏单元只有 `pkg.extract.main` 和 `pkg.extract.classification`。已删除规则的历史结果仍可从持久化数据读取，但不会因历史数据重新出现在活动目录。新增普通规则必须经过新的规格、契约和规则库范围审查，不能通过注册旧模块恢复。
+当前活动普通规则为 `alarm.active_state`、`alarm.recurrence` 和 `kpi.measurement_units`，隐藏单元只有
+`pkg.extract.main` 和 `pkg.extract.classification`。两条告警规则独立执行，不互相导入或消费 prepare；已删除规则的历史结果仍可从
+持久化数据读取，但不会因历史数据重新出现在活动目录。新增普通规则必须经过新的规格、契约和规则库范围审查，
+不能通过注册旧模块恢复。
 
 ## 11. 后续迁移建议
 
@@ -401,7 +404,45 @@ SQLite 单文件数据库（`data/patrolx.db`）在程序空闲时可直接复�
 - 并行度固定 4，本版不提供配置项；放开 prepare 跨规则共享消费属于后续独立版本，需先修订宪法与相关契约。
 - 解压阶段、收尾阶段与单条规则内的 chunk 级并行不在本版范围。
 
-## 15. 告警生命周期与闪断判定机制（历史，已下线）
+## 15. 未清除告警与反复上报机制
+
+### 扫描与独立性
+
+`alarm_all` 只声明 `^alarm/[^/]+\.csv$`，两条规则均引用该扫描组，只读取任务内 `alarm/` 直属 CSV。嵌套目录、
+非 CSV、操作日志、配置、状态文件与跨任务数据都不在输入范围。规则不声明 prepare，不写 prepared 数据，也不能
+读取另一条告警规则的 JSON。
+
+公共实现集中在 `app/inspectors/alarm/common.py`，只负责解码、表头解析、字段归一化、去重、质量统计与覆盖
+范围，不生成 `RuleResult`。单文件失败只记录在该文件质量中，不阻断其他文件；文件大小、行数和任务行数均有固定预算。
+
+### 中英文映射
+
+表头、状态、严重级和对象键别名集中维护，当前覆盖英文与中文常见导出。未识别术语保留在
+`unknown_headers`、`unknown_status_values` 或 `unknown_severity_values` 质量统计中；后续补充权威映射时只扩展
+公共映射与测试，不改变两条规则的判定语义。UTF-8 BOM、GB18030、无时区按 UTC+8、带偏移时间转 UTC 均由公共解析层处理。
+
+### 双计数与事实边界
+
+| 口径 | 定义 | 用途 |
+| --- | --- | --- |
+| 原始重复次数 | `Σ Repeat Times` | 保留源字段的原始累计值 |
+| 估算上报总数 | `Σ(1 + Repeat Times)` | 仅用于比较潜在上报规模，不是精确事件总数 |
+
+`alarm.active_state` 以状态列的 `Not Cleared` 作为活动判据，不使用“清除时间为空”另行推断活动状态。它按
+应用、告警 ID 与对象聚合，并依据 `coverage.end_at` 计算活动持续时长。`alarm.recurrence` 按应用与告警 ID
+聚合全部生命周期，输出对象明细、状态与严重级分布、`multi_lifecycle`、`repeat_reporting`、`short_alarm`、
+`rapid_recurrence`、`reset_cleared` 证据。
+
+`coverage.end_at` 是最大有效告警时间，不是恢复时刻或任务执行时刻。规则不判断操作时间/非操作时间，也不把某个
+时间窗称为计划外窗口。`Reset Cleared` 不代表稳定恢复；观察末刻之后没有记录也不能证明已经恢复。
+
+### 结果与展示
+
+规则结果分别使用 `metadata.alarm_active` 与 `metadata.alarm_recurrence`。规则详情页分别渲染“未清除告警”和
+“告警反复上报”，HTML 报告读取活动规则结果生成“告警优先处置”摘要。历史 `metadata.alarm_flapping` 只按旧结构
+只读展示，不迁移为上述命名空间。
+
+## 16. 告警生命周期与闪断判定机制（历史，已下线）
 
 ### 目标设计
 
@@ -442,5 +483,6 @@ SQLite 单文件数据库（`data/patrolx.db`）在程序空闲时可直接复�
 ### 差异
 
 - 该规则已不可重跑或重建；本节阈值与字段仅用于解释已持久化的历史结果。
+- 历史操作窗参数只解释旧结果，不能用于现行告警规则判断操作时间或非操作时间。
 - 时间轴联动（把闪断结论叠加到设备时间轴）不在本版范围，后续版本必须通过既有 `RuleResult` 读取，
   不得让其他普通规则直接消费本规则产物。

@@ -2,6 +2,10 @@
 # pattern 必须匹配以 / 分隔的任务内 POSIX 相对路径。
 version: 1
 groups:
+  alarm_all:
+    description: 告警目录直属 CSV
+    source_patterns:
+      - '^alarm/[^/]+\.csv$'
   kpi_all:
     description: KPI 测量单元 CSV（含话统目录）
     source_patterns:

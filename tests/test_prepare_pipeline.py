@@ -425,7 +425,11 @@ def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch)
     prepared_dir = task_dir / "prepared"
     assert not (prepared_dir / "log.umf_acc").exists()
     assert not (prepared_dir / "traffic.stat").exists()
-    assert {result["code"] for result in load_task(env, task.task_id)["system"]["rules"]} == {"kpi.measurement_units"}
+    assert {result["code"] for result in load_task(env, task.task_id)["system"]["rules"]} == {
+        "alarm.active_state",
+        "alarm.recurrence",
+        "kpi.measurement_units",
+    }
 
 
 def test_cli_main_extract_failure_creates_failed_task_without_report(tmp_path: Path, monkeypatch) -> None:

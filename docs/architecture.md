@@ -329,8 +329,9 @@ docs/example/real-package-structure.md
 Service Logs 只保留 98 个业务主日志并将 85 个 `.log.gz` 展开为 `.log`；CHR 选择并解压
 3 个 `.bil.gz` 为 `chr/*.bil`。所有排除成员必须出现在 ignored 审计中。
 
-当前活动普通规则仅 `kpi.measurement_units`；上述映射只决定安全解压、分类落位和证据保留，
-不代表恢复日志、告警、配置、状态、资源或 CHR 业务规则。
+当前活动普通规则为 `alarm.active_state`、`alarm.recurrence` 与 `kpi.measurement_units`。上述映射只决定安全解压、
+分类落位和证据保留；告警 CSV 会触发两条仅分析告警文件的规则，其余日志、配置、状态、资源和 CHR 文件仍只保留证据，
+不代表恢复对应业务规则。
 
 ## 7. 规则模型与执行编排
 
@@ -339,12 +340,14 @@ Service Logs 只保留 98 个业务主日志并将 85 个 `.log.gz` 展开为 `.
 | 优先级 | 职责 | 示例 |
 | --- | --- | --- |
 | P0 | 隐藏的数据准备与解压基础设施 | `pkg.extract.main`、`pkg.extract.classification` |
-| P1 | 单维度阈值、统计、完整性检查 | `kpi.measurement_units` |
+| P1 | 单维度阈值、统计、完整性检查 | `alarm.active_state`、`alarm.recurrence`、`kpi.measurement_units` |
 | P2 | 跨维度关联、趋势、根因分析（当前无活动普通规则） | 无 |
 
 规则执行按优先级升序分组；组内按规则编码排序。
 
-活动普通规则目录严格为 KPI-only。告警、配置、日志、资源和话统类规则模块已删除，不能重新注册、启停、重跑或重建；已持久化的历史结果继续只读可查。
+活动普通规则范围只包含告警与 KPI 两类：告警规则仅分析 `alarm_all` 匹配的直属 CSV，KPI 规则仅分析
+`kpi_all` 匹配的测量单元 CSV。配置、日志、资源和话统类业务规则模块已删除，不能重新注册、启停、重跑或重建；
+已持久化的历史结果继续只读可查。新增其他类别规则必须经过新的规格、契约与规则库范围审查。
 
 ### 7.2 依赖
 
@@ -628,6 +631,10 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
 ```yaml
 version: 1
 groups:
+  alarm_all:
+    description: 告警目录直属 CSV
+    source_patterns:
+      - '^alarm/[^/]+\.csv$'
   kpi_all:
     description: KPI 测量单元 CSV（含话统目录）
     source_patterns:
@@ -642,8 +649,8 @@ prepare。界面状态初始化后，SQLite 中的规则启停状态是唯一执
 
 ```python
 Inspector(
-    code="kpi.measurement_units",
-    source_refs=["kpi_all"],
+    code="alarm.active_state",
+    source_refs=["alarm_all"],
 )
 ```
 
@@ -666,7 +673,30 @@ python tools/generate_scan_rules.py validate --source-dir output/task-<cleaned-p
 Windows 上推荐使用 Git Bash 或 WSL。YAML 中的 `source_patterns` 必须使用 POSIX `/` 分隔符；
 运行时任务清单会把相对路径统一转换为 `/` 后再做 `re.fullmatch()`。路径包含空格时加引号。
 
-### 7.10 告警规则的历史只读兼容
+### 7.10 未清除告警与反复上报巡检
+
+告警能力由两条独立 P1 规则组成，均通过 `alarm_all` 只匹配 `^alarm/[^/]+\.csv$`，因此不读取嵌套目录、
+非 CSV、操作日志、配置、状态文件或其他任务数据：
+
+- `alarm.active_state`：以告警状态列中的 `Not Cleared` 为唯一活动判据，输出未清除记录、对象分组、严重级、
+  持续时长、原始重复次数与估算上报总数，并按最高严重级、重复量和持续时长排序。
+- `alarm.recurrence`：按应用与告警 ID 汇总生命周期，输出对象明细、状态分布、短告警、快速复发、重复上报、
+  重置清除等事实，不消费活动规则结果。
+
+两条规则共用 `app/inspectors/alarm/common.py` 的纯解析与归一化模块。该模块不构造 `RuleResult`、不写 prepared
+数据，两条规则也没有 `prepare` 或任何规则间依赖。表头、状态、严重级和对象键的中英文别名集中在公共映射中；
+未知术语和未知表头进入质量统计供审计，不能静默错映射。当前已覆盖 UTF-8 BOM、GB18030、无时区按 UTC+8
+解释以及带偏移时间转 UTC。
+
+“总次数”固定展示两个独立口径：原始 `Σ Repeat Times` 与估算 `Σ(1 + Repeat Times)`。后者不是精确事件总数。
+规则不判断计划内/计划外或操作时间/非操作时间；只陈述告警文件中的发生、持续、对象、重复和快速复发事实。
+`coverage.end_at` 是最大有效告警时间，不是真实恢复时刻或任务执行时刻。`Reset Cleared` 仅表示清除状态被重置，
+不代表稳定恢复；规则也不会根据观察末刻之后没有记录来推断恢复。
+
+结果分别写入 `metadata.alarm_active` 与 `metadata.alarm_recurrence`，规则详情页和 HTML 报告的“告警优先处置”
+区块读取相同结构。单规则重跑只重写目标规则、任务摘要和报告，不执行或重建另一条告警规则。
+
+### 7.11 告警规则的历史只读兼容
 
 `alarm.stat` 与 `alarm.flapping` 已随 037 规则库收缩删除，不再是活动能力，也不存在对应的 `scan_rules.yaml` 扫描组。历史任务中已持久化的结果和 `metadata.alarm_flapping` 仍可读取，规则详情页继续按既有字段渲染分组证据；这类结果不可重新启停、重跑或重建。
 

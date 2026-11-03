@@ -109,7 +109,7 @@ def test_overview_summary_counts_tasks_rules_results_and_findings() -> None:
     expected_rules = registry.all()
     assert body["task_count"] == before["task_count"] + 2
     assert body["registered_rule_count"] == len(expected_rules)
-    assert body["registered_rule_count"] == 1
+    assert body["registered_rule_count"] == 3
     assert body["rule_result_count"] == before["rule_result_count"] + 3
     assert body["finding_count"] == before["finding_count"] + 3
     assert body["status_counts"]["total"] == before["status_counts"]["total"] + 3

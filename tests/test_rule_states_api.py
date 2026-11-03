@@ -15,8 +15,8 @@ def test_inspector_states_default_page_size_is_ten() -> None:
     body = response.json()
     assert body["page"] == 1
     assert body["page_size"] == 10
-    assert len(body["items"]) == 1
-    assert body["total"] == 1
+    assert len(body["items"]) == 3
+    assert body["total"] == 3
 
 
 def test_inspector_states_support_filters() -> None:

@@ -3,7 +3,7 @@
 import pytest
 
 from app.inspectors.base import Inspector
-from app.inspectors.registry import RuleRegistry
+from app.inspectors.registry import RuleRegistry, registry
 from app.models.schemas import Priority, RuleCategory, Severity
 
 
@@ -76,3 +76,14 @@ def test_registry_requires_resolution_before_execution_plan() -> None:
     registry.register(make_rule(source_refs=["alarm_history"]))
     with pytest.raises(ValueError, match="source_refs 未解析"):
         registry.inspect_plan()
+
+
+def test_alarm_rules_resolve_direct_csv_group_without_prepare() -> None:
+    registry.load_all()
+
+    alarm_rules = {rule.code: rule for rule in registry.all() if rule.code.startswith("alarm.")}
+
+    assert set(alarm_rules) == {"alarm.active_state", "alarm.recurrence"}
+    assert {tuple(rule.source_refs or []) for rule in alarm_rules.values()} == {("alarm_all",)}
+    assert {tuple(rule.source_patterns or []) for rule in alarm_rules.values()} == {(r"^alarm/[^/]+\.csv$",)}
+    assert all(rule.prepare is None for rule in alarm_rules.values())

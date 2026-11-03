@@ -45,11 +45,15 @@ def test_upload_list_system_rules_report_logs_delete() -> None:
     task_id = _upload()
     task = _wait(task_id)
     assert task["status"] == "completed"
-    assert task["stats"]["total"] == 1
+    assert task["stats"]["total"] == 3
 
     system = client.get(f"/api/v2/tasks/{task_id}/system").json()
-    assert system["summary"]["total"] == 1
-    assert [rule["code"] for rule in system["rules"]] == ["kpi.measurement_units"]
+    assert system["summary"]["total"] == 3
+    assert [rule["code"] for rule in system["rules"]] == [
+        "alarm.active_state",
+        "alarm.recurrence",
+        "kpi.measurement_units",
+    ]
 
     rule = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units").json()
     assert rule["code"] == "kpi.measurement_units"
@@ -89,8 +93,14 @@ def test_inspectors_metadata() -> None:
     resp = client.get("/api/v2/inspectors")
     assert resp.status_code == 200
     codes = {item["code"] for item in resp.json()}
-    assert codes == {"kpi.measurement_units"}
+    assert codes == {"alarm.active_state", "alarm.recurrence", "kpi.measurement_units"}
     assert all(item["description"] and item["recommendation"] for item in resp.json())
+    recurrence = next(item for item in resp.json() if item["code"] == "alarm.recurrence")
+    assert recurrence["params"] == [
+        {"name": "short_alarm_sec", "value": "300"},
+        {"name": "rapid_recurrence_window_sec", "value": "3600"},
+        {"name": "rapid_recurrence_min_count", "value": "3"},
+    ]
 
     hidden_resp = client.get("/api/v2/inspectors", params={"include_hidden": True})
     hidden_codes = {item["code"] for item in hidden_resp.json() if item["hidden"]}

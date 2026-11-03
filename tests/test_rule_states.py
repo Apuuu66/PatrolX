@@ -17,6 +17,8 @@ from app.services.rule_states import (
     update_rule_state,
 )
 
+ACTIVE_RULES = {"alarm.active_state", "alarm.recurrence", "kpi.measurement_units"}
+
 
 def _write_scan_config(path: Path, disabled_rules: list[str] | object) -> None:
     path.write_text(
@@ -53,13 +55,13 @@ def _local_registry(codes: list[str]) -> RuleRegistry:
     return target
 
 
-def test_ensure_imports_kpi_state_once() -> None:
+def test_ensure_imports_active_rule_states_once() -> None:
     ensure_rule_states()
 
     with session_factory() as session:
         states = {item.rule_code: item.enabled for item in session.query(RuleState).all()}
 
-    assert states == {"kpi.measurement_units": True}
+    assert states == {code: True for code in ACTIVE_RULES}
 
 
 def test_existing_states_are_not_overwritten_by_reinitialization() -> None:
@@ -74,6 +76,8 @@ def test_update_persists_state_and_timestamp() -> None:
     ensure_rule_states()
     first = update_rule_state("kpi.measurement_units", False)
     second = update_rule_state("kpi.measurement_units", False)
+    for code in ACTIVE_RULES - {"kpi.measurement_units"}:
+        update_rule_state(code, False)
 
     assert first.enabled is False
     assert second.updated_at == first.updated_at
@@ -82,7 +86,8 @@ def test_update_persists_state_and_timestamp() -> None:
 
 def test_enabled_codes_match_persisted_states() -> None:
     ensure_rule_states()
-    update_rule_state("kpi.measurement_units", False)
+    for code in ACTIVE_RULES:
+        update_rule_state(code, False)
 
     assert get_enabled_rule_codes() == set()
 
@@ -171,9 +176,9 @@ def test_invalid_config_format_blocks_initialization(tmp_path: Path, monkeypatch
         ensure_rule_states(_local_registry(["test.enabled"]))
 
 
-def test_registry_keeps_only_kpi_active_after_legacy_removal() -> None:
+def test_registry_keeps_alarm_and_kpi_active_after_legacy_removal() -> None:
     registry.load_all()
 
-    assert registry.all() == [registry.get("kpi.measurement_units")]
+    assert {rule.code for rule in registry.all()} == ACTIVE_RULES
     assert registry.get("kpi.measurement_units").hidden is False
     assert "log.ccc_service" not in registry.codes()

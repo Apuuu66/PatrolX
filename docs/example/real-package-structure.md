@@ -28,7 +28,10 @@ ZZapp01BCN_app_Problem_scene_333.zip
                 └── ServiceLog_20260901011314.zip
 ```
 
-`alarm_history_*.zip` 内部只有多个告警 CSV，没有 `alarm_summary.json`。`PerfResult_*.zip` 内部都是测量单元 CSV；展开时按压缩包成员归组统一进入 `kpi/`。当前活动普通规则仅 `kpi.measurement_units`，告警、配置、日志、资源和话统文件仍会安全分类保留，但不会触发对应业务的普通规则。
+`alarm_history_*.zip` 内部只有多个告警 CSV，没有 `alarm_summary.json`。`PerfResult_*.zip` 内部都是测量单元 CSV；
+展开时按压缩包成员归组统一进入 `kpi/`。当前活动普通规则为 `alarm.active_state`、`alarm.recurrence` 与
+`kpi.measurement_units`：只有 `alarm/` 直属 CSV 触发两条告警规则，配置、日志、资源和话统文件仍会安全分类保留，
+但不会触发对应业务的普通规则。
 
 `Basic Information/LST ME.txt` 是网元清单，样例同时保留键值记录和真实导出的表头加数据行格式。键值记录包含 `UMF-SZ-01`、`CSP-SZ-01`（含软件版本）和 `CSP-SZ-02`（缺软件版本）；表格式记录追加 `TABLE-CSP-01`（使用补丁版本）和 `TABLE-UMF-01`（补丁版本为 `null`，回退基础版本）。文件中的网元类型可使用 `umf` / `csp` 或 `UMF` / `CSP`，解析器会把上传 `product` 与清单值统一转为大写后比较，上传值始终是唯一筛选依据。
 
@@ -116,26 +119,38 @@ alarm_history_202609010101137101.zip
 └── alarm_history_202609010101137101_003.csv
 ```
 
-告警 CSV 使用真实导出表头（12 列）：
+真实导出可能使用中文或英文表头；典型中文 12 列表头如下：
 
 ```text
 告警流水号,应用ID,应用名称,告警ID,告警名称,告警级别,发生时间,清除时间,清除类型,事件类型,告警重复次数,定位信息
 ```
 
-列语义与解析映射：
+列语义与现行解析映射：
 
 | 真实列 | 解析用途 |
 | --- | --- |
 | `告警流水号` | 记录标识，参与跨文件重复行判定 |
-| `告警ID` | `alarm_code`，与 `应用名称` 组成闪断判定分组键 |
-| `应用名称` | 分组对象（`object`），实例明细保留在 `定位信息` |
+| `告警ID`、`应用名称` | 生命周期的告警类型键；活动规则还会结合对象分组 |
+| `应用名称` | 告警应用，不直接等同于对象 |
 | `告警名称` | 展示用描述 |
 | `告警级别` | 中文口径，归一化为 `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `发生时间` / `清除时间` | 生命周期起止；清除时间为空即视为未清除，真实导出没有独立状态列 |
-| `清除类型` | 展示清除方式（自动/手动）；恢复结论仍只取决于清除时间与观察窗 |
-| `告警重复次数`、`事件类型`、`应用ID`、`定位信息` | 记录上下文，供展示与定位，不参与判定 |
+| `发生时间` / `清除时间` | 生命周期起止与持续时长；无时区时间按 UTC+8 解释后转 UTC |
+| `清除类型`（或英文状态列 `Whether Cleared`） | 活动判据，归一化为 `Not Cleared` / `Normal Cleared` / `Reset Cleared`；未知状态审计后排除 |
+| `告警重复次数` | 原始 `Repeat Times`，用于 `Σ Repeat Times` 与估算 `Σ(1 + Repeat Times)` 两个独立口径 |
+| `定位信息` / `附加信息` | 按 Pod、设备、服务优先级提取对象，缺失时保留原文或标记对象未识别 |
+| `事件类型`、`应用ID`、告警流水号 | 记录上下文、去重与来源追溯 |
 
-`_003.csv` 保留为历史闪断检测的固定演示证据（告警 1050–1053）。`alarm.stat` 与 `alarm.flapping` 已下线，不再从当前包执行；静态历史夹具只用于验证既有结果的只读展示。
+表头、状态、严重级和对象键的中英文别名集中在 `app/inspectors/alarm/common.py`。当前已知中英文口径直接映射，
+未知表头或术语进入质量统计，供后续补充权威映射；不会静默把未知值当成已知状态。
+
+`alarm.active_state` 只以状态列 `Not Cleared` 识别活动告警，按严重级、重复量和持续时长排序；
+`alarm.recurrence` 汇总全部生命周期、对象、短告警、快速复发、重复上报和 Reset 证据。两条规则都只分析
+`alarm/[^/]+\.csv`，彼此独立，不读取操作日志，也不判断操作时间/非操作时间。`coverage.end_at` 是最大有效告警时间，
+不是恢复时刻；`Reset Cleared` 不代表稳定恢复。
+
+`_003.csv` 原有告警 1050–1053 继续作为固定夹具保留。合成 UMF 包还包含纯英文、纯中文、混合同任务、完全重复记录和
+坏编码告警文件，用于验证两条现行规则的中英文解析、跨文件去重、单文件失败隔离和质量审计。`alarm.stat` 与
+`alarm.flapping` 已下线，不再从当前包执行；静态历史夹具只用于验证既有结果的只读展示。
 
 ### 性能包
 
@@ -277,7 +292,7 @@ other/...
 
 | 文件 | 类别 | 当前处理 |
 | --- | --- | --- |
-| `alarm_history_*.csv` | `alarm` | 安全保留，不触发普通规则 |
+| `alarm_history_*.csv`、`alarm/*.csv` | `alarm` | `alarm.active_state`、`alarm.recurrence`（仅直属 CSV） |
 | `system_info.ini`、`version.ini` | `config` | 安全保留，不触发普通规则 |
 | `LST ME.txt` | `config` | 台账解析（`site_device_lst_me`），不属于普通巡检规则 |
 | `Call_Session_API_Statistics_*` | `kpi` | `kpi.measurement_units` |

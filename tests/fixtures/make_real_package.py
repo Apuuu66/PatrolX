@@ -111,6 +111,42 @@ ALARM_CSV_003 = (
     "pod-umf-9\n"
 )
 
+# 039 中英文、混合表头、重复、坏记录和编码失败样例。全部使用固定时间戳。
+ALARM_ENGLISH_CSV = (
+    "Serial No.,App Name,Alarm ID,Alarm Name,Alarm Severity,Raised Time,Cleared Time,"
+    "Whether Cleared,Repeat Times,Location Info,Additional Information\n"
+    "4001,CSP Core,7001,Active database pool exhausted,Critical,2026-09-18 09:00:00,,Not Cleared,9,"
+    "Pod Name=pod-active; Located Device=node-a,Service Name=db\n"
+    "4002,CSP Core,7002,Short network reset,Major,2026-09-18 09:05:00,2026-09-18 09:07:00,"
+    "Normal Cleared,0,Located Device=node-b,\n"
+    "4003,CSP Core,7003,Repeated authentication failure,High,2026-09-18 09:10:00,,"
+    "Not Cleared,5,Pod Name=pod-active,\n"
+    "4003,CSP Core,7003,Repeated authentication failure,High,2026-09-18 09:10:00,,"
+    "Not Cleared,5,Pod Name=pod-active,\n"
+    "4004,CSP Core,7004,Reset without stable recovery,Medium,2026-09-18 09:20:00,2026-09-18 09:21:00,"
+    "Reset Cleared,1,,\n"
+    "4005,CSP Core,7005,Bad raised time,Minor,not-a-time,,Not Cleared,0,Located Device=node-c,\n"
+)
+
+ALARM_CHINESE_CSV = (
+    "告警流水号,应用名称,告警ID,告警名称,告警级别,发生时间,清除时间,清除类型,告警重复次数,定位信息,附加信息\n"
+    "4101,核心服务,7101,活动数据库连接池耗尽,紧急,2026-09-18 09:00:00,,未清除,9,"
+    "Pod Name=pod-active,\n"
+    "4102,核心服务,7102,短时链路闪断,严重,2026-09-18 09:05:00,2026-09-18 09:07:00,正常清除,0,节点B,\n"
+    "4103,核心服务,7103,多次认证失败,重要,2026-09-18 09:10:00,,未清除,5,Pod Name=pod-active,\n"
+    "4104,核心服务,7104,重置后未稳定恢复,次要,2026-09-18 09:20:00,2026-09-18 09:21:00,重置清除,1,,\n"
+)
+
+ALARM_MIXED_CSV = (
+    "Serial No.,应用名称,Alarm ID,告警名称,Alarm Severity,发生时间,Cleared Time,Whether Cleared,"
+    "Repeat Times,定位信息,Additional Information\n"
+    "4201,混合应用,7201,混合严重告警,严重,2026-09-18T09:00:00Z,2026-09-18T09:01:00Z,"
+    "Normal Cleared,2,定位设备=node-mixed,\n"
+    "4202,混合应用,7202,混合未知级别,提示,2026-09-18 09:02:00,,未清除,0,Located Device=node-mixed,\n"
+)
+
+ALARM_BAD_ENCODING_BYTES = b"\xff\xfe\x00broken alarm fixture"
+
 # US2 告警边界样例使用固定内容，便于后续断言生效路线、空文件/零记录保留和局部损坏隔离。
 UMF_ALARM_HEADER = (
     "告警流水号,应用ID,应用名称,告警ID,告警名称,告警级别,发生时间,清除时间,清除类型,事件类型,告警重复次数,定位信息\n"
@@ -357,6 +393,10 @@ def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:
         _add_bytes(zf, "alarm_history_202609010101137101_001.csv", ALARM_CSV_001.encode("utf-8"))
         _add_bytes(zf, "alarm_history_202609010101137101_002.csv", ALARM_CSV_002.encode("utf-8"))
         _add_bytes(zf, "alarm_history_202609010101137101_003.csv", ALARM_CSV_003.encode("utf-8"))
+        _add_bytes(zf, "alarm_english_039.csv", ALARM_ENGLISH_CSV.encode("utf-8"))
+        _add_bytes(zf, "alarm_chinese_039.csv", ALARM_CHINESE_CSV.encode("utf-8"))
+        _add_bytes(zf, "alarm_mixed_039.csv", ALARM_MIXED_CSV.encode("utf-8"))
+        _add_bytes(zf, "alarm_bad_encoding_039.csv", ALARM_BAD_ENCODING_BYTES)
 
     perf_buffer = io.BytesIO()
     with zipfile.ZipFile(perf_buffer, "w", zipfile.ZIP_DEFLATED) as zf:

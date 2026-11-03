@@ -13,6 +13,10 @@
     th, td { border: 1px solid #eee; padding: 8px 12px; text-align: left; font-size: 14px; }
     th { background: #fafafa; }
     .finding { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #faad14; background: #fffbe6; }
+    .alarm-priority { margin: 12px 0 16px; padding: 12px 16px; border: 1px solid #ffccc7; border-radius: 8px; background: #fff2f0; }
+    .alarm-priority .stats { margin: 0 0 12px; }
+    .alarm-priority .stat { background: #fff; }
+    .alarm-note { color: #8c8c8c; font-size: 12px; margin: 6px 0; }
     code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
   </style>
 </head>
@@ -29,6 +33,48 @@
     <div class="stat" style="color:#8c8c8c">异常 <b>{{ system.summary.error }}</b></div>
     <div class="stat" style="color:#1677ff">跳过 <b>{{ system.summary.skip }}</b></div>
   </div>
+  {% if alarm_active %}
+  <h2>告警优先处置</h2>
+  <div class="alarm-priority">
+    <div class="stats">
+      <div class="stat">活动告警 <b>{{ alarm_active.active_records }}</b> 条</div>
+      <div class="stat">活动分组 <b>{{ alarm_active.active_groups }}</b> 个</div>
+      <div class="stat" style="color:#cf1322">最高严重级 <b>{{ alarm_active.highest_severity }}</b></div>
+      <div class="stat">原始 Repeat Times 合计 <b>{{ alarm_active.raw_repeat_times_total }}</b> 次</div>
+      <div class="stat">估算上报总数 <b>{{ alarm_active.estimated_report_total }}</b> 次</div>
+    </div>
+    <p><b>优先处置建议：</b>{{ alarm_active.recommendation }}</p>
+    <p class="alarm-note">
+      双计数口径：原始 Repeat Times 为 Σ Repeat Times；估算上报总数为 Σ(1 + Repeat Times)，不是精确事件总数。
+    </p>
+    <p class="alarm-note">
+      观察末刻：{{ alarm_active.coverage_end_at }}；{{ alarm_active.observation_note }}。
+      单条最大原始重复次数：{{ alarm_active.max_single_repeat_times }} 次。
+    </p>
+    {% if alarm_active.groups %}
+    <h2>优先分组</h2>
+    <table>
+      <tr>
+        <th>告警</th><th>严重级</th><th>对象</th><th>持续时长</th><th>原始重复</th><th>估算上报</th>
+      </tr>
+      {% for group in alarm_active.groups %}
+      <tr>
+        <td>{{ group.alarm_name }}（{{ group.app_name }} / {{ group.alarm_id }}）</td>
+        <td>{{ group.severity }}</td>
+        <td>{{ group.object }}</td>
+        <td>{{ group.duration }}</td>
+        <td>{{ group.raw_repeat_times_total }} 次</td>
+        <td>{{ group.estimated_report_total }} 次</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+    {% for note in alarm_active.notes %}
+    <p class="alarm-note">{{ note }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <h2>规则结果</h2>
   <table>
     <tr><th>规则</th><th>名称</th><th>状态</th><th>摘要</th><th>跳过原因</th></tr>

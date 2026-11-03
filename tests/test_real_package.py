@@ -17,7 +17,7 @@ from app.services.extraction.classification import classify_main_evidence
 from app.services.inventory.parser import parse_inventory
 from tests.fixtures.make_real_package import BASE, FIXED_DATE, LST_ME_TXT, build_real_package
 
-DEFAULT_FIXTURE_SHA256 = "5da4306883b84e63cb961a313a98646930691108a95733652342353d3ff68a6d"
+DEFAULT_FIXTURE_SHA256 = "c6fe260b70f9f80f4f3f82d2d510aba89803f0516e9e6b0d270a3493a5b12a94"
 
 
 def _extract(tmp_path: Path, *, copy_base_only: bool = False):
@@ -76,7 +76,7 @@ def test_real_non_kpi_files_are_preserved_without_active_rules(tmp_path: Path) -
     assert run.entries
     assert {entry.category for entry in run.entries} == {"alarm", "other"}
     active_codes = {rule.code for rule in registry.all()}
-    assert active_codes == {"kpi.measurement_units"}
+    assert active_codes == {"alarm.active_state", "alarm.recurrence", "kpi.measurement_units"}
     assert {"alarm.stat", "alarm.flapping", "resource.check"}.isdisjoint(active_codes)
 
 

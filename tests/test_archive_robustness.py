@@ -318,22 +318,24 @@ def test_member_path_depth_boundary(tmp_path: Path, depth: int) -> None:
         assert exc_info.value.error_code == "member_path_depth_exceeded"
 
 
-def test_archive_file_count_boundary(tmp_path: Path) -> None:
-    """单归档等于 100,000 文件允许，第 100,001 个文件拒绝。"""
+def test_archive_file_count_boundary_uses_configured_limit(tmp_path: Path) -> None:
+    """实例预算等于上限时允许，超过一个文件时拒绝；默认固定值由独立测试覆盖。"""
+    limit = UnpackLimit()
+    limit.max_files = 2
     allowed = tmp_path / "allowed.zip"
     with zipfile.ZipFile(allowed, "w", compression=zipfile.ZIP_STORED) as zf:
-        for index in range(ARCHIVE_FILE_LIMIT):
+        for index in range(limit.max_files):
             zf.writestr(f"file-{index:06d}.txt", b"")
 
-    assert unpack_zip(allowed, tmp_path / "allowed-out") == ARCHIVE_FILE_LIMIT
+    assert unpack_zip(allowed, tmp_path / "allowed-out", limit) == limit.max_files
 
     rejected = tmp_path / "rejected.zip"
     with zipfile.ZipFile(rejected, "w", compression=zipfile.ZIP_STORED) as zf:
-        for index in range(ARCHIVE_FILE_LIMIT + 1):
+        for index in range(limit.max_files + 1):
             zf.writestr(f"file-{index:06d}.txt", b"")
 
     with pytest.raises(ArchiveError) as exc_info:
-        unpack_zip(rejected, tmp_path / "rejected-out")
+        unpack_zip(rejected, tmp_path / "rejected-out", limit)
 
     assert exc_info.value.error_code == "file_count_exceeded"
 
