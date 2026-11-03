@@ -17,7 +17,9 @@ import { RedoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult, type TaskStatus } from "../api/http";
+import { AlarmActiveStatePanel, type AlarmActiveMetadata } from "../components/AlarmActiveStatePanel";
 import { AlarmFlappingPanel, type AlarmFlappingMetadata } from "../components/AlarmFlappingPanel";
+import { AlarmRecurrencePanel, type AlarmRecurrenceMetadata } from "../components/AlarmRecurrencePanel";
 import { CopyTextButton } from "../components/CopyTextButton";
 import { getStatusTextColor } from "../utils/statusTextColors";
 import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
@@ -177,8 +179,11 @@ export function RuleDetailPage() {
   const metrics = result.metrics ?? [];
   const sourcePatterns = meta?.source_patterns ?? [];
   const hasMeasurementResults = Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "measurement_units");
+  const alarmActive = (result.metadata ?? {})["alarm_active"] as AlarmActiveMetadata | undefined;
+  const alarmRecurrence = (result.metadata ?? {})["alarm_recurrence"] as AlarmRecurrenceMetadata | undefined;
   const alarmFlapping = (result.metadata ?? {})["alarm_flapping"] as AlarmFlappingMetadata | undefined;
-  const hasEvidence = Boolean(alarmFlapping) || hasMeasurementResults || metrics.length > 0;
+  const hasEvidence =
+    Boolean(alarmActive) || Boolean(alarmRecurrence) || Boolean(alarmFlapping) || hasMeasurementResults || metrics.length > 0;
 
   return (
     <div className="rule-detail-page">
@@ -198,7 +203,7 @@ export function RuleDetailPage() {
           type="warning"
           showIcon
           message="该规则已下线，仅供历史查看"
-          description="当前活动规则库仅执行 KPI 巡检；该历史结果不可重跑或重建。"
+          description="该规则已不在当前活动规则库中；历史结果不可重跑或重建。"
         />
       )}
 
@@ -321,6 +326,26 @@ export function RuleDetailPage() {
       >
         {hasEvidence ? (
           <div className="rule-evidence-sections">
+            {alarmActive && (
+              <section className="rule-evidence-section">
+                <Typography.Text strong className="rule-evidence-title">
+                  未清除告警
+                </Typography.Text>
+                <AlarmActiveStatePanel metadata={alarmActive} showAllColumns={showAllColumns} />
+              </section>
+            )}
+            {alarmRecurrence && (
+              <section className="rule-evidence-section">
+                <Typography.Text strong className="rule-evidence-title">
+                  告警反复上报
+                </Typography.Text>
+                <AlarmRecurrencePanel
+                  metadata={alarmRecurrence}
+                  metrics={result.metrics}
+                  showAllColumns={showAllColumns}
+                />
+              </section>
+            )}
             {alarmFlapping && (
               <section className="rule-evidence-section">
                 <Typography.Text strong className="rule-evidence-title">

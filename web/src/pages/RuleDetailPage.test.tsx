@@ -233,6 +233,7 @@ describe("RuleDetailPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("rule-offline-banner").textContent).toContain("该规则已下线，仅供历史查看");
     });
+    expect(screen.getByTestId("rule-offline-banner").textContent).not.toContain("仅执行 KPI");
 
     const rerunButton = screen.getByRole("button", { name: /重跑本规则/ }) as HTMLButtonElement;
     expect(rerunButton.disabled).toBe(true);
@@ -241,6 +242,82 @@ describe("RuleDetailPage", () => {
     expect(screen.getByTestId("rule-section-findings").textContent).toContain("未清除且反复的告警");
     expect(screen.getByTestId("rule-section-evidence").textContent).toContain("告警生命周期分组");
     expect(screen.getByTestId("rule-section-source-patterns").textContent).toContain("该规则未声明源文件匹配范围");
+  });
+
+
+  it("仅渲染 alarm_active 命名空间，不混入其它告警面板", async () => {
+    vi.mocked(api.getRuleResult).mockResolvedValue(
+      makeRule({
+        code: "alarm.active_state",
+        name: "未清除告警巡检",
+        summary: "活动告警 3 条、2 组；最高严重级 CRITICAL",
+        metadata: {
+          alarm_active: {
+            schema_version: 1,
+            coverage: { end_at: "2026-09-01T02:31:05+00:00", observation_note: "不是任务执行时刻或真实恢复时刻" },
+            totals: { active_records: 3, active_groups: 2, details_truncated: false, findings_truncated: false },
+            status_counts: { "Not Cleared": 3 },
+            active_severity_counts: { CRITICAL: 1 },
+            active_summary: {
+              highest_severity: "CRITICAL",
+              raw_repeat_times_total: 7,
+              estimated_report_total: 10,
+              estimated_total_is_estimate: true,
+            },
+            groups: [],
+            records: [],
+            notes: [],
+          },
+        },
+      }),
+    );
+    vi.mocked(api.listInspectors).mockResolvedValue([
+      makeInspector({ code: "alarm.active_state", name: "未清除告警巡检", severity: "high" }),
+    ]);
+
+    renderPage("alarm.active_state");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("rule-section-evidence").textContent).toContain("未清除告警");
+    });
+    const evidence = screen.getByTestId("rule-section-evidence").textContent ?? "";
+    expect(evidence).toContain("最高严重级");
+    expect(evidence).not.toContain("告警反复上报");
+    expect(evidence).not.toContain("告警生命周期分组");
+  });
+
+  it("仅渲染 alarm_recurrence 命名空间，并展示反复上报口径", async () => {
+    vi.mocked(api.getRuleResult).mockResolvedValue(
+      makeRule({
+        code: "alarm.recurrence",
+        name: "告警反复上报巡检",
+        summary: "有效生命周期 24 条、告警类型 2 种",
+        metadata: {
+          alarm_recurrence: {
+            schema_version: 1,
+            coverage: { end_at: "2026-09-01T02:31:05+00:00" },
+            totals: { alarm_types: 2, details_truncated: false, findings_truncated: false },
+            status_counts: { "Not Cleared": 1 },
+            severity_counts: { CRITICAL: 1 },
+            types: [],
+            notes: ["原始 Repeat Times 合计与估算上报总数是两个独立口径"],
+          },
+        },
+      }),
+    );
+    vi.mocked(api.listInspectors).mockResolvedValue([
+      makeInspector({ code: "alarm.recurrence", name: "告警反复上报巡检", severity: "medium" }),
+    ]);
+
+    renderPage("alarm.recurrence");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("rule-section-evidence").textContent).toContain("告警反复上报");
+    });
+    const evidence = screen.getByTestId("rule-section-evidence").textContent ?? "";
+    expect(evidence).toContain("原始 Repeat Times");
+    expect(evidence).not.toContain("未清除告警");
+    expect(evidence).not.toContain("告警生命周期分组");
   });
 
   it("证据表默认精简列，切换后显示全部列", async () => {

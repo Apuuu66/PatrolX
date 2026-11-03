@@ -171,6 +171,7 @@ PYCODE
   "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_kpi_measurement_history.py"
   "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_home_task.py"
   "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_alarm_flapping.py"
+  "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_alarm_active_recurrence.py"
 fi
 
 exec "$VENV_PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port "$PORT"
