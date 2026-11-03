@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, type MeasurementBinding } from "../api/http";
+import { api, type MeasurementBinding, type MeasurementResource } from "../api/http";
 import { MeasurementUnitsPage } from "./MeasurementUnitsPage";
 
 const authState = vi.hoisted(() => ({
@@ -34,6 +34,26 @@ vi.mock("../api/http", () => ({
     createMeasurementDerived: vi.fn(),
   },
 }));
+
+const focusMetric: MeasurementResource = {
+  resource_id: "ME_FOCUS_E2E",
+  kind: "me",
+  name_zh: "关注功能测试指标",
+  name_en: "Focus E2E Metric",
+  enabled: true,
+  is_manual: false,
+  display_order: 10,
+  metric_group: "测试分组",
+  direction: "neutral",
+  importance: "normal",
+  warning_threshold: null,
+  critical_threshold: null,
+  source: "preset",
+  origin_task_id: null,
+  origin_file: null,
+  created_at: "2026-09-01T00:00:00Z",
+  updated_at: "2026-09-01T00:00:00Z",
+};
 
 const binding: MeasurementBinding = {
   id: 1,
@@ -85,6 +105,57 @@ describe("MeasurementUnitsPage 权限边界", () => {
     await userEvent.click(screen.getByRole("tab", { name: "派生指标" }));
 
     expect(screen.queryByRole("button", { name: /新建派生指标/ })).toBeNull();
+  });
+
+  it("管理员可在关注指标页取消关注并看到状态收敛", async () => {
+    authState.user = { username: "admin", role: "admin" };
+    let enabled = true;
+    vi.mocked(api.listMeasurementResources).mockImplementation(async (query) => {
+      if (query.kind === "me" && query.search === "关注功能测试指标") {
+        return { total: 1, items: [{ ...focusMetric, enabled }] };
+      }
+      return { total: 0, items: [] };
+    });
+    vi.mocked(api.updateMeasurementResource).mockImplementation(async (_resourceId, payload) => {
+      enabled = payload.enabled ?? enabled;
+      return { ...focusMetric, enabled };
+    });
+
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "关注指标" }));
+    await userEvent.type(screen.getByPlaceholderText("搜索指标 ID / 中文名 / 英文名"), "关注功能测试指标{enter}");
+    await screen.findByText("关注功能测试指标");
+
+    const metricRow = screen.getByText("关注功能测试指标").closest("tr");
+    expect(metricRow).not.toBeNull();
+    await userEvent.click(within(metricRow as HTMLElement).getByRole("button", { name: "取消关注" }));
+
+    await waitFor(() =>
+      expect(api.updateMeasurementResource).toHaveBeenCalledWith("ME_FOCUS_E2E", { enabled: false }),
+    );
+    await waitFor(() =>
+      expect(within(metricRow as HTMLElement).getByRole("button", { name: "关注" })).toBeTruthy(),
+    );
+  });
+
+  it("关注指标搜索只触发一次列表请求", async () => {
+    authState.user = { username: "admin", role: "admin" };
+    vi.mocked(api.listMeasurementResources).mockResolvedValue({ total: 0, items: [] });
+
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "关注指标" }));
+    await waitFor(() => expect(api.listMeasurementResources).toHaveBeenCalledTimes(1));
+    vi.mocked(api.listMeasurementResources).mockClear();
+
+    await userEvent.type(screen.getByPlaceholderText("搜索指标 ID / 中文名 / 英文名"), "关注功能测试指标{enter}");
+
+    await waitFor(() => expect(api.listMeasurementResources).toHaveBeenCalledTimes(1));
+    expect(api.listMeasurementResources).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "me",
+      search: "关注功能测试指标",
+      page: 1,
+      page_size: 20,
+    }));
   });
 
   it("管理员仍可读取指标资源治理信息", async () => {

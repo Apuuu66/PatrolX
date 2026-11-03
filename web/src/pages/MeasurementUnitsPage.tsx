@@ -714,6 +714,217 @@ function MeasurementBindingTab() {
   );
 }
 
+
+type FocusFilter = "all" | "enabled" | "disabled";
+
+const FOCUS_FILTER_OPTIONS = [
+  { value: "all", label: "全部指标" },
+  { value: "enabled", label: "仅看关注" },
+  { value: "disabled", label: "仅看未关注" },
+];
+
+function MeasurementFocusTab() {
+  const { message } = App.useApp();
+  const [items, setItems] = useState<MeasurementResource[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState("");
+  const [focusFilter, setFocusFilter] = useState<FocusFilter>("all");
+  const [selectedIds, setSelectedIds] = useState<Key[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(
+    async (nextPage: number, nextPageSize: number, nextSearch: string, nextFilter: FocusFilter) => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const data = await api.listMeasurementResources({
+          kind: "me",
+          search: nextSearch || undefined,
+          enabled: nextFilter === "all" ? undefined : nextFilter === "enabled",
+          page: nextPage,
+          page_size: nextPageSize,
+        });
+        setItems(data.items);
+        setTotal(data.total);
+      } catch (err) {
+        const text = err instanceof Error ? err.message : "关注指标加载失败";
+        setLoadError(text);
+        message.error(text);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [message],
+  );
+
+  useEffect(() => {
+    void load(page, pageSize, search, focusFilter);
+  }, [focusFilter, load, page, pageSize, search]);
+
+  const updateFocus = async (resourceIds: Key[], enabled: boolean) => {
+    const ids = [...new Set(resourceIds.map(String))];
+    if (ids.length === 0) return;
+    setUpdating(true);
+    let succeeded = 0;
+    const failed: string[] = [];
+    try {
+      for (let start = 0; start < ids.length; start += 5) {
+        const batch = ids.slice(start, start + 5);
+        const results = await Promise.allSettled(
+          batch.map((resourceId) => api.updateMeasurementResource(resourceId, { enabled })),
+        );
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            succeeded += 1;
+          } else {
+            failed.push(batch[index]);
+          }
+        });
+      }
+      if (failed.length > 0) {
+        message.warning(`关注设置完成：成功 ${succeeded} 个，失败 ${failed.length} 个`);
+      } else {
+        message.success(enabled ? `已关注 ${succeeded} 个指标` : `已取消关注 ${succeeded} 个指标`);
+      }
+      setSelectedIds([]);
+      await load(page, pageSize, search, focusFilter);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const columns: ColumnsType<MeasurementResource> = [
+    {
+      title: "指标",
+      dataIndex: "name_zh",
+      key: "name_zh",
+      render: (_, record) => <ResourceNameCell name={record.name_zh} id={record.resource_id} />,
+    },
+    {
+      title: "分组",
+      dataIndex: "metric_group",
+      key: "metric_group",
+      width: 150,
+      render: (value: string | null) => value || "未分组",
+    },
+    {
+      title: "重点",
+      dataIndex: "importance",
+      key: "importance",
+      width: 90,
+      render: (value: MeasurementResource["importance"]) => {
+        const importance = value || "normal";
+        return <Tag color={IMPORTANCE_COLORS[importance]}>{importance}</Tag>;
+      },
+    },
+    {
+      title: "方向",
+      dataIndex: "direction",
+      key: "direction",
+      width: 110,
+      render: (value: MeasurementResource["direction"]) => DIRECTION_LABELS[value || ""] || "未配置",
+    },
+    {
+      title: "关注状态",
+      dataIndex: "enabled",
+      key: "enabled",
+      width: 120,
+      render: (enabled: boolean) => enabled ? <Tag color="green">关注</Tag> : <Tag>未关注</Tag>,
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 120,
+      render: (_, record) => (
+        <Button
+          size="small"
+          type={record.enabled ? "default" : "primary"}
+          loading={updating}
+          aria-label={record.enabled ? "取消关注" : "关注"}
+          onClick={() => void updateFocus([record.resource_id], !record.enabled)}
+        >
+          {record.enabled ? "取消关注" : "关注"}
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <Card title="关注指标">
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="只巡检你关注的 KPI"
+        description="取消关注后，该指标不再参与后续巡检，也不会写入历史索引；已有任务需要重跑后才会按新的关注范围生成结果。"
+      />
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Input.Search
+          allowClear
+          placeholder="搜索指标 ID / 中文名 / 英文名"
+          style={{ width: 300 }}
+          onSearch={(value) => {
+            setSearch(value);
+            setPage(1);
+            setSelectedIds([]);
+          }}
+        />
+        <Select
+          style={{ width: 160 }}
+          value={focusFilter}
+          options={FOCUS_FILTER_OPTIONS}
+          onChange={(value: FocusFilter) => {
+            setFocusFilter(value);
+            setPage(1);
+            setSelectedIds([]);
+          }}
+        />
+        <Typography.Text type="secondary">共 {total} 个指标</Typography.Text>
+        <Button aria-label="关注选中" disabled={selectedIds.length === 0 || updating} loading={updating} onClick={() => void updateFocus(selectedIds, true)}>
+          关注选中
+        </Button>
+        <Button aria-label="取消关注选中" disabled={selectedIds.length === 0 || updating} loading={updating} onClick={() => void updateFocus(selectedIds, false)}>
+          取消关注选中
+        </Button>
+      </Space>
+      {loadError ? (
+        <LoadErrorState description={loadError} onRetry={() => void load(page, pageSize, search, focusFilter)} retrying={loading} />
+      ) : (
+        <Table
+          rowKey="resource_id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          rowSelection={{ selectedRowKeys: selectedIds, onChange: setSelectedIds }}
+          locale={{
+            emptyText: (
+              <EmptyState
+                description={search ? "没有匹配的关注指标" : "暂无指标"}
+                action={<Button onClick={() => void load(page, pageSize, search, focusFilter)}>刷新列表</Button>}
+              />
+            ),
+          }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            onChange: (nextPage, nextPageSize) => {
+              setPage(nextPage);
+              setPageSize(nextPageSize);
+              setSelectedIds([]);
+            },
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
 interface DerivedFormValues {
   measurement_unit_id: string;
   metric_resource_id: string;
@@ -897,6 +1108,8 @@ function MeasurementDerivedTab() {
 }
 
 export function MeasurementUnitsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   return (
     <div>
       <PageHeader
@@ -906,6 +1119,7 @@ export function MeasurementUnitsPage() {
       <Tabs defaultActiveKey="units" items={[
         { key: "units", label: "测量单元", children: <MeasurementUnitTab /> },
         { key: "bindings", label: "绑定关系", children: <MeasurementBindingTab /> },
+        ...(isAdmin ? [{ key: "focus", label: "关注指标", children: <MeasurementFocusTab /> }] : []),
         { key: "derived", label: "派生指标", children: <MeasurementDerivedTab /> },
       ]} />
     </div>

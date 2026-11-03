@@ -126,6 +126,7 @@ def main() -> None:
             "MU_CALL,呼叫统计,Call Statistics\n"
             "ME_CALL,呼叫请求次数,Call Requests\n"
             "ME_MAX_USERS,最大注册用户数,Max Registered Users\n"
+            "ME_FOCUS_E2E,关注功能测试指标,Focus E2E Metric\n"
         )
     )
     _seed_task(
