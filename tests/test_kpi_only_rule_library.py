@@ -105,9 +105,32 @@ def test_real_structure_umf_package_runs_kpi_from_scene(tmp_path: Path, monkeypa
 
     assert task.status.value == "completed"
     assert [rule.code for rule in task.system.rules] == ["kpi.measurement_units"]
-    assert load_rule(env, task.task_id, "kpi.measurement_units")["status"] != "skip"
+    result = load_rule(env, task.task_id, "kpi.measurement_units")
+    assert result["status"] == "pass"
+    raw_metric_names = {
+        metric["raw_source_name"] for unit in result["metadata"]["measurement_units"] for metric in unit["metrics"]
+    }
+    assert {"呼叫请求次数", "Call Requests"} <= raw_metric_names
+    rate_metric_names = {
+        "Media Resource Creation Success Rate(%)",
+        "DC Resource Update Success Rate(%)",
+        "Media Resource Creation Requests Success Rate(%)",
+        "Data Channel Resource Update Requests Success Rate(%)",
+    }
+    rate_metrics = [
+        metric
+        for unit in result["metadata"]["measurement_units"]
+        for metric in unit["metrics"]
+        if metric["raw_source_name"] in rate_metric_names
+    ]
+    assert {metric["raw_source_name"] for metric in rate_metrics} == rate_metric_names
+    for metric in rate_metrics:
+        observations = metric["observations"]
+        assert sum(observation["not_applicable_count"] for observation in observations) == 2
+        assert sum(observation["valid_count"] for observation in observations) == 1
+        assert all(observation["null_count"] == 0 for observation in observations)
     manifest = json.loads((env.task_dir(task.task_id) / "manifest.json").read_text(encoding="utf-8"))
-    assert len([item for item in manifest["catalog"] if item["path"].startswith("kpi/")]) == 73
+    assert len([item for item in manifest["catalog"] if item["path"].startswith("kpi/")]) == 74
     assert sha256_file(package) == checksum
 
 

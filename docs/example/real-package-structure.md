@@ -97,7 +97,7 @@ Outer Device/
 | `umf.other` | `**` / `*` | fallback | `other` | `other/{suffix}` |
 | `umf.ignore-outside-scene` | evidence / `**` / `*` | ignore | — | 仅写忽略审计 |
 
-`PerfResult_*.zip` 的全部 73 个成员直接进入 `kpi/`，不按成员文件名或扩展名二次分类。`CollectExport*.zip` 的 14 个 CSV 进入以归档 stem 命名的 `other/MESH Application Metrics/<archive_stem>/` 命名空间。MML ZIP 同样按单一 `expand` 路线进入 `mml/`。
+`PerfResult_*.zip` 的全部成员直接进入 `kpi/`，不按成员文件名或扩展名二次分类；真实基准为 73 个成员，合成夹具为覆盖中英文表头增加至 74 个。`CollectExport*.zip` 的 14 个 CSV 进入以归档 stem 命名的 `other/MESH Application Metrics/<archive_stem>/` 命名空间。MML ZIP 同样按单一 `expand` 路线进入 `mml/`。
 
 Service Logs 归档使用 include/exclude 选择：13 个业务主日志和 85 个轮转 `.log.gz` 共生成 98 个 `.log`；RScheck、dblog、UFP、monitor、start/proxy、bbox 和 `LocalLogReport.csv` 均只写 ignored。CHR 归档选择 3 个 `**/*.bil.gz` 并去除一层 `.gz`，`LocalLogReport.csv` 与其他成员只写 ignored。Host Debug/System 归档展开后，把其中的 `**/*.log.gz` 解压为 `.log`，同包非日志成员仍按成员路径保留。
 
@@ -149,13 +149,13 @@ PerfResult_202609010101137101.zip
 └── ne333_Container_Metric_Unit_15_0_202609020000.csv
 ```
 
-`Call_Session_API_Statistics_*` 是呼叫 KPI。CSV 表头前的元数据行允许存在；解析器必须按列名定位：
+`Call_Session_API_Statistics_*` 是呼叫 KPI。CSV 表头前的元数据行允许存在；中英文表头互斥，解析器必须按列名定位：
 
-- `测量开始时间`
-- `测量结束时间`
-- `周期(分钟)`
+- 中文：`测量开始时间`、`测量结束时间`、`周期(分钟)`
+- 英文：`StarTime` / `StartTime`、`EndTime`、`Period(Minute)`
 
-`周期(分钟)` 之后的全部列都是 KPI/测量对象列，列名与顺序可变化，不使用固定下标。
+周期列之后的全部列都是 KPI/测量对象列，列名与顺序可变化，不使用固定下标。
+成功率为空且对应请求数可唯一确认且为 `0` 时，该行记为不适用，不应导致巡检失败；请求数为正、缺失或无法唯一匹配时仍按空值异常处理。合成英文样例同时覆盖 Media、DC、Data Channel 等多套独立成功率列，不合并相近指标。
 
 `Container_Metric_Unit_*` 是容器 CPU/内存资源 CSV，不是 KPI，也不会被当作活动 KPI 测量单元。资源规则已下线，文件仅按既有分类规则安全保留。
 
@@ -271,7 +271,7 @@ kpi/ne333_Container_Metric_Unit_15_0_202609020000.csv
 other/...
 ```
 
-上例中的 `kpi/*` 使用真实包基准名称；合成 UMF 包使用 `PerfResult_20260918.zip` 的 73 个成员。实际 task 只会命中一个可识别场景，路径以 manifest 为准。所有 ignored、conflicts 和 failures 必须能在 manifest 中逐项追溯；目录存在但未进入 catalog 的文件不得被规则读取。
+上例中的 `kpi/*` 使用真实包基准名称；合成 UMF 包使用 `PerfResult_20260918.zip` 的 74 个成员。实际 task 只会命中一个可识别场景，路径以 manifest 为准。所有 ignored、conflicts 和 failures 必须能在 manifest 中逐项追溯；目录存在但未进入 catalog 的文件不得被规则读取。
 
 ## 规则适配
 

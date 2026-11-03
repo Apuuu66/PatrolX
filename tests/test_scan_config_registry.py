@@ -21,7 +21,7 @@ def test_load_all_resolves_declared_source_refs() -> None:
     assert kpi.source_refs == ["kpi_all"]
     assert kpi.scan_refs_resolved
     assert kpi.source_patterns == [r"^kpi/.*\.csv$", r"^traffic/.*\.csv$"]
-    assert kpi.rule_version == "3.3.0"
+    assert kpi.rule_version == "3.3.3"
 
     assert (settings.config / "scan_rules.yaml").is_file()
 

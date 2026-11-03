@@ -130,6 +130,16 @@ KPI_HEADER = (
     "服务名,实例,测量开始时间,测量结束时间,周期(分钟),"
     "呼叫请求次数,呼叫请求成功次数,呼叫请求失败次数,呼叫成功率,呼叫失败率,统计峰值,最大并发"
 )
+KPI_HEADER_EN = (
+    "Service Name,Instance,Reliability,Cause,StarTime,EndTime,Period(Minute),"
+    "Call Requests,Successful Call Requests,Failed Call Requests,Call Success Rate,"
+    "Call Failure Rate,Peak Value,Max Concurrency,"
+    "Number of Media Resource Creation Requests(times),"
+    "Number of Data Channel Resource Update Requests(times),"
+    "Media Resource Creation Success Rate(%),DC Resource Update Success Rate(%),"
+    "Media Resource Creation Requests Success Rate(%),"
+    "Data Channel Resource Update Requests Success Rate(%)"
+)
 
 # 服务 / 实例组合：UMF 与 CSP 各一台主用节点，外加一台 UMF 备用接入节点。
 CALL_INSTANCES = [
@@ -181,6 +191,25 @@ def _call_kpi(period: int) -> str:
                 f"{requests},{successes},{failures},{success_rate:.2f},{actual_failure_rate:.2f},"
                 f"{peak},{concurrency}"
             )
+    return "\n".join(lines) + "\n"
+
+
+def _english_call_kpi() -> str:
+    """生成英文表头 KPI 样例，覆盖真实 App Problem Scene 的导出格式。"""
+    start = datetime(2026, 9, 2)
+    end = start + timedelta(minutes=15)
+    lines = [
+        "NE Type:UMF",
+        "Measurement Unit Name:Call Session API Statistics",
+        KPI_HEADER_EN,
+    ]
+    for index, (service, instance, _load_factor, _quality_factor) in enumerate(CALL_INSTANCES):
+        resource_requests = 0 if index < 2 else 1
+        resource_rates = ",,," if resource_requests == 0 else ",100.00,100.00,100.00,100.00"
+        lines.append(
+            f"{service},{instance},ok,,{start:%Y-%m-%d %H:%M:%S},{end:%Y-%m-%d %H:%M:%S},15,"
+            f"1500,1498,2,99.87,0.13,220,110,{resource_requests},{resource_requests}{resource_rates}"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -422,12 +451,12 @@ def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:
         )
 
     umf_base = "Outer Device/Problem 038/wrapper/UMF Problem Scene"
-    umf_kpi_buffer = _zip_bytes(
-        {
-            f"ne333_Call_Session_API_Statistics_15_{index:02d}_202609180000.csv": _call_kpi(15).encode("utf-8")
-            for index in range(73)
-        }
-    )
+    umf_kpi_members = {
+        f"ne333_Call_Session_API_Statistics_15_{index:02d}_202609180000.csv": _call_kpi(15).encode("utf-8")
+        for index in range(73)
+    }
+    umf_kpi_members["ne333_Call_Session_API_Statistics_15_73_202609180000.csv"] = _english_call_kpi().encode("utf-8")
+    umf_kpi_buffer = _zip_bytes(umf_kpi_members)
     mesh_metrics_buffer = _zip_bytes(
         {
             f"mesh-metric-{index:02d}.csv": (

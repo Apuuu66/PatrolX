@@ -329,12 +329,13 @@ KPI 指标列必须按测量单元归属，并在任务执行时完成归属与�
 任务执行 `kpi.measurement_units` 规则时（`app/services/kpi_measurement_units.py`）：
 
 - 按文件名主干匹配已启用测量单元；未匹配文件计入 `unmatched_files`，多周期文件中非首选周期计入 `skipped_files` 并记录原因。
-- 解析 CSV 表头（允许表头前存在 `key：value` 元数据行），按 `测量开始时间`、`测量结束时间`、`周期(分钟)` 定位指标列。
+- 解析 CSV 表头（允许表头前存在 `key：value` 元数据行）；中英文表头互斥，中文按 `测量开始时间`、`测量结束时间`、`周期(分钟)` 定位，英文按 `StarTime`/`StartTime`、`EndTime`、`Period(Minute)` 定位。
+- 成功率空值只有在业务主体唯一匹配的请求数为 `0` 时记为 `not_applicable_count`，不再计为空值异常；正分母、分母缺失或匹配歧义仍按异常处理。名称相近的 Media / DC / Data Channel 成功率指标保持独立。
 - 指标列归属规则：
   - 目录已有同名指标 → 复用既有指标，不重复创建；
   - 指标已归属其他测量单元 → 生成跨测量单元冲突记录，不自动改绑；
   - 目录中不存在 → 自动创建指标资源并归属当前测量单元，默认启用（specs/021）。
-- 绑定状态为 `confirmed` / `candidate` / `conflict`，只有已确认且启用的绑定参与巡检；人工注册指标走
+- 绑定状态为 `confirmed` / `candidate` / `conflict`；只有绑定 `status=confirmed`、绑定 `enabled=true` 且 ME 指标资源 `enabled=true` 的指标参与解析、判定和历史索引，停用指标不写入 `kpi/history/index.jsonl`；人工注册指标走
   `POST /api/v5/kpi/measurement-bindings/{binding_id}/register-metric`，批量确认走 `POST /api/v5/kpi/measurement-bindings/batch-confirm`。
 
 #### 判定维度

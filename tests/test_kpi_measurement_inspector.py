@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from app.core.config import settings
 from app.models.db import init_db
+from app.services.kpi_history import index_path
 from app.services.kpi_measurement_units import (
     discover_measurement_bindings,
     import_resource_csv,
@@ -92,6 +95,32 @@ def list_measurement_bindings():
     return function()
 
 
+def test_disabled_metric_is_excluded_from_inspection_and_history(tmp_path: Path) -> None:
+    import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫统计,Call Statistics\n"))
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次),无关指标(次)\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100,9\n",
+        encoding="utf-8",
+    )
+    files = [(path.name, path)]
+    discover_measurement_bindings("task-disabled", files)
+
+    from app.services.kpi_measurement_units import list_measurement_resources
+
+    disabled = list_measurement_resources(kind="me", search="无关指标")["items"][0]
+    update_manual_metric(disabled["resource_id"], enabled=False)
+
+    result = inspect_measurement_files("task-disabled", files)
+
+    unit = result["measurement_units"][0]
+    assert [metric["raw_source_name"] for metric in unit["metrics"]] == ["呼叫请求次数(次)"]
+    history = index_path(settings.output, "task-disabled")
+    records = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines()]
+    assert len(records) == 1
+    assert records[0]["metric_resource_id"] != disabled["resource_id"]
+
+
 def test_all_readings_pass(tmp_path: Path) -> None:
     _prepare_resources()
     files = _task(
@@ -103,6 +132,157 @@ def test_all_readings_pass(tmp_path: Path) -> None:
     assert unit["status"] == "pass"
     assert unit["metric_coverage"] == "1/1"
     assert set(unit["objects"]) == {"pod-a", "pod-b"}
+
+
+def test_english_measurement_header_is_inspected(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "Service Name,Instance,Reliability,Cause,StarTime,EndTime,Period(Minute),Call Requests\n"
+        "pod-a,,ok,,2026-09-02 00:00:00,2026-09-02 00:15:00,15,100\n",
+        encoding="utf-8",
+    )
+    files = [(path.name, path)]
+
+    result = inspect_measurement_files("task-en-header", files)
+
+    file_result = next(item for item in result["files"] if item["filename"] == path.name)
+    assert file_result["status"] == "matched"
+    unit = result["measurement_units"][0]
+    assert unit["status"] == "pass"
+    assert unit["metric_coverage"] == "1/1"
+    metric = unit["metrics"][0]
+    assert metric["raw_source_name"] == "Call Requests"
+    assert metric["observations"][0]["avg_value"] == 100.0
+
+
+def test_english_period_priority_skips_non_preferred_files(tmp_path: Path) -> None:
+    _prepare_resources()
+    header = "Service Name,Instance,StarTime,EndTime,Period(Minute),Call Requests\n"
+    period_15 = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    period_5 = tmp_path / "ne333_Call_Statistics_5_0_202609020000.csv"
+    period_15.write_text(
+        header + "pod-a,,2026-09-02 00:00:00,2026-09-02 00:15:00,15,3\n",
+        encoding="utf-8",
+    )
+    period_5.write_text(
+        header + "pod-b,,2026-09-02 00:05:00,2026-09-02 00:10:00,5,99\n",
+        encoding="utf-8",
+    )
+    files = [(path.name, path) for path in (period_15, period_5)]
+
+    result = inspect_measurement_files("task-en-period", files)
+
+    by_name = {item["filename"]: item for item in result["files"]}
+    assert by_name[period_15.name]["status"] == "matched"
+    assert by_name[period_5.name]["status"] == "skipped"
+    assert by_name[period_5.name]["reason"] == "period_not_preferred"
+    metric = result["measurement_units"][0]["metrics"][0]
+    assert metric["observations"][0]["object_key"] == "pod-a"
+    assert metric["observations"][0]["avg_value"] == 3.0
+
+
+def test_measurement_header_normalization_accepts_export_variants(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "container, Star Time , End Time , Period（Minute）,Call Requests\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,12\n",
+        encoding="utf-8",
+    )
+
+    result = inspect_measurement_files("task-en-variant", [(path.name, path)])
+
+    unit = result["measurement_units"][0]
+    assert unit["status"] == "pass"
+    assert unit["metrics"][0]["observations"][0]["avg_value"] == 12.0
+
+
+def test_ambiguous_header_roles_are_reported(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "container,StarTime,StartTime,EndTime,Period(Minute),Call Requests\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:00:00,2026-09-02 00:15:00,15,12\n",
+        encoding="utf-8",
+    )
+
+    result = inspect_measurement_files("task-en-ambiguous", [(path.name, path)])
+
+    file_result = next(item for item in result["files"] if item["filename"] == path.name)
+    assert file_result["status"] == "parse_error"
+    assert file_result["reason"] == "header_ambiguous"
+    unit = result["measurement_units"][0]
+    assert unit["status"] == "error"
+    assert unit["reason"] == "表头列存在歧义"
+
+
+def test_zero_request_success_rates_are_not_counted_as_anomalies_and_aliases_stay_separate(
+    tmp_path: Path,
+) -> None:
+    _prepare_resources()
+    request_columns = (
+        "Number of Media Resource Creation Requests(times),Number of Data Channel Resource Update Requests(times)"
+    )
+    files: list[tuple[str, Path]] = []
+    headers = (
+        "Media Resource Creation Success Rate(%),DC Resource Update Success Rate(%)",
+        "Media Resource Creation Requests Success Rate(%),Data Channel Resource Update Requests Success Rate(%)",
+    )
+    for suffix, rate_columns in zip(("0", "1"), headers, strict=True):
+        path = tmp_path / f"ne333_Call_Statistics_15_{suffix}_202609020000.csv"
+        path.write_text(
+            "Service Name,StarTime,EndTime,Period(Minute),"
+            + request_columns
+            + ","
+            + rate_columns
+            + "\n"
+            + "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,0,0,,,\n",
+            encoding="utf-8",
+        )
+        files.append((path.name, path))
+
+    result = inspect_measurement_files("task-zero-denominator", files)
+
+    unit = result["measurement_units"][0]
+    rate_metrics = [metric for metric in unit["metrics"] if "Success Rate" in metric["raw_source_name"]]
+    assert {metric["raw_source_name"] for metric in rate_metrics} == {
+        "Media Resource Creation Success Rate(%)",
+        "DC Resource Update Success Rate(%)",
+        "Media Resource Creation Requests Success Rate(%)",
+        "Data Channel Resource Update Requests Success Rate(%)",
+    }
+    assert unit["status"] == "pass"
+    assert unit["metric_coverage"] == "6/6"
+    for metric in rate_metrics:
+        observation = metric["observations"][0]
+        assert metric["read_status"] == "ok"
+        assert observation["read_status"] == "ok"
+        assert observation["null_count"] == 0
+        assert observation["not_applicable_count"] == 1
+        assert observation["avg_value"] is None
+
+
+def test_empty_success_rate_with_positive_requests_remains_an_anomaly(tmp_path: Path) -> None:
+    _prepare_resources()
+    path = tmp_path / "ne333_Call_Statistics_15_0_202609020000.csv"
+    path.write_text(
+        "Service Name,StarTime,EndTime,Period(Minute),"
+        "Number of Media Resource Creation Requests(times),Media Resource Creation Success Rate(%)\n"
+        "pod-a,2026-09-02 00:00:00,2026-09-02 00:15:00,15,1,\n",
+        encoding="utf-8",
+    )
+
+    result = inspect_measurement_files("task-positive-denominator", [(path.name, path)])
+
+    unit = result["measurement_units"][0]
+    rate_metric = next(metric for metric in unit["metrics"] if "Success Rate" in metric["raw_source_name"])
+    observation = rate_metric["observations"][0]
+    assert unit["status"] == "fail"
+    assert rate_metric["read_status"] == "parse_error"
+    assert observation["read_status"] == "null"
+    assert observation["null_count"] == 1
+    assert observation["not_applicable_count"] == 0
 
 
 def test_missing_confirmed_column_is_ignored(tmp_path: Path) -> None:

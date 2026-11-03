@@ -324,8 +324,8 @@ deploy/config/classify_rules.yaml
 docs/example/real-package-structure.md
 ```
 
-基准映射包括：UMF/CSP 告警统一进入 `alarm/`；`PerfResult_*.zip` 的 73 个成员进入
-`kpi/`；`CollectExport*.zip` 的 14 个 CSV 进入 `other/MESH Application Metrics/`；
+基准映射包括：UMF/CSP 告警统一进入 `alarm/`；真实 `PerfResult_*.zip` 的 73 个成员进入
+`kpi/`（合成夹具为覆盖中英文表头增加至 74 个）；`CollectExport*.zip` 的 14 个 CSV 进入 `other/MESH Application Metrics/`；
 Service Logs 只保留 98 个业务主日志并将 85 个 `.log.gz` 展开为 `.log`；CHR 选择并解压
 3 个 `.bil.gz` 为 `chr/*.bil`。所有排除成员必须出现在 ignored 审计中。
 
@@ -584,14 +584,22 @@ python build.py gen-web-api
 
 ### 7.8 KPI 测量单元巡检
 
-KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
-`测量开始时间`、`测量结束时间` 和 `周期(分钟)`，该周期列之后的列均为指标值。
+KPI CSV 允许表头前存在 `key：value` 元数据行；中英文表头互斥，中文按
+`测量开始时间`、`测量结束时间`、`周期(分钟)` 定位，英文按
+`StarTime`/`StartTime`、`EndTime`、`Period(Minute)` 定位；周期列之后的列均为指标值。
+成功率列为空时，仅当可唯一关联到业务主体相同的请求数列且请求数为 `0`，才记为不适用
+（`not_applicable_count`）并豁免空值异常；请求数大于 `0`、缺失或无法唯一关联时仍按异常处理。
+`Media Resource Creation Success Rate(%)`、`Media Resource Creation Requests Success Rate(%)`、
+`DC Resource Update Success Rate(%)`、`Data Channel Resource Update Requests Success Rate(%)`
+是四个独立指标，不因名称相近而自动合并。
 
 现行 KPI 能力由单一规则 `kpi.measurement_units`（P1）承载，匹配 `^kpi/.*\.csv$` 与 `^traffic/.*\.csv$`：
 
 - 测量单元归属：按文件名主干匹配已启用测量单元，未归属文件计入 `unmatched_files`，多周期文件按优先级保留并在 `skipped_files` 记录跳过原因。
 - 指标自动入库：任务执行时按 CSV 表头归属指标列——复用既有指标、暴露跨测量单元冲突、目录未覆盖的列自动创建并默认启用（specs/021）。
-  人工注册（`/api/v5/kpi/measurement-bindings/{binding_id}/register-metric`）与绑定批量确认（`/api/v5/kpi/measurement-bindings/batch-confirm`）只作为异常修正能力。
+- 关注范围：只有“绑定已确认且启用 + 指标资源启用”的 ME 才参与解析、判定和历史索引；
+  停用指标不会写入 `kpi/history/index.jsonl`，既有任务需重跑后才会按新关注范围收敛。
+- 人工注册（`/api/v5/kpi/measurement-bindings/{binding_id}/register-metric`）与绑定批量确认（`/api/v5/kpi/measurement-bindings/batch-confirm`）只作为异常修正能力。
 - 判定维度：文件归属、数值可读性、指标静态阈值、任务内趋势；单文件或单指标解析失败不中断其他单元。
 - 结果形态：`metadata.measurement_units[]` 保存每个测量单元的指标明细与状态，任务摘要与报告只读该结构。
 
