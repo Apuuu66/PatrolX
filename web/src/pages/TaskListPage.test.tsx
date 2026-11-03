@@ -61,9 +61,9 @@ function makePreparation(): DataPreparation {
     skip_count: 0,
     items: [
       {
-        code: "prepare.alarm",
-        name: "告警提取",
-        category: "alarm",
+        code: "pkg.extract.main",
+        name: "主包解压",
+        category: "main",
         status: "warn",
         summary: "提取 3/5",
         duration_ms: 120,
@@ -81,9 +81,9 @@ function makePreparation(): DataPreparation {
         ],
       },
       {
-        code: "prepare.logs",
-        name: "日志提取",
-        category: "logs",
+        code: "pkg.extract.classification",
+        name: "分类落位",
+        category: "classification",
         status: "pass",
         summary: "全部提取",
         duration_ms: 80,
@@ -882,7 +882,7 @@ describe("TaskListPage 行内信息与操作", () => {
       expect(document.querySelector(".ant-popover")).not.toBeNull();
     });
     const popover = document.querySelector(".ant-popover") as HTMLElement;
-    expect(popover.textContent ?? "").toContain("告警 3/5");
+    expect(popover.textContent ?? "").toContain("主包 3/5");
     expect(popover.textContent ?? "").toContain("来源文件缺失");
   }, 60000);
 });

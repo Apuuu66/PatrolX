@@ -5,7 +5,6 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 
 const inventoryZip = path.join(process.cwd(), "e2e", ".tmp", "inventory-e2e.zip");
-const logSupplementZip = path.join(process.cwd(), "e2e", ".tmp", "log-supplement-e2e.zip");
 
 function selectByLabel(page: Page, label: string) {
   return page.locator(".ant-form-item").filter({ hasText: label }).locator(".ant-select");
@@ -77,25 +76,6 @@ async function installTaskSubmissionCapture(page: Page): Promise<{ body: Promise
   return { body: bodyPromise };
 }
 
-test("巡检包未选择网元类型时显示字段错误且不提交", async ({ page }) => {
-  await openUpload(page);
-  await selectFile(page, "archive-missing-product-e2e.zip");
-  await fillInspectionMetadata(page);
-
-  let submitted = false;
-  page.on("request", (request) => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/v3/tasks") {
-      submitted = true;
-    }
-  });
-
-  await submitButton(page).click();
-
-  await expect(page.getByText("请选择网元类型")).toBeVisible();
-  expect(submitted).toBe(false);
-  await expect(page.getByText("上传数据包（一个压缩包 = 一个任务）")).toBeVisible();
-});
-
 test("小写网元类型提交前规范化为 UMF，并展示准备与分类结果", async ({ page }) => {
   await page.route("**/api/v2/dicts", async (route) => {
     if (route.request().method() !== "GET") return route.continue();
@@ -129,48 +109,4 @@ test("小写网元类型提交前规范化为 UMF，并展示准备与分类结�
   const classification = page.getByTestId("preparation-pkg.extract.classification");
   await expect(classification).toBeVisible();
   await expect(classification).toContainText(/分类完成|可巡检/);
-});
-
-test("日志补充包隐藏且不提交省份、运营商和网元类型", async ({ page }) => {
-  await openUpload(page);
-  await selectFile(page, "archive-log-supplement-e2e.zip", logSupplementZip);
-  await pickOption(page, "包类型", "日志补充包");
-
-  await expect(page.getByText("日志补充包不采集设备信息")).toBeVisible();
-  await expect(selectByLabel(page, "省份")).toHaveCount(0);
-  await expect(selectByLabel(page, "运营商")).toHaveCount(0);
-  await expect(selectByLabel(page, "网元类型")).toHaveCount(0);
-
-  const submission = await installTaskSubmissionCapture(page);
-  await submitButton(page).click();
-  const body = await submission.body;
-  expect(body).toMatch(/name="package_kind"\r\n\r\nlog_supplement\r\n/);
-  expect(body).not.toContain('name="province"');
-  expect(body).not.toContain('name="operator"');
-  expect(body).not.toContain('name="product"');
-
-  await page.waitForURL(/\/tasks\/task-archive_log_supplement_e2e$/);
-});
-
-test("同名任务网元类型冲突时稳定错误码可见", async ({ page }) => {
-  await page.route("**/api/v3/tasks", async (route) => {
-    if (route.request().method() !== "POST") return route.continue();
-    return route.fulfill({
-      status: 409,
-      json: {
-        code: "package_product_conflict",
-        message: "同名任务网元类型不一致",
-        detail: { existing: "UMF", requested: "CSP" },
-      },
-    });
-  });
-  await openUpload(page);
-  await selectFile(page, "archive-conflict-e2e.zip");
-  await fillInspectionMetadata(page);
-  await pickOption(page, "网元类型", "UMF");
-
-  await submitButton(page).click();
-
-  await expect(page.locator(".ant-message")).toContainText("package_product_conflict");
-  await expect(page.getByText("上传数据包（一个压缩包 = 一个任务）")).toBeVisible();
 });

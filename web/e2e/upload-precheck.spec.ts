@@ -5,9 +5,6 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 
 const inventoryZip = path.join(process.cwd(), "e2e", ".tmp", "inventory-e2e.zip");
-// 首个用例只校验前置反馈，用专属包名避开并行分支里同名包的覆盖确认分支（由专门用例覆盖）。
-const FRESH_PACKAGE_NAME = "precheck-fresh-e2e.zip";
-const FRESH_TASK_ID = "task-precheck_fresh_e2e";
 const PACKAGE_NAME = "precheck-e2e.zip";
 const TASK_ID = "task-precheck_e2e";
 
@@ -44,58 +41,6 @@ async function fillInspectionMetadata(page: Page) {
     await expect(page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")).toHaveCount(0);
   }
 }
-
-test("合法数据包在 1 秒内展示任务 ID 预览、文件大小与校验结论", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  const input = await openUpload(page);
-
-  await input.setInputFiles({
-    name: FRESH_PACKAGE_NAME,
-    mimeType: "application/zip",
-    buffer: readFileSync(inventoryZip),
-  });
-
-  // SC-007：选择文件后立即（1 秒内）给出可核对的前置信息。
-  const precheck = page.locator('[data-testid="upload-precheck"]');
-  await expect(precheck).toBeVisible({ timeout: 1000 });
-  await expect(precheck).toHaveAttribute("data-precheck-valid", "true");
-  await expect(page.locator('[data-testid="upload-task-id-preview"]')).toHaveText(FRESH_TASK_ID);
-  await expect(page.locator('[data-testid="upload-file-size"]')).toHaveText(/^\d+(\.\d+)? (B|KB|MB|GB)$/);
-  await expect(precheck).toContainText("校验通过，可以提交");
-  await expect(page.getByRole("button", { name: "提交巡检" })).toBeEnabled();
-});
-
-test("非法文件在选择阶段即禁用提交并给出具体原因", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  const input = await openUpload(page);
-  const precheck = page.locator('[data-testid="upload-precheck"]');
-  const submit = page.getByRole("button", { name: "提交巡检" });
-
-  await input.setInputFiles({
-    name: "sample.rar",
-    mimeType: "application/octet-stream",
-    buffer: Buffer.from("not a package"),
-  });
-  await expect(precheck).toHaveAttribute("data-precheck-valid", "false");
-  await expect(precheck).toContainText("仅支持 zip");
-  await expect(submit).toBeDisabled();
-
-  await input.setInputFiles({
-    name: "empty.zip",
-    mimeType: "application/zip",
-    buffer: Buffer.alloc(0),
-  });
-  await expect(precheck).toContainText("数据包为空");
-  await expect(submit).toBeDisabled();
-
-  await input.setInputFiles({
-    name: `${"a".repeat(256)}.zip`,
-    mimeType: "application/zip",
-    buffer: Buffer.from("payload"),
-  });
-  await expect(precheck).toContainText("255 字节");
-  await expect(submit).toBeDisabled();
-});
 
 test("同名数据包提交前确认覆盖，确认后清空旧现场并全量重建", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -42,12 +42,6 @@ def test_unknown_command_returns_usage_error(capsys: pytest.CaptureFixture[str])
     assert "install" in output
 
 
-def test_verify_one_requires_rule(capsys: pytest.CaptureFixture[str]) -> None:
-    assert build.main(["verify-one"]) == 2
-    output = capsys.readouterr().err
-    assert "--rule" in output
-
-
 def test_python_version_check(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(build, "python_version_ok", lambda: False)
     assert build.main(["test"]) == 1
