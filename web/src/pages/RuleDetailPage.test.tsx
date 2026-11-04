@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { App } from "antd";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, type InspectorInfo, type RuleResult } from "../api/http";
 import { RuleDetailPage } from "./RuleDetailPage";
@@ -15,6 +15,15 @@ vi.mock("../api/http", () => ({
     getTask: vi.fn(),
   },
 }));
+
+beforeAll(async () => {
+  await Promise.all([
+    import("../components/AlarmActiveStatePanel"),
+    import("../components/AlarmFlappingPanel"),
+    import("../components/AlarmRecurrencePanel"),
+    import("../components/MetricPanel"),
+  ]);
+});
 
 function makeAlarmMetadata() {
   return {
