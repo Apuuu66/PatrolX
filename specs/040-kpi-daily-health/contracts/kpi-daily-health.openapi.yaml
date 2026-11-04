@@ -1,0 +1,200 @@
+openapi: 3.1.0
+info:
+  title: PatrolX KPI 日健康契约
+  version: 1.0.0
+  description: 本功能新增接口的契约片段；实施时合并进 docs/api/openapi.yaml。
+paths:
+  /api/v2/tasks/{task_id}/rules/{rule_code}/daily-health/{measurement_unit_id}/{metric_resource_id}:
+    get:
+      tags: [KPI]
+      summary: 获取单指标当前判定、昨日趋势和 7 日证据
+      operationId: getKpiDailyHealthMetricV2
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/RuleCode'
+        - $ref: '#/components/parameters/MeasurementUnitId'
+        - $ref: '#/components/parameters/MetricResourceId'
+      responses:
+        '200':
+          description: 指标日健康详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDailyHealthMetricDetail'
+        '404':
+          description: 任务、规则、测量单元或指标不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 请求参数错误
+components:
+  parameters:
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: {type: string}
+    RuleCode:
+      name: rule_code
+      in: path
+      required: true
+      schema: {type: string}
+    MeasurementUnitId:
+      name: measurement_unit_id
+      in: path
+      required: true
+      schema: {type: string}
+    MetricResourceId:
+      name: metric_resource_id
+      in: path
+      required: true
+      schema: {type: string}
+  schemas:
+    CurrentHealthStatus:
+      type: string
+      enum: [normal, warn, fail, pending_config, unable_to_judge, not_applicable]
+    TrendHealthStatus:
+      type: string
+      enum: [improved, stable, worsened, observe, no_baseline]
+    MetricRole:
+      type: string
+      enum: [base, derived]
+    ConfigSource:
+      type: string
+      enum: [custom, default, legacy_resource, missing]
+    KpiThresholdEvidence:
+      type: object
+      required: [direction, source]
+      properties:
+        direction:
+          anyOf:
+            - type: string
+              enum: [higher_better, lower_better, neutral]
+            - type: 'null'
+        warning_threshold:
+          anyOf: [{type: number}, {type: 'null'}]
+        critical_threshold:
+          anyOf: [{type: number}, {type: 'null'}]
+        source:
+          $ref: '#/components/schemas/ConfigSource'
+    KpiChangeThresholdEvidence:
+      type: object
+      required: [unit, source]
+      properties:
+        value:
+          anyOf: [{type: number, minimum: 0}, {type: 'null'}]
+        unit:
+          type: string
+          enum: [pp, relative, unavailable]
+        source:
+          $ref: '#/components/schemas/ConfigSource'
+    KpiConsistencyEvidence:
+      type: object
+      required: [status, tolerance_pp]
+      properties:
+        status:
+          type: string
+          enum: [not_checked, within_tolerance, exceeded, unavailable]
+        tolerance_pp:
+          type: number
+          minimum: 0
+        difference_pp:
+          anyOf: [{type: number}, {type: 'null'}]
+    KpiDailyBucket:
+      type: object
+      required: [date, status]
+      properties:
+        date:
+          type: string
+          format: date
+        value:
+          anyOf: [{type: number}, {type: 'null'}]
+        numerator:
+          anyOf: [{type: number}, {type: 'null'}]
+        denominator:
+          anyOf: [{type: number}, {type: 'null'}]
+        valid_count:
+          type: integer
+          minimum: 0
+        first_measured_at:
+          anyOf: [{type: string, format: date-time}, {type: 'null'}]
+        last_measured_at:
+          anyOf: [{type: string, format: date-time}, {type: 'null'}]
+        status:
+          type: string
+          enum: [ok, no_data, zero_denominator, unreadable, no_baseline]
+    KpiDailyHealthGroup:
+      type: object
+      required: [object_key, period_minutes, current_status, trend_status]
+      properties:
+        object_key: {type: string}
+        period_minutes:
+          anyOf: [{type: integer, minimum: 1}, {type: 'null'}]
+        today:
+          anyOf: [{$ref: '#/components/schemas/KpiDailyBucket'}, {type: 'null'}]
+        yesterday:
+          anyOf: [{$ref: '#/components/schemas/KpiDailyBucket'}, {type: 'null'}]
+        current_status:
+          $ref: '#/components/schemas/CurrentHealthStatus'
+        trend_status:
+          $ref: '#/components/schemas/TrendHealthStatus'
+        reason: {type: string}
+        source_files:
+          type: array
+          items: {type: string}
+    KpiDailyHealthMetricDetail:
+      type: object
+      required: [task_id, rule_code, measurement_unit_id, metric_resource_id, metric, groups, seven_day_trend]
+      properties:
+        task_id: {type: string}
+        rule_code: {type: string}
+        measurement_unit_id: {type: string}
+        metric_resource_id: {type: string}
+        metric:
+          type: object
+          required: [role, current_status, trend_status]
+          properties:
+            name_zh: {type: string}
+            role:
+              $ref: '#/components/schemas/MetricRole'
+            data_date: {type: string, format: date}
+            previous_date: {type: string, format: date}
+            daily_aggregation: {type: string}
+            formula:
+              anyOf: [{type: string}, {type: 'null'}]
+            current_status:
+              $ref: '#/components/schemas/CurrentHealthStatus'
+            trend_status:
+              $ref: '#/components/schemas/TrendHealthStatus'
+            current_threshold:
+              $ref: '#/components/schemas/KpiThresholdEvidence'
+            change_threshold:
+              $ref: '#/components/schemas/KpiChangeThresholdEvidence'
+            consistency:
+              $ref: '#/components/schemas/KpiConsistencyEvidence'
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiDailyHealthGroup'
+        seven_day_trend:
+          type: array
+          maxItems: 7
+          items:
+            $ref: '#/components/schemas/KpiDailyBucket'
+        legacy_fallback:
+          anyOf:
+            - type: object
+              required: [code, message]
+              properties:
+                code: {type: string}
+                message: {type: string}
+            - type: 'null'
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        detail: {}
