@@ -5,6 +5,7 @@ import {
   type TaskDetailData,
   type TaskDetailLoadScope,
 } from "./taskDetailData";
+import { sameJsonValue } from "../utils/jsonValue";
 
 export function useTaskDetailData(taskId: string) {
   const [data, setData] = useState<TaskDetailData | null>(null);
@@ -16,6 +17,9 @@ export function useTaskDetailData(taskId: string) {
       const previous = dataRef.current;
       if (scope === "full") setLoading(true);
       const next = await loadTaskDetailData(taskId, undefined, { scope, previous });
+      if (scope === "refresh" && previous && sameJsonValue(previous, next)) {
+        return;
+      }
       dataRef.current = next;
       setData(next);
       if (scope === "full") setLoading(false);

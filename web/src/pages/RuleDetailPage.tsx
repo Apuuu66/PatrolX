@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   App,
@@ -17,11 +17,10 @@ import { RedoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type InspectorInfo, type RuleResult, type TaskStatus } from "../api/http";
-import { AlarmFlappingPanel, type AlarmFlappingMetadata } from "../components/AlarmFlappingPanel";
+import type { AlarmFlappingMetadata } from "../components/AlarmFlappingPanel";
 import { CopyTextButton } from "../components/CopyTextButton";
 import { getStatusTextColor } from "../utils/statusTextColors";
 import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
-import { MetricPanel } from "../components/MetricPanel";
 import { PageHeader } from "../components/PageHeader";
 import { FindingItem } from "../components/FindingItem";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
@@ -32,6 +31,13 @@ import { getRuleCategoryLabel } from "../utils/ruleCategories";
 /** 重跑状态轮询间隔与上限（FR-023）。 */
 const RERUN_POLL_INTERVAL_MS = 1500;
 const RERUN_POLL_TIMEOUT_MS = 120_000;
+
+const AlarmFlappingPanel = lazy(() =>
+  import("../components/AlarmFlappingPanel").then((module) => ({ default: module.AlarmFlappingPanel })),
+);
+const MetricPanel = lazy(() =>
+  import("../components/MetricPanel").then((module) => ({ default: module.MetricPanel })),
+);
 
 const RULE_STATUS_COLOR = new Map<string, string>(RESULT_STATUS_META.map((meta) => [meta.key, meta.color]));
 const RULE_STATUS_LABEL = new Map<string, string>(RESULT_STATUS_META.map((meta) => [meta.key, meta.label]));
@@ -326,7 +332,9 @@ export function RuleDetailPage() {
                 <Typography.Text strong className="rule-evidence-title">
                   告警生命周期分组
                 </Typography.Text>
-                <AlarmFlappingPanel metadata={alarmFlapping} showAllColumns={showAllColumns} />
+                <Suspense fallback={<Card size="small" loading />}>
+                  <AlarmFlappingPanel metadata={alarmFlapping} showAllColumns={showAllColumns} />
+                </Suspense>
               </section>
             )}
             {hasMeasurementResults && (
@@ -347,7 +355,9 @@ export function RuleDetailPage() {
                 <Typography.Text strong className="rule-evidence-title">
                   指标
                 </Typography.Text>
-                <MetricPanel metrics={metrics} showAllColumns={showAllColumns} />
+                <Suspense fallback={<Card size="small" loading />}>
+                  <MetricPanel metrics={metrics} showAllColumns={showAllColumns} />
+                </Suspense>
               </section>
             )}
           </div>

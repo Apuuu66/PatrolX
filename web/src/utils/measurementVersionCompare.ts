@@ -30,6 +30,7 @@ export function formatVersionDateTime(value: string | null | undefined): string 
 }
 
 type VersionChartOption = {
+  animation: false;
   tooltip: { trigger: "axis" };
   legend: { top: number };
   grid: { left: number; right: number; top: number; bottom: number };
@@ -65,6 +66,7 @@ export function buildVersionCompareChartOption(
   };
 
   return {
+    animation: false,
     tooltip: { trigger: "axis" },
     legend: { top: 0 },
     grid: { left: 56, right: 24, top: 48, bottom: 56 },

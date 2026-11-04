@@ -19,7 +19,7 @@ test("趋势点不足的指标仍可点击查看时间点明细", async ({ page 
   });
 
   await page.goto(`/tasks/${TASK_ID}/rules/kpi.measurement_units`);
-  await expect(page.getByText("呼叫统计")).toBeVisible();
+  await expect(page.getByText("呼叫统计", { exact: true })).toBeVisible();
 
   const detailResponsePromise = page.waitForResponse(
     (response) =>

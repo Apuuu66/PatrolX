@@ -201,6 +201,7 @@ export function buildHistoryTrendChartOption(
   });
 
   return {
+    animation: false,
     tooltip: { trigger: "axis" },
     legend: { top: 0 },
     grid: { left: 56, right: 24, top: 48, bottom: 56 },

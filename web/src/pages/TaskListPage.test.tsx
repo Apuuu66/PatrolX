@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { Profiler } from "react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "antd";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -269,6 +270,76 @@ describe("TaskListPage", () => {
     expect(within(rows[0]).getByTestId("task-last-run").textContent).toBe("5 分钟前");
     expect(within(rows[1]).getByTestId("task-duration").textContent).toBe("-");
     expect(within(rows[1]).getByTestId("task-last-run").textContent).toBe("-");
+  });
+
+  it("运行中任务的背景轮询不重新显示表格加载态", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(api.listTasks)
+        .mockResolvedValueOnce({
+          items: [makeTask({ task_id: "running", status: "running", completed_at: null })],
+          total: 1,
+          page: 1,
+          page_size: 10,
+        })
+        .mockImplementationOnce(() => new Promise(() => undefined));
+
+      renderPage();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("running")).toBeDefined();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+
+      expect(api.listTasks).toHaveBeenCalledTimes(2);
+      expect(document.querySelector(".ant-spin-spinning")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("后台轮询返回相同内容时不触发额外渲染", async () => {
+    vi.useFakeTimers();
+    try {
+      const response = {
+        items: [makeTask({ task_id: "running", status: "running", completed_at: null })],
+        total: 1,
+        page: 1,
+        page_size: 10,
+      };
+      vi.mocked(api.listTasks).mockResolvedValue(response);
+      let commits = 0;
+
+      render(
+        <App>
+          <Profiler id="task-list" onRender={() => (commits += 1)}>
+            <MemoryRouter>
+              <TaskListPage />
+            </MemoryRouter>
+          </Profiler>
+        </App>,
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("running")).toBeDefined();
+      const commitsAfterInitialLoad = commits;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+        await Promise.resolve();
+      });
+
+      expect(api.listTasks).toHaveBeenCalledTimes(2);
+      expect(commits).toBe(commitsAfterInitialLoad);
+      expect(document.querySelector(".ant-spin-spinning")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("任务列表收敛为 6 列，时间三段合并进同一单元格", async () => {

@@ -18,7 +18,7 @@ test("测量单元支持同设备版本对比", async ({ page }) => {
   });
 
   await page.goto(`/tasks/${TASK_ID}/rules/kpi.measurement_units`);
-  await expect(page.getByText("呼叫统计")).toBeVisible();
+  await expect(page.getByText("呼叫统计", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "查看呼叫请求次数完整趋势" }).click();
   const candidatesResponsePromise = page.waitForResponse(

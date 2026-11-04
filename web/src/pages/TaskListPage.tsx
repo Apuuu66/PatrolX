@@ -48,6 +48,7 @@ import { MetadataList } from "../components/MetadataList";
 import { usePolling } from "../hooks/usePolling";
 import { getTaskDurationDisplay, getTaskMetadataTags } from "../utils/taskCard";
 import { getTaskFailureReason, sortTasksForList } from "../utils/taskListSort";
+import { sameJsonValue } from "../utils/jsonValue";
 import {
   OVERVIEW_METRICS,
   getOverviewDistribution,
@@ -297,25 +298,31 @@ export function TaskListPage() {
   // 覆盖确认的唯一目标：列表命中、提交前探测命中或 checksum 冲突提示三者取一（FR-024）。
   const overwriteTargetId = uploadDuplicate?.task_id ?? uploadConflict?.taskId ?? probedDuplicateId;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [data, overviewData] = await Promise.all([
-        api.listTasks({ page, page_size: pageSize, status: status === "" ? undefined : status }),
-        api.getOverview(),
-      ]);
-      setItems(data.items);
-      setTotal(data.total);
-      setOverview(overviewData);
-    } catch (err) {
-      const text = err instanceof Error ? err.message : "加载失败";
-      setLoadError(text);
-      message.error(text);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, status, message]);
+  const load = useCallback(
+    async (background = false) => {
+      if (!background) {
+        setLoading(true);
+        setLoadError(null);
+      }
+      try {
+        const [data, overviewData] = await Promise.all([
+          api.listTasks({ page, page_size: pageSize, status: status === "" ? undefined : status }),
+          api.getOverview(),
+        ]);
+        setItems((current) => (sameJsonValue(current, data.items) ? current : data.items));
+        setTotal((current) => (current === data.total ? current : data.total));
+        setOverview((current) => (sameJsonValue(current, overviewData) ? current : overviewData));
+      } catch (err) {
+        if (background) return;
+        const text = err instanceof Error ? err.message : "加载失败";
+        setLoadError(text);
+        message.error(text);
+      } finally {
+        if (!background) setLoading(false);
+      }
+    },
+    [page, pageSize, status, message],
+  );
 
   const retryLoad = useCallback(() => {
     void load();
@@ -338,7 +345,7 @@ export function TaskListPage() {
   const sortedItems = useMemo(() => sortTasksForList(items), [items]);
   const distribution = useMemo(() => getOverviewDistribution(overview), [overview]);
   const busy = useMemo(() => items.some((t) => t.status === "pending" || t.status === "running"), [items]);
-  usePolling(load, 2000, busy);
+  usePolling(() => load(true), 2000, busy);
 
   const buildUploadForm = (): FormData | null => {
     if (!file) return null;

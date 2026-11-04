@@ -1,6 +1,7 @@
 import type { MeasurementTrendPoint } from "../api/http";
 
 export type MeasurementTrendChartOption = {
+  animation: false;
   tooltip: { trigger: "axis" };
   grid: { left: number; right: number; top: number; bottom: number };
   xAxis: { type: "category"; boundaryGap: false; data: string[] };
@@ -10,6 +11,7 @@ export type MeasurementTrendChartOption = {
 };
 
 export type MeasurementDailyTrendChartOption = {
+  animation: false;
   tooltip: { trigger: "axis" };
   legend: { top: 0 };
   grid: { left: number; right: number; top: number; bottom: number };
@@ -87,6 +89,7 @@ export function buildTrendChartOption(
   if (points.length < 2) return null;
 
   return {
+    animation: false,
     tooltip: { trigger: "axis" },
     grid: { left: 56, right: 24, top: 40, bottom: 56 },
     xAxis: {
@@ -217,6 +220,7 @@ export function buildDailyTrendChartOption(
   });
 
   return {
+    animation: false,
     tooltip: { trigger: "axis" },
     legend: { top: 0 },
     grid: { left: 56, right: 24, top: 48, bottom: 56 },

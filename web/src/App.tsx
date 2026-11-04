@@ -1,9 +1,8 @@
-import { Suspense, lazy } from "react";
+import { lazy } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import { App as AntApp, ConfigProvider, Spin } from "antd";
-import zhCN from "antd/locale/zh_CN";
-import { MainLayout } from "./layouts/MainLayout";
+
 import { AuthProvider } from "./auth/AuthContext";
+import { MainLayout } from "./layouts/MainLayout";
 
 const TaskListPage = lazy(() =>
   import("./pages/TaskListPage").then(({ TaskListPage }) => ({ default: TaskListPage })),
@@ -33,12 +32,6 @@ const InventoryDevicePage = lazy(() =>
   })),
 );
 
-const PageFallback = (
-  <div style={{ display: "grid", placeItems: "center", minHeight: 320 }}>
-    <Spin />
-  </div>
-);
-
 const router = createBrowserRouter([
   {
     path: "/",
@@ -62,32 +55,8 @@ const router = createBrowserRouter([
 
 export default function App() {
   return (
-    <ConfigProvider
-      locale={zhCN}
-      theme={{
-        token: {
-          colorPrimary: "#1677ff",
-          borderRadius: 8,
-          colorBgLayout: "#f5f5f5",
-          colorBorderSecondary: "#f0f0f0",
-          fontSize: 14,
-          fontSizeSM: 12,
-          fontSizeLG: 16,
-          lineHeight: 1.5715,
-          colorText: "rgba(0, 0, 0, 0.88)",
-          colorTextSecondary: "rgba(0, 0, 0, 0.65)",
-          colorTextDescription: "rgba(0, 0, 0, 0.65)",
-          colorTextTertiary: "rgba(0, 0, 0, 0.45)",
-        },
-      }}
-    >
-      <AuthProvider>
-        <AntApp>
-          <Suspense fallback={PageFallback}>
-            <RouterProvider router={router} />
-          </Suspense>
-        </AntApp>
-      </AuthProvider>
-    </ConfigProvider>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   );
 }
