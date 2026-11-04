@@ -4,8 +4,9 @@
 
     python run_online.py
 
-脚本会启动 FastAPI 后端和 Vite 前端，并统一处理 Ctrl+C 停止；也可通过
-`--host`、`--port`、`--web-host`、`--web-port` 覆盖默认地址。
+脚本会启动 FastAPI 后端并默认构建、预览生产前端，统一处理 Ctrl+C 停止；
+也可通过 `--host`、`--port`、`--web-host`、`--web-port` 覆盖默认地址，
+或使用 `--dev-web` 显式启动 Vite 开发服务器。
 """
 
 from __future__ import annotations
@@ -46,9 +47,15 @@ def backend_command(*, python: Path, host: str, port: int, reload: bool) -> list
     return command
 
 
-def web_command(*, npm: str, host: str, port: int) -> list[str]:
-    """构造前端启动命令。"""
-    return [npm, "run", "dev", "--", "--host", host, "--port", str(port)]
+def web_build_command(*, npm: str) -> list[str]:
+    """构造生产前端构建命令。"""
+    return [npm, "run", "build"]
+
+
+def web_command(*, npm: str, host: str, port: int, dev: bool = False) -> list[str]:
+    """构造前端启动命令；默认预览生产构建，显式指定时使用开发服务器。"""
+    script = "dev" if dev else "preview"
+    return [npm, "run", script, "--", "--host", host, "--port", str(port)]
 
 
 def _prepare_python(root: Path) -> Path:
@@ -110,6 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--web-host", default="127.0.0.1", help="前端页面地址，默认 127.0.0.1")
     parser.add_argument("--web-port", type=int, default=5173, help="前端页面端口，默认 5173")
     parser.add_argument("--no-reload", action="store_true", help="关闭后端自动重载")
+    parser.add_argument("--dev-web", action="store_true", help="使用 Vite 开发服务器（默认构建并预览生产前端）")
     args = parser.parse_args(argv)
 
     npm = _find_npm()
@@ -119,6 +127,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     python = _prepare_python(ROOT)
     _prepare_web(ROOT, npm)
+
+    if not args.dev_web:
+        print("[PatrolX] 构建生产前端...")
+        try:
+            subprocess.run(web_build_command(npm=npm), cwd=ROOT / "web", check=True)
+        except subprocess.CalledProcessError:
+            print("[PatrolX] 前端生产构建失败，请检查构建日志", file=sys.stderr)
+            return 1
 
     backend = subprocess.Popen(
         backend_command(
@@ -130,7 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cwd=ROOT,
     )
     frontend = subprocess.Popen(
-        web_command(npm=npm, host=args.web_host, port=args.web_port),
+        web_command(npm=npm, host=args.web_host, port=args.web_port, dev=args.dev_web),
         cwd=ROOT / "web",
     )
     processes = [backend, frontend]
