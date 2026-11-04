@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from app.core.archive import is_archive
 from app.core.checksum import sha256_file
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.metrics import TASKS_TOTAL
 from app.inspectors.pkg import EXTRACT_MANIFEST
 from app.inspectors.registry import registry
@@ -44,6 +45,8 @@ from app.services.inventory.parser import parse_inventory
 from app.services.report import render_report
 from app.services.rule_states import assert_rule_enabled, get_enabled_rule_codes
 from app.services.scanning import TaskFileCatalog
+
+logger = get_logger("patrolx.cli")
 
 
 def _now() -> datetime:
@@ -269,12 +272,16 @@ def _publish_terminal(task: InspectionTask, publish: Callable[[InspectionTask], 
     if publish is not None:
         publish(task)
     else:
-        # 本地模式与在线模式共用同一发布语义：SQLite 快照（任务行 + 规则结果 + KPI 点 +
-        # 准备摘要）先收敛，再写 task.json，读方看到终态时展示数据已完整。
+        # 本地模式与在线模式共用同一发布语义：先提交任务行、规则结果与准备摘要，
+        # 再写 task.json；KPI 镜像独立执行，不能阻塞终态可见。
         from app.services import task_db
 
-        task_db.publish_from_scene(task, output=settings.output)
+        task_db.publish_from_scene(task, output=settings.output, include_kpi=False)
         store.save_task_meta(settings.output, task)
+        try:
+            task_db.publish_kpi_from_scene(task.task_id, output=settings.output)
+        except Exception:  # noqa: BLE001 - KPI 镜像失败不得把已完成任务改回失败
+            logger.exception("task_kpi_mirror_failed", task_id=task.task_id)
         # 本地模式与在线模式共用留存清理语义：终态发布后清理超期现场。
         from app.services import retention
 

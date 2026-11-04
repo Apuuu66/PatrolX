@@ -189,10 +189,11 @@ class TaskService:
                 self._finish_run(task_id, TaskStatus.FAILED)
 
     def _publish_terminal(self, task: InspectionTask) -> None:
-        """在线任务终态发布：SQLite 快照先收敛，再写 task.json。
+        """在线任务终态发布：先提交任务与规则快照，再写 task.json。
 
         终态发布是任务现场的最后一次写入：读方看到 completed 时，报告、收尾日志、
-        台账归档与 SQLite 快照（任务行 + 规则结果 + KPI 点 + 准备摘要）均已就绪。
+        台账归档、任务行、规则结果与准备摘要均已就绪。KPI 镜像随后独立执行，
+        失败只记录日志，不能阻塞或回滚任务终态。
         运行字段以 ``save_run_start`` 写入的本次开始时刻为准，现场旧值不得回退。
         """
         last_run_at, _, _ = task_db.get_run_fields(task.task_id)
@@ -204,9 +205,17 @@ class TaskService:
                 "duration_ms": task_db.elapsed_ms(last_run_at or task.last_run_at, completed_at),
             }
         )
-        # 任务行、规则结果、KPI 点与本次耗时在同一发布事务内收敛，终态一旦可见数据即完整。
-        task_db.publish_from_scene(published, output=settings.output)
+        task_db.publish_from_scene(published, output=settings.output, include_kpi=False)
         store.save_task_meta(settings.output, published)
+        # 终态提交后任务已可被读、删、重建；KPI 镜像与留存清理仍由当前 worker
+        # 持有执行锁完成，其他操作会等待锁释放而不是误报任务仍在运行。
+        with self._state_lock:
+            if self._active_task == published.task_id:
+                self._active_task = None
+        try:
+            task_db.publish_kpi_from_scene(published.task_id, output=settings.output)
+        except Exception:  # noqa: BLE001 - KPI 镜像失败不得回滚已经可见的任务终态
+            logger.exception("task_kpi_mirror_failed", task_id=published.task_id)
         # 终态发布完成后执行磁盘留存清理；清理失败只记日志，不改变任务终态。
         retention.cleanup_safely(output=settings.output, uploads=settings.uploads)
 

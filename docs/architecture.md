@@ -166,8 +166,9 @@ python run_online.py
    - Web 只消费契约化数据，不直接理解规则内部实现。
 
 8. **终态发布与留存治理**
-   - 任务进入终态时，父进程在单个事务内发布任务行（含 `last_run_at`、`duration_ms`、`preparation`）、全部规则结果（含 `pkg.extract.main`、`pkg.extract.classification`）与本次 KPI 历史点。
-   - 发布完成后再写现场文件（`task.json`、`system.json`、`report.html`），最后触发留存清理。
+   - 任务进入终态时，父进程先用快速事务发布任务行（含 `last_run_at`、`duration_ms`、`preparation`）与全部规则结果（含 `pkg.extract.main`、`pkg.extract.classification`），随后写 `task.json`。
+   - 本次 KPI 历史点在终态可见后独立镜像到 SQLite；镜像失败只记录 `task_kpi_mirror_failed`，不回滚已经提交的任务终态。启动回填可从终态 `system.json` 与规则结果恢复缺失 `task.json` 的任务，无需先等待完整 KPI 索引。
+   - 终态发布完成并写出现场文件后触发留存清理。
    - 留存清理只删除磁盘现场，不改动任何 DB 行；保留集合 = 按 `COALESCE(last_run_at, created_at)` 倒序的前 50 个任务 ∪ 全部 `pending` / `running` 任务。
    - 重跑、全量/增量重建与单规则重跑同样整批替换该任务的规则结果与 KPI 历史点：只保留最新一次执行结果，不做版本历史。
    - 执行日志与报告不入库，随现场清理一同消失；现场缺失时报告/日志接口返回 410 `scene_cleaned`，重跑与重建返回 410 并提示重新上传同名数据包、确认覆盖后全量重建。

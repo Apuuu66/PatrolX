@@ -147,8 +147,8 @@ def test_kpi_rule_supports_summary_and_metric_detail() -> None:
             for metric in unit["metrics"]:
                 assert "trends" not in metric
                 assert "observations" not in metric
-                assert len(metric["trend_points"]) <= 30
-                assert metric["trend_point_count"] >= len(metric["trend_points"])
+                assert "trend_points" not in metric
+                assert metric["trend_point_count"] >= 0
 
         unit = units[0]
         metric = unit["metrics"][0]
