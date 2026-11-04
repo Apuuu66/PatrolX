@@ -60,23 +60,22 @@ describe("MainLayout", () => {
   it("访客模式下登录按钮不是主按钮权重", () => {
     renderLayout("/");
 
-    // AntD 会在两字中文按钮中插入空格，名称为"登 录"。
     const login = screen.getByRole("button", { name: /登\s*录/ });
-    expect(login.classList.contains("ant-btn-primary")).toBe(false);
-    expect(login.classList.contains("ant-btn-default")).toBe(true);
+    expect(login.classList.contains("app-button")).toBe(true);
+    expect(login.classList.contains("app-button--small")).toBe(true);
+    expect(login.classList.contains("app-button--primary")).toBe(false);
   });
 
-  it("侧边栏使用深色导航底，并保留键盘可达的菜单项", () => {
+  it("侧边栏使用深色导航底，并保留可访问的当前菜单项", () => {
     setSession("token-for-test", { username: "admin", role: "admin" });
     const { container } = renderLayout("/inspectors");
 
     const sider = container.querySelector(".app-sider") as HTMLElement;
     expect(sider).not.toBeNull();
-    // 深色导航：侧边栏与菜单都走 dark 主题，与浅色内容区分区。
-    expect(sider.classList.contains("ant-layout-sider-dark")).toBe(true);
-    expect(container.querySelector(".app-sider .ant-menu-dark")).not.toBeNull();
-    const item = within(sider).getByText("规则管理").closest("li") as HTMLElement;
-    expect(item.classList.contains("ant-menu-item-selected")).toBe(true);
-    expect(item.getAttribute("tabindex")).not.toBeNull();
+    expect(container.querySelector(".app-nav")).not.toBeNull();
+    const item = within(sider).getByRole("link", { name: "规则管理" });
+    expect(item.classList.contains("app-nav-link")).toBe(true);
+    expect(item.classList.contains("is-selected")).toBe(true);
+    expect(item.getAttribute("aria-current")).toBe("page");
   });
 });

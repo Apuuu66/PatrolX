@@ -23,6 +23,7 @@ test("buildTrendChartOption 生成完整趋势曲线配置", () => {
   assert.equal(option.series[0]?.name, "CPU使用率");
   assert.deepEqual(option.series[0]?.data, [1, 3, 2]);
   assert.equal(option.tooltip.trigger, "axis");
+  assert.equal(option.animation, false);
 });
 
 test("buildTrendChartOption 对不足两个趋势点返回空配置", () => {
@@ -83,4 +84,5 @@ test("buildDailyTrendChartOption 按时刻对齐每日曲线", () => {
   assert.deepEqual(option?.series.find((item) => item.name === "2026-01-01")?.data, [10, 20]);
   assert.deepEqual(option?.series.find((item) => item.name === "2026-01-02")?.data, [30, 60]);
   assert.deepEqual(option?.series.find((item) => item.name === "历史基线")?.data, [10, 20]);
+  assert.equal(option?.animation, false);
 });

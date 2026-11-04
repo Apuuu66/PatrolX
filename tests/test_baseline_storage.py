@@ -168,6 +168,40 @@ def test_init_db_creates_missing_sqlite_parent_directory(tmp_path: Path, monkeyp
     assert db_path.is_file()
 
 
+def test_init_db_enables_wal_mode(tmp_path: Path, monkeypatch) -> None:
+    """KPI 大事务发布期间，任务摘要读取不能被回滚日志锁死。"""
+    import sqlite3
+
+    from app.core.config import settings
+    from app.models.db import init_db
+
+    db_path = tmp_path / "wal-patrolx.db"
+    monkeypatch.setattr(settings, "sqlite_path", db_path)
+
+    init_db()
+
+    with sqlite3.connect(db_path) as connection:
+        journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+
+    assert str(journal_mode).lower() == "wal"
+
+
+def test_session_factory_waits_for_transient_sqlite_writer(tmp_path: Path, monkeypatch) -> None:
+    """并发写入短暂重叠时，数据库会话应等待而不是立即锁失败。"""
+    from sqlalchemy import text
+
+    from app.core.config import settings
+    from app.models.db import init_db, session_factory
+
+    monkeypatch.setattr(settings, "sqlite_path", tmp_path / "busy-timeout-patrolx.db")
+    init_db()
+
+    with session_factory() as session:
+        busy_timeout = session.execute(text("PRAGMA busy_timeout")).scalar()
+
+    assert int(busy_timeout) >= 30_000
+
+
 def test_default_sqlite_path_is_outside_output_root(monkeypatch) -> None:
     """元数据库默认不与任务输出目录混放。"""
     from app.core.config import Settings

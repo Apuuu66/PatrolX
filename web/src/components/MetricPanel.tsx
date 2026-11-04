@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
-import echarts from "../lib/echarts";
+import { lazy, Suspense } from "react";
 import { Card, Col, Row, Typography } from "antd";
 import { Table } from "./ResizableTable";
 import type { components } from "../api/client";
 
 type Metric = components["schemas"]["Metric"];
+
+const MetricTrendChart = lazy(() => import("./MetricTrendChart"));
 
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -48,47 +49,14 @@ export function MetricPanel({
         </Row>
       )}
       {trend.map((m) => (
-        <TrendChart key={m.key} metric={m} />
+        <Suspense key={m.key} fallback={<Card size="small" loading style={{ marginTop: 12 }} />}>
+          <MetricTrendChart metric={m} />
+        </Suspense>
       ))}
       {metrics.every((m) => !isNumber(m.value)) && (
         <FallbackTable metrics={metrics} showAllColumns={showAllColumns} />
       )}
     </div>
-  );
-}
-
-function TrendChart({ metric }: { metric: Metric }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!ref.current || !metric.series?.length) return;
-    const chart = echarts.init(ref.current);
-    const points = metric.series.map((s) => ({ x: String(s.t ?? ""), y: Number(s.v ?? 0) }));
-    chart.setOption({
-      tooltip: { trigger: "axis" },
-      grid: { left: 48, right: 24, top: 40, bottom: 32 },
-      xAxis: { type: "category", data: points.map((p) => p.x), boundaryGap: false },
-      yAxis: { type: "value" },
-      series: [
-        {
-          name: metric.label,
-        type: "line",
-        smooth: true,
-        showSymbol: false,
-          data: points.map((p) => p.y),
-        },
-      ],
-    });
-    const onResize = () => chart.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      chart.dispose();
-    };
-  }, [metric]);
-  return (
-    <Card size="small" title={`${metric.label}（趋势）`} style={{ marginTop: 12 }}>
-      <div ref={ref} style={{ height: 280 }} />
-    </Card>
   );
 }
 

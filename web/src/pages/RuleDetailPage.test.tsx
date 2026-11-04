@@ -146,6 +146,7 @@ describe("RuleDetailPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("rule-section-conclusion")).toBeDefined();
     });
+    expect(api.getRuleResult).toHaveBeenCalledWith("task-001", "alarm.flapping", false);
 
     const order = Array.from(document.querySelectorAll('[data-testid^="rule-section-"]')).map((element) =>
       element.getAttribute("data-testid"),
@@ -207,6 +208,29 @@ describe("RuleDetailPage", () => {
     expect(screen.getByTestId("rule-section-conclusion").textContent).toContain(
       "source_patterns 未匹配到文件: ^traffic/.*$",
     );
+  });
+
+  it("KPI 规则加载时排除原始记录，避免页面携带大体积证据数据", async () => {
+    vi.mocked(api.getRuleResult).mockResolvedValue(
+      makeRule({
+        code: "kpi.measurement_units",
+        name: "KPI 测量单元巡检",
+        metadata: { measurement_units: [] },
+      }),
+    );
+    vi.mocked(api.listInspectors).mockResolvedValue([
+      makeInspector({ code: "kpi.measurement_units", name: "KPI 测量单元巡检" }),
+    ]);
+
+    renderPage("kpi.measurement_units");
+
+    await waitFor(() => {
+      expect(api.getRuleResult).toHaveBeenCalledWith(
+        "task-001",
+        "kpi.measurement_units",
+        true,
+      );
+    });
   });
 
   it("skip 且无跳过原因时给出兜底文案，不静默通过", async () => {
@@ -278,7 +302,7 @@ describe("RuleDetailPage", () => {
     renderPage("alarm.active_state");
 
     await waitFor(() => {
-      expect(screen.getByTestId("rule-section-evidence").textContent).toContain("未清除告警");
+      expect(screen.getByTestId("rule-section-evidence").textContent).toContain("最高严重级");
     });
     const evidence = screen.getByTestId("rule-section-evidence").textContent ?? "";
     expect(evidence).toContain("最高严重级");
@@ -312,7 +336,7 @@ describe("RuleDetailPage", () => {
     renderPage("alarm.recurrence");
 
     await waitFor(() => {
-      expect(screen.getByTestId("rule-section-evidence").textContent).toContain("告警反复上报");
+      expect(screen.getByTestId("rule-section-evidence").textContent).toContain("原始 Repeat Times");
     });
     const evidence = screen.getByTestId("rule-section-evidence").textContent ?? "";
     expect(evidence).toContain("原始 Repeat Times");

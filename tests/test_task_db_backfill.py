@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import tracemalloc
 from datetime import UTC, datetime
 
-from app.models.db import TaskKpiPoint, TaskRuleResult, session_factory
+from app.models.db import TaskKpiPoint, TaskRecord, TaskRuleResult, session_factory
 from app.models.schemas import InspectionTask, RuleResult, RuleStatus, Summary, SystemInspection, TaskStats
 from app.services import store, task_db
 from tests.baseline_helpers import setup_env
@@ -117,6 +118,28 @@ def test_backfill_imports_scene_task_with_rules_and_kpi(tmp_path, monkeypatch) -
     assert task_db.get_run_fields(task_id) == (CREATED_AT, 240_000, "c" * 64)
 
 
+def test_backfill_streams_large_kpi_index_file(tmp_path, monkeypatch) -> None:
+    """启动回填读取大索引时必须逐行消费，不能把整文件、行列表和全部对象同时留在内存。"""
+    env = setup_env(tmp_path, monkeypatch)
+    task_id = "task-backfill-streaming"
+    task = _scene_task(task_id)
+    _write_scene(env, task, rules=[_rule()], points=[])
+    index = env.task_dir(task_id) / "kpi" / "history" / "index.jsonl"
+    with index.open("w", encoding="utf-8") as fh:
+        for value in range(60_000):
+            fh.write(json.dumps(_point(task_id, value=value), ensure_ascii=False) + "\n")
+
+    tracemalloc.start()
+    try:
+        assert task_db.import_task_from_output(task_id, output=env.output)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert peak < 40 * 1024 * 1024
+    assert _scene_rows(task_id) == (1, 60_000)
+
+
 def test_backfill_skips_already_indexed_task(tmp_path, monkeypatch) -> None:
     env = setup_env(tmp_path, monkeypatch)
     task_id = "task-backfill-indexed"
@@ -169,3 +192,56 @@ def test_backfill_is_idempotent(tmp_path, monkeypatch) -> None:
     assert task_db.backfill_from_output(env.output) == 0
     assert task_db.backfill_from_output(env.output) == 0
     assert _scene_rows(task_id) == first_rows == (1, 1)
+
+
+def test_backfill_recovers_terminal_scene_without_task_json(tmp_path, monkeypatch) -> None:
+    """进程在写 task.json 前退出时，启动回填应从终态现场恢复任务。"""
+    env = setup_env(tmp_path, monkeypatch)
+    task_id = "task-backfill-terminal"
+    task = _scene_task(task_id)
+    assert task.system is not None
+    store.save_system(env.output, task_id, task.system)
+    store.save_rule_result(env.output, task_id, _rule())
+    (env.task_dir(task_id) / "execution.log").write_text(
+        json.dumps({"ts": "2026-09-10T08:00:00+00:00", "level": "info", "message": "任务开始"})
+        + "\n"
+        + json.dumps({"ts": "2026-09-10T12:00:00+00:00", "level": "info", "message": "任务完成"})
+        + "\n",
+        encoding="utf-8",
+    )
+    with session_factory() as session:
+        session.add(
+            TaskRecord(
+                task_id=task_id,
+                name=task.name,
+                mode="online",
+                status="running",
+                trigger="api",
+                package_file=task.system.package_file,
+                customer=dict(task.system.customer),
+                package_kind="inspection",
+                version=task.system.version,
+                stats={},
+                created_at=CREATED_AT,
+                last_run_at=datetime(2026, 9, 10, 11, 56, tzinfo=UTC),
+            )
+        )
+        session.commit()
+
+    def unexpected_kpi_read(_task_dir, _task_id):
+        raise AssertionError("历史终态恢复不得等待 KPI 索引入库")
+
+    monkeypatch.setattr(task_db, "_read_kpi_index", unexpected_kpi_read)
+
+    assert task_db.backfill_from_output(env.output) == 1
+
+    summary = task_db.get_task_summary(task_id)
+    assert summary is not None
+    assert summary.status.value == "completed"
+    assert summary.completed_at == COMPLETED_AT
+    assert summary.duration_ms == 240_000
+    assert [result.code for result in task_db.list_rule_results(task_id)] == [KPI_CODE]
+    assert task_db.list_kpi_points(task_id) == []
+    saved = json.loads((env.task_dir(task_id) / "task.json").read_text(encoding="utf-8"))
+    assert saved["status"] == "completed"
+    assert task_db.backfill_from_output(env.output) == 0

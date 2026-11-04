@@ -9,9 +9,12 @@ import re
 import uuid
 from collections import Counter
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
 from typing import Any, Literal
+from unicodedata import normalize
 
 from sqlalchemy import exists, func, or_
 
@@ -443,7 +446,22 @@ def match_measurement_files(files: Iterable[tuple[str, Path]]) -> dict[str, Any]
 
 
 _UNIT_PATTERN = re.compile(r"^(.*?)\s*[（(]([^()（）]*)[）)]\s*$")
-_HEADER_ANCHORS = ("测量开始时间", "测量结束时间", "周期(分钟)")
+_HEADER_ROLE_ALIASES = {
+    "start": frozenset({"测量开始时间", "startime", "starttime"}),
+    "end": frozenset({"测量结束时间", "endtime"}),
+    "period": frozenset({"周期(分钟)", "period(minute)", "period(minutes)"}),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _HeaderLayout:
+    """测量 CSV 表头位置；所有时间与周期读取共用同一布局。"""
+
+    row_index: int
+    row: list[str]
+    start_index: int
+    end_index: int
+    period_index: int
 
 
 def _split_source_name(raw_name: str) -> tuple[str, str | None]:
@@ -453,11 +471,119 @@ def _split_source_name(raw_name: str) -> tuple[str, str | None]:
     return match.group(1).strip(), match.group(2).strip()
 
 
-def _find_header(rows: list[list[str]]) -> tuple[int, list[str]] | None:
-    for index, row in enumerate(rows[:30]):
-        if all(anchor in row for anchor in _HEADER_ANCHORS):
-            return index, row
-    return None
+_SUCCESS_RATE_PATTERN = re.compile(r"\bsuccess\s+rate\b|成功率", re.IGNORECASE)
+_REQUEST_COUNT_PATTERN = re.compile(r"\brequests?\b|请求(?:次数|数)", re.IGNORECASE)
+_RESPONSE_COUNT_PATTERN = re.compile(
+    r"\b(?:success|failure)\s+responses?\b|(?:成功|失败)(?:响应|请求次数)",
+    re.IGNORECASE,
+)
+
+
+def _metric_semantic_tokens(raw_name: str) -> tuple[str, ...]:
+    """提取成功率与请求数名称中的业务主体，用于定位零分母对应的请求列。"""
+    base_name, _ = _split_source_name(raw_name)
+    text = normalize("NFKC", base_name).casefold()
+    text = re.sub(r"\bsuccess\s+rate(?:\s+of)?\b", " ", text)
+    text = text.replace("成功率", " ")
+    text = re.sub(r"\bnumber\s+of\b", " ", text)
+    text = re.sub(r"\brequests?\b", " ", text)
+    text = re.sub(r"请求(?:次数|数)", " ", text)
+    text = re.sub(r"[^0-9a-z\u4e00-\u9fff]+", " ", text)
+    return tuple(token for token in text.split() if token)
+
+
+def _is_success_rate_name(raw_name: str) -> bool:
+    base_name, _ = _split_source_name(raw_name)
+    return bool(_SUCCESS_RATE_PATTERN.search(normalize("NFKC", base_name).casefold()))
+
+
+def _is_request_count_name(raw_name: str) -> bool:
+    base_name, _ = _split_source_name(raw_name)
+    text = normalize("NFKC", base_name).casefold()
+    if _SUCCESS_RATE_PATTERN.search(text) or _RESPONSE_COUNT_PATTERN.search(text):
+        return False
+    return bool(_REQUEST_COUNT_PATTERN.search(text))
+
+
+def _tokens_match(rate_tokens: tuple[str, ...], request_tokens: tuple[str, ...]) -> bool:
+    """精确匹配业务主体，同时允许 DC 这类连续词首字母缩写。"""
+
+    @cache
+    def match(rate_index: int, request_index: int) -> bool:
+        if rate_index == len(rate_tokens):
+            return request_index == len(request_tokens)
+        if request_index == len(request_tokens):
+            return False
+        token = rate_tokens[rate_index]
+        if token == request_tokens[request_index]:
+            return match(rate_index + 1, request_index + 1)
+        if not (token.isascii() and token.isalpha() and 2 <= len(token) <= 8):
+            return False
+        acronym = ""
+        for end in range(request_index + 1, len(request_tokens) + 1):
+            acronym += request_tokens[end - 1][0]
+            if not token.startswith(acronym):
+                break
+            if acronym == token and match(rate_index + 1, end):
+                return True
+        return False
+
+    return match(0, 0)
+
+
+def _success_rate_denominator_indices(header_row: list[str]) -> dict[int, int]:
+    """返回成功率为空时可检查分母的成功率列到请求数列映射。"""
+    request_columns: list[tuple[int, tuple[str, ...]]] = []
+    for index, raw_name in enumerate(header_row):
+        if _is_request_count_name(raw_name):
+            tokens = _metric_semantic_tokens(raw_name)
+            if tokens:
+                request_columns.append((index, tokens))
+
+    denominator_indices: dict[int, int] = {}
+    for index, raw_name in enumerate(header_row):
+        if not _is_success_rate_name(raw_name):
+            continue
+        rate_tokens = _metric_semantic_tokens(raw_name)
+        if not rate_tokens:
+            continue
+        candidates = [
+            request_index
+            for request_index, request_tokens in request_columns
+            if _tokens_match(rate_tokens, request_tokens)
+        ]
+        # 多列同时匹配时无法证明分母归属，保持原空值异常，避免错误忽略。
+        if len(candidates) == 1:
+            denominator_indices[index] = candidates[0]
+    return denominator_indices
+
+
+def _normalize_header_name(value: str) -> str:
+    """统一 BOM、全半角、大小写和空白，降低导出格式差异。"""
+    return re.sub(r"\s+", "", normalize("NFKC", value.strip()).casefold())
+
+
+def _find_header(rows: list[list[str]]) -> tuple[_HeaderLayout | None, str | None]:
+    for row_index, row in enumerate(rows[:30]):
+        role_indices = {
+            role: [index for index, value in enumerate(row) if _normalize_header_name(value) in aliases]
+            for role, aliases in _HEADER_ROLE_ALIASES.items()
+        }
+        if not all(role_indices[role] for role in _HEADER_ROLE_ALIASES):
+            continue
+        if any(len(indices) > 1 for indices in role_indices.values()):
+            return None, "header_ambiguous"
+        return (
+            _HeaderLayout(
+                row_index=row_index,
+                row=row,
+                start_index=role_indices["start"][0],
+                end_index=role_indices["end"][0],
+                period_index=role_indices["period"][0],
+            ),
+            None,
+        )
+    return None, "header_not_found"
 
 
 def _read_csv_rows(path: Path) -> list[list[str]]:
@@ -585,13 +711,12 @@ def _file_period_minutes(path: Path) -> int | None:
         rows = _read_csv_rows(path)
     except (OSError, UnicodeError, csv.Error):
         return None
-    header = _find_header(rows)
-    if header is None or "周期(分钟)" not in header[1]:
+    header, _ = _find_header(rows)
+    if header is None:
         return None
-    period_index = header[1].index("周期(分钟)")
-    for row in rows[header[0] + 1 :]:
-        if len(row) > period_index and row[period_index].strip():
-            return _parse_period_minutes(row[period_index])
+    for row in rows[header.row_index + 1 :]:
+        if len(row) > header.period_index and row[header.period_index].strip():
+            return _parse_period_minutes(row[header.period_index])
     return None
 
 
@@ -636,12 +761,11 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
             except (OSError, UnicodeError, csv.Error) as exc:
                 file_result.update({"status": "parse_error", "reason": "csv_read_error", "detail": str(exc)})
                 continue
-            header = _find_header(rows)
+            header, header_error = _find_header(rows)
             if header is None:
-                file_result.update({"status": "parse_error", "reason": "header_not_found"})
+                file_result.update({"status": "parse_error", "reason": header_error or "header_not_found"})
                 continue
-            anchor_index = header[1].index("周期(分钟)")
-            metric_columns = header[1][anchor_index + 1 :]
+            metric_columns = header.row[header.period_index + 1 :]
             candidates: list[dict[str, Any]] = []
             matched_metrics: list[str] = []
             auto_registered: list[str] = []
@@ -1207,6 +1331,7 @@ def _merge_observation(target: dict[str, Any], source: dict[str, Any]) -> None:
     target["row_count"] += source["row_count"]
     target["valid_count"] += source["valid_count"]
     target["null_count"] += source["null_count"]
+    target["not_applicable_count"] += source.get("not_applicable_count", 0)
     target["parse_error_count"] += source["parse_error_count"]
     target["zero_count"] += source["zero_count"]
     if source["min_value"] is not None:
@@ -1468,7 +1593,20 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
 
     unit_results: dict[str, dict[str, Any]] = {}
     with session_factory() as session:
-        bindings = session.query(KpiMeasurementBinding).filter_by(status="confirmed", enabled=True).all()
+        bindings = (
+            session.query(KpiMeasurementBinding)
+            .join(
+                KpiMeasurementResource,
+                KpiMeasurementResource.resource_id == KpiMeasurementBinding.metric_resource_id,
+            )
+            .filter(
+                KpiMeasurementBinding.status == "confirmed",
+                KpiMeasurementBinding.enabled.is_(True),
+                KpiMeasurementResource.kind == "me",
+                KpiMeasurementResource.enabled.is_(True),
+            )
+            .all()
+        )
         by_unit: dict[str, list[KpiMeasurementBinding]] = {}
         for binding in bindings:
             by_unit.setdefault(binding.measurement_unit_id, []).append(binding)
@@ -1496,6 +1634,8 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 continue
             if file_result.get("reason") == "header_not_found":
                 parse_reason = "表头未找到"
+            elif file_result.get("reason") == "header_ambiguous":
+                parse_reason = "表头列存在歧义"
             elif file_result.get("reason") == "csv_read_error":
                 parse_reason = f"CSV 读取失败: {file_result.get('detail', '')}"
             else:
@@ -1553,7 +1693,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             )
             if not by_unit.get(unit_id):
                 result["status"] = "skip"
-                result["reason"] = "未配置已确认指标绑定"
+                result["reason"] = "未配置已确认且启用的指标绑定"
                 continue
             result["file_count"] += 1
             result["source_files"].append(file_result["source_file"])
@@ -1563,16 +1703,16 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 result["status"] = "error"
                 result["reason"] = f"CSV 读取失败: {exc}"
                 continue
-            header = _find_header(rows)
+            header, header_error = _find_header(rows)
             if header is None:
                 file_result["status"] = "parse_error"
-                file_result["reason"] = "header_not_found"
+                file_result["reason"] = header_error or "header_not_found"
                 result["status"] = "error"
-                result["reason"] = "表头未找到"
+                result["reason"] = "表头列存在歧义" if header_error == "header_ambiguous" else "表头未找到"
                 continue
-            header_index, header_row = header
-            start_index = header_row.index("测量开始时间")
-            column_index = {name: index for index, name in enumerate(header_row)}
+            start_index = header.start_index
+            column_index = {name: index for index, name in enumerate(header.row)}
+            success_rate_denominators = _success_rate_denominator_indices(header.row)
             confirmed_bindings = by_unit[unit_id]
             for binding in confirmed_bindings:
                 series_points: list[dict[str, Any]] = []
@@ -1580,7 +1720,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 if binding.raw_source_name not in column_index:
                     continue
                 observations: dict[str, dict[str, Any]] = {}
-                for line_number, data_row in enumerate(rows[header_index + 1 :], start=header_index + 2):
+                for line_number, data_row in enumerate(rows[header.row_index + 1 :], start=header.row_index + 2):
                     if not data_row or all(not cell.strip() for cell in data_row):
                         continue
                     object_key = data_row[0].strip() if start_index > 0 and data_row else "__all__"
@@ -1591,6 +1731,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                             "row_count": 0,
                             "valid_count": 0,
                             "null_count": 0,
+                            "not_applicable_count": 0,
                             "parse_error_count": 0,
                             "zero_count": 0,
                             "min_value": None,
@@ -1608,6 +1749,22 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         if raw_value.strip():
                             observation["parse_error_count"] += 1
                         else:
+                            denominator_index = success_rate_denominators.get(value_index)
+                            denominator_valid, denominator = (
+                                _parse_number(data_row[denominator_index])
+                                if denominator_index is not None and len(data_row) > denominator_index
+                                else (False, None)
+                            )
+                            if denominator_valid and denominator == 0:
+                                observation["not_applicable_count"] += 1
+                                observation["source_rows"].append(
+                                    {
+                                        "source_file": file_result["source_file"],
+                                        "line_number": line_number,
+                                        "value": raw_value,
+                                    }
+                                )
+                                continue
                             observation["null_count"] += 1
                         observation["source_rows"].append(
                             {"source_file": file_result["source_file"], "line_number": line_number, "value": raw_value}
@@ -1625,7 +1782,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                     observation["sum_value"] += number
                     measured_at = _parse_measurement_time(data_row[start_index])
                     period_minutes = _parse_period_minutes(
-                        data_row[column_index["周期(分钟)"]] if "周期(分钟)" in column_index else ""
+                        data_row[header.period_index] if len(data_row) > header.period_index else ""
                     )
                     if measured_at is not None:
                         series_points.append(

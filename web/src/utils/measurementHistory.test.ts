@@ -108,6 +108,7 @@ test("buildHistoryTrendChartOption 按时刻生成当前任务、历史和基线
   assert.deepEqual(option?.series.find((item) => item.name === "当前任务")?.data, [30, null]);
   assert.deepEqual(option?.series.find((item) => item.name === "2026-09-09")?.data, [10, 20]);
   assert.deepEqual(option?.series.find((item) => item.name === "历史基线")?.data, [10, null]);
+  assert.equal(option?.animation, false);
   const markData = option?.series.find((item) => item.name === "当前任务")?.markPoint?.data;
   assert.equal(markData?.length, 1);
   assert.deepEqual(markData?.[0]?.coord, ["10:00", 30]);

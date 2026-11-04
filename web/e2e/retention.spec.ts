@@ -98,7 +98,7 @@ test("清理后任务详情、规则结果与 KPI 趋势仍可查", async ({ pag
   await expect(ruleRow).toContainText(KPI_RULE_CODE);
 
   await page.goto(`/tasks/${CLEANED_TASK_ID}/rules/${KPI_RULE_CODE}`);
-  await expect(page.getByText("呼叫统计")).toBeVisible();
+  await expect(page.getByText("呼叫统计", { exact: true })).toBeVisible();
 
   const detailResponsePromise = page.waitForResponse(
     (response) =>
@@ -109,8 +109,9 @@ test("清理后任务详情、规则结果与 KPI 趋势仍可查", async ({ pag
   const detailResponse = await detailResponsePromise;
   expect(detailResponse.status()).toBe(200);
   // 完整趋势的时间点明细来自数据库中的 KPI 明细，两条窗口仍可核对。
-  await expect(page.getByRole("cell", { name: "101 次", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "105 次", exact: true })).toBeVisible();
+  const timepointTable = page.getByRole("table", { name: "时间点明细" });
+  await expect(timepointTable.getByRole("cell", { name: "101 次", exact: true })).toBeVisible();
+  await expect(timepointTable.getByRole("cell", { name: "105 次", exact: true })).toBeVisible();
 
   const historyResponsePromise = page.waitForResponse(
     (response) =>

@@ -166,8 +166,9 @@ python run_online.py
    - Web 只消费契约化数据，不直接理解规则内部实现。
 
 8. **终态发布与留存治理**
-   - 任务进入终态时，父进程在单个事务内发布任务行（含 `last_run_at`、`duration_ms`、`preparation`）、全部规则结果（含 `pkg.extract.main`、`pkg.extract.classification`）与本次 KPI 历史点。
-   - 发布完成后再写现场文件（`task.json`、`system.json`、`report.html`），最后触发留存清理。
+   - 任务进入终态时，父进程先用快速事务发布任务行（含 `last_run_at`、`duration_ms`、`preparation`）与全部规则结果（含 `pkg.extract.main`、`pkg.extract.classification`），随后写 `task.json`。
+   - 本次 KPI 历史点在终态可见后独立镜像到 SQLite；镜像失败只记录 `task_kpi_mirror_failed`，不回滚已经提交的任务终态。启动回填可从终态 `system.json` 与规则结果恢复缺失 `task.json` 的任务，无需先等待完整 KPI 索引。
+   - 终态发布完成并写出现场文件后触发留存清理。
    - 留存清理只删除磁盘现场，不改动任何 DB 行；保留集合 = 按 `COALESCE(last_run_at, created_at)` 倒序的前 50 个任务 ∪ 全部 `pending` / `running` 任务。
    - 重跑、全量/增量重建与单规则重跑同样整批替换该任务的规则结果与 KPI 历史点：只保留最新一次执行结果，不做版本历史。
    - 执行日志与报告不入库，随现场清理一同消失；现场缺失时报告/日志接口返回 410 `scene_cleaned`，重跑与重建返回 410 并提示重新上传同名数据包、确认覆盖后全量重建。
@@ -324,8 +325,8 @@ deploy/config/classify_rules.yaml
 docs/example/real-package-structure.md
 ```
 
-基准映射包括：UMF/CSP 告警统一进入 `alarm/`；`PerfResult_*.zip` 的 73 个成员进入
-`kpi/`；`CollectExport*.zip` 的 14 个 CSV 进入 `other/MESH Application Metrics/`；
+基准映射包括：UMF/CSP 告警统一进入 `alarm/`；真实 `PerfResult_*.zip` 的 73 个成员进入
+`kpi/`（合成夹具为覆盖中英文表头增加至 74 个）；`CollectExport*.zip` 的 14 个 CSV 进入 `other/MESH Application Metrics/`；
 Service Logs 只保留 98 个业务主日志并将 85 个 `.log.gz` 展开为 `.log`；CHR 选择并解压
 3 个 `.bil.gz` 为 `chr/*.bil`。所有排除成员必须出现在 ignored 审计中。
 
@@ -587,14 +588,22 @@ python build.py gen-web-api
 
 ### 7.8 KPI 测量单元巡检
 
-KPI CSV 允许表头前存在 `key：value` 元数据行；表头按列名定位
-`测量开始时间`、`测量结束时间` 和 `周期(分钟)`，该周期列之后的列均为指标值。
+KPI CSV 允许表头前存在 `key：value` 元数据行；中英文表头互斥，中文按
+`测量开始时间`、`测量结束时间`、`周期(分钟)` 定位，英文按
+`StarTime`/`StartTime`、`EndTime`、`Period(Minute)` 定位；周期列之后的列均为指标值。
+成功率列为空时，仅当可唯一关联到业务主体相同的请求数列且请求数为 `0`，才记为不适用
+（`not_applicable_count`）并豁免空值异常；请求数大于 `0`、缺失或无法唯一关联时仍按异常处理。
+`Media Resource Creation Success Rate(%)`、`Media Resource Creation Requests Success Rate(%)`、
+`DC Resource Update Success Rate(%)`、`Data Channel Resource Update Requests Success Rate(%)`
+是四个独立指标，不因名称相近而自动合并。
 
 现行 KPI 能力由单一规则 `kpi.measurement_units`（P1）承载，匹配 `^kpi/.*\.csv$` 与 `^traffic/.*\.csv$`：
 
 - 测量单元归属：按文件名主干匹配已启用测量单元，未归属文件计入 `unmatched_files`，多周期文件按优先级保留并在 `skipped_files` 记录跳过原因。
 - 指标自动入库：任务执行时按 CSV 表头归属指标列——复用既有指标、暴露跨测量单元冲突、目录未覆盖的列自动创建并默认启用（specs/021）。
-  人工注册（`/api/v5/kpi/measurement-bindings/{binding_id}/register-metric`）与绑定批量确认（`/api/v5/kpi/measurement-bindings/batch-confirm`）只作为异常修正能力。
+- 关注范围：只有“绑定已确认且启用 + 指标资源启用”的 ME 才参与解析、判定和历史索引；
+  停用指标不会写入 `kpi/history/index.jsonl`，既有任务需重跑后才会按新关注范围收敛。
+- 人工注册（`/api/v5/kpi/measurement-bindings/{binding_id}/register-metric`）与绑定批量确认（`/api/v5/kpi/measurement-bindings/batch-confirm`）只作为异常修正能力。
 - 判定维度：文件归属、数值可读性、指标静态阈值、任务内趋势；单文件或单指标解析失败不中断其他单元。
 - 结果形态：`metadata.measurement_units[]` 保存每个测量单元的指标明细与状态，任务摘要与报告只读该结构。
 

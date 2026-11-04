@@ -57,4 +57,28 @@ describe("useTaskDetailData", () => {
     expect(result.current.busy).toBe(true);
     expect(result.current.loading).toBe(false);
   });
+
+  it("reuses the previous data object when a poll returns unchanged content", async () => {
+    const refreshed: TaskDetailData = {
+      ...data,
+      task: { status: "ready", data: { ...task, stats: { ...task.stats } } },
+      logs: { status: "ready", data: [] },
+    };
+    loadTaskDetailData.mockReset();
+    loadTaskDetailData.mockResolvedValueOnce(data).mockResolvedValueOnce(refreshed);
+
+    const { result } = renderHook(() => useTaskDetailData("task-running"));
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+    const firstData = result.current.data;
+    expect(firstData).toBe(data);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(loadTaskDetailData).toHaveBeenCalledTimes(2);
+    expect(result.current.data).toBe(firstData);
+  });
 });

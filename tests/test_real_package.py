@@ -17,7 +17,7 @@ from app.services.extraction.classification import classify_main_evidence
 from app.services.inventory.parser import parse_inventory
 from tests.fixtures.make_real_package import BASE, FIXED_DATE, LST_ME_TXT, build_real_package
 
-DEFAULT_FIXTURE_SHA256 = "c6fe260b70f9f80f4f3f82d2d510aba89803f0516e9e6b0d270a3493a5b12a94"
+DEFAULT_FIXTURE_SHA256 = "9ec08ee3741c0bfee59e2975a76a1a244b079e4dc825cd6bd0d0dff56b322e72"
 
 
 def _extract(tmp_path: Path, *, copy_base_only: bool = False):
@@ -153,7 +153,7 @@ def test_real_package_fixture_variants_are_repeatable(tmp_path: Path) -> None:
 
 
 def test_umf_fixture_covers_real_directory_routes_and_archive_members(tmp_path: Path) -> None:
-    """UMF 合成目录覆盖外层包装、大小写、73 KPI、14 MESH 和未命中文件。"""
+    """UMF 合成目录覆盖外层包装、大小写、74 KPI、14 MESH 和未命中文件。"""
     package = build_real_package(tmp_path / "first")
     repeated = build_real_package(tmp_path / "second")
     assert sha256_file(package) == sha256_file(repeated)
@@ -183,7 +183,7 @@ def test_umf_fixture_covers_real_directory_routes_and_archive_members(tmp_path: 
 
         kpi_name = f"{base}/Performance Measurement Results/PerfResult_20260918.zip"
         with zipfile.ZipFile(io.BytesIO(archive.read(kpi_name))) as kpi_archive:
-            assert len(kpi_archive.infolist()) == 73
+            assert len(kpi_archive.infolist()) == 74
             assert all(info.date_time == FIXED_DATE for info in kpi_archive.infolist())
 
         mesh_name = f"{base}/MESH Application Metrics/CollectExport_20260918.zip"
@@ -259,9 +259,9 @@ def test_umf_fixture_classifies_into_rule_ready_catalog(tmp_path: Path) -> None:
     assert all((data_dir / entry.target).is_file() for entry in run.entries)
 
     kpi_entries = [entry for entry in run.entries if entry.route_id == "umf.kpi"]
-    assert len(kpi_entries) == 73
+    assert len(kpi_entries) == 74
     assert all(entry.category == "kpi" and entry.target.startswith("kpi/") for entry in kpi_entries)
-    assert len({entry.target for entry in kpi_entries}) == 73
+    assert len({entry.target for entry in kpi_entries}) == 74
 
     mml_entries = [entry for entry in run.entries if entry.route_id == "umf.mml-archive"]
     assert {entry.member_relative for entry in mml_entries} == {

@@ -61,6 +61,7 @@ describe("measurement version compare utils", () => {
     const option = buildVersionCompareChartOption(comparison, "呼叫量");
 
     assert.ok(option);
+    assert.equal(option.animation, false);
     assert.equal(option.series.length, 2);
     assert.deepEqual(option.xAxis.data, ["10:00"]);
     assert.deepEqual(option.series[0].name, "当前版本 V2");

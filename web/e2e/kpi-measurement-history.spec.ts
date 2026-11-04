@@ -2,6 +2,26 @@ import { expect, test } from "@playwright/test";
 
 const TASK_ID = "task-kpi-history-current";
 
+test("单任务趋势使用轻量图表，切换历史对比后才加载 ECharts", async ({ page }) => {
+  const chartRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/echarts|zrender/.test(request.url())) chartRequests.push(request.url());
+  });
+
+  await page.goto(`/tasks/${TASK_ID}/rules/kpi.measurement_units`);
+  await expect(page.getByText("呼叫统计", { exact: true })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(chartRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "查看呼叫请求次数完整趋势" }).click();
+  await expect(page.locator('.ant-modal [data-testid="measurement-single-trend-chart"]')).toBeVisible();
+  expect(chartRequests).toEqual([]);
+
+  await page.getByRole("tab", { name: "历史对比" }).click();
+  await expect(page.locator(".ant-modal canvas").first()).toBeVisible();
+  expect(chartRequests.length).toBeGreaterThan(0);
+});
+
 test("测量单元支持完整趋势和历史对比维度选择", async ({ page }) => {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
@@ -18,7 +38,7 @@ test("测量单元支持完整趋势和历史对比维度选择", async ({ page 
   });
 
   await page.goto(`/tasks/${TASK_ID}/rules/kpi.measurement_units`);
-  await expect(page.getByText("呼叫统计")).toBeVisible();
+  await expect(page.getByText("呼叫统计", { exact: true })).toBeVisible();
 
   const detailResponsePromise = page.waitForResponse(
     (response) =>

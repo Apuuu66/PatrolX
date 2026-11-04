@@ -79,14 +79,14 @@ def test_kpi_rule_consumes_only_classified_kpi_catalog_paths(tmp_path: Path) -> 
     write_catalog_manifest(data_dir, [entry.path for entry in run.catalog])
 
     kpi_paths = {Path(entry.path) for entry in run.catalog if entry.path.startswith("kpi/")}
-    assert len(kpi_paths) == 73
+    assert len(kpi_paths) == 74
 
     catalog_paths = TaskFileCatalog.build(data_dir).paths()
     assert any(path.parts[0] == "other" for path in catalog_paths)
 
     registry.load_all()
     kpi_rule = registry.get("kpi.measurement_units")
-    assert kpi_rule.rule_version == "3.3.0"
+    assert kpi_rule.rule_version == "3.3.3"
     assert kpi_rule.source_patterns == [r"^kpi/.*\.csv$", r"^traffic/.*\.csv$"]
     assert set(TaskFileCatalog.build(data_dir).match(kpi_rule.source_patterns or [])) == kpi_paths
     assert all(path.parts[0] == "kpi" for path in kpi_paths)

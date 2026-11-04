@@ -21,6 +21,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.core.config import settings
 
+SQLITE_BUSY_TIMEOUT_SECONDS = 30
+
 
 class Base(DeclarativeBase):
     pass
@@ -52,9 +54,20 @@ def _sqlite_path() -> Path:
     return settings.resolved(settings.sqlite_path)
 
 
+def _create_sqlite_engine(path: Path) -> Engine:
+    """创建统一配置的 SQLite 引擎，避免并发写短暂重叠时立即失败。"""
+    return create_engine(
+        f"sqlite:///{path}",
+        connect_args={
+            "check_same_thread": False,
+            "timeout": SQLITE_BUSY_TIMEOUT_SECONDS,
+        },
+    )
+
+
 def session_factory() -> Session:
     """按当前 settings 创建会话，保证测试环境切换 SQLite 生效。"""
-    engine = create_engine(f"sqlite:///{_sqlite_path()}", connect_args={"check_same_thread": False})
+    engine = _create_sqlite_engine(_sqlite_path())
     return Session(bind=engine, autoflush=False, expire_on_commit=False)
 
 
@@ -82,7 +95,9 @@ def _rebuild_legacy_tasks(engine: Engine) -> None:
 def init_db() -> None:
     path = _sqlite_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False})
+    engine = _create_sqlite_engine(path)
+    with engine.begin() as connection:
+        connection.execute(text("PRAGMA journal_mode=WAL"))
     if inspect(engine).has_table("tasks") and "system_id" in {
         column["name"] for column in inspect(engine).get_columns("tasks")
     }:

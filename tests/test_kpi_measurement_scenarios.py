@@ -251,7 +251,7 @@ def test_disabled_confirmed_binding_is_not_inspected(tmp_path: Path) -> None:
 
     result = inspect_measurement_files("task-disabled", [(path.name, path)])
     assert result["measurement_units"][0]["status"] == "skip"
-    assert result["measurement_units"][0]["reason"] == "未配置已确认指标绑定"
+    assert result["measurement_units"][0]["reason"] == "未配置已确认且启用的指标绑定"
 
 
 def test_row_value_quality_details_are_preserved(tmp_path: Path) -> None:

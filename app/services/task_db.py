@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, insert
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -48,6 +48,7 @@ from app.models.schemas import (
 logger = get_logger("patrolx.task_db")
 
 _KPI_RULE_CODE = "kpi.measurement_units"
+_KPI_INSERT_BATCH_SIZE = 1_000
 _EMPTY_STATS = {"total": 0, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 0, "systems": 0}
 
 
@@ -116,7 +117,7 @@ def _rule_row(task_id: str, result: RuleResult, *, updated_at: datetime | None =
     )
 
 
-def _kpi_row(task_id: str, point: dict[str, Any]) -> TaskKpiPoint | None:
+def _kpi_row_values(task_id: str, point: dict[str, Any]) -> dict[str, Any] | None:
     measured_at = point.get("measured_at")
     if isinstance(measured_at, str):
         measured_at = _parse_iso_time(measured_at)
@@ -126,18 +127,33 @@ def _kpi_row(task_id: str, point: dict[str, Any]) -> TaskKpiPoint | None:
     value = point.get("value")
     period = point.get("period_minutes")
     line_number = point.get("line_number")
-    return TaskKpiPoint(
-        task_id=task_id,
-        rule_code=str(point.get("rule_code") or _KPI_RULE_CODE),
-        measurement_unit_id=point.get("measurement_unit_id"),
-        metric_resource_id=point.get("metric_resource_id"),
-        object_key=point.get("object_key") or "__all__",
-        period_minutes=period if isinstance(period, int) else None,
-        measured_at=measured_at,
-        value=float(value) if isinstance(value, (int, float)) else None,
-        source_file=point.get("source_file"),
-        line_number=line_number if isinstance(line_number, int) else None,
-    )
+    return {
+        "task_id": task_id,
+        "rule_code": str(point.get("rule_code") or _KPI_RULE_CODE),
+        "measurement_unit_id": point.get("measurement_unit_id"),
+        "metric_resource_id": point.get("metric_resource_id"),
+        "object_key": point.get("object_key") or "__all__",
+        "period_minutes": period if isinstance(period, int) else None,
+        "measured_at": measured_at,
+        "value": float(value) if isinstance(value, (int, float)) else None,
+        "source_file": point.get("source_file"),
+        "line_number": line_number if isinstance(line_number, int) else None,
+    }
+
+
+def _kpi_insert_batches(points: Iterable[dict[str, Any]], task_id: str) -> Iterable[list[dict[str, Any]]]:
+    """把 KPI 输入流切成固定大小批次，避免 ORM 身份映射保存全部行。"""
+    batch: list[dict[str, Any]] = []
+    for point in points:
+        row = _kpi_row_values(task_id, point)
+        if row is None:
+            continue
+        batch.append(row)
+        if len(batch) >= _KPI_INSERT_BATCH_SIZE:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
 
 
 def _apply_task_row(record: TaskRecord, task: InspectionTask) -> None:
@@ -202,14 +218,14 @@ def publish_snapshot(
 ) -> None:
     """单事务整批替换本任务的规则结果与 KPI 点，并同步任务行。"""
     results = list(rule_results)
-    points = [row for row in (_kpi_row(task.task_id, point) for point in kpi_points) if row is not None]
     with session_factory() as session:
         _upsert_task_row(session, task)
         session.query(TaskRuleResult).filter(TaskRuleResult.task_id == task.task_id).delete()
         session.query(TaskKpiPoint).filter(TaskKpiPoint.task_id == task.task_id).delete()
         for result in results:
             session.add(_rule_row(task.task_id, result))
-        session.add_all(points)
+        for batch in _kpi_insert_batches(kpi_points, task.task_id):
+            session.execute(insert(TaskKpiPoint), batch)
         session.commit()
 
 
@@ -682,28 +698,25 @@ def _read_json_file(path: Path) -> object | None:
         return None
 
 
-def _read_kpi_index(task_dir: Path, task_id: str) -> list[dict[str, Any]]:
-    """读取任务私有 KPI 索引；坏行跳过，不阻断回填。"""
+def _read_kpi_index(task_dir: Path, task_id: str) -> Iterable[dict[str, Any]]:
+    """逐行读取任务私有 KPI 索引；坏行跳过，不阻断回填。"""
     path = task_dir / "kpi" / "history" / "index.jsonl"
     if not path.is_file():
-        return []
-    records: list[dict[str, Any]] = []
+        return
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    raw = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(raw, dict) or raw.get("task_id") != task_id:
+                    continue
+                yield raw
     except (OSError, UnicodeDecodeError):
         logger.warning("task_backfill_index_unreadable", task_id=task_id, path=str(path))
-        return []
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            raw = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(raw, dict) or raw.get("task_id") != task_id:
-            continue
-        records.append(raw)
-    return records
 
 
 def _read_rule_results(task_dir: Path, task_id: str) -> list[RuleResult]:
@@ -723,11 +736,126 @@ def _read_rule_results(task_dir: Path, task_id: str) -> list[RuleResult]:
     return results
 
 
-def publish_from_scene(task: InspectionTask, *, output: Path | None = None) -> None:
+def _read_scene_log_time(task_dir: Path, status: TaskStatus) -> datetime | None:
+    """从执行日志 ``ts`` 字段读取终态时间；异常日志不阻断恢复。"""
+    path = task_dir / "execution.log"
+    last_time: datetime | None = None
+    terminal_time: datetime | None = None
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                timestamp = _parse_iso_time(entry.get("ts"))
+                if timestamp is None:
+                    continue
+                last_time = timestamp
+                message = str(entry.get("message") or "")
+                if status == TaskStatus.COMPLETED and "完成" in message:
+                    terminal_time = timestamp
+                elif status == TaskStatus.FAILED and "失败" in message:
+                    terminal_time = timestamp
+    except (OSError, UnicodeDecodeError):
+        pass
+    return terminal_time or last_time
+
+
+def _recover_terminal_task_from_scene(task_id: str, task_dir: Path) -> InspectionTask | None:
+    """用数据库任务行 + 终态 system.json + 规则结果恢复缺失 task.json 的任务。"""
+    with session_factory() as session:
+        record = session.get(TaskRecord, task_id)
+        if record is None or record.status not in {TaskStatus.PENDING.value, TaskStatus.RUNNING.value}:
+            return None
+        record_values = {
+            "name": record.name,
+            "mode": record.mode,
+            "trigger": record.trigger,
+            "created_at": _as_utc(record.created_at),
+            "last_run_at": _as_utc(record.last_run_at),
+            "package_kind": record.package_kind,
+            "stats": dict(record.stats or {}),
+        }
+
+    system_payload = _read_json_file(task_dir / "system.json")
+    if not isinstance(system_payload, dict):
+        return None
+    try:
+        system = SystemInspection.model_validate(system_payload)
+    except Exception:  # noqa: BLE001 - 坏 system.json 不阻断其他任务恢复
+        logger.warning("task_backfill_system_invalid", task_id=task_id)
+        return None
+
+    status = TaskStatus.COMPLETED if system.status == SystemStatus.COMPLETED else TaskStatus.FAILED
+    completed_at = _read_scene_log_time(task_dir, status)
+    if completed_at is None:
+        try:
+            completed_at = datetime.fromtimestamp((task_dir / "system.json").stat().st_mtime, tz=UTC)
+        except OSError:
+            completed_at = record_values["last_run_at"] or record_values["created_at"]
+    last_run_at = record_values["last_run_at"] or record_values["created_at"]
+    if last_run_at is None or completed_at is None:
+        return None
+
+    preparation = None
+    from app.services import preparation as preparation_service
+
+    try:
+        preparation = preparation_service.load_preparation(task_dir)
+    except Exception:  # noqa: BLE001 - 准备摘要重建失败不影响终态恢复
+        logger.warning("task_backfill_preparation_failed", task_id=task_id)
+
+    summary = system.summary
+    systems = record_values["stats"].get("systems", 1)
+    try:
+        package_kind = PackageKind(str(record_values["package_kind"] or PackageKind.INSPECTION.value))
+    except ValueError:
+        package_kind = PackageKind.INSPECTION
+    try:
+        return InspectionTask(
+            task_id=task_id,
+            name=record_values["name"],
+            mode=TaskMode(record_values["mode"]),
+            status=status,
+            trigger=TaskTrigger(record_values["trigger"]),
+            created_at=record_values["created_at"],
+            completed_at=completed_at,
+            last_run_at=last_run_at,
+            duration_ms=elapsed_ms(last_run_at, completed_at),
+            stats=TaskStats(
+                total=summary.total,
+                pass_=summary.pass_,
+                warn=summary.warn,
+                fail=summary.fail,
+                error=summary.error,
+                skip=summary.skip,
+                systems=int(systems) if isinstance(systems, int) else 1,
+            ),
+            preparation=preparation,
+            system=system,
+            package_kind=package_kind,
+        )
+    except Exception:  # noqa: BLE001 - 历史脏字段只跳过该任务
+        logger.warning("task_backfill_terminal_scene_invalid", task_id=task_id)
+        return None
+
+
+def publish_from_scene(
+    task: InspectionTask,
+    *,
+    output: Path | None = None,
+    include_kpi: bool = True,
+) -> None:
     """读取任务现场并整批发布到 SQLite；单个坏规则或 KPI 行跳过。
 
     准备摘要只在现场可计算时写入，避免覆盖既有值；``preparation`` 计算函数保持
     执行期语义不变，读取方一律以任务行中的快照为准。
+
+    ``include_kpi=False`` 只发布任务行与规则结果，供终态先可见；KPI 随后通过
+    :func:`publish_kpi_from_scene` 独立镜像，失败不回滚任务终态。
     """
     base = output or settings.output
     task_dir = base / task.task_id
@@ -740,8 +868,29 @@ def publish_from_scene(task: InspectionTask, *, output: Path | None = None) -> N
     publish_snapshot(
         published,
         rule_results=_read_rule_results(task_dir, task.task_id),
-        kpi_points=_read_kpi_index(task_dir, task.task_id),
+        kpi_points=_read_kpi_index(task_dir, task.task_id) if include_kpi else (),
     )
+
+
+def publish_kpi_from_scene(task_id: str, *, output: Path | None = None) -> int:
+    """独立镜像现场 KPI 索引到 SQLite，失败由调用方记录且不改变任务终态。"""
+    base = output or settings.output
+    task_dir = base / task_id
+    point_count = 0
+
+    def counted_points() -> Iterable[dict[str, Any]]:
+        nonlocal point_count
+        for point in _read_kpi_index(task_dir, task_id):
+            point_count += 1
+            yield point
+
+    with session_factory() as session:
+        session.query(TaskKpiPoint).filter(TaskKpiPoint.task_id == task_id).delete()
+        for batch in _kpi_insert_batches(counted_points(), task_id):
+            session.execute(insert(TaskKpiPoint), batch)
+        session.commit()
+    logger.info("task_kpi_mirrored", task_id=task_id, kpi_point_count=point_count)
+    return point_count
 
 
 def _row_needs_snapshot(session: Session, task_id: str, rule_results: list[RuleResult]) -> bool:
@@ -757,7 +906,15 @@ def import_task_from_output(task_id: str, *, output: Path | None = None, force: 
     task_dir = base / task_id
     payload = _read_json_file(task_dir / "task.json")
     if not isinstance(payload, dict):
-        return False
+        recovered = _recover_terminal_task_from_scene(task_id, task_dir)
+        if recovered is None:
+            return False
+        publish_from_scene(recovered, output=base, include_kpi=False)
+        from app.services.store import save_task_meta
+
+        save_task_meta(base, recovered)
+        logger.info("task_backfilled_terminal_scene", task_id=task_id)
+        return True
     try:
         task = InspectionTask.model_validate(payload)
     except Exception:  # noqa: BLE001 - 坏 task.json 跳过并记录
@@ -776,7 +933,14 @@ def import_task_from_output(task_id: str, *, output: Path | None = None, force: 
             if record is not None and not _row_needs_snapshot(session, task_id, rule_results):
                 return False
 
-    kpi_points = _read_kpi_index(task_dir, task_id)
+    kpi_point_count = 0
+
+    def counted_kpi_points() -> Iterable[dict[str, Any]]:
+        nonlocal kpi_point_count
+        for point in _read_kpi_index(task_dir, task_id):
+            kpi_point_count += 1
+            yield point
+
     preparation = task.preparation
     if preparation is None:
         from app.services import preparation as preparation_service
@@ -799,12 +963,12 @@ def import_task_from_output(task_id: str, *, output: Path | None = None, force: 
             ),
         }
     )
-    publish_snapshot(merged, rule_results=rule_results, kpi_points=kpi_points)
+    publish_snapshot(merged, rule_results=rule_results, kpi_points=counted_kpi_points())
     logger.info(
         "task_backfilled",
         task_id=task_id,
         rule_count=len(rule_results),
-        kpi_point_count=len(kpi_points),
+        kpi_point_count=kpi_point_count,
     )
     return True
 
@@ -832,13 +996,13 @@ def ensure_backfilled(output: Path | None = None) -> int:
 
 
 def backfill_from_output(output: Path | None = None) -> int:
-    """启动幂等回填：扫描 ``output/*/task.json``，导入尚不在库中的任务。"""
+    """启动幂等回填：扫描任务现场，导入未入库任务并恢复终态场景。"""
     base = output or settings.output
     if not base.is_dir():
         return 0
     imported = 0
-    for task_file in sorted(base.glob("*/task.json")):
-        task_id = task_file.parent.name
+    for task_dir in sorted(path for path in base.iterdir() if path.is_dir()):
+        task_id = task_dir.name
         try:
             if import_task_from_output(task_id, output=base):
                 imported += 1

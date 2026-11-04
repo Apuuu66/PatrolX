@@ -86,6 +86,7 @@ export interface MeasurementMetadataMetric {
   trend_label?: string;
   trend_signal?: "improved" | "worsened" | "none";
   trend_reason?: string | null;
+  trend_point_count?: number;
   trend_points?: MeasurementTrendPoint[];
   trends?: MeasurementTrend[];
   source_file?: string;

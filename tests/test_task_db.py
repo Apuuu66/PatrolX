@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import tracemalloc
 from datetime import UTC, datetime
 
 import pytest
@@ -182,6 +183,26 @@ def test_publish_snapshot_replaces_previous_results_with_latest(tmp_path, monkey
     assert len(results[0].findings) == 1
     assert [point["value"] for point in task_db.list_kpi_points(task_id)] == [2.0, 3.0]
     assert _row_counts(task_id) == (1, 2)
+
+
+def test_publish_snapshot_streams_large_kpi_generator(tmp_path, monkeypatch) -> None:
+    """大批 KPI 点必须分批写入，不能先构造等量 ORM 对象占满内存。"""
+    setup_env(tmp_path, monkeypatch)
+    task_id = "task-db-streaming"
+
+    def points():
+        for index in range(30_000):
+            yield _point(task_id, value=float(index))
+
+    tracemalloc.start()
+    try:
+        task_db.publish_snapshot(_task(task_id, [_rule()]), rule_results=[_rule()], kpi_points=points())
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert peak < 40 * 1024 * 1024
+    assert _row_counts(task_id) == (1, 30_000)
 
 
 def test_publish_from_scene_skips_broken_rule_files(tmp_path, monkeypatch) -> None:

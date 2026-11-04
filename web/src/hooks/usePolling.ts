@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 
-export function usePolling(callback: () => void, intervalMs: number, enabled: boolean) {
+type PollCallback = () => void | Promise<void>;
+
+export function usePolling(callback: PollCallback, intervalMs: number, enabled: boolean) {
   const saved = useRef(callback);
   useEffect(() => {
     saved.current = callback;
@@ -8,7 +10,30 @@ export function usePolling(callback: () => void, intervalMs: number, enabled: bo
 
   useEffect(() => {
     if (!enabled) return;
-    const timer = setInterval(() => saved.current(), intervalMs);
-    return () => clearInterval(timer);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const schedule = () => {
+      if (!cancelled) timer = setTimeout(run, intervalMs);
+    };
+
+    const run = () => {
+      let pending: void | Promise<void>;
+      try {
+        pending = saved.current();
+      } catch {
+        schedule();
+        return;
+      }
+      void Promise.resolve(pending)
+        .catch(() => undefined)
+        .finally(schedule);
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, [enabled, intervalMs]);
 }
