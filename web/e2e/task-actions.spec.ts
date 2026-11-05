@@ -6,6 +6,18 @@ import type { Page } from "@playwright/test";
 const ledgerZip = path.join(process.cwd(), "e2e", ".tmp", "device-check-e2e.zip");
 const LEDGER_DEVICE_NAME = "E2E-DEV-901";
 
+async function showAllTasks(page: Page) {
+  await page.locator(".ant-pagination-options .ant-select-selector").click();
+  const option = page
+    .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option")
+    .filter({ hasText: /^100\s*条\/页$/ });
+  await expect(option).toBeVisible();
+  await option.click();
+  await expect(page.locator(".ant-pagination-options .ant-select-selection-item")).toHaveText(
+    /100\s*条\/页/,
+  );
+}
+
 async function loginAdmin(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /^登\s*录$/ }).first().click();
@@ -67,6 +79,7 @@ const task = {
 
 test("任务列表操作全部平铺，高频入口一次点击可达", async ({ page }) => {
   await page.goto("/");
+  await showAllTasks(page);
   const taskRow = page
     .locator(".task-table .ant-table-tbody > tr.ant-table-row")
     .filter({ hasText: "首页失败任务样例" })
@@ -90,6 +103,7 @@ test("任务列表操作全部平铺，高频入口一次点击可达", async ({
 
 test("已完成任务的报告入口常驻可见并一次点击进入报告", async ({ page }) => {
   await page.goto("/");
+  await showAllTasks(page);
   const completedRow = page
     .locator(".task-table .ant-table-tbody > tr.ant-table-row")
     .filter({ hasText: "task-kpi-history-current" })

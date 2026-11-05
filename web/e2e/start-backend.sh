@@ -169,6 +169,11 @@ make_log_supplement_zip(base / "log-supplement-e2e.zip")
 PYCODE
 
   "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_kpi_measurement_history.py"
+  "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_kpi_daily_health.py"
+  "$VENV_PYTHON" -m app.cli create-user \
+    --username e2e-viewer \
+    --password e2e-viewer-123 \
+    --role viewer
   "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_home_task.py"
   "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_alarm_flapping.py"
   "$VENV_PYTHON" "$ROOT_DIR/web/e2e/seed_alarm_active_recurrence.py"

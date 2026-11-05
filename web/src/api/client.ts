@@ -454,6 +454,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/tasks/{task_id}/rules/{rule_code}/daily-health/{measurement_unit_id}/{metric_resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Kpi Daily Health Metric V2
+         * @description 按需返回单个 KPI 指标的当前判定、昨日趋势和最近 7 个自然日证据。
+         */
+        get: operations["getKpiDailyHealthMetricV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/inspectors": {
         parameters: {
             query?: never;
@@ -687,6 +707,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v5/kpi/metric-maintenance-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Kpi Metric Maintenance Configs V5
+         * @description 分页读取指标维护配置的有效视图，按测量单元、指标显示顺序和指标 ID 稳定排序。
+         */
+        get: operations["listKpiMetricMaintenanceConfigsV5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v5/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Kpi Metric Maintenance Config V5
+         * @description 读取指标维护配置的有效视图；历史资源只有阈值时以 legacy_resource 来源返回安全默认值。
+         */
+        get: operations["getKpiMetricMaintenanceConfigV5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Kpi Metric Maintenance Config V5
+         * @description 原子更新指标维护配置并写入审计，仅管理员可操作。
+         */
+        patch: operations["updateKpiMetricMaintenanceConfigV5"];
+        trace?: never;
+    };
+    "/api/v5/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}/audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Kpi Metric Maintenance Audits V5 */
+        get: operations["listKpiMetricMaintenanceAuditsV5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v5/kpi/measurement-bindings/{binding_id}/register-metric": {
         parameters: {
             query?: never;
@@ -728,7 +809,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Kpi Measurement Derived V5
+         * @description 分页读取聚合指标定义，返回指标名称和时间戳以便维护。
+         */
+        get: operations["listKpiMeasurementDerivedV5"];
         put?: never;
         /** Create Kpi Measurement Derived V5 */
         post: operations["createKpiMeasurementDerivedV5"];
@@ -736,6 +821,27 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v5/kpi/measurement-derived/{derived_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Kpi Measurement Derived V5 */
+        get: operations["getKpiMeasurementDerivedV5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Kpi Measurement Derived V5
+         * @description 更新现有聚合指标定义；测量单元与指标 ID 不可修改，变更写入审计。
+         */
+        patch: operations["updateKpiMeasurementDerivedV5"];
         trace?: never;
     };
     "/healthz": {
@@ -1185,6 +1291,255 @@ export interface components {
              */
             has_gap: boolean;
         };
+        /**
+         * ConfigSource
+         * @enum {string}
+         */
+        ConfigSource: "custom" | "default" | "legacy_resource" | "missing";
+        /**
+         * CurrentHealthStatus
+         * @enum {string}
+         */
+        CurrentHealthStatus: "normal" | "warn" | "fail" | "pending_config" | "unable_to_judge" | "not_applicable";
+        /**
+         * DailyAggregation
+         * @enum {string}
+         */
+        DailyAggregation: "latest" | "mean" | "sum" | "max" | "min";
+        /** KpiChangeThresholdEvidence */
+        KpiChangeThresholdEvidence: {
+            /** Value */
+            value?: number | null;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "pp" | "relative" | "unavailable";
+            source: components["schemas"]["ConfigSource"];
+        };
+        /** KpiConsistencyEvidence */
+        KpiConsistencyEvidence: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_checked" | "within_tolerance" | "exceeded" | "unavailable";
+            /** Tolerance Pp */
+            tolerance_pp: number;
+            /** Difference Pp */
+            difference_pp?: number | null;
+        };
+        /** KpiDailyBucket */
+        KpiDailyBucket: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Value */
+            value?: number | null;
+            /** Numerator */
+            numerator?: number | null;
+            /** Denominator */
+            denominator?: number | null;
+            /**
+             * Valid Count
+             * @default 0
+             */
+            valid_count: number;
+            /** First Measured At */
+            first_measured_at?: string | null;
+            /** Last Measured At */
+            last_measured_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "no_data" | "zero_denominator" | "unreadable" | "no_baseline";
+        };
+        /** KpiDailyHealthGroup */
+        KpiDailyHealthGroup: {
+            /** Object Key */
+            object_key: string;
+            /** Period Minutes */
+            period_minutes: number | null;
+            today?: components["schemas"]["KpiDailyBucket"] | null;
+            yesterday?: components["schemas"]["KpiDailyBucket"] | null;
+            current_status: components["schemas"]["CurrentHealthStatus"];
+            trend_status: components["schemas"]["TrendHealthStatus"];
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Source Files */
+            source_files?: string[];
+        };
+        /** KpiDailyHealthMetricDetail */
+        KpiDailyHealthMetricDetail: {
+            /** Task Id */
+            task_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            metric: components["schemas"]["KpiDailyHealthMetricEvidence"];
+            /** Groups */
+            groups: components["schemas"]["KpiDailyHealthGroup"][];
+            /** Seven Day Trend */
+            seven_day_trend: components["schemas"]["KpiDailyBucket"][];
+            legacy_fallback?: components["schemas"]["KpiLegacyFallback"] | null;
+        };
+        /** KpiDailyHealthMetricEvidence */
+        KpiDailyHealthMetricEvidence: {
+            /**
+             * Name Zh
+             * @default
+             */
+            name_zh: string;
+            role: components["schemas"]["MetricRole"];
+            /** Data Date */
+            data_date?: string | null;
+            /** Previous Date */
+            previous_date?: string | null;
+            /** Daily Aggregation */
+            daily_aggregation: string;
+            /** Formula */
+            formula?: string | null;
+            current_status: components["schemas"]["CurrentHealthStatus"];
+            trend_status: components["schemas"]["TrendHealthStatus"];
+            current_threshold: components["schemas"]["KpiThresholdEvidence"];
+            change_threshold: components["schemas"]["KpiChangeThresholdEvidence"];
+            consistency: components["schemas"]["KpiConsistencyEvidence"];
+        };
+        /** KpiLegacyFallback */
+        KpiLegacyFallback: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** KpiMetricMaintenanceAudit */
+        KpiMetricMaintenanceAudit: {
+            /** Id */
+            id: number;
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Actor */
+            actor: string;
+            /** Changed Fields */
+            changed_fields: string[];
+            /** Before Values */
+            before_values: {
+                [key: string]: unknown;
+            };
+            /** After Values */
+            after_values: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** KpiMetricMaintenanceAuditList */
+        KpiMetricMaintenanceAuditList: {
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["KpiMetricMaintenanceAudit"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** KpiMetricMaintenanceConfig */
+        KpiMetricMaintenanceConfig: {
+            /** Measurement Unit Id */
+            measurement_unit_id: string;
+            /** Metric Resource Id */
+            metric_resource_id: string;
+            /** Name Zh */
+            name_zh: string;
+            role: components["schemas"]["MetricRole"];
+            /** Direction */
+            direction?: ("higher_better" | "lower_better" | "neutral") | null;
+            /** Warning Threshold */
+            warning_threshold?: number | null;
+            /** Critical Threshold */
+            critical_threshold?: number | null;
+            daily_aggregation: components["schemas"]["DailyAggregation"];
+            /** Daily Change Threshold */
+            daily_change_threshold?: number | null;
+            /**
+             * Daily Change Threshold Unit
+             * @enum {string}
+             */
+            daily_change_threshold_unit: "pp" | "relative" | "auto";
+            /** Is Percentage */
+            is_percentage: boolean;
+            zero_semantics: components["schemas"]["ZeroSemantics"];
+            /** Consistency Tolerance */
+            consistency_tolerance: number;
+            object_match_mode: components["schemas"]["ObjectMatchMode"];
+            /** Enabled */
+            enabled: boolean;
+            config_source: components["schemas"]["ConfigSource"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** KpiMetricMaintenanceConfigList */
+        KpiMetricMaintenanceConfigList: {
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["KpiMetricMaintenanceConfig"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** KpiMetricMaintenanceConfigUpdateRequest */
+        KpiMetricMaintenanceConfigUpdateRequest: {
+            role?: components["schemas"]["MetricRole"] | null;
+            /** Direction */
+            direction?: ("higher_better" | "lower_better" | "neutral") | null;
+            /** Warning Threshold */
+            warning_threshold?: number | null;
+            /** Critical Threshold */
+            critical_threshold?: number | null;
+            daily_aggregation?: components["schemas"]["DailyAggregation"] | null;
+            /** Daily Change Threshold */
+            daily_change_threshold?: number | null;
+            /** Daily Change Threshold Unit */
+            daily_change_threshold_unit?: ("pp" | "relative" | "auto") | null;
+            /** Is Percentage */
+            is_percentage?: boolean | null;
+            zero_semantics?: components["schemas"]["ZeroSemantics"] | null;
+            /** Consistency Tolerance */
+            consistency_tolerance?: number | null;
+            object_match_mode?: components["schemas"]["ObjectMatchMode"] | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /** KpiThresholdEvidence */
+        KpiThresholdEvidence: {
+            /** Direction */
+            direction: ("higher_better" | "lower_better" | "neutral") | null;
+            /** Warning Threshold */
+            warning_threshold?: number | null;
+            /** Critical Threshold */
+            critical_threshold?: number | null;
+            source: components["schemas"]["ConfigSource"];
+        };
         /** KpiMeasurementBinding */
         KpiMeasurementBinding: {
             /** Id */
@@ -1288,6 +1643,22 @@ export interface components {
             template: "success_rate" | "reverse_success_rate";
             /** Enabled */
             enabled: boolean;
+            /** Metric Resource Name Zh */
+            metric_resource_name_zh: string;
+            /** Numerator Metric Name Zh */
+            numerator_metric_name_zh: string;
+            /** Denominator Metric Name Zh */
+            denominator_metric_name_zh: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** KpiMeasurementDerivedCreateRequest */
         KpiMeasurementDerivedCreateRequest: {
@@ -1305,6 +1676,28 @@ export interface components {
              * @enum {string}
              */
             template: "success_rate" | "reverse_success_rate";
+        };
+        /** KpiMeasurementDerivedList */
+        KpiMeasurementDerivedList: {
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["KpiMeasurementDerived"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** KpiMeasurementDerivedUpdateRequest */
+        KpiMeasurementDerivedUpdateRequest: {
+            /** Numerator Metric Id */
+            numerator_metric_id?: string | null;
+            /** Denominator Metric Id */
+            denominator_metric_id?: string | null;
+            /** Template */
+            template?: ("success_rate" | "reverse_success_rate") | null;
+            /** Enabled */
+            enabled?: boolean | null;
         };
         /** KpiMeasurementEnabledRequest */
         KpiMeasurementEnabledRequest: {
@@ -1452,6 +1845,16 @@ export interface components {
             /** Items */
             items: components["schemas"]["KpiMeasurementUnit"][];
         };
+        /**
+         * MetricRole
+         * @enum {string}
+         */
+        MetricRole: "base" | "derived";
+        /**
+         * ObjectMatchMode
+         * @enum {string}
+         */
+        ObjectMatchMode: "exact";
         /** LogEntry */
         LogEntry: {
             /**
@@ -2286,6 +2689,11 @@ export interface components {
          * @enum {string}
          */
         TaskTrigger: "api" | "cli" | "rerun";
+        /**
+         * TrendHealthStatus
+         * @enum {string}
+         */
+        TrendHealthStatus: "improved" | "stable" | "worsened" | "observe" | "no_baseline";
         /** UserCreateRequestV1 */
         UserCreateRequestV1: {
             /** Username */
@@ -2364,6 +2772,11 @@ export interface components {
          * @enum {string}
          */
         VersionDirection: "upgrade" | "downgrade" | "unchanged";
+        /**
+         * ZeroSemantics
+         * @enum {string}
+         */
+        ZeroSemantics: "unknown" | "expected_zero" | "business_not_triggered";
     };
     responses: never;
     parameters: never;
@@ -3379,6 +3792,49 @@ export interface operations {
             };
         };
     };
+    getKpiDailyHealthMetricV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+                rule_code: string;
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDailyHealthMetricDetail"];
+                };
+            };
+            /** @description 任务、规则、测量单元或指标不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listInspectorsV2: {
         parameters: {
             query?: {
@@ -3848,6 +4304,197 @@ export interface operations {
             };
         };
     };
+    listKpiMetricMaintenanceConfigsV5: {
+        parameters: {
+            query?: {
+                measurement_unit_id?: string | null;
+                metric_resource_id?: string | null;
+                enabled?: boolean | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricMaintenanceConfigList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getKpiMetricMaintenanceConfigV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricMaintenanceConfig"];
+                };
+            };
+            /** @description 指标或绑定不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateKpiMetricMaintenanceConfigV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiMetricMaintenanceConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricMaintenanceConfig"];
+                };
+            };
+            /** @description 请求体没有可更新字段 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 指标或绑定不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 角色或对象匹配配置冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listKpiMetricMaintenanceAuditsV5: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                measurement_unit_id: string;
+                metric_resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricMaintenanceAuditList"];
+                };
+            };
+            /** @description 指标或绑定不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     registerKpiMeasurementMetricV5: {
         parameters: {
             query?: never;
@@ -3922,6 +4569,42 @@ export interface operations {
             };
         };
     };
+    listKpiMeasurementDerivedV5: {
+        parameters: {
+            query?: {
+                measurement_unit_id?: string | null;
+                enabled?: boolean | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementDerivedList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     createKpiMeasurementDerivedV5: {
         parameters: {
             query?: never;
@@ -3944,6 +4627,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KpiMeasurementDerived"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getKpiMeasurementDerivedV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                derived_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementDerived"];
+                };
+            };
+            /** @description 派生配置不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateKpiMeasurementDerivedV5: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                derived_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementDerivedUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementDerived"];
+                };
+            };
+            /** @description 请求体没有可更新字段 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 派生配置不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 分子或分母不属于同一测量单元的已确认启用绑定 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Validation Error */

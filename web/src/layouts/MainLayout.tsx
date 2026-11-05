@@ -94,6 +94,7 @@ function ShellIcon({ name }: { name: ShellIconName }) {
     <svg
       aria-hidden="true"
       className="app-shell-icon"
+      data-icon={name}
       fill="none"
       height="18"
       viewBox="0 0 24 24"

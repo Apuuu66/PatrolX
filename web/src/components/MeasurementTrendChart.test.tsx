@@ -66,6 +66,26 @@ describe("MetricTrendCell", () => {
     expect(screen.getByText("ne333_Call_Statistics_15_0_202609201000.csv:2")).toBeTruthy();
   });
 
+  it("带时区的时间点按北京时间展示", async () => {
+    renderCell(makeMetric({
+      trend_points: [
+        {
+          time: "2026-09-20T02:00:00+00:00",
+          object_key: "pod-a",
+          period_minutes: 15,
+          value: 2048,
+          source_rows: [
+            { source_file: "ne333_Call_Statistics_15_0_202609201000.csv", line_number: 2, value: "2048" },
+          ],
+        },
+      ],
+    }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "查看最大注册用户数完整趋势" }));
+
+    expect(await screen.findByText("2026-09-20 10:00:00")).toBeTruthy();
+  });
+
   it("缺少时间点时仍可点击并解释无法判断趋势的原因", async () => {
     renderCell(makeMetric({ trend_points: [], trend_reason: "no_time_series" }));
 

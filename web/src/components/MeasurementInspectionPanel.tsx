@@ -8,6 +8,7 @@ import type {
   MeasurementMetadataUnit,
   MeasurementMetricDetail,
 } from "../api/http";
+import { KpiDailyHealthPanel } from "./KpiDailyHealthPanel";
 import { MetricTrendCell } from "./MeasurementTrendChart";
 
 const MeasurementMetricDetail = lazy(() =>
@@ -261,7 +262,12 @@ export function MeasurementInspectionPanel({
   };
 
   if (!activeUnit) {
-    return <div className="measurement-panel-empty">没有可展示的测量单元结果</div>;
+    return (
+      <div className="measurement-inspection-panel" data-testid="measurement-inspection-panel">
+        <KpiDailyHealthPanel metadata={metadata} taskId={taskId} ruleCode={ruleCode} />
+        <div className="measurement-panel-empty">没有可展示的测量单元结果</div>
+      </div>
+    );
   }
 
   const objectRows = Object.values(activeUnit.objects ?? {});
@@ -270,6 +276,7 @@ export function MeasurementInspectionPanel({
 
   return (
     <div className="measurement-inspection-panel" data-testid="measurement-inspection-panel">
+      <KpiDailyHealthPanel metadata={metadata} taskId={taskId} ruleCode={ruleCode} />
       {overview ? <KpiOverviewCard overview={overview} /> : null}
       <div className="measurement-unit-toolbar">
         <label htmlFor="measurement-unit-selector">测量单元</label>

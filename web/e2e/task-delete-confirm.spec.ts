@@ -1,5 +1,19 @@
 import { expect, test } from "@playwright/test";
 
+import type { Page } from "@playwright/test";
+
+async function showAllTasks(page: Page) {
+  await page.locator(".ant-pagination-options .ant-select-selector").click();
+  const option = page
+    .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option")
+    .filter({ hasText: /^100\s*条\/页$/ });
+  await expect(option).toBeVisible();
+  await option.click();
+  await expect(page.locator(".ant-pagination-options .ant-select-selection-item")).toHaveText(
+    /100\s*条\/页/,
+  );
+}
+
 test("任务列表行内删除需要二次确认", async ({ page }) => {
   let deleteRequested = false;
   await page.route("**/api/v2/tasks/task-home-failed", async (route) => {
@@ -11,6 +25,7 @@ test("任务列表行内删除需要二次确认", async ({ page }) => {
   });
 
   await page.goto("/");
+  await showAllTasks(page);
   const taskRow = page
     .locator(".task-table .ant-table-tbody > tr.ant-table-row")
     .filter({ hasText: "首页失败任务样例" })
@@ -33,6 +48,7 @@ test("删除确认弹窗取消后不发起删除且任务仍在列表", async ({
   });
 
   await page.goto("/");
+  await showAllTasks(page);
   const taskRow = page
     .locator(".task-table .ant-table-tbody > tr.ant-table-row")
     .filter({ hasText: "首页失败任务样例" })

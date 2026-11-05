@@ -21,7 +21,7 @@ test("布局在 1280px 与 1920px 下符合宽度约束", async ({ page }) => {
 
   await page.setViewportSize({ width: 1920, height: 900 });
   const wide = await page.evaluate(() => {
-    const inner = document.querySelector(".ant-layout-content .app-shell-inner");
+    const inner = document.querySelector(".app-content > .app-shell-inner");
     const header = document.querySelector(".app-shell-header");
     return {
       scrollWidth: document.documentElement.scrollWidth,
@@ -51,8 +51,9 @@ test("访客模式登录按钮不是主按钮权重", async ({ page }) => {
 
   const login = page.locator(".app-shell-header").getByRole("button", { name: /登\s*录/ });
   await expect(login).toBeVisible();
-  await expect(login).toHaveClass(/ant-btn-default/);
-  await expect(login).not.toHaveClass(/ant-btn-primary/);
+  await expect(login).toHaveClass(/app-button/);
+  await expect(login).toHaveClass(/app-button--small/);
+  await expect(login).not.toHaveClass(/app-button--primary/);
 });
 
 test("关注状态文字满足 WCAG AA 对比度", async ({ page }) => {

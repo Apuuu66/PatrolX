@@ -3,11 +3,11 @@ import { expect, test } from "@playwright/test";
 test("侧边栏基础指标和数据字典使用不同图标", async ({ page }) => {
   await page.goto("/");
 
-  const metricsItem = page.getByRole("menuitem", { name: "基础指标" });
-  const dictsItem = page.getByRole("menuitem", { name: "数据字典" });
+  const metricsItem = page.getByRole("link", { name: "基础指标" });
+  const dictsItem = page.getByRole("link", { name: "数据字典" });
 
-  await expect(metricsItem.locator('[aria-label="fund"]')).toBeVisible();
-  await expect(dictsItem.locator('[aria-label="database"]')).toBeVisible();
+  await expect(metricsItem.locator('[data-icon="measurement"]')).toBeVisible();
+  await expect(dictsItem.locator('[data-icon="dicts"]')).toBeVisible();
 });
 
 test("侧边栏为深色导航，选中态用左侧指示条 + 白字加粗表达", async ({ page }) => {
@@ -16,11 +16,10 @@ test("侧边栏为深色导航，选中态用左侧指示条 + 白字加粗表�
   const sider = page.locator(".app-sider");
   await expect(sider).toBeVisible();
   // 深色导航：整块深底与浅色内容区分区，品牌与菜单文字保持白系。
-  await expect(sider).toHaveClass(/ant-layout-sider-dark/);
   await expect(sider).toHaveCSS("background-color", "rgb(0, 21, 41)");
   await expect(sider.locator(".app-sider-brand")).toHaveCSS("color", "rgb(255, 255, 255)");
 
-  const selected = sider.locator(".ant-menu-item-selected");
+  const selected = sider.locator(".app-nav-link.is-selected");
   await expect(selected).toHaveCount(1);
   await expect(selected).toContainText("规则管理");
   await expect(selected).toHaveCSS("background-color", "rgba(255, 255, 255, 0.12)");
@@ -35,7 +34,7 @@ test("侧边栏为深色导航，选中态用左侧指示条 + 白字加粗表�
   expect(indicator.background).toBe("rgb(22, 119, 255)");
 
   // 未选中项保持白系中性文字色，并在深色底上满足 WCAG AA 4.5:1。
-  const unselected = sider.locator(".ant-menu-item").filter({ hasText: "数据字典" });
+  const unselected = sider.locator(".app-nav-link").filter({ hasText: "数据字典" });
   await expect(unselected).toHaveCSS("color", "rgba(255, 255, 255, 0.65)");
   const ratio = await unselected.evaluate((node) => {
     const numbers = (value: string) => (value.match(/[\d.]+/g) ?? []).map(Number);

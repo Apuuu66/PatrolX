@@ -75,6 +75,18 @@ async function loginAdmin(page: import("@playwright/test").Page) {
   await expect(page.getByText("e2e-admin")).toBeVisible();
 }
 
+async function showAllInventoryDevices(page: import("@playwright/test").Page) {
+  await page.locator(".ant-pagination-options .ant-select-selector").click();
+  const option = page
+    .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option")
+    .filter({ hasText: /^100\s*条\/页$/ });
+  await expect(option).toBeVisible();
+  await option.click();
+  await expect(page.locator(".ant-pagination-options .ant-select-selection-item")).toHaveText(
+    /100\s*条\/页/,
+  );
+}
+
 test("巡检包上传后可在任务详情、设备台账和设备详情间追踪", async ({ page }) => {
   await uploadPackage(page, inspectionZip, "inspection");
 
@@ -123,6 +135,7 @@ test("设备台账只支持管理员物理删除", async ({ page }) => {
   await uploadPackage(page, deleteZip, "inspection");
 
   await page.goto("/inventory");
+  await showAllInventoryDevices(page);
   await expect(page.getByRole("button", { name: /新增设备/ })).toHaveCount(0);
   await page.getByText("E2E-DELETE-901").first().click();
   await expect(page).toHaveURL(/\/inventory\/devices\//);
@@ -143,6 +156,7 @@ test("设备台账只支持管理员物理删除", async ({ page }) => {
 
   // 列表页同样提供危险确认删除入口
   await page.goto("/inventory");
+  await showAllInventoryDevices(page);
   const listRow = page.getByRole("row").filter({ hasText: "E2E-DELETE-901" });
   await expect(listRow).toHaveCount(1);
   await listRow.getByRole("button", { name: /^删\s*除$/ }).click();

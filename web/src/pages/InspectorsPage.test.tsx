@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,49 @@ describe("InspectorsPage", () => {
       const codes = screen.getAllByText(/^config\./).map((node) => node.textContent);
       expect(codes).toEqual(["config.old", "config.new"]);
     });
+  });
+
+  it("快速搜索时晚返回的旧请求不会覆盖筛选结果", async () => {
+    let resolveInitial: ((value: Awaited<ReturnType<typeof api.listInspectorStates>>) => void) | undefined;
+    const initialRequest = new Promise<Awaited<ReturnType<typeof api.listInspectorStates>>>((resolve) => {
+      resolveInitial = resolve;
+    });
+    vi.mocked(api.listInspectorStates)
+      .mockImplementationOnce(() => initialRequest)
+      .mockResolvedValueOnce({
+        items: [makeInspector({ code: "kpi.measurement_units", name: "KPI 测量单元检查" })],
+        total: 1,
+        page: 1,
+        page_size: 10,
+      });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(api.listInspectorStates).toHaveBeenCalledWith(expect.objectContaining({ search: "" }));
+    });
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText("搜索编码 / 名称"), "kpi.measurement_units{Enter}");
+    await waitFor(() => {
+      expect(api.listInspectorStates).toHaveBeenCalledWith(
+        expect.objectContaining({ search: "kpi.measurement_units" }),
+      );
+    });
+    await screen.findByText("kpi.measurement_units");
+
+    expect(resolveInitial).toBeTypeOf("function");
+    await act(async () => {
+      resolveInitial?.({
+        items: [makeInspector({ code: "config.old" }), makeInspector({ code: "config.new" })],
+        total: 2,
+        page: 1,
+        page_size: 10,
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("config.old")).toBeNull();
+    expect(screen.getByText("kpi.measurement_units")).toBeTruthy();
   });
 
   it("密度切换默认紧凑，切换到舒适后写入本地偏好且表体行高联动", async () => {

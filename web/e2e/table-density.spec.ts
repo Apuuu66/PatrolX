@@ -97,6 +97,9 @@ test("规则管理页更新时间以相对时间呈现并支持点击表头排�
   await page.goto("/inspectors");
 
   const rows = page.locator(".inspectors-table .ant-table-tbody > tr.ant-table-row");
+  const search = page.getByPlaceholder("搜索编码 / 名称");
+  await search.fill("kpi.measurement_units");
+  await search.press("Enter");
   await expect(rows.first()).toBeVisible();
   await expect(rows).toHaveCount(1);
   await expect(rows.first().locator(".inspectors-code code").first()).toHaveText(

@@ -32,6 +32,11 @@ vi.mock("../api/http", () => ({
     registerMeasurementMetric: vi.fn(),
     updateMeasurementResource: vi.fn(),
     createMeasurementDerived: vi.fn(),
+    listKpiMetricMaintenanceConfigs: vi.fn(),
+    listKpiMeasurementDerived: vi.fn(),
+    listKpiMetricMaintenanceAudits: vi.fn(),
+    updateKpiMetricMaintenanceConfig: vi.fn(),
+    updateKpiMeasurementDerived: vi.fn(),
   },
 }));
 
@@ -165,5 +170,18 @@ describe("MeasurementUnitsPage 权限边界", () => {
     await userEvent.click(screen.getByRole("tab", { name: "绑定关系" }));
 
     await waitFor(() => expect(api.listMeasurementResources).toHaveBeenCalled());
+  });
+
+  it("浏览者可打开维护配置页签查看指标配置", async () => {
+    authState.user = { username: "viewer", role: "viewer" };
+    vi.mocked(api.listKpiMetricMaintenanceConfigs).mockResolvedValue({ total: 0, items: [], page: 1, page_size: 20 });
+    vi.mocked(api.listKpiMeasurementDerived).mockResolvedValue({ total: 0, items: [], page: 1, page_size: 20 });
+
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "维护配置" }));
+
+    expect(await screen.findByRole("heading", { name: "指标维护配置" })).toBeDefined();
+    await waitFor(() => expect(api.listKpiMetricMaintenanceConfigs).toHaveBeenCalledWith({ page: 1, page_size: 200 }));
+    expect(api.listKpiMeasurementDerived).toHaveBeenCalledWith({ page: 1, page_size: 200 });
   });
 });

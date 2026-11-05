@@ -50,6 +50,18 @@ export type MeasurementHistoryPoint = components["schemas"]["MeasurementHistoryP
 export type MeasurementVersionCandidateList = components["schemas"]["MeasurementVersionCandidateList"];
 export type MeasurementVersionCandidate = components["schemas"]["MeasurementVersionCandidate"];
 export type MeasurementVersionComparison = components["schemas"]["MeasurementVersionComparison"];
+export type KpiDailyHealthMetricDetail = components["schemas"]["KpiDailyHealthMetricDetail"];
+export type KpiDailyHealthMetricEvidence = components["schemas"]["KpiDailyHealthMetricEvidence"];
+export type KpiDailyHealthGroup = components["schemas"]["KpiDailyHealthGroup"];
+export type KpiDailyBucket = components["schemas"]["KpiDailyBucket"];
+export type KpiMetricMaintenanceConfig = components["schemas"]["KpiMetricMaintenanceConfig"];
+export type KpiMetricMaintenanceConfigList = components["schemas"]["KpiMetricMaintenanceConfigList"];
+export type KpiMetricMaintenanceConfigUpdateRequest = components["schemas"]["KpiMetricMaintenanceConfigUpdateRequest"];
+export type KpiMetricMaintenanceAudit = components["schemas"]["KpiMetricMaintenanceAudit"];
+export type KpiMetricMaintenanceAuditList = components["schemas"]["KpiMetricMaintenanceAuditList"];
+export type KpiMeasurementDerived = components["schemas"]["KpiMeasurementDerived"];
+export type KpiMeasurementDerivedList = components["schemas"]["KpiMeasurementDerivedList"];
+export type KpiMeasurementDerivedUpdateRequest = components["schemas"]["KpiMeasurementDerivedUpdateRequest"];
 
 export interface MeasurementTrendPoint {
   time: string;
@@ -558,6 +570,85 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  getKpiDailyHealthMetric: (
+    taskId: string,
+    ruleCode: string,
+    measurementUnitId: string,
+    metricResourceId: string,
+  ) =>
+    request<KpiDailyHealthMetricDetail>(
+      `${BASE}/tasks/${encodeURIComponent(taskId)}/rules/${encodeURIComponent(ruleCode)}`
+        + `/daily-health/${encodeURIComponent(measurementUnitId)}/${encodeURIComponent(metricResourceId)}`,
+    ),
+
+  listKpiMetricMaintenanceConfigs: (
+    query: { measurement_unit_id?: string; metric_resource_id?: string; enabled?: boolean; page?: number; page_size?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiMetricMaintenanceConfigList>(
+      `${KPI_V5_BASE}/kpi/metric-maintenance-configs${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  getKpiMetricMaintenanceConfig: (measurementUnitId: string, metricResourceId: string) =>
+    request<KpiMetricMaintenanceConfig>(
+      `${KPI_V5_BASE}/kpi/metric-maintenance-configs/${encodeURIComponent(measurementUnitId)}`
+        + `/${encodeURIComponent(metricResourceId)}`,
+    ),
+
+  updateKpiMetricMaintenanceConfig: (
+    measurementUnitId: string,
+    metricResourceId: string,
+    payload: KpiMetricMaintenanceConfigUpdateRequest,
+  ) =>
+    request<KpiMetricMaintenanceConfig>(
+      `${KPI_V5_BASE}/kpi/metric-maintenance-configs/${encodeURIComponent(measurementUnitId)}`
+        + `/${encodeURIComponent(metricResourceId)}`,
+      { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    ),
+
+  listKpiMetricMaintenanceAudits: (
+    measurementUnitId: string,
+    metricResourceId: string,
+    query: { page?: number; page_size?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiMetricMaintenanceAuditList>(
+      `${KPI_V5_BASE}/kpi/metric-maintenance-configs/${encodeURIComponent(measurementUnitId)}`
+        + `/${encodeURIComponent(metricResourceId)}/audits${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  listKpiMeasurementDerived: (
+    query: { measurement_unit_id?: string; enabled?: boolean; page?: number; page_size?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiMeasurementDerivedList>(
+      `${KPI_V5_BASE}/kpi/measurement-derived${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  getKpiMeasurementDerived: (derivedId: number) =>
+    request<KpiMeasurementDerived>(`${KPI_V5_BASE}/kpi/measurement-derived/${derivedId}`),
+
+  updateKpiMeasurementDerived: (derivedId: number, payload: KpiMeasurementDerivedUpdateRequest) =>
+    request<KpiMeasurementDerived>(`${KPI_V5_BASE}/kpi/measurement-derived/${derivedId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 
 
   listUsers: async (query: { page?: number; page_size?: number } = {}) => {

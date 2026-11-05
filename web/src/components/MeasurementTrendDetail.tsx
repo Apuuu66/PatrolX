@@ -13,7 +13,18 @@ const VersionComparePanel = lazy(() =>
 
 const POINT_PAGE_SIZE = 10;
 const DATE_TIME_PATTERN = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?/;
+const EXPLICIT_TIMEZONE_PATTERN = /(?:Z|[+-]\d{2}:?\d{2})$/i;
 const COMPACT_NUMBER = new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 2 });
+const BEIJING_TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
 
 type TrendTab = "single" | "history" | "version";
 
@@ -32,7 +43,8 @@ function MetricDisplayName(metric: { metric_resource_id: string; metric_resource
 function parsePoints(points: MeasurementTrendPoint[]): ParsedPoint[] {
   return points
     .map((point) => {
-      const match = DATE_TIME_PATTERN.exec(point.time);
+      const displayTime = formatPointTime(point.time);
+      const match = DATE_TIME_PATTERN.exec(displayTime);
       if (!match || !Number.isFinite(point.value)) return null;
       const [, date, timeLabel] = match;
       return {
@@ -58,7 +70,15 @@ function formatPercent(value: number | null | undefined): string {
 }
 
 function formatPointTime(value: string): string {
-  return value.replace("T", " ").slice(0, 19);
+  const normalized = value.replace("T", " ").slice(0, 19);
+  if (!EXPLICIT_TIMEZONE_PATTERN.test(value)) return normalized;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return normalized;
+  const parts = Object.fromEntries(
+    BEIJING_TIME_FORMATTER.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 function formatChartTime(point: ParsedPoint, includeDate: boolean): string {

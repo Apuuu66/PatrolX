@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { App, Button, Card, Input, Select, Space, Switch, Tag, Tooltip, Typography } from "antd";
 import { Table } from "../components/ResizableTable";
 import type { ColumnsType } from "antd/es/table";
@@ -38,20 +38,24 @@ export function InspectorsPage() {
   const [search, setSearch] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const { density, tableSize, setDensity } = useTableDensity();
+  const requestSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setLoadError(null);
     try {
       const result = await api.listInspectorStates({ page, page_size: pageSize, category, enabled, search });
+      if (seq !== requestSeq.current) return;
       setItems(result.items ?? []);
       setTotal(result.total);
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       const text = err instanceof Error ? err.message : "加载失败";
       setLoadError(text);
       message.error(text);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [category, enabled, message, page, pageSize, search]);
 

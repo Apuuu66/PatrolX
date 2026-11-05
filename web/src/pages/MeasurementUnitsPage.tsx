@@ -7,6 +7,7 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { api, type MeasurementBinding, type MeasurementBindingBatchConfirmResponse, type MeasurementResource, type MeasurementUnit, type MeasurementUnitImportResult } from "../api/http";
 import { ResourceNameCell } from "../components/ResourceNameCell";
+import { KpiMetricMaintenancePanel } from "../components/KpiMetricMaintenancePanel";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState, LoadErrorState } from "../components/PageState";
@@ -1114,13 +1115,14 @@ export function MeasurementUnitsPage() {
     <div>
       <PageHeader
         title="基础指标"
-        description="基于测量单元维护资源目录、指标绑定和派生指标"
+        description="基于测量单元维护资源目录、指标绑定、派生指标和日健康配置"
       />
       <Tabs defaultActiveKey="units" items={[
         { key: "units", label: "测量单元", children: <MeasurementUnitTab /> },
         { key: "bindings", label: "绑定关系", children: <MeasurementBindingTab /> },
         ...(isAdmin ? [{ key: "focus", label: "关注指标", children: <MeasurementFocusTab /> }] : []),
         { key: "derived", label: "派生指标", children: <MeasurementDerivedTab /> },
+        { key: "maintenance", label: "维护配置", children: <KpiMetricMaintenancePanel /> },
       ]} />
     </div>
   );

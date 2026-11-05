@@ -4,7 +4,13 @@ import { App } from "antd";
 import { Profiler } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { api, type MeasurementMetadataMetric, type MeasurementMetadataUnit } from "../api/http";
+import {
+  api,
+  type MeasurementKpiOverview,
+  type MeasurementMetadataMetric,
+  type MeasurementMetadataUnit,
+} from "../api/http";
+import type { KpiDailyHealthSnapshot } from "./KpiDailyHealthPanel";
 import { MeasurementInspectionPanel } from "./MeasurementInspectionPanel";
 
 function makeMetric(id: string, name: string): MeasurementMetadataMetric {
@@ -64,6 +70,79 @@ function makeMetricWithManyDetails(): MeasurementMetadataMetric {
   };
 }
 
+function makeDailyHealthSnapshot(): KpiDailyHealthSnapshot {
+  return {
+    schema_version: 1,
+    timezone: "Asia/Shanghai",
+    data_date: "2026-11-05",
+    previous_date: "2026-11-04",
+    latest_measured_at: "2026-11-05T10:15:00+08:00",
+    legacy_fallback: null,
+    current_counts: { normal: 1 },
+    trend_counts: { stable: 1 },
+    scope: {
+      enabled_measurement_unit_count: 1,
+      confirmed_binding_metric_count: 1,
+      expected_metric_count: 1,
+      out_of_scope_file_count: 0,
+      unconfirmed_binding_count: 0,
+      out_of_scope_reason_counts: {},
+    },
+    metrics: [{
+      measurement_unit_id: "MU_A",
+      measurement_unit_name_zh: "测量单元 A",
+      measurement_unit_enabled: true,
+      metric_resource_id: "ME_A",
+      metric_resource_name_zh: "日健康指标",
+      metric_resource_enabled: true,
+      binding_confirmed: true,
+      role: "derived",
+      importance: "P1",
+      direction: "higher_better",
+      display_unit: "%",
+      is_percentage: true,
+      current_status: "normal",
+      current_reason: "threshold_satisfied",
+      current_reason_text: "达到阈值要求",
+      today_value: 99.2,
+      today_display: "99.2%",
+      yesterday_value: 99,
+      yesterday_display: "99.0%",
+      delta: 0.2,
+      delta_display: "+0.2pp",
+      trend_status: "stable",
+      trend_reason: "变化在容差内（pp）",
+      trend_reason_code: "within_tolerance",
+      current_threshold: {
+        direction: "higher_better",
+        warning_threshold: 99,
+        critical_threshold: 98,
+        source: "custom",
+      },
+      change_threshold: { value: 0.2, unit: "pp", source: "default" },
+      daily_aggregation: "formula",
+      aggregation_source: "default",
+      zero_semantics: "unknown",
+      consistency: { status: "within_tolerance", tolerance_pp: 0.2, difference_pp: 0.01 },
+      objects: [],
+    }],
+  };
+}
+
+function makeKpiOverview(): MeasurementKpiOverview {
+  return {
+    unit_count: 1,
+    metric_count: 1,
+    health_score: 90,
+    status_counts: { warn: 1 },
+    business_fail_count: 0,
+    business_warn_count: 1,
+    data_error_count: 0,
+    trend_worsened_count: 0,
+    unconfigured_count: 0,
+  };
+}
+
 async function chooseUnit(name: string) {
   const combobox = screen.getByRole("combobox", { name: "测量单元" });
   const option = within(combobox).getByRole("option", { name: new RegExp(name) });
@@ -71,6 +150,36 @@ async function chooseUnit(name: string) {
 }
 
 describe("MeasurementInspectionPanel", () => {
+  it("首屏先展示日健康结论，再展示原有 KPI 总览", () => {
+    render(
+      <App>
+        <MeasurementInspectionPanel
+          metadata={{
+            daily_health: makeDailyHealthSnapshot(),
+            kpi_overview: makeKpiOverview(),
+            measurement_units: [makeUnit("MU_A", "测量单元 A", "指标 A", 90)],
+          }}
+        />
+      </App>,
+    );
+
+    const dailyHealth = screen.getByRole("region", { name: "KPI 当前判定与昨日趋势" });
+    const overview = screen.getByRole("region", { name: "KPI 总览" });
+    expect(dailyHealth.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("日健康指标")).toBeDefined();
+  });
+
+  it("没有测量单元时仍展示旧任务日健康兼容提示", () => {
+    render(
+      <App>
+        <MeasurementInspectionPanel metadata={{ measurement_units: [] }} />
+      </App>,
+    );
+
+    expect(screen.getByRole("heading", { name: "KPI 日健康兼容提示" })).toBeDefined();
+    expect(screen.getByText(/旧任务没有日健康结论/)).toBeDefined();
+  });
+
   it("一次只挂载一个测量单元，并允许切换到其他单元", async () => {
     render(
       <App>
