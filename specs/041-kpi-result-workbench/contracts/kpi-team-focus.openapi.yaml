@@ -1,0 +1,381 @@
+openapi: 3.1.0
+info:
+  title: PatrolX KPI 团队关注规划契约
+  version: 6.0.0-plan
+  description: >-
+    按网元类型共享的 KPI 团队关注。关注身份为
+    network_element_type + measurement_unit_id + metric_resource_id，
+    不绑定 task_id、device_id 或用户。写入采用 expected_revision + add[] + remove[] 的原子 PATCH。
+    本文件是 Plan 阶段契约草案。
+servers:
+  - url: /
+tags:
+  - name: KpiTeamFocus
+security:
+  - bearerAuth: []
+paths:
+  /api/v6/kpi/team-focus/{network_element_type}:
+    get:
+      tags: [KpiTeamFocus]
+      summary: 读取当前任务上下文中的共享团队关注
+      description: >-
+        返回指定网元类型的共享关注项和 revision，并按 task_id 计算当前任务可用性。
+        不可用项不得自动删除，必须保留并标记原因；团队关注总数只统计当前任务可用项。
+        当前任务可关注指标全集由 GET /api/v6/kpi/tasks/{task_id}/metrics?view=all 提供，
+        不另建第二套指标目录。
+      operationId: listKpiTeamFocusV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementType'
+        - $ref: '#/components/parameters/TaskIdQuery'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 256
+        - name: measurement_unit_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: availability
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/FocusAvailability'
+      responses:
+        '200':
+          description: 团队关注分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiTeamFocusPageV6'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '409':
+          $ref: '#/components/responses/TaskResultRequiresRebuild'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      tags: [KpiTeamFocus]
+      summary: 原子保存团队关注差异
+      description: >-
+        在一个事务内校验 revision、去重、验证加入项属于当前任务可关注范围，
+        应用 add/remove、递增 revision。add 与 remove 必须至少一个非空且二者不得重叠。
+        remove 可按共享身份移出当前任务不可用项。冲突时不应用任何变更并返回当前 revision。
+      operationId: patchKpiTeamFocusV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiTeamFocusPatchRequestV6'
+      responses:
+        '200':
+          description: 已保存
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiTeamFocusPatchResponseV6'
+        '400':
+          $ref: '#/components/responses/InvalidFocusRequest'
+        '403':
+          $ref: '#/components/responses/WriteForbidden'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '409':
+          $ref: '#/components/responses/TeamFocusPatchConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    NetworkElementType:
+      name: network_element_type
+      in: path
+      required: true
+      description: 运行时网元类型字典值。禁止使用 *、COMMON、空字符串或公共范围。
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 32
+        pattern: '^[A-Z][A-Z0-9_]*$'
+        examples: [UMF, CSP]
+    TaskIdQuery:
+      name: task_id
+      in: query
+      required: true
+      description: 用于计算当前任务可用性；不改变关注项的跨任务共享身份。
+      schema:
+        type: string
+        minLength: 1
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+  responses:
+    TaskNotFound:
+      description: 任务不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TaskResultRequiresRebuild:
+      description: 当前任务没有 v6 KPI 快照
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rebuild_required:
+              value:
+                code: task_result_requires_rebuild
+                message: 旧任务结果需要按当前规则和配置重建
+                detail:
+                  task_id: example-task
+                  action: rebuild_full
+    InvalidFocusRequest:
+      description: 关注差异为空、重叠、重复或加入项不属于当前任务可关注范围
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            empty_operation:
+              value:
+                code: team_focus_operation_empty
+                message: 至少需要加入或移出一个关注项
+            item_not_available:
+              value:
+                code: team_focus_item_not_available
+                message: 指标不属于当前任务可关注范围
+                detail:
+                  measurement_unit_id: example-mu
+                  metric_resource_id: example-metric
+    WriteForbidden:
+      description: 当前用户没有维护写权限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            forbidden:
+              value:
+                code: kpi_write_forbidden
+                message: 当前用户无团队关注维护权限
+    TeamFocusPatchConflict:
+      description: 旧任务没有 v6 KPI 快照，或 revision 已过期；两种错误均不应用任何关注变更
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rebuild_required:
+              value:
+                code: task_result_requires_rebuild
+                message: 旧任务结果需要按当前规则和配置重建
+                detail:
+                  task_id: example-task
+                  action: rebuild_full
+            revision_conflict:
+              value:
+                code: team_focus_revision_conflict
+                message: 团队关注已被其他维护人员更新，请刷新后重试
+                detail:
+                  network_element_type: UMF
+                  expected_revision: 7
+                  current_revision: 9
+    ValidationError:
+      description: 请求结构不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HTTPValidationError'
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        detail:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+    HTTPValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    FocusAvailability:
+      type: string
+      enum: [available, unavailable]
+    FocusAvailabilityReason:
+      type: string
+      enum: [not_in_task_scope, measurement_unit_disabled]
+    KpiFocusIdentity:
+      type: object
+      required: [measurement_unit_id, metric_resource_id]
+      properties:
+        measurement_unit_id:
+          type: string
+          minLength: 1
+        metric_resource_id:
+          type: string
+          minLength: 1
+      description: network_element_type 来自请求路径，不属于数组项的可变字段。
+    KpiTeamFocusItemV6:
+      type: object
+      required:
+        - network_element_type
+        - measurement_unit_id
+        - measurement_unit_name
+        - metric_resource_id
+        - metric_name
+        - availability
+        - added_by
+        - added_at
+      properties:
+        network_element_type:
+          type: string
+        measurement_unit_id:
+          type: string
+        measurement_unit_name:
+          type: string
+        metric_resource_id:
+          type: string
+        metric_name:
+          type: string
+        availability:
+          $ref: '#/components/schemas/FocusAvailability'
+        availability_reason:
+          oneOf:
+            - $ref: '#/components/schemas/FocusAvailabilityReason'
+            - type: 'null'
+        added_by:
+          type: string
+        added_at:
+          type: string
+          description: ISO 8601 UTC。
+    KpiTeamFocusPageV6:
+      type: object
+      required:
+        - network_element_type
+        - revision
+        - page
+        - page_size
+        - total
+        - available_count
+        - unavailable_count
+        - items
+        - can_write
+      properties:
+        network_element_type:
+          type: string
+        revision:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        total:
+          type: integer
+          minimum: 0
+          description: 当前过滤条件下的关注项总数，包含 unavailable。
+        available_count:
+          type: integer
+          minimum: 0
+          description: 当前任务可用关注数；作为 summary.team_focus_count。
+        unavailable_count:
+          type: integer
+          minimum: 0
+          description: 当前任务不可用但被保留的关注数。
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiTeamFocusItemV6'
+        can_write:
+          type: boolean
+          description: false 时前端不得渲染可提交的保存操作。
+    KpiTeamFocusPatchRequestV6:
+      type: object
+      required: [task_id, expected_revision, add, remove]
+      properties:
+        task_id:
+          type: string
+          minLength: 1
+          description: 用于验证 add 项属于当前任务可关注范围。
+        expected_revision:
+          type: integer
+          minimum: 0
+        add:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/KpiFocusIdentity'
+        remove:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/KpiFocusIdentity'
+      description: >-
+        add/remove 必须至少一个非空，数组内身份唯一，且同一身份不能同时出现在两数组中。
+        服务端按请求整体原子应用，不逐项部分提交。
+    KpiTeamFocusPatchResponseV6:
+      type: object
+      required:
+        - network_element_type
+        - revision
+        - added_count
+        - removed_count
+        - available_count
+        - unavailable_count
+      properties:
+        network_element_type:
+          type: string
+        revision:
+          type: integer
+          minimum: 1
+        added_count:
+          type: integer
+          minimum: 0
+        removed_count:
+          type: integer
+          minimum: 0
+        available_count:
+          type: integer
+          minimum: 0
+        unavailable_count:
+          type: integer
+          minimum: 0

@@ -1,0 +1,203 @@
+openapi: 3.1.0
+info:
+  title: PatrolX 日志补充包规则网元字段规划契约
+  version: 6.0.0-plan
+  description: >-
+    POST /api/v3/tasks 的增量规划契约。日志补充包可选择一个规则适用网元类型，也可以不选；
+    该值只用于业务规则匹配，不写入 product，不改变 GENERIC 分类，不触发设备台账。
+    巡检包携带该字段时返回 metadata_not_applicable。本文件是 Plan 阶段契约草案。
+servers:
+  - url: /
+tags:
+  - name: TaskUpload
+    description: 巡检包与日志补充包创建和同名幂等恢复
+security:
+  - bearerAuth: []
+paths:
+  /api/v3/tasks:
+    post:
+      tags: [TaskUpload]
+      summary: 创建 v3 任务
+      description: >-
+        创建任务或按同名 checksum 恢复既有现场，成功返回 202 + Location。
+        inspection 包以 province、operator、product 作为任务元数据；product 经 trim().upper()
+        后只能取运行时网元类型字典值。log_supplement 包的 product 必须为空，可使用独立字段
+        rule_network_element_type 选择一个规则适用网元类型，或省略表示不选择。
+        rule_network_element_type 对巡检包不适用，且不会写入 product、分类 profile 或设备台账。
+        同名任务固定按 checksum → package_kind → product → rule_network_element_type 顺序校验；
+        四项均一致时只恢复现场并返回 202，不自动重跑。
+      operationId: createTaskV3
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_createTaskV3'
+      responses:
+        '202':
+          description: 已创建或已按相同包与元数据恢复现场
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreated'
+        '400':
+          description: >-
+            上传元数据不合法。巡检包缺少省份、运营商或 product，product 或日志包规则适用网元类型
+            不在运行时字典中；日志包携带 province、operator、product；或巡检包携带
+            rule_network_element_type 时拒绝创建。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          x-error-codes:
+            - missing_province
+            - missing_operator
+            - missing_product
+            - invalid_product
+            - invalid_rule_network_element_type
+            - metadata_not_applicable
+        '409':
+          description: >-
+            同名任务冲突，严格按 checksum → package_kind → product → rule_network_element_type
+            顺序判定，前项不一致即返回，不再比较后续字段。相同 checksum/kind/product/type
+            才执行幂等恢复。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          x-error-codes:
+            - package_checksum_conflict
+            - package_kind_conflict
+            - package_product_conflict
+            - package_rule_network_element_type_conflict
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  headers:
+    Location:
+      description: 新建或恢复的任务资源位置。
+      schema:
+        type: string
+        examples: ['/api/v3/tasks/example-task']
+  responses:
+    ValidationError:
+      description: multipart 请求结构不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HTTPValidationError'
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        detail:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+    HTTPValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    PackageKind:
+      type: string
+      enum: [inspection, log_supplement]
+      description: inspection 为巡检包；log_supplement 为日志补充包。
+    TaskCreateErrorCode:
+      type: string
+      enum:
+        - missing_province
+        - missing_operator
+        - missing_product
+        - invalid_product
+        - invalid_rule_network_element_type
+        - metadata_not_applicable
+      description: POST /api/v3/tasks 的稳定元数据校验错误码。
+    TaskConflictCode:
+      type: string
+      enum:
+        - package_checksum_conflict
+        - package_kind_conflict
+        - package_product_conflict
+        - package_rule_network_element_type_conflict
+      description: >-
+        同名任务冲突稳定错误码；判定顺序固定为 checksum → package_kind → product →
+        rule_network_element_type。
+    NetworkElementType:
+      type: string
+      minLength: 1
+      maxLength: 32
+      pattern: '^[A-Z][A-Z0-9_]*$'
+      description: >-
+        运行时网元类型字典值，经 trim().upper() 规范化；当前为 UMF、CSP，
+        不得使用 public、*、COMMON 或空字符串。最终允许集合由服务端字典校验。
+      examples: [UMF, CSP]
+    Body_createTaskV3:
+      type: object
+      required: [package_file, package_kind]
+      properties:
+        package_file:
+          type: string
+          contentMediaType: application/octet-stream
+          description: zip、tar.gz 或 tgz 数据包；文件名必须小于等于 255 UTF-8 字节。
+        package_kind:
+          $ref: '#/components/schemas/PackageKind'
+        name:
+          oneOf:
+            - type: string
+            - type: 'null'
+        province:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: inspection 必填且去空白后不得为空；log_supplement 禁止非空值。
+        operator:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: inspection 必填且去空白后不得为空；log_supplement 禁止非空值。
+        product:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: >-
+            inspection 条件必填，值经 trim().upper() 规范化并作为任务 product 保存；
+            log_supplement 必须为空或 null。该字段不接受日志补充包的规则适用网元类型。
+        rule_network_element_type:
+          oneOf:
+            - type: string
+              minLength: 1
+              maxLength: 32
+              pattern: '^[A-Z][A-Z0-9_]*$'
+            - type: 'null'
+          description: >-
+            log_supplement 可选且至多一个值，仅用于业务规则匹配，经 trim().upper() 规范化；
+            省略或空值表示未选择。inspection 禁止携带非空值。
+      description: >-
+        package_file 与 package_kind 必填。条件必填和禁填规则由服务端运行时校验，
+        以兼容 multipart 客户端生成。
+    TaskCreated:
+      type: object
+      required: [task_id]
+      properties:
+        task_id:
+          type: string
+          description: 由唯一压缩包文件名派生的稳定任务标识；幂等恢复时保持不变。
+      description: 既有响应结构保持不变；规则适用网元类型通过任务元数据和 v6 汇总展示。

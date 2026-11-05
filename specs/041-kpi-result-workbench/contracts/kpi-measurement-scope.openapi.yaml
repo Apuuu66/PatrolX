@@ -1,0 +1,1033 @@
+openapi: 3.1.0
+info:
+  title: PatrolX KPI 测量单元巡检范围规划契约
+  version: 6.0.0-plan
+  description: >-
+    测量单元是 KPI 巡检的唯一日常启停粒度。单位启用后纳入全部已确认基础指标和已定义派生指标。
+    v6 绑定、派生和维护配置均没有启用门禁。历史停用恢复、待归属和单条绑定修正
+    使用可审计、幂等且支持部分失败重试的接口。本文件是 Plan 阶段契约草案。
+servers:
+  - url: /
+tags:
+  - name: KpiMeasurementScope
+  - name: KpiLegacyMaintenance
+  - name: KpiV5Frozen
+security:
+  - bearerAuth: []
+paths:
+  /api/v6/kpi/measurement-units:
+    get:
+      tags: [KpiMeasurementScope]
+      summary: 分页查询网元类型下的测量单元巡检范围
+      operationId: listKpiMeasurementUnitsV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementTypeQuery'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 256
+        - name: inspection_enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: configuration_state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiConfigurationState'
+        - name: recovery_state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiRecoveryState'
+      responses:
+        '200':
+          description: 测量单元分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementUnitPageV6'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/measurement-units/{network_element_type}/{measurement_unit_id}:
+    get:
+      tags: [KpiMeasurementScope]
+      summary: 获取测量单元巡检范围详情
+      operationId: getKpiMeasurementUnitV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementTypePath'
+        - $ref: '#/components/parameters/MeasurementUnitIdPath'
+      responses:
+        '200':
+          description: 测量单元详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementUnitV6'
+        '404':
+          $ref: '#/components/responses/MeasurementUnitNotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      tags: [KpiMeasurementScope]
+      summary: 启用或停用测量单元
+      description: >-
+        这是唯一日常巡检启停开关。停用只影响后续任务，不删除绑定、派生、维护口径、
+        团队关注或历史结果；启用后全部已确认基础指标和已定义派生指标纳入后续任务。
+      operationId: setKpiMeasurementInspectionEnabledV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementTypePath'
+        - $ref: '#/components/parameters/MeasurementUnitIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiMeasurementInspectionPatchV6'
+      responses:
+        '200':
+          description: 更新后的测量单元
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementUnitV6'
+        '403':
+          $ref: '#/components/responses/WriteForbidden'
+        '404':
+          $ref: '#/components/responses/MeasurementUnitNotFound'
+        '409':
+          $ref: '#/components/responses/MeasurementUnitRevisionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/measurement-bindings:
+    get:
+      tags: [KpiMeasurementScope]
+      summary: 分页查询测量单元绑定诊断
+      description: 正常入库自动确认绑定；本接口只用于诊断和单条异常修正，不提供批量确认。
+      operationId: listKpiMeasurementBindingsV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementTypeQuery'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: measurement_unit_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiBindingState'
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        '200':
+          description: 绑定分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementBindingPageV6'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/measurement-bindings/{network_element_type}/{binding_id}:
+    patch:
+      tags: [KpiMeasurementScope]
+      summary: 单条修正绑定异常
+      description: >-
+        仅允许将 candidate/conflict 修正为 confirmed 或 ignored，并记录 revision、原因和操作来源。
+        不存在批量确认接口；ignored 绑定不进入有效指标集合。
+      operationId: correctKpiMeasurementBindingV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementTypePath'
+        - name: binding_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiMeasurementBindingPatchV6'
+      responses:
+        '200':
+          description: 修正后的绑定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementBindingV6'
+        '400':
+          $ref: '#/components/responses/BindingNotCorrectable'
+        '403':
+          $ref: '#/components/responses/WriteForbidden'
+        '404':
+          $ref: '#/components/responses/BindingNotFound'
+        '409':
+          $ref: '#/components/responses/MeasurementBindingRevisionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/legacy-recovery-audits:
+    get:
+      tags: [KpiLegacyMaintenance]
+      summary: 分页查询历史指标级停用恢复审计
+      operationId: listKpiLegacyRecoveryAuditsV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementTypeQueryOptional'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: result
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiRecoveryResult'
+        - name: object_kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiRecoveryObjectKind'
+        - name: measurement_unit_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 恢复审计分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiLegacyRecoveryAuditPageV6'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/legacy-recovery-audits/retry:
+    post:
+      tags: [KpiLegacyMaintenance]
+      summary: 批量重试历史停用恢复
+      description: >-
+        按对象异步重试，成功项不回滚，失败项保留错误和 attempt_count。
+        idempotency_key 相同且请求相同时返回同一 maintenance operation，不重复执行。
+      operationId: retryKpiLegacyRecoveryV6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiLegacyRecoveryRetryRequestV6'
+      responses:
+        '202':
+          description: 已接受重试
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMaintenanceOperationAcceptedV6'
+        '400':
+          $ref: '#/components/responses/InvalidMaintenanceTargets'
+        '403':
+          $ref: '#/components/responses/WriteForbidden'
+        '409':
+          $ref: '#/components/responses/MaintenanceOperationIdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/pending-attributions:
+    get:
+      tags: [KpiLegacyMaintenance]
+      summary: 分页查询待归属配置
+      operationId: listKpiPendingAttributionsV6
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: resolution_state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiPendingResolutionState'
+        - name: reason
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiPendingReason'
+        - name: source_table
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 待归属分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiPendingAttributionPageV6'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/pending-attributions/{pending_id}/resolve:
+    post:
+      tags: [KpiLegacyMaintenance]
+      summary: 为待归属配置指定网元类型
+      description: >-
+        由维护人员显式指定一个网元类型后异步物化 v6 配置。不接受公共范围，不默认选择 UMF/CSP，
+        未完成前记录不进入任何巡检范围。
+      operationId: resolveKpiPendingAttributionV6
+      parameters:
+        - name: pending_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiPendingAttributionResolveRequestV6'
+      responses:
+        '202':
+          description: 已接受归属物化
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMaintenanceOperationAcceptedV6'
+        '403':
+          $ref: '#/components/responses/WriteForbidden'
+        '404':
+          $ref: '#/components/responses/PendingAttributionNotFound'
+        '409':
+          $ref: '#/components/responses/MaintenanceOperationIdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/maintenance-operations/{operation_id}:
+    get:
+      tags: [KpiLegacyMaintenance]
+      summary: 查询恢复或归属操作进度
+      description: >-
+        操作可处于 partial_success；页面必须展示成功数、失败数和逐项错误，不得把部分失败显示为完成。
+      operationId: getKpiMaintenanceOperationV6
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 维护操作详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMaintenanceOperationV6'
+        '404':
+          $ref: '#/components/responses/MaintenanceOperationNotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v5/kpi/measurement-bindings/batch-confirm:
+    post:
+      tags: [KpiV5Frozen]
+      deprecated: true
+      summary: 旧版批量确认绑定（冻结，仅兼容）
+      description: >-
+        v5 契约冻结，仅标记 deprecated，供旧客户端兼容；v6 UI、新服务和执行器不得调用。
+        物理删除必须另行下线 v5，不在本功能中破坏既有字段含义。
+      operationId: batchConfirmKpiMeasurementBindingsV5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiV5BatchConfirmRequest'
+      responses:
+        '200':
+          description: 旧版响应结构保持不变
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiV5BatchConfirmResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    NetworkElementTypeQuery:
+      name: network_element_type
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 32
+        pattern: '^[A-Z][A-Z0-9_]*$'
+    NetworkElementTypeQueryOptional:
+      name: network_element_type
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 32
+        pattern: '^[A-Z][A-Z0-9_]*$'
+    NetworkElementTypePath:
+      name: network_element_type
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 32
+        pattern: '^[A-Z][A-Z0-9_]*$'
+    MeasurementUnitIdPath:
+      name: measurement_unit_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+  headers:
+    Location:
+      description: 异步维护操作资源位置
+      schema:
+        type: string
+  responses:
+    WriteForbidden:
+      description: 当前用户没有维护写权限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            forbidden:
+              value:
+                code: kpi_write_forbidden
+                message: 当前用户无 KPI 配置维护权限
+    MeasurementUnitNotFound:
+      description: 指定网元类型下不存在测量单元
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            not_found:
+              value:
+                code: kpi_measurement_unit_not_found
+                message: 测量单元不存在
+                detail:
+                  network_element_type: UMF
+                  measurement_unit_id: example-mu
+    MeasurementUnitRevisionConflict:
+      description: 测量单元配置 revision 已过期
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            conflict:
+              value:
+                code: kpi_measurement_unit_revision_conflict
+                message: 测量单元配置已更新，请刷新后重试
+                detail:
+                  expected_revision: 3
+                  current_revision: 5
+    BindingNotFound:
+      description: 指定网元类型下不存在绑定
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BindingNotCorrectable:
+      description: 当前绑定状态不允许人工修正
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            not_correctable:
+              value:
+                code: kpi_binding_not_correctable
+                message: 仅 candidate 或 conflict 绑定可执行单条人工修正
+    MeasurementBindingRevisionConflict:
+      description: 绑定 revision 已过期
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            conflict:
+              value:
+                code: kpi_measurement_binding_revision_conflict
+                message: 绑定配置已更新，请刷新后重试
+                detail:
+                  expected_revision: 1
+                  current_revision: 2
+    PendingAttributionNotFound:
+      description: 待归属记录不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    MaintenanceOperationNotFound:
+      description: 维护操作不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InvalidMaintenanceTargets:
+      description: 重试目标为空、重复或不属于可重试状态
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalid_targets:
+              value:
+                code: kpi_maintenance_target_invalid
+                message: 仅 failed 或 pending 的恢复审计可重试
+                detail:
+                  invalid_audit_ids: [12, 19]
+    MaintenanceOperationIdempotencyConflict:
+      description: 相同 idempotency_key 已用于不同请求
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            conflict:
+              value:
+                code: kpi_maintenance_operation_idempotency_conflict
+                message: 幂等键已用于不同维护请求
+                detail:
+                  idempotency_key: example-key
+                  existing_operation_id: op-example
+    ValidationError:
+      description: 请求结构不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HTTPValidationError'
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        detail:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+    HTTPValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    KpiConfigurationState:
+      type: string
+      enum: [ready, incomplete]
+    KpiRecoveryState:
+      type: string
+      enum: [none, pending, partial_failure, completed]
+    KpiBindingState:
+      type: string
+      enum: [candidate, confirmed, conflict, ignored]
+    KpiRecoveryResult:
+      type: string
+      enum: [pending, running, recovered, failed, skipped]
+    KpiRecoveryObjectKind:
+      type: string
+      enum: [metric, binding, derived]
+    KpiRecoverySource:
+      type: string
+      enum: [migration, ui, api]
+    KpiPendingResolutionState:
+      type: string
+      enum: [pending, assigned, materialized, failed]
+    KpiPendingReason:
+      type: string
+      enum: [missing_product, ambiguous_product, orphan_reference]
+    KpiMeasurementUnitV6:
+      type: object
+      required:
+        - network_element_type
+        - measurement_unit_id
+        - name_zh
+        - name_en
+        - inspection_enabled
+        - revision
+        - base_metric_count
+        - derived_metric_count
+        - confirmed_binding_count
+        - candidate_binding_count
+        - configuration_state
+        - recovery_state
+        - updated_at
+      properties:
+        network_element_type:
+          type: string
+        measurement_unit_id:
+          type: string
+        name_zh:
+          type: string
+        name_en:
+          type: string
+        inspection_enabled:
+          type: boolean
+          description: 唯一日常巡检启停状态。
+        revision:
+          type: integer
+          minimum: 0
+        base_metric_count:
+          type: integer
+          minimum: 0
+        derived_metric_count:
+          type: integer
+          minimum: 0
+        confirmed_binding_count:
+          type: integer
+          minimum: 0
+        candidate_binding_count:
+          type: integer
+          minimum: 0
+        configuration_state:
+          $ref: '#/components/schemas/KpiConfigurationState'
+        recovery_state:
+          $ref: '#/components/schemas/KpiRecoveryState'
+        source:
+          type: string
+          enum: [preset, discovered, manual]
+        updated_at:
+          type: string
+          description: ISO 8601 UTC。
+        notice:
+          type: string
+          description: 停用时常返回“只影响后续巡检，现有配置与关注保留”。
+    KpiMeasurementUnitPageV6:
+      type: object
+      required: [total, page, page_size, items]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiMeasurementUnitV6'
+    KpiMeasurementInspectionPatchV6:
+      type: object
+      required: [expected_revision, inspection_enabled]
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0
+        inspection_enabled:
+          type: boolean
+      additionalProperties: false
+    KpiMeasurementBindingV6:
+      type: object
+      required:
+        - id
+        - network_element_type
+        - measurement_unit_id
+        - raw_source_name
+        - base_source_name
+        - status
+        - source_file
+        - origin_task_id
+        - revision
+        - updated_at
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        network_element_type:
+          type: string
+        measurement_unit_id:
+          type: string
+        measurement_unit_name:
+          type: string
+        raw_source_name:
+          type: string
+        base_source_name:
+          type: string
+        metric_resource_id:
+          oneOf:
+            - type: string
+            - type: 'null'
+        metric_resource_name:
+          oneOf:
+            - type: string
+            - type: 'null'
+        display_unit:
+          oneOf:
+            - type: string
+            - type: 'null'
+        status:
+          $ref: '#/components/schemas/KpiBindingState'
+        source_file:
+          type: string
+        origin_task_id:
+          type: string
+        revision:
+          type: integer
+          minimum: 0
+        updated_at:
+          type: string
+          description: ISO 8601 UTC。
+        diagnostic:
+          oneOf:
+            - type: string
+            - type: 'null'
+    KpiMeasurementBindingPageV6:
+      type: object
+      required: [total, page, page_size, items]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiMeasurementBindingV6'
+    KpiMeasurementBindingPatchV6:
+      type: object
+      required: [expected_revision, status, reason]
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [confirmed, ignored]
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 512
+      additionalProperties: false
+    KpiLegacyRecoveryAuditV6:
+      type: object
+      required:
+        - audit_id
+        - source_table
+        - source_record_id
+        - source_key
+        - object_kind
+        - before_snapshot
+        - result
+        - attempt_count
+        - source
+        - created_at
+        - updated_at
+      properties:
+        audit_id:
+          type: integer
+          minimum: 1
+        source_table:
+          type: string
+        source_record_id:
+          type: string
+        source_key:
+          type: string
+        network_element_type:
+          oneOf:
+            - type: string
+            - type: 'null'
+        measurement_unit_id:
+          oneOf:
+            - type: string
+            - type: 'null'
+        metric_resource_id:
+          oneOf:
+            - type: string
+            - type: 'null'
+        object_kind:
+          $ref: '#/components/schemas/KpiRecoveryObjectKind'
+        before_snapshot:
+          type: object
+          additionalProperties: true
+        result:
+          $ref: '#/components/schemas/KpiRecoveryResult'
+        error_code:
+          oneOf:
+            - type: string
+            - type: 'null'
+        error_message:
+          oneOf:
+            - type: string
+            - type: 'null'
+        attempt_count:
+          type: integer
+          minimum: 0
+        actor:
+          oneOf:
+            - type: string
+            - type: 'null'
+        source:
+          $ref: '#/components/schemas/KpiRecoverySource'
+        created_at:
+          type: string
+          description: ISO 8601 UTC。
+        updated_at:
+          type: string
+          description: ISO 8601 UTC。
+    KpiLegacyRecoveryAuditPageV6:
+      type: object
+      required: [total, page, page_size, items]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiLegacyRecoveryAuditV6'
+    KpiLegacyRecoveryRetryRequestV6:
+      type: object
+      required: [audit_ids, idempotency_key]
+      properties:
+        audit_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 128
+      additionalProperties: false
+    KpiPendingAttributionV6:
+      type: object
+      required:
+        - pending_id
+        - source_table
+        - source_record_id
+        - source_key
+        - source_payload
+        - candidate_network_element_types
+        - reason
+        - resolution_state
+        - attempt_count
+        - idempotency_key
+        - created_at
+        - updated_at
+      properties:
+        pending_id:
+          type: integer
+          minimum: 1
+        source_table:
+          type: string
+        source_record_id:
+          type: string
+        source_key:
+          type: string
+        source_payload:
+          type: object
+          additionalProperties: true
+        candidate_network_element_types:
+          type: array
+          items:
+            type: string
+        reason:
+          $ref: '#/components/schemas/KpiPendingReason'
+        resolution_state:
+          $ref: '#/components/schemas/KpiPendingResolutionState'
+        assigned_network_element_type:
+          oneOf:
+            - type: string
+            - type: 'null'
+        attempt_count:
+          type: integer
+          minimum: 0
+        last_error:
+          oneOf:
+            - type: string
+            - type: 'null'
+        idempotency_key:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+    KpiPendingAttributionPageV6:
+      type: object
+      required: [total, page, page_size, items]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiPendingAttributionV6'
+    KpiPendingAttributionResolveRequestV6:
+      type: object
+      required: [network_element_type, idempotency_key]
+      properties:
+        network_element_type:
+          type: string
+          minLength: 1
+          maxLength: 32
+          pattern: '^[A-Z][A-Z0-9_]*$'
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 128
+      additionalProperties: false
+    KpiMaintenanceOperationAcceptedV6:
+      type: object
+      required: [operation_id, status]
+      properties:
+        operation_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running]
+    KpiMaintenanceOperationItemV6:
+      type: object
+      required: [target_id, result]
+      properties:
+        target_id:
+          type: string
+        result:
+          type: string
+          enum: [pending, running, succeeded, failed, skipped]
+        error_code:
+          oneOf:
+            - type: string
+            - type: 'null'
+        error_message:
+          oneOf:
+            - type: string
+            - type: 'null'
+    KpiMaintenanceOperationV6:
+      type: object
+      required:
+        - operation_id
+        - operation_type
+        - status
+        - idempotency_key
+        - total_count
+        - succeeded_count
+        - failed_count
+        - pending_count
+        - items
+        - created_at
+      properties:
+        operation_id:
+          type: string
+        operation_type:
+          type: string
+          enum: [legacy_recovery_retry, pending_attribution_resolve]
+        status:
+          type: string
+          enum: [queued, running, succeeded, partial_success, failed]
+        idempotency_key:
+          type: string
+        total_count:
+          type: integer
+          minimum: 0
+        succeeded_count:
+          type: integer
+          minimum: 0
+        failed_count:
+          type: integer
+          minimum: 0
+        pending_count:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiMaintenanceOperationItemV6'
+        created_at:
+          type: string
+        completed_at:
+          oneOf:
+            - type: string
+            - type: 'null'
+    KpiV5BatchConfirmRequest:
+      type: object
+      required: [binding_ids]
+      properties:
+        binding_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: integer
+    KpiV5BatchConfirmResponse:
+      type: object
+      description: v5 既有字段语义保持不变。
+      additionalProperties: true

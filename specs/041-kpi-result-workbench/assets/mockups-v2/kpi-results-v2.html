@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440, initial-scale=1">
+<title>PatrolX · KPI 巡检结果（讨论稿 v2）</title>
+<link rel="stylesheet" href="./mockup.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8 9h8M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M7 15l4-4 3 2 5-6"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M8 20a3 3 0 0 1 0-6h11M9 8h6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5M16 6a3 3 0 0 1 0 6M18 15c2 .8 3 2.4 3 5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8A7 7 0 0 1 18.7 6L20 12M4 12l1.3 6A7 7 0 0 0 17.9 16"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 9 5 5 5-5"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.4 6 .9-4.3 4.2 1 5.9-5.4-2.8-5.4 2.8 1-5.9L3.3 9.3l6-.9L12 3Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+</svg>
+
+<main class="artboard" aria-label="KPI 巡检结果默认需处理视图">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"></span><span class="brand-name">PatrolX</span></div>
+      <div class="nav-group">
+        <div class="nav-caption">工作台</div>
+        <div class="nav-item active"><svg class="icon"><use href="#i-clipboard"/></svg>巡检任务</div>
+        <div class="nav-item"><svg class="icon"><use href="#i-server"/></svg>设备台账</div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-caption">配置管理</div>
+        <div class="nav-item"><svg class="icon"><use href="#i-chart"/></svg>基础指标</div>
+        <div class="nav-item"><svg class="icon"><use href="#i-sliders"/></svg>规则管理</div>
+        <div class="nav-item"><svg class="icon"><use href="#i-book"/></svg>数据字典</div>
+        <div class="nav-item"><svg class="icon"><use href="#i-users"/></svg>用户管理</div>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="user-avatar">管理</div>
+        <div><div class="user-name">管理员</div><div class="user-role">维护写权限</div></div>
+      </div>
+    </aside>
+
+    <section class="app-main">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>巡检任务</span><span class="crumb-sep">/</span><strong>task-umf-20261105-0900</strong><span class="crumb-sep">/</span><span>KPI 巡检结果</span></div>
+        <div class="topbar-right"><span>结果更新时间 11:02</span><button class="icon-button" aria-label="刷新"><svg class="icon"><use href="#i-refresh"/></svg></button><div class="topbar-divider"></div><div class="avatar-small">管</div><span>管理员</span></div>
+      </header>
+
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <div class="page-title-wrap"><h1 class="page-title">KPI 巡检结果</h1><span class="tag pass"><span class="dot"></span>执行完成</span><span class="tag shared">UMF 网元类型</span></div>
+            <div class="page-subtitle"><span>数据日期 2026-11-05</span><span>·</span><span>对比日期 2026-11-04</span><span>·</span><span>最新测量 11-05 11:00</span><span>·</span><span>规则范围快照 RS-20261105-0942</span></div>
+          </div>
+          <div class="page-actions"><button class="btn"><svg class="icon"><use href="#i-file"/></svg>查看任务报告</button><button class="btn primary"><svg class="icon"><use href="#i-refresh"/></svg>刷新当前结果</button></div>
+        </div>
+
+        <section class="card summary-card" style="margin-top:12px" aria-label="团队关注汇总">
+          <div class="summary-main">
+            <div class="summary-conclusion">
+              <div class="summary-kicker">UMF 团队关注 · 按网元类型共享</div>
+              <div class="summary-headline"><strong>6</strong> 项需要处理</div>
+              <div class="summary-desc">团队关注 <b>18</b> 项 = 需处理 <b>6</b> + 无需处理 <b>12</b></div>
+            </div>
+            <div class="summary-metrics">
+              <div class="summary-metric"><span class="summary-metric-label">已启用测量单元</span><span class="summary-metric-value">12</span><span class="summary-metric-note">当前 UMF 任务范围</span></div>
+              <div class="summary-metric"><span class="summary-metric-label">全部指标</span><span class="summary-metric-value">248</span><span class="summary-metric-note">不因关注而减少</span></div>
+              <div class="summary-metric"><span class="summary-metric-label">团队关注</span><span class="summary-metric-value">18</span><span class="summary-metric-note">UMF 内跨任务共享</span></div>
+              <div class="summary-metric"><span class="summary-metric-label">无需处理</span><span class="summary-metric-value">12</span><span class="summary-metric-note">正常 / 不适用</span></div>
+            </div>
+          </div>
+          <div class="summary-groups">
+            <span class="group-summary-label">互斥处置分组</span>
+            <span class="group-chip fail"><span class="status-dot fail"></span>失败 <b>1</b></span>
+            <span class="group-chip warn"><span class="status-dot warn"></span>预警 <b>2</b></span>
+            <span class="group-chip trend"><span class="status-dot warn"></span>趋势恶化 <b>1</b></span>
+            <span class="group-chip error"><span class="status-dot error"></span>无法判定 <b>1</b></span>
+            <span class="group-chip pending"><span class="status-dot warn"></span>待配置 <b>1</b></span>
+            <span class="group-chip pass" style="margin-left:auto"><span class="status-dot pass"></span>无需处理 <b>12</b></span>
+          </div>
+        </section>
+
+        <div class="scope-banner">
+          <svg class="icon"><use href="#i-info"/></svg>
+          <span><b>查看范围说明</b>　巡检范围由测量单元启用状态决定；团队关注只影响默认查看范围，不改变巡检、报告或历史结果。</span>
+          <span class="scope-link">查看测量单元 →</span>
+        </div>
+
+        <section class="workbench">
+          <div class="card results-panel">
+            <div class="results-toolbar">
+              <div class="view-tabs"><span class="view-tab active">需处理 <span class="count">6</span></span><span class="view-tab">团队关注 <span class="count">18</span></span><span class="view-tab">全部指标 <span class="count">248</span></span></div>
+              <div class="spacer"></div>
+              <button class="btn small manage-focus"><svg class="icon"><use href="#i-star"/></svg>管理团队关注</button>
+            </div>
+            <div class="filter-row">
+              <div class="search-box"><svg class="icon"><use href="#i-search"/></svg><span>搜索指标名称、指标 ID、测量单元</span></div>
+              <div class="select"><span>全部测量单元</span><svg class="icon"><use href="#i-chevron"/></svg></div>
+              <div class="select"><span>全部判定</span><svg class="icon"><use href="#i-chevron"/></svg></div>
+            </div>
+            <div class="result-meta">
+              <span>当前展示 <strong>6</strong> 项需处理指标</span>
+              <span class="right"><span class="legend"><span class="status-dot fail"></span>失败</span><span class="legend"><span class="status-dot warn"></span>预警 / 趋势</span><span class="legend"><span class="status-dot error"></span>无法判定</span><span>按处置优先级排序</span></span>
+            </div>
+            <div class="result-table">
+              <div class="result-table-head"><div>判定</div><div>测量单元 / 指标</div><div>今日</div><div>昨日</div><div>变化</div><div style="text-align:right">证据</div></div>
+
+              <div class="result-row selected">
+                <div class="result-group"><span class="result-group-label fail"><span class="status-dot fail"></span>失败</span><span class="trend-label bad">昨日恶化</span></div>
+                <div class="result-metric"><div class="result-name">媒体资源创建成功率</div><div class="result-path">UMF-AMF-01 · <span class="mono">kpi.media_resource.create_rate</span></div></div>
+                <div class="result-value bad">64.5%</div><div class="result-value">75.0%</div><div class="result-change bad">-10.5pp</div><div class="evidence-link">查看</div>
+              </div>
+
+              <div class="result-row">
+                <div class="result-group"><span class="result-group-label warn"><span class="status-dot warn"></span>预警</span><span class="trend-label">阈值突破</span></div>
+                <div class="result-metric"><div class="result-name">S1 切换成功率</div><div class="result-path">UMF-AMF-02 · <span class="mono">kpi.s1.handover_success_rate</span></div></div>
+                <div class="result-value">98.76%</div><div class="result-value">99.07%</div><div class="result-change warn">-0.31pp</div><div class="evidence-link">查看</div>
+              </div>
+
+              <div class="result-row">
+                <div class="result-group"><span class="result-group-label warn"><span class="status-dot warn"></span>预警</span><span class="trend-label">连续 2 天</span></div>
+                <div class="result-metric"><div class="result-name">S6a 鉴权成功率</div><div class="result-path">UMF-MME-03 · <span class="mono">kpi.s6a.auth_success_rate</span></div></div>
+                <div class="result-value">99.12%</div><div class="result-value">99.48%</div><div class="result-change warn">-0.36pp</div><div class="evidence-link">查看</div>
+              </div>
+
+              <div class="result-row">
+                <div class="result-group"><span class="result-group-label trend"><span class="status-dot warn"></span>趋势恶化</span><span class="trend-label bad">超容差</span></div>
+                <div class="result-metric"><div class="result-name">PDU 会话建立时延</div><div class="result-path">UMF-SMF-02 · <span class="mono">kpi.pdu.session_setup_latency</span></div></div>
+                <div class="result-value">42.8ms</div><div class="result-value">38.0ms</div><div class="result-change bad">+12.6%</div><div class="evidence-link">查看</div>
+              </div>
+
+              <div class="result-row">
+                <div class="result-group"><span class="result-group-label error"><span class="status-dot error"></span>无法判定</span><span class="trend-label">无有效点</span></div>
+                <div class="result-metric"><div class="result-name">UPF 资源池利用率</div><div class="result-path">UMF-UPF-01 · <span class="mono">kpi.upf.resource_pool_usage</span></div></div>
+                <div class="result-value">—</div><div class="result-value">—</div><div class="result-change muted">—</div><div class="evidence-link">查看</div>
+              </div>
+
+              <div class="result-row">
+                <div class="result-group"><span class="result-group-label pending"><span class="status-dot warn"></span>待配置</span><span class="trend-label">阈值缺失</span></div>
+                <div class="result-metric"><div class="result-name">核心网注册成功率</div><div class="result-path">UMF-NRF-01 · <span class="mono">kpi.core.registration_success_rate</span></div></div>
+                <div class="result-value">99.36%</div><div class="result-value">99.41%</div><div class="result-change warn">-0.05pp</div><div class="evidence-link">查看</div>
+              </div>
+            </div>
+            <div class="result-footer"><span>共 6 项 · 计数口径：需处理 + 无需处理 = 团队关注 18</span><div class="pager"><span class="active">1</span><span>›</span></div></div>
+          </div>
+
+          <aside class="card evidence-panel" aria-label="指标证据">
+            <div class="evidence-head"><span>指标证据</span><span class="close">×</span></div>
+            <div class="evidence-tags"><span class="tag fail"><span class="dot"></span>失败</span><span class="tag warn">昨日恶化</span><span class="tag shared">base · 源包直出</span><span class="tag shared">UMF 内共享关注</span></div>
+            <div class="evidence-title">媒体资源创建成功率</div>
+            <div class="evidence-id mono">kpi.media_resource.create_rate · 健康媒体统计 · base</div>
+            <div class="value-grid">
+              <div class="value-cell"><div class="value-label">今日</div><div class="value-main bad">64.5%</div><div class="value-sub bad">-10.5pp 较昨日</div></div>
+              <div class="value-cell"><div class="value-label">昨日</div><div class="value-main">75.0%</div><div class="value-sub">源包日值</div></div>
+              <div class="value-cell"><div class="value-label">有效点</div><div class="value-main">7</div><div class="value-sub">7 / 7 天有数据</div></div>
+            </div>
+            <div class="reason-box"><div class="reason-title">判定原因</div><div class="reason-text">源包成功率低于失败阈值 70.0%，且较昨日下降超过 0.20pp 容差。对象与周期分组一致。</div></div>
+            <div class="evidence-section-title">判定依据 <span>阈值来源：维护配置 v12</span></div>
+            <div class="basis-grid">
+              <div class="basis-cell"><div class="basis-label">判定方向</div><div class="basis-value">越高越好 · 日成功率</div></div>
+              <div class="basis-cell"><div class="basis-label">指标类型</div><div class="basis-value">源包直出 · <span class="mono">base</span></div></div>
+              <div class="basis-cell"><div class="basis-label">预警 / 失败阈值</div><div class="basis-value">75.0% / 70.0%</div></div>
+              <div class="basis-cell"><div class="basis-label">来源列 / 口径</div><div class="basis-value mono">Media Resource Creation Requests Success Rate(%) · 全日聚合</div></div>
+              <div class="basis-cell"><div class="basis-label">关联证据 · 不参与计算</div><div class="basis-value mono">请求 200 / 成功 129 / 失败 71</div></div>
+            </div>
+            <div class="evidence-section-title">近 7 日趋势 <span>2026-10-30 → 11-05</span></div>
+            <div class="trend-card">
+              <div class="trend-head"><span>源包成功率</span><span>失败阈值 70%</span></div>
+              <svg class="trend-chart" viewBox="0 0 330 70" preserveAspectRatio="none" aria-label="近 7 日成功率趋势">
+                <defs><linearGradient id="fillFail" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4d4f" stop-opacity=".18"/><stop offset="1" stop-color="#ff4d4f" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0 46H330" stroke="#ffccc7" stroke-width="1" stroke-dasharray="4 4"/>
+                <path d="M0 12 C25 14 38 20 55 20 S96 13 110 17 S150 24 165 23 S205 14 220 19 S259 29 275 27 S310 33 330 59 L330 70 L0 70Z" fill="url(#fillFail)"/>
+                <path d="M0 12 C25 14 38 20 55 20 S96 13 110 17 S150 24 165 23 S205 14 220 19 S259 29 275 27 S310 33 330 59" fill="none" stroke="#ff4d4f" stroke-width="2"/>
+                <circle cx="330" cy="59" r="3.5" fill="#fff" stroke="#ff4d4f" stroke-width="2"/>
+                <circle cx="0" cy="12" r="2" fill="#ff4d4f"/><circle cx="55" cy="20" r="2" fill="#ff4d4f"/><circle cx="110" cy="17" r="2" fill="#ff4d4f"/><circle cx="165" cy="23" r="2" fill="#ff4d4f"/><circle cx="220" cy="19" r="2" fill="#ff4d4f"/><circle cx="275" cy="27" r="2" fill="#ff4d4f"/>
+              </svg>
+              <div style="display:flex;justify-content:space-between;font-size:8px;color:#9aa3b2;transform:translateY(-3px)"><span>10-30</span><span>11-01</span><span>11-03</span><span>11-05</span></div>
+            </div>
+            <div class="object-box"><div><div class="object-name">对象 / 周期</div><div class="object-meta">pod-health-a · 15 分钟周期 · 同日同比</div><div class="object-meta mono" style="margin-top:4px">来源：ports_umf_media_20261105_1000.csv</div></div><span class="tag fail"><span class="dot"></span>失败</span></div>
+          </aside>
+        </section>
+      </div>
+    </section>
+  </div>
+</main>
+</body>
+</html>

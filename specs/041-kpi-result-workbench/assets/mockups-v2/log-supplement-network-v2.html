@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440, initial-scale=1">
+<title>PatrolX · 日志补充包网元选择（讨论稿 v2）</title>
+<link rel="stylesheet" href="./mockup.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8 9h8M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M7 15l4-4 3 2 5-6"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M8 20a3 3 0 0 1 0-6h11M9 8h6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5M16 6a3 3 0 0 1 0 6M18 15c2 .8 3 2.4 3 5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 15v4h14v-4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 9 5 5 5-5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8A7 7 0 0 1 18.7 6L20 12M4 12l1.3 6A7 7 0 0 0 17.9 16"/></symbol>
+</svg>
+
+<main class="artboard" aria-label="日志补充包上传与规则适用网元类型选择">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"></span><span class="brand-name">PatrolX</span></div>
+      <div class="nav-group"><div class="nav-caption">工作台</div><div class="nav-item active"><svg class="icon"><use href="#i-clipboard"/></svg>巡检任务</div><div class="nav-item"><svg class="icon"><use href="#i-server"/></svg>设备台账</div></div>
+      <div class="nav-group"><div class="nav-caption">配置管理</div><div class="nav-item"><svg class="icon"><use href="#i-chart"/></svg>基础指标</div><div class="nav-item"><svg class="icon"><use href="#i-sliders"/></svg>规则管理</div><div class="nav-item"><svg class="icon"><use href="#i-book"/></svg>数据字典</div><div class="nav-item"><svg class="icon"><use href="#i-users"/></svg>用户管理</div></div>
+      <div class="sidebar-bottom"><div class="user-avatar">管理</div><div><div class="user-name">管理员</div><div class="user-role">维护写权限</div></div></div>
+    </aside>
+    <section class="app-main">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>工作台</span><span class="crumb-sep">/</span><strong>巡检任务</strong></div>
+        <div class="topbar-right"><span>任务按数据包唯一隔离</span><button class="icon-button"><svg class="icon"><use href="#i-refresh"/></svg></button><div class="topbar-divider"></div><div class="avatar-small">管</div><span>管理员</span></div>
+      </header>
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <div class="page-title-wrap"><h1 class="page-title">巡检任务</h1><span class="tag neutral">一个数据包 = 一个任务</span></div>
+            <div class="page-subtitle"><span>按上传包离线执行</span><span>·</span><span>输出目录按 task_id 隔离</span><span>·</span><span>原始包只读</span></div>
+          </div>
+          <div class="page-actions"><button class="btn primary"><svg class="icon"><use href="#i-upload"/></svg>上传数据包</button></div>
+        </div>
+        <section class="card task-summary">
+          <div class="task-summary-cell"><div class="task-summary-label">今日新增</div><div class="task-summary-value">8</div></div>
+          <div class="task-summary-cell"><div class="task-summary-label">执行中</div><div class="task-summary-value">2</div></div>
+          <div class="task-summary-cell"><div class="task-summary-label">已完成</div><div class="task-summary-value">5</div></div>
+          <div class="task-summary-cell"><div class="task-summary-label">需重建</div><div class="task-summary-value">1</div></div>
+        </section>
+        <section class="card task-list-backdrop">
+          <div class="task-toolbar-backdrop"><div class="search-box" style="max-width:330px"><svg class="icon"><use href="#i-search"/></svg><span>搜索任务 ID 或数据包名称</span></div><div class="select"><span>全部任务状态</span><svg class="icon"><use href="#i-chevron"/></svg></div><div class="select"><span>全部数据日期</span><svg class="icon"><use href="#i-chevron"/></svg></div></div>
+          <div class="task-row-backdrop head"><div>任务</div><div>类型 / 网元</div><div>状态</div><div>数据日期</div><div>操作</div></div>
+          <div class="task-row-backdrop"><div><div class="task-name-backdrop">task-umf-20261105-0900</div><div class="task-meta-backdrop mono">UMF_PROVINCE_A_20261105_0900.tar.gz · 1.8 GB</div></div><div><span class="tag info">标准巡检包</span><div class="task-meta-backdrop">UMF · 5.2.1</div></div><div><span class="tag pass">已完成</span><div class="task-meta-backdrop">需处理 6 项</div></div><div>2026-11-05<br><span class="task-meta-backdrop">11:00 测量</span></div><div class="task-ops-backdrop"><span>详情</span><span>报告</span><span>重建</span></div></div>
+          <div class="task-row-backdrop"><div><div class="task-name-backdrop">task-log-20261105-0200</div><div class="task-meta-backdrop mono">UMF_SBTS_20261105_020000.tar.gz · 184.2 MB</div></div><div><span class="tag neutral">日志补充包</span><div class="task-meta-backdrop">规则范围 UMF</div></div><div><span class="tag pass">已完成</span><div class="task-meta-backdrop">业务规则 9 条</div></div><div>2026-11-05<br><span class="task-meta-backdrop">02:00 日志</span></div><div class="task-ops-backdrop"><span>详情</span><span>报告</span><span>重建</span></div></div>
+          <div class="task-row-backdrop"><div><div class="task-name-backdrop">task-log-20261104-2230</div><div class="task-meta-backdrop mono">CSP_SBC_20261104_223000.zip · 96.4 MB</div></div><div><span class="tag neutral">日志补充包</span><div class="task-meta-backdrop">规则范围 CSP</div></div><div><span class="tag pass">已完成</span><div class="task-meta-backdrop">业务规则 6 条</div></div><div>2026-11-04<br><span class="task-meta-backdrop">22:30 日志</span></div><div class="task-ops-backdrop"><span>详情</span><span>报告</span><span>重建</span></div></div>
+          <div class="task-row-backdrop"><div><div class="task-name-backdrop">task-log-20261104-2100</div><div class="task-meta-backdrop mono">GENERIC_TRACE_20261104_210000.tar.gz · 54.8 MB</div></div><div><span class="tag neutral">日志补充包</span><div class="task-meta-backdrop">未选择规则适用网元</div></div><div><span class="tag pass">已完成</span><div class="task-meta-backdrop">仅内部技术单元</div></div><div>2026-11-04<br><span class="task-meta-backdrop">21:00 日志</span></div><div class="task-ops-backdrop"><span>详情</span><span>报告</span><span>重建</span></div></div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-scrim"></div>
+  <section class="upload-modal" role="dialog" aria-modal="true" aria-label="上传日志补充包">
+    <header class="upload-modal-head">
+      <div class="upload-modal-title-row"><div><h2 class="upload-modal-title">上传数据包</h2><div class="upload-modal-sub">选择文件后校验名称、大小与归档格式；提交前完成必要配置。</div></div><span class="upload-modal-close">×</span></div>
+      <div class="upload-tabs"><div class="upload-tab">标准巡检包</div><div class="upload-tab active">日志补充包 <span class="tag neutral">GENERIC</span></div></div>
+    </header>
+
+    <div class="upload-modal-body">
+      <div class="upload-file">
+        <div class="upload-file-icon"><svg class="icon"><use href="#i-file"/></svg></div>
+        <div><div class="upload-file-name mono">UMF_SBTS_20261105_020000.tar.gz</div><div class="upload-file-meta">184.2 MB · 合成演示数据 · 校验完整</div></div>
+        <div class="upload-file-status"><span class="tag pass">格式与大小通过</span><div class="mono">SHA-256 8f3a…c21d</div></div>
+      </div>
+
+      <div class="upload-form-grid">
+        <div class="upload-field"><div class="upload-label">任务 ID 预览 <span class="optional">由包名派生</span></div><div class="upload-input mono">UMF_SBTS_20261105_020000</div></div>
+        <div class="upload-field"><div class="upload-label">分类 profile <span class="optional">固定</span></div><div class="upload-input"><span>GENERIC</span><span class="tag neutral">不可修改</span></div></div>
+      </div>
+
+      <div class="upload-info"><svg class="icon"><use href="#i-info"/></svg><div><b>日志补充包不会写入任务 product。</b>仍按 GENERIC 分类处理，不触发设备台账解析或归档；下方选择仅用于匹配普通业务规则的网元归属。</div></div>
+
+      <div class="network-choice-label">规则适用网元类型 <span class="optional">可选 · 只能单选</span></div>
+      <div class="network-radio-row">
+        <div class="network-radio"><span class="radio-circle"></span><div><div class="network-radio-name">不指定</div><div class="network-radio-desc">只执行解压、分类等内部技术单元；结果页明确显示未选择业务规则范围。</div></div></div>
+        <div class="network-radio selected"><span class="radio-circle"></span><div><div class="network-radio-name">UMF</div><div class="network-radio-desc">仅执行归属 UMF 的普通业务规则；不改变 product 与 GENERIC 分类。</div></div></div>
+        <div class="network-radio"><span class="radio-circle"></span><div><div class="network-radio-name">CSP</div><div class="network-radio-desc">仅执行归属 CSP 的普通业务规则；与 UMF 规则范围完全隔离。</div></div></div>
+      </div>
+
+      <div class="upload-check-strip"><span class="upload-check">不写入 product</span><span class="upload-check">保持 GENERIC 分类</span><span class="upload-check">不解析设备台账</span></div>
+      <div class="upload-task-preview"><span>本次计划</span><b>内部技术单元</b><span>＋</span><b>UMF 命中的普通业务规则</b><span style="margin-left:auto">未归属规则不执行，也不生成 skip</span></div>
+    </div>
+
+    <footer class="upload-modal-footer">
+      <div class="upload-footer-note"><b>原始包只读。</b>同名任务已存在时，提交前需确认覆盖并全量重建。</div>
+      <div class="upload-footer-actions"><button class="btn">取消</button><button class="btn primary">上传并开始巡检</button></div>
+    </footer>
+  </section>
+</main>
+</body>
+</html>

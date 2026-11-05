@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440, initial-scale=1">
+<title>PatrolX · 规则网元归属（讨论稿 v2）</title>
+<link rel="stylesheet" href="./mockup.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8 9h8M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M7 15l4-4 3 2 5-6"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M8 20a3 3 0 0 1 0-6h11M9 8h6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5M16 6a3 3 0 0 1 0 6M18 15c2 .8 3 2.4 3 5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 9 5 5 5-5"/></symbol>
+  <symbol id="i-sliders-small" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+</svg>
+
+<main class="artboard" aria-label="规则网元归属配置">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"></span><span class="brand-name">PatrolX</span></div>
+      <div class="nav-group"><div class="nav-caption">工作台</div><div class="nav-item"><svg class="icon"><use href="#i-clipboard"/></svg>巡检任务</div><div class="nav-item"><svg class="icon"><use href="#i-server"/></svg>设备台账</div></div>
+      <div class="nav-group"><div class="nav-caption">配置管理</div><div class="nav-item"><svg class="icon"><use href="#i-chart"/></svg>基础指标</div><div class="nav-item active"><svg class="icon"><use href="#i-sliders"/></svg>规则管理</div><div class="nav-item"><svg class="icon"><use href="#i-book"/></svg>数据字典</div><div class="nav-item"><svg class="icon"><use href="#i-users"/></svg>用户管理</div></div>
+      <div class="sidebar-bottom"><div class="user-avatar">管理</div><div><div class="user-name">管理员</div><div class="user-role">维护写权限</div></div></div>
+    </aside>
+    <section class="app-main">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>配置管理</span><span class="crumb-sep">/</span><strong>规则管理</strong></div>
+        <div class="topbar-right"><span>归属配置版本 2026-11-05.3</span><button class="icon-button"><svg class="icon"><use href="#i-refresh"/></svg></button><div class="topbar-divider"></div><div class="avatar-small">管</div><span>管理员</span></div>
+      </header>
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <div class="page-title-wrap"><h1 class="page-title">规则管理</h1><span class="tag neutral">业务规则 29</span><span class="tag shared">动态网元归属</span></div>
+            <div class="page-subtitle"><span>规则归属在运行时配置</span><span>·</span><span>可归属一个或多个网元类型</span><span>·</span><span>不设公共规则</span><span>·</span><span>不设规则级全局启停</span></div>
+          </div>
+          <div class="page-actions"><button class="btn"><svg class="icon"><use href="#i-sliders-small"/></svg>批量配置归属</button><button class="btn primary"><svg class="icon"><use href="#i-clock"/></svg>查看变更审计</button></div>
+        </div>
+
+        <div class="rule-scope-banner">
+          <svg class="icon"><use href="#i-info"/></svg>
+          <span><b>规则是否执行只由网元归属决定。</b>未归属规则保持待配置且不进入任何任务执行计划，也不会以“跳过”结果出现。</span>
+          <span class="right">最近生效：后续任务 / 显式重建</span>
+        </div>
+
+        <section class="card rule-summary">
+          <div class="rule-summary-cell"><span class="rule-summary-label">全部业务规则</span><span class="rule-summary-value">29 <span class="rule-summary-note">含待配置</span></span></div>
+          <div class="rule-summary-cell"><span class="rule-summary-label">可执行规则</span><span class="rule-summary-value">27 <span class="rule-summary-note">至少 1 个归属</span></span></div>
+          <div class="rule-summary-cell"><span class="rule-summary-label">多网元归属</span><span class="rule-summary-value">3 <span class="rule-summary-note">UMF + CSP</span></span></div>
+          <div class="rule-summary-cell"><span class="rule-summary-label">未归属</span><span class="rule-summary-value unassigned">2 <span class="rule-summary-note">待配置 · 不执行</span></span></div>
+        </section>
+
+        <section class="card rule-list-card">
+          <div class="rule-toolbar">
+            <div class="rule-search"><svg class="icon"><use href="#i-search"/></svg><span>搜索规则名称、规则代码或分类</span></div>
+            <div class="select"><span>全部规则分类</span><svg class="icon"><use href="#i-chevron"/></svg></div>
+            <div class="select"><span>按更新时间</span><svg class="icon"><use href="#i-chevron"/></svg></div>
+          </div>
+          <div class="rule-filter-tabs"><span class="rule-filter-tab active">全部 <b>29</b></span><span class="rule-filter-tab">UMF <b>16</b></span><span class="rule-filter-tab">CSP <b>9</b></span><span class="rule-filter-tab">多网元 <b>3</b></span><span class="rule-filter-tab">未归属 <b>2</b></span><span class="rule-filter-note">归属标签可重叠，筛选项计数不代表互斥总和</span></div>
+          <div class="rule-table">
+            <div class="rule-thead"><div>业务规则</div><div>分类</div><div>网元归属</div><div>执行状态</div><div>版本</div><div>最近变更</div><div>操作</div></div>
+            <div class="rule-tr"><div><div class="rule-name">媒体资源创建成功率</div><div class="rule-code mono">kpi.media_resource.create_rate</div></div><div>KPI · P1</div><div class="rule-assignment"><span class="tag info">UMF</span></div><div class="rule-status runnable"><span class="status-dot pass"></span>可执行</div><div>v12</div><div>11-04 18:22<br><span class="muted">admin</span></div><div class="rule-actions"><span class="primary-link">配置归属</span><span class="muted-link">详情</span></div></div>
+            <div class="rule-tr"><div><div class="rule-name">S1 切换成功率</div><div class="rule-code mono">kpi.s1.handover_success_rate</div></div><div>KPI · P1</div><div class="rule-assignment"><span class="tag info">UMF</span><span class="tag multi">CSP</span></div><div class="rule-status runnable"><span class="status-dot pass"></span>可执行</div><div>v9</div><div>11-05 09:31<br><span class="muted">admin</span></div><div class="rule-actions"><span class="primary-link">配置归属</span><span class="muted-link">详情</span></div></div>
+            <div class="rule-tr"><div><div class="rule-name">S6a 鉴权成功率</div><div class="rule-code mono">kpi.s6a.auth_success_rate</div></div><div>KPI · P1</div><div class="rule-assignment"><span class="tag info">UMF</span></div><div class="rule-status runnable"><span class="status-dot pass"></span>可执行</div><div>v7</div><div>11-03 16:08<br><span class="muted">zhaoy</span></div><div class="rule-actions"><span class="primary-link">配置归属</span><span class="muted-link">详情</span></div></div>
+            <div class="rule-tr"><div><div class="rule-name">PDU 会话建立时延</div><div class="rule-code mono">kpi.pdu.session_setup_latency</div></div><div>KPI · P2</div><div class="rule-assignment"><span class="tag info">UMF</span></div><div class="rule-status runnable"><span class="status-dot pass"></span>可执行</div><div>v5</div><div>11-04 14:11<br><span class="muted">admin</span></div><div class="rule-actions"><span class="primary-link">配置归属</span><span class="muted-link">详情</span></div></div>
+            <div class="rule-tr"><div><div class="rule-name">边界会话成功率</div><div class="rule-code mono">kpi.csp.sbc.session_success_rate</div></div><div>KPI · P1</div><div class="rule-assignment"><span class="tag multi">CSP</span></div><div class="rule-status runnable"><span class="status-dot pass"></span>可执行</div><div>v4</div><div>11-05 08:50<br><span class="muted">admin</span></div><div class="rule-actions"><span class="primary-link">配置归属</span><span class="muted-link">详情</span></div></div>
+            <div class="rule-tr pending-row"><div><div class="rule-name">时间同步偏差</div><div class="rule-code mono">kpi.generic.time_sync_deviation</div></div><div>KPI · P2</div><div class="rule-assignment"><span class="empty">未配置网元归属</span></div><div class="rule-status blocked"><span class="status-dot error"></span>待配置 · 不执行</div><div>v3</div><div>11-05 10:12<br><span class="muted">system</span></div><div class="rule-actions"><span class="primary-link">配置归属</span><span class="muted-link">详情</span></div></div>
+            <div class="rule-tr"><div><div class="rule-name">日志会话完整性</div><div class="rule-code mono">log.session.integrity</div></div><div>日志 · P1</div><div class="rule-assignment"><span class="tag info">UMF</span></div><div class="rule-status runnable"><span class="status-dot pass"></span>可执行</div><div>v6</div><div>11-02 19:17<br><span class="muted">admin</span></div><div class="rule-actions"><span class="primary-link">配置归属</span><span class="muted-link">详情</span></div></div>
+          </div>
+          <div class="rule-table-footer"><span>显示 7 / 29 条业务规则</span><span class="right">规则私有 prepare 跟随 owner 归属；隐藏解压和分类单元不在此管理</span></div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-scrim"></div>
+  <section class="assignment-modal" role="dialog" aria-modal="true" aria-label="配置规则网元归属">
+    <header class="assignment-modal-head">
+      <div><h2 class="assignment-modal-title">配置规则归属</h2><div class="assignment-modal-sub">配置后仅对后续任务或显式重建生效；执行中的任务使用启动时快照。</div></div>
+      <span class="assignment-modal-close">×</span>
+    </header>
+    <div class="assignment-modal-body">
+      <div class="assignment-current">
+        <div class="assignment-current-icon"><svg class="icon"><use href="#i-sliders-small"/></svg></div>
+        <div><div class="assignment-current-name">S1 切换成功率</div><div class="assignment-current-code mono">kpi.s1.handover_success_rate · KPI · P1</div></div>
+        <div class="assignment-current-tags"><span class="tag info">UMF</span><span class="tag multi">CSP</span></div>
+      </div>
+      <div class="assignment-label-row"><span class="assignment-label">适用网元类型</span><span class="assignment-label-note">单选或多选 · 不存在公共范围</span></div>
+      <div class="network-options">
+        <div class="network-option selected"><span class="checkbox-square"></span><div><div class="network-option-name">UMF</div><div class="network-option-desc">当前任务 product=UMF 时执行该规则。</div></div></div>
+        <div class="network-option selected"><span class="checkbox-square"></span><div><div class="network-option-name">CSP</div><div class="network-option-desc">当前任务 product=CSP 时执行该规则。</div></div></div>
+      </div>
+      <div class="assignment-warning"><b>清空全部归属后，规则进入“未归属”。</b>该规则将停止参与后续任务，不进入执行计划，也不会生成“跳过”结果。</div>
+      <div class="assignment-snapshot"><svg class="icon"><use href="#i-clock"/></svg><span>本次保存将记录变更前后归属、操作人、时间与配置版本。</span></div>
+    </div>
+    <footer class="assignment-modal-footer"><span class="assignment-clear">清空全部归属</span><div class="right"><button class="btn">取消</button><button class="btn primary">保存归属</button></div></footer>
+  </section>
+</main>
+</body>
+</html>

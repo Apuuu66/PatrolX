@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PatrolX · KPI 巡检工作台效果图 v2</title>
+<style>
+:root{--primary:#1677ff;--text:#1f2329;--text2:#596273;--text3:#8b95a5;--border:#e5e8ee;--bg:#f3f5f8;--surface:#fff}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.wrap{width:min(1320px,calc(100vw - 48px));margin:0 auto}
+.top{background:#071c33;color:#fff;position:relative;overflow:hidden}
+.top::after{content:"";position:absolute;right:-140px;top:-220px;width:620px;height:620px;border:1px solid rgba(120,184,255,.13);border-radius:50%;box-shadow:0 0 0 80px rgba(22,119,255,.04),0 0 0 160px rgba(22,119,255,.025)}
+.top .wrap{position:relative;z-index:1;padding:34px 0 30px}
+.brandline{display:flex;align-items:center;gap:10px;color:#8ec5ff;font-size:12px;letter-spacing:.08em}
+.branddot{width:26px;height:26px;border:2px solid #75b6ff;border-radius:50%;display:grid;place-items:center;position:relative}
+.branddot::before{content:"";width:7px;height:7px;border:2px solid #75b6ff;border-radius:50%}
+.branddot::after{content:"";position:absolute;width:31px;height:9px;border-top:1.5px solid rgba(117,182,255,.5);border-radius:50%;transform:rotate(-22deg)}
+.herorow{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-top:21px}
+h1{margin:0;font-size:34px;line-height:1.25;font-weight:680;letter-spacing:-.8px}
+.sub{margin-top:10px;color:rgba(255,255,255,.58);font-size:13px;line-height:1.7}
+.confirmed{display:inline-flex;align-items:center;gap:8px;height:26px;padding:0 10px;border:1px solid rgba(115,209,154,.36);background:rgba(82,196,126,.11);border-radius:999px;color:#b7f3cc;font-size:11px;white-space:nowrap}
+.confirmed i{width:6px;height:6px;border-radius:50%;background:#52c47e;display:block}
+.rules{margin-top:25px;display:flex;flex-wrap:wrap;gap:8px}
+.rule{padding:8px 11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.055);border-radius:7px;color:rgba(255,255,255,.76);font-size:11px}
+.rule b{color:#fff;font-weight:600;margin-right:5px}
+.content{padding:28px 0 48px}
+.section-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px}
+h2{margin:0;font-size:20px;line-height:1.4;font-weight:650;letter-spacing:-.2px}
+.hint{color:var(--text3);font-size:11px}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:11px;overflow:hidden;box-shadow:0 2px 7px rgba(15,23,42,.045);transition:box-shadow .18s,border-color .18s}
+.card:hover{border-color:#b8d8ff;box-shadow:0 9px 28px rgba(22,119,255,.11)}
+.card.primary{grid-column:1/-1}
+.thumb{display:block;background:#e9edf3;overflow:hidden;aspect-ratio:16/10;border-bottom:1px solid var(--border)}
+.card:not(.primary) .thumb{aspect-ratio:16/10}
+.thumb img{width:100%;height:100%;display:block;object-fit:cover;object-position:top center}
+.card-body{padding:14px 16px 15px;display:flex;gap:16px;align-items:flex-start}
+.num{width:26px;height:26px;flex:0 0 26px;border-radius:6px;background:#e6f4ff;color:#0958d9;display:grid;place-items:center;font-size:11px;font-weight:650}
+.card-title{display:block;margin:0;font-size:14px;font-weight:620;line-height:1.4}
+.card-desc{display:block;margin-top:5px;color:var(--text2);font-size:11px;line-height:1.65}
+.card-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.card-tags span{padding:3px 6px;background:#f6f8fa;border:1px solid #e8ebf0;border-radius:4px;color:#667085;font-size:9px}
+.open{margin-left:auto;color:var(--primary);font-size:10px;white-space:nowrap;padding-top:3px}
+.foot{margin-top:20px;padding:13px 15px;background:#fff;border:1px dashed #d7dde6;border-radius:8px;color:var(--text3);font-size:10px;line-height:1.65;display:flex;gap:10px;align-items:flex-start}
+.foot strong{color:var(--text2);font-weight:600}
+.foot .dot{width:7px;height:7px;border-radius:50%;background:#1677ff;margin-top:4px;flex:0 0 7px}
+@media(max-width:900px){.cards{grid-template-columns:1fr}.card.primary{grid-column:auto}.herorow{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brandline"><span class="branddot"></span><span>PATROLX · KPI RESULT WORKBENCH</span></div>
+    <div class="herorow">
+      <div><h1>KPI 巡检工作台 · 效果图 v2</h1><div class="sub">基于最新讨论口径重新生成：按网元类型共享关注、测量单元唯一启停、规则动态归属、旧任务点击重建。<br>本轮修订明确：成功率由源包直接提供，不展示重算公式；所有人物、指标、任务与文件均为合成演示数据。</div></div>
+      <span class="confirmed"><i></i>v2 已确认</span>
+    </div>
+    <div class="rules">
+      <span class="rule"><b>1</b>需处理 / 团队关注 / 全部指标</span>
+      <span class="rule"><b>2</b>UMF 内共享 · CSP 隔离</span>
+      <span class="rule"><b>3</b>测量单元是唯一日常启停粒度</span>
+      <span class="rule"><b>4</b>不设公共规则 · 无规则级全局启停</span>
+      <span class="rule"><b>5</b>未归属规则不执行、不生成 skip</span>
+      <span class="rule"><b>6</b>日志补充包单选网元或选择不指定</span>
+    </div>
+  </div>
+</header>
+<main class="content wrap">
+  <div class="section-head"><h2>关键界面</h2><span class="hint">点击图片可在 Chrome 中查看 1440 × 900 原尺寸</span></div>
+  <div class="cards">
+    <a class="card primary" href="./../kpi-results-v2.png" target="_blank" rel="noreferrer">
+      <span class="thumb"><img src="./../kpi-results-v2.png" alt="KPI 巡检结果默认需处理视图"></span>
+      <span class="card-body"><span class="num">01</span><span><span class="card-title">默认进入“需处理”，结果与证据同屏</span><span class="card-desc">首屏回答今天先看什么；互斥分组、团队关注汇总和全部指标全貌保持独立。证据侧栏展示判定原因、阈值、源指标口径、7 日趋势与来源文件；源包成功率只显示原值和关联证据，只有本地派生指标才展示公式。</span><span class="card-tags"><span>三视图</span><span>互斥分组</span><span>昨日 / 7 日趋势</span><span>源值直出</span></span></span><span class="open">打开原图 ↗</span></span>
+    </a>
+    <a class="card" href="./../kpi-focus-management-v2.png" target="_blank" rel="noreferrer">
+      <span class="thumb"><img src="./../kpi-focus-management-v2.png" alt="团队关注管理侧栏"></span>
+      <span class="card-body"><span class="num">02</span><span><span class="card-title">手动维护 UMF 内共享关注</span><span class="card-desc">从当前任务可关注指标中批量加入或移出；CSP 独立维护，不跨网元类型读取或覆盖。关注只影响默认查看范围。</span><span class="card-tags"><span>UMF 内共享</span><span>CSP 隔离</span><span>暂存后保存</span></span></span><span class="open">打开原图 ↗</span></span>
+    </a>
+    <a class="card" href="./../kpi-scope-control-v2.png" target="_blank" rel="noreferrer">
+      <span class="thumb"><img src="./../kpi-scope-control-v2.png" alt="测量单元巡检范围配置"></span>
+      <span class="card-body"><span class="num">03</span><span><span class="card-title">测量单元是唯一巡检启停粒度</span><span class="card-desc">基础指标页移除“关注指标”页签，指标、绑定和派生均无独立巡检开关；停用只影响后续任务，配置与关注保留。</span><span class="card-tags"><span>无指标级开关</span><span>配置保留</span><span>旧任务重建</span></span></span><span class="open">打开原图 ↗</span></span>
+    </a>
+    <a class="card" href="./../rule-network-assignment-v2.png" target="_blank" rel="noreferrer">
+      <span class="thumb"><img src="./../rule-network-assignment-v2.png" alt="业务规则网元归属配置"></span>
+      <span class="card-body"><span class="num">04</span><span><span class="card-title">业务规则动态归属一个或多个网元</span><span class="card-desc">无公共范围，也无规则级全局启停；未归属规则进入“待配置 · 不执行”。清空最后归属后立即停止后续任务匹配。</span><span class="card-tags"><span>UMF / CSP</span><span>未归属不执行</span><span>范围快照</span></span></span><span class="open">打开原图 ↗</span></span>
+    </a>
+    <a class="card" href="./../log-supplement-network-v2.png" target="_blank" rel="noreferrer">
+      <span class="thumb"><img src="./../log-supplement-network-v2.png" alt="日志补充包网元选择"></span>
+      <span class="card-body"><span class="num">05</span><span><span class="card-title">日志补充包单选规则适用网元</span><span class="card-desc">UMF / CSP / 不指定三选一；不写入 product，不改变 GENERIC 分类，不触发设备台账解析。未指定时只执行内部技术单元。</span><span class="card-tags"><span>只有一个值</span><span>不改变 product</span><span>可选不指定</span></span></span><span class="open">打开原图 ↗</span></span>
+    </a>
+  </div>
+  <div class="foot"><span class="dot"></span><span><strong>确认状态：</strong>v2 已确认。整体界面结构沿用已讨论版本；媒体资源创建成功率已按源包直出、不重算的证据口径修订，可作为实现依据。</span></div>
+</main>
+</body>
+</html>

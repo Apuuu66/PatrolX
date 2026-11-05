@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440, initial-scale=1">
+<title>PatrolX · 测量单元巡检范围（讨论稿 v2）</title>
+<link rel="stylesheet" href="./mockup.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8 9h8M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M7 15l4-4 3 2 5-6"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M8 20a3 3 0 0 1 0-6h11M9 8h6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5M16 6a3 3 0 0 1 0 6M18 15c2 .8 3 2.4 3 5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.4 6 .9-4.3 4.2 1 5.9-5.4-2.8-5.4 2.8 1-5.9L3.3 9.3l6-.9L12 3Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8A7 7 0 0 1 18.7 6L20 12M4 12l1.3 6A7 7 0 0 0 17.9 16"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></symbol>
+</svg>
+<main class="artboard" aria-label="测量单元巡检范围">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"></span><span class="brand-name">PatrolX</span></div>
+      <div class="nav-group"><div class="nav-caption">工作台</div><div class="nav-item"><svg class="icon"><use href="#i-clipboard"/></svg>巡检任务</div><div class="nav-item"><svg class="icon"><use href="#i-server"/></svg>设备台账</div></div>
+      <div class="nav-group"><div class="nav-caption">配置管理</div><div class="nav-item active"><svg class="icon"><use href="#i-chart"/></svg>基础指标</div><div class="nav-item"><svg class="icon"><use href="#i-sliders"/></svg>规则管理</div><div class="nav-item"><svg class="icon"><use href="#i-book"/></svg>数据字典</div><div class="nav-item"><svg class="icon"><use href="#i-users"/></svg>用户管理</div></div>
+      <div class="sidebar-bottom"><div class="user-avatar">管理</div><div><div class="user-name">管理员</div><div class="user-role">维护写权限</div></div></div>
+    </aside>
+    <section class="app-main">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>基础指标</span><span class="crumb-sep">/</span><strong>测量单元巡检范围</strong></div>
+        <div class="topbar-right"><span>配置更新时间 11:08</span><button class="icon-button"><svg class="icon"><use href="#i-refresh"/></svg></button><div class="topbar-divider"></div><div class="avatar-small">管</div><span>管理员</span></div>
+      </header>
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <div class="page-title-wrap"><h1 class="page-title">测量单元巡检范围</h1><span class="tag shared">唯一启停粒度</span></div>
+            <div class="page-subtitle"><span>测量单元归属一个网元类型</span><span>·</span><span>启用后纳入其全部已确认基础指标与已定义派生指标</span><span>·</span><span>变更仅影响后续任务</span></div>
+          </div>
+          <div class="page-actions"><button class="btn"><svg class="icon"><use href="#i-star"/></svg>查看团队关注</button><button class="btn primary"><svg class="icon"><use href="#i-refresh"/></svg>刷新配置</button></div>
+        </div>
+
+        <div class="scope-banner" style="margin-top:12px">
+          <svg class="icon"><use href="#i-info"/></svg>
+          <span><b>巡检启停只到测量单元。</b>不再提供指标、绑定或派生级巡检开关；团队关注也不等于巡检范围。</span>
+          <span class="scope-link">查看范围口径说明 →</span>
+        </div>
+
+        <div class="scope-layout">
+          <section class="card scope-table-card" aria-label="测量单元列表">
+            <div class="scope-tabs"><div class="scope-tab active">测量单元</div><div class="scope-tab">绑定关系</div><div class="scope-tab">派生指标</div><div class="scope-tab">维护配置</div></div>
+            <div class="scope-toolbar"><span class="scope-section-title">测量单元列表</span><span class="muted">共 20 个 · 12 个启用</span><span class="right"><span class="tag neutral">UMF 8</span><span class="tag neutral">CSP 4</span></span></div>
+            <div class="scope-search"><svg class="icon"><use href="#i-search"/></svg><span>搜索测量单元名称或 ID</span></div>
+            <div class="scope-filters"><span class="filter-pill active">全部网元类型 <b>20</b></span><span class="filter-pill">UMF <b>12</b></span><span class="filter-pill">CSP <b>8</b></span><span class="filter-pill">已停用 <b>6</b></span><span style="margin-left:auto;color:#8b95a5;font-size:9.5px">启用状态按网元类型独立生效</span></div>
+            <div class="scope-table">
+              <div class="scope-thead"><div>测量单元</div><div>网元类型</div><div>纳入指标</div><div>最近更新</div><div>巡检范围</div><div>操作</div></div>
+              <div class="scope-tr"><div><div class="scope-unit-name">AMF 核心网元 01</div><div class="scope-unit-meta mono">UMF-AMF-01 · AMF · 浙江移动</div></div><div><span class="tag info">UMF</span></div><div class="scope-metrics"><span>8 基础</span><span>2 派生</span></div><div class="scope-updated">11-05 10:52<br><span class="mono">admin</span></div><div class="scope-toggle-cell"><span class="switch on"></span><span class="toggle-label on">已启用 · 后续任务</span></div><div style="color:#1677ff;font-size:10px">查看指标</div></div>
+              <div class="scope-tr"><div><div class="scope-unit-name">SMF 会话管理 02</div><div class="scope-unit-meta mono">UMF-SMF-02 · SMF · 浙江移动</div></div><div><span class="tag info">UMF</span></div><div class="scope-metrics"><span>11 基础</span><span>3 派生</span></div><div class="scope-updated">11-05 10:49<br><span class="mono">admin</span></div><div class="scope-toggle-cell"><span class="switch on"></span><span class="toggle-label on">已启用 · 后续任务</span></div><div style="color:#1677ff;font-size:10px">查看指标</div></div>
+              <div class="scope-tr"><div><div class="scope-unit-name">UPF 用户面 01</div><div class="scope-unit-meta mono">UMF-UPF-01 · UPF · 浙江移动</div></div><div><span class="tag info">UMF</span></div><div class="scope-metrics"><span>6 基础</span><span>1 派生</span></div><div class="scope-updated">11-04 18:16<br><span class="mono">zhaoy</span></div><div class="scope-toggle-cell"><span class="switch"></span><span class="toggle-label">已停用 · 配置保留</span></div><div style="color:#1677ff;font-size:10px">查看指标</div></div>
+              <div class="scope-tr"><div><div class="scope-unit-name">SBC 边界会话 01</div><div class="scope-unit-meta mono">CSP-SBC-01 · SBC · 浙江电信</div></div><div><span class="tag multi">CSP</span></div><div class="scope-metrics"><span>9 基础</span><span>2 派生</span></div><div class="scope-updated">11-05 10:38<br><span class="mono">admin</span></div><div class="scope-toggle-cell"><span class="switch on"></span><span class="toggle-label on">已启用 · 后续任务</span></div><div style="color:#1677ff;font-size:10px">查看指标</div></div>
+              <div class="scope-tr"><div><div class="scope-unit-name">CSP 用户面 02</div><div class="scope-unit-meta mono">CSP-UPF-02 · UPF · 浙江电信</div></div><div><span class="tag multi">CSP</span></div><div class="scope-metrics"><span>7 基础</span><span>1 派生</span></div><div class="scope-updated">11-05 09:57<br><span class="mono">admin</span></div><div class="scope-toggle-cell"><span class="switch on"></span><span class="toggle-label on">已启用 · 后续任务</span></div><div style="color:#1677ff;font-size:10px">查看指标</div></div>
+              <div class="scope-tr"><div><div class="scope-unit-name">NRF 网络仓储 01</div><div class="scope-unit-meta mono">UMF-NRF-01 · NRF · 浙江移动</div></div><div><span class="tag info">UMF</span></div><div class="scope-metrics"><span>4 基础</span><span>1 派生</span></div><div class="scope-updated">11-05 10:03<br><span class="mono">admin</span></div><div class="scope-toggle-cell"><span class="switch"></span><span class="toggle-label">已停用 · 配置保留</span></div><div style="color:#1677ff;font-size:10px">查看指标</div></div>
+            </div>
+          </section>
+
+          <aside class="card rule-card">
+            <div class="rule-card-kicker"><span class="status-dot pass"></span>范围控制规则</div>
+            <div class="rule-card-title">只在测量单元这一层<br>决定是否巡检</div>
+            <div class="rule-card-desc">测量单元归属且只归属一个网元类型。启停状态按类型独立保存，关注列表不参与执行范围计算。</div>
+            <div class="rule-card-section"><div class="rule-card-label">启用后的结果</div><div class="rule-item"><span class="num">1</span><span>全部已确认基础指标进入巡检。</span></div><div class="rule-item"><span class="num">2</span><span>全部已定义派生指标进入巡检。</span></div><div class="rule-item"><span class="num">3</span><span>配置待完善的指标保留，并显示“待配置”或“无法判定”。</span></div></div>
+            <div class="rule-disabled"><b>不存在的开关</b><br>指标、绑定与派生配置均无独立巡检启停；团队关注也不产生第二套巡检控制。</div>
+            <div class="rule-card-link"><svg class="icon"><use href="#i-star"/></svg><span>团队关注统一在 KPI 结果页维护</span><span>前往 →</span></div>
+            <div class="old-task-note"><b>旧任务口径：</b>已生成结果不迁移、不改写；请在任务列表对应行点击“重建”，按当前配置重新生成。</div>
+            <div class="old-task-note" style="margin-top:8px"><b>停用后：</b>仅停止后续任务，保留基础指标、绑定、派生配置与团队关注；重新启用即恢复纳管。</div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+</body>
+</html>

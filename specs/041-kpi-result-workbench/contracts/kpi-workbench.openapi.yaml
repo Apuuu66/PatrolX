@@ -1,0 +1,918 @@
+openapi: 3.1.0
+info:
+  title: PatrolX KPI 结果工作台规划契约
+  version: 6.0.0-plan
+  description: >-
+    KPI 任务级结果工作台。新读取能力全部位于 /api/v6/kpi。
+    汇总、三视图、证据与技术分析均以任务冻结范围为事实源；前端不得回退读取 v5。
+    本文件是 Plan 阶段契约草案，实现时先合并到 docs/api/openapi.yaml。
+servers:
+  - url: /
+tags:
+  - name: KpiWorkbench
+    description: 任务级 KPI 汇总、结果、证据与技术分析
+  - name: TaskCompatibility
+    description: 既有任务重建能力，本功能仅增加行内入口和新结果契约
+security:
+  - bearerAuth: []
+paths:
+  /api/v6/kpi/tasks/{task_id}/summary:
+    get:
+      tags: [KpiWorkbench]
+      summary: 获取 KPI 工作台汇总
+      description: >-
+        返回当前任务冻结范围内的全局汇总。needs_attention 与 no_action 互斥，
+        且二者之和等于当前任务可用的团队关注数；不可用关注项单独计数。
+        如果任务没有 v6 KPI 快照，固定返回 409 task_result_requires_rebuild。
+      operationId: getKpiTaskSummaryV6
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: 工作台汇总
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiTaskSummaryV6'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '409':
+          $ref: '#/components/responses/TaskResultRequiresRebuild'
+        '410':
+          $ref: '#/components/responses/SceneCleaned'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/tasks/{task_id}/metrics:
+    get:
+      tags: [KpiWorkbench]
+      summary: 分页查询 KPI 结果视图
+      description: >-
+        view=needs_attention 只返回团队关注中需处理的可用指标；
+        view=team_focus 返回团队关注中可用和不可用的全部项；
+        view=all 返回任务快照中的全部指标。total 是应用筛选后的分页总数，
+        view_total 是筛选前该视图总数，用于显示“当前可见 x / 总计 y”。
+        排序固定为 needs_attention_group、importance_rank、measurement_unit_id、metric_resource_id。
+      operationId: listKpiTaskMetricsV6
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - name: view
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiResultView'
+          description: 默认 needs_attention。
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 256
+          description: 同时匹配指标名称、指标 ID、测量单元名称和测量单元 ID。
+        - name: measurement_unit_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: current_status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CurrentHealthStatus'
+        - name: yesterday_trend
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TrendHealthStatus'
+        - name: needs_attention_group
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/NeedsAttentionGroup'
+      responses:
+        '200':
+          description: KPI 结果分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricResultPageV6'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '409':
+          $ref: '#/components/responses/TaskResultRequiresRebuild'
+        '410':
+          $ref: '#/components/responses/SceneCleaned'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/tasks/{task_id}/metrics/{measurement_unit_id}/{metric_resource_id}/evidence:
+    get:
+      tags: [KpiWorkbench]
+      summary: 按需获取单个指标证据
+      description: >-
+        证据必须来自任务快照中的指标定义与结果，不得按指标名称硬编码。
+        单个证据读取失败只影响该请求，不影响汇总或其他结果行。
+      operationId: getKpiMetricEvidenceV6
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/MeasurementUnitId'
+        - $ref: '#/components/parameters/MetricResourceId'
+      responses:
+        '200':
+          description: 指标证据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricEvidenceV6'
+        '404':
+          $ref: '#/components/responses/MetricOrTaskNotFound'
+        '409':
+          $ref: '#/components/responses/TaskResultRequiresRebuild'
+        '410':
+          $ref: '#/components/responses/SceneCleaned'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '424':
+          $ref: '#/components/responses/EvidenceUnavailable'
+  /api/v6/kpi/tasks/{task_id}/metrics/{measurement_unit_id}/{metric_resource_id}/technical-analysis:
+    get:
+      tags: [KpiWorkbench]
+      summary: 按需获取指标技术分析
+      description: >-
+        返回跨任务历史趋势和同设备版本对比，作为证据抽屉中的次级内容；
+        不参与首屏汇总、需处理队列或全局排序。
+      operationId: getKpiMetricTechnicalAnalysisV6
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/MeasurementUnitId'
+        - $ref: '#/components/parameters/MetricResourceId'
+        - name: history_days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 90
+        - name: version_limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: 技术分析
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiTechnicalAnalysisV6'
+        '404':
+          $ref: '#/components/responses/MetricOrTaskNotFound'
+        '409':
+          $ref: '#/components/responses/TaskResultRequiresRebuild'
+        '410':
+          $ref: '#/components/responses/SceneCleaned'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v2/tasks/{task_id}/rebuild:
+    post:
+      tags: [TaskCompatibility]
+      summary: 全量或增量重建既有任务
+      description: >-
+        既有契约，不新增 v6 重建接口。任务列表行内“重建”使用 mode=full，
+        必须二次确认；重建保持同一 task_id，并按当前规则归属与 KPI 配置生成新快照。
+        对旧任务执行全量重建后，v6 工作台方可读取结果。
+      operationId: rebuildTaskV2
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RebuildRequestV2'
+      responses:
+        '202':
+          description: 已接受重建，Location 指向既有任务资源
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreated'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '409':
+          description: 原始包缺失；需重新上传同名包并确认覆盖后重建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                package_missing:
+                  value:
+                    code: package_missing
+                    message: 原始数据包缺失，请重新上传同名包后重建
+                    detail:
+                      task_id: example-task
+        '410':
+          $ref: '#/components/responses/SceneCleaned'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    MeasurementUnitId:
+      name: measurement_unit_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    MetricResourceId:
+      name: metric_resource_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+  headers:
+    Location:
+      description: 新建或重建资源的位置
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: 请求参数不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TaskNotFound:
+      description: 任务不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            not_found:
+              value:
+                code: not_found
+                message: 任务不存在
+                detail: null
+    MetricOrTaskNotFound:
+      description: 任务或任务范围内的指标不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            metric_not_found:
+              value:
+                code: kpi_metric_not_found
+                message: 指标不在当前任务的 KPI 快照中
+                detail:
+                  task_id: example-task
+                  measurement_unit_id: example-mu
+                  metric_resource_id: example-metric
+    TaskResultRequiresRebuild:
+      description: 旧任务没有 v6 KPI 快照，必须从任务行重建
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rebuild_required:
+              value:
+                code: task_result_requires_rebuild
+                message: 旧任务结果需要按当前规则和配置重建
+                detail:
+                  task_id: example-task
+                  action: rebuild_full
+    SceneCleaned:
+      description: 任务现场已清理，不能再执行业务规则或生成证据
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            scene_cleaned:
+              value:
+                code: scene_cleaned
+                message: 任务现场已清理；历史核心结果仍可查询
+    EvidenceUnavailable:
+      description: 指标证据无法读取；其他结果保持可用
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            evidence_unavailable:
+              value:
+                code: kpi_evidence_unavailable
+                message: 指标证据读取失败，请重试
+                detail:
+                  retryable: true
+                  measurement_unit_id: example-mu
+                  metric_resource_id: example-metric
+    ValidationError:
+      description: 请求结构不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HTTPValidationError'
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        detail:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+    HTTPValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    KpiResultView:
+      type: string
+      enum: [needs_attention, team_focus, all]
+      description: 默认值为 needs_attention。
+    NeedsAttentionGroup:
+      type: string
+      enum: [failure, warning, trend_degraded, unjudgeable, needs_config]
+    CurrentHealthStatus:
+      type: string
+      enum: [normal, warn, fail, pending_config, unable_to_judge, not_applicable]
+    TrendHealthStatus:
+      type: string
+      enum: [improved, stable, worsened, observe, no_baseline]
+    MetricRole:
+      type: string
+      enum: [base, derived]
+    MetricAvailability:
+      type: string
+      enum: [available, unavailable]
+    MetricSpecialState:
+      type: string
+      enum:
+        - no_action
+        - not_applicable
+        - no_baseline
+        - all_zero
+        - zero_denominator
+        - no_data
+        - unavailable
+    Importance:
+      type: string
+      enum: [P0, P1, P2, normal]
+    NumberOrNull:
+      oneOf:
+        - type: number
+        - type: 'null'
+    KpiRuleScopeStatusV6:
+      type: object
+      required: [business_rule_count, has_executable_rules]
+      properties:
+        business_rule_count:
+          type: integer
+          minimum: 0
+        has_executable_rules:
+          type: boolean
+        notice:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: 无业务规则时明确提示“当前网元类型未配置可执行业务规则”。
+    KpiSummaryCountsV6:
+      type: object
+      required:
+        - enabled_measurement_unit_count
+        - all_metric_count
+        - team_focus_count
+        - needs_attention_count
+        - no_action_count
+        - unavailable_focus_count
+      properties:
+        enabled_measurement_unit_count:
+          type: integer
+          minimum: 0
+        all_metric_count:
+          type: integer
+          minimum: 0
+        team_focus_count:
+          type: integer
+          minimum: 0
+          description: 当前任务可用的团队关注数；不包含 unavailable_focus_count。
+        needs_attention_count:
+          type: integer
+          minimum: 0
+        no_action_count:
+          type: integer
+          minimum: 0
+        unavailable_focus_count:
+          type: integer
+          minimum: 0
+      description: needs_attention_count + no_action_count 必须等于 team_focus_count。
+    KpiNeedsAttentionGroupSummary:
+      type: object
+      required: [group, order, count]
+      properties:
+        group:
+          $ref: '#/components/schemas/NeedsAttentionGroup'
+        order:
+          type: integer
+          minimum: 1
+          maximum: 5
+        count:
+          type: integer
+          minimum: 0
+    KpiTaskSummaryV6:
+      type: object
+      required:
+        - task_id
+        - network_element_type
+        - result_contract_version
+        - data_date
+        - previous_date
+        - latest_measured_at
+        - counts
+        - needs_attention_groups
+        - rule_scope
+      properties:
+        task_id:
+          type: string
+        network_element_type:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: 标准巡检包为 product；日志补充包未选择规则适用网元类型时为 null。
+        result_contract_version:
+          type: string
+          const: v6
+        data_date:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: 无数据时可为 null；有值时为 YYYY-MM-DD。
+        previous_date:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: 对比日期；无对比基线时可为 null。
+        latest_measured_at:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: ISO 8601 UTC。
+        counts:
+          $ref: '#/components/schemas/KpiSummaryCountsV6'
+        needs_attention_groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiNeedsAttentionGroupSummary'
+          description: 固定按 failure、warning、trend_degraded、unjudgeable、needs_config 返回。
+        rule_scope:
+          $ref: '#/components/schemas/KpiRuleScopeStatusV6'
+        notices:
+          type: array
+          items:
+            type: string
+    KpiMetricResultV6:
+      type: object
+      required:
+        - task_id
+        - network_element_type
+        - measurement_unit_id
+        - measurement_unit_name
+        - metric_resource_id
+        - metric_name
+        - role
+        - importance
+        - importance_rank
+        - availability
+        - is_team_focus
+      properties:
+        task_id:
+          type: string
+        network_element_type:
+          type: string
+        measurement_unit_id:
+          type: string
+        measurement_unit_name:
+          type: string
+        metric_resource_id:
+          type: string
+        metric_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/MetricRole'
+        importance:
+          $ref: '#/components/schemas/Importance'
+        importance_rank:
+          type: integer
+          minimum: 0
+        availability:
+          $ref: '#/components/schemas/MetricAvailability'
+        availability_reason:
+          type: string
+          enum: [not_in_task_scope, measurement_unit_disabled]
+        is_team_focus:
+          type: boolean
+        current_status:
+          oneOf:
+            - $ref: '#/components/schemas/CurrentHealthStatus'
+            - type: 'null'
+        yesterday_trend:
+          oneOf:
+            - $ref: '#/components/schemas/TrendHealthStatus'
+            - type: 'null'
+        needs_attention_group:
+          oneOf:
+            - $ref: '#/components/schemas/NeedsAttentionGroup'
+            - type: 'null'
+        special_state:
+          oneOf:
+            - $ref: '#/components/schemas/MetricSpecialState'
+            - type: 'null'
+        today_value:
+          $ref: '#/components/schemas/NumberOrNull'
+        yesterday_value:
+          $ref: '#/components/schemas/NumberOrNull'
+        change_value:
+          $ref: '#/components/schemas/NumberOrNull'
+        change_unit:
+          type: string
+          enum: [pp, relative, absolute, unavailable]
+        reason:
+          type: string
+        evidence_available:
+          type: boolean
+    KpiAppliedFiltersV6:
+      type: object
+      properties:
+        search:
+          oneOf:
+            - type: string
+            - type: 'null'
+        measurement_unit_id:
+          oneOf:
+            - type: string
+            - type: 'null'
+        current_status:
+          oneOf:
+            - $ref: '#/components/schemas/CurrentHealthStatus'
+            - type: 'null'
+        yesterday_trend:
+          oneOf:
+            - $ref: '#/components/schemas/TrendHealthStatus'
+            - type: 'null'
+        needs_attention_group:
+          oneOf:
+            - $ref: '#/components/schemas/NeedsAttentionGroup'
+            - type: 'null'
+    KpiMetricResultPageV6:
+      type: object
+      required: [items, total, view_total, page, page_size, empty_state, applied_filters]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiMetricResultV6'
+        total:
+          type: integer
+          minimum: 0
+          description: 应用筛选后的总数。
+        view_total:
+          type: integer
+          minimum: 0
+          description: 应用筛选前当前视图总数。
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        empty_state:
+          type: string
+          enum: [none, no_task_metrics, team_focus_empty, no_matching_metrics]
+        applied_filters:
+          $ref: '#/components/schemas/KpiAppliedFiltersV6'
+    KpiThresholdEvidenceV6:
+      type: object
+      properties:
+        direction:
+          type: string
+          enum: [higher_better, lower_better, neutral]
+        warning_threshold:
+          $ref: '#/components/schemas/NumberOrNull'
+        critical_threshold:
+          $ref: '#/components/schemas/NumberOrNull'
+        source:
+          type: string
+          enum: [custom, default, legacy_resource, missing]
+      required: [direction, warning_threshold, critical_threshold, source]
+    KpiDailyBucketV6:
+      type: object
+      required: [date, status, valid_count]
+      properties:
+        date:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/NumberOrNull'
+        numerator:
+          $ref: '#/components/schemas/NumberOrNull'
+        denominator:
+          $ref: '#/components/schemas/NumberOrNull'
+        valid_count:
+          type: integer
+          minimum: 0
+        first_measured_at:
+          oneOf:
+            - type: string
+            - type: 'null'
+        last_measured_at:
+          oneOf:
+            - type: string
+            - type: 'null'
+        status:
+          type: string
+          enum: [ok, no_data, zero_denominator, unreadable, no_baseline]
+    KpiEvidenceComponentV6:
+      type: object
+      required: [metric_resource_id, name, role]
+      properties:
+        metric_resource_id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [numerator, denominator]
+        value:
+          $ref: '#/components/schemas/NumberOrNull'
+    KpiEvidenceGroupV6:
+      type: object
+      required: [object_key, period_minutes, current_status, trend_status, source_files]
+      properties:
+        object_key:
+          type: string
+        period_minutes:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+        today:
+          oneOf:
+            - $ref: '#/components/schemas/KpiDailyBucketV6'
+            - type: 'null'
+        yesterday:
+          oneOf:
+            - $ref: '#/components/schemas/KpiDailyBucketV6'
+            - type: 'null'
+        current_status:
+          $ref: '#/components/schemas/CurrentHealthStatus'
+        trend_status:
+          $ref: '#/components/schemas/TrendHealthStatus'
+        reason:
+          type: string
+        source_files:
+          type: array
+          items:
+            type: string
+    KpiMetricEvidenceV6:
+      type: object
+      required:
+        - task_id
+        - network_element_type
+        - measurement_unit_id
+        - metric_resource_id
+        - metric
+        - current
+        - previous
+        - current_threshold
+        - groups
+        - seven_day_trend
+        - sources
+      properties:
+        task_id:
+          type: string
+        network_element_type:
+          type: string
+        measurement_unit_id:
+          type: string
+        metric_resource_id:
+          type: string
+        metric:
+          type: object
+          required: [name, role, daily_aggregation, current_status, trend_status]
+          properties:
+            name:
+              type: string
+            role:
+              $ref: '#/components/schemas/MetricRole'
+            formula:
+              oneOf:
+                - type: string
+                - type: 'null'
+            daily_aggregation:
+              type: string
+              enum: [latest, mean, sum, max, min]
+            current_status:
+              $ref: '#/components/schemas/CurrentHealthStatus'
+            trend_status:
+              $ref: '#/components/schemas/TrendHealthStatus'
+        current:
+          $ref: '#/components/schemas/KpiDailyBucketV6'
+        previous:
+          oneOf:
+            - $ref: '#/components/schemas/KpiDailyBucketV6'
+            - type: 'null'
+        change_value:
+          $ref: '#/components/schemas/NumberOrNull'
+        change_unit:
+          type: string
+          enum: [pp, relative, absolute, unavailable]
+        reason:
+          type: string
+        reason_codes:
+          type: array
+          items:
+            type: string
+        valid_count:
+          type: integer
+          minimum: 0
+        current_threshold:
+          $ref: '#/components/schemas/KpiThresholdEvidenceV6'
+        change_threshold:
+          type: object
+          properties:
+            value:
+              $ref: '#/components/schemas/NumberOrNull'
+            unit:
+              type: string
+              enum: [pp, relative, unavailable]
+            source:
+              type: string
+              enum: [custom, default, legacy_resource, missing]
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiEvidenceComponentV6'
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiEvidenceGroupV6'
+        seven_day_trend:
+          type: array
+          maxItems: 7
+          items:
+            $ref: '#/components/schemas/KpiDailyBucketV6'
+        sources:
+          type: array
+          items:
+            type: object
+            required: [file]
+            properties:
+              file:
+                type: string
+              record_group:
+                oneOf:
+                  - type: string
+                  - type: 'null'
+        config_snapshot:
+          type: object
+          properties:
+            config_revision:
+              type: integer
+              minimum: 0
+            config_fingerprint:
+              type: string
+    KpiHistoryPointV6:
+      type: object
+      required: [task_id, data_date, value, status]
+      properties:
+        task_id:
+          type: string
+        data_date:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/NumberOrNull'
+        status:
+          type: string
+          enum: [ok, no_data, zero_denominator, unreadable, no_baseline, pending_config]
+    KpiVersionComparisonV6:
+      type: object
+      required: [task_id, device_id, version, data_date, current_value, comparison_value]
+      properties:
+        task_id:
+          type: string
+        device_id:
+          type: string
+        version:
+          type: string
+        data_date:
+          type: string
+          format: date
+        current_value:
+          $ref: '#/components/schemas/NumberOrNull'
+        comparison_value:
+          $ref: '#/components/schemas/NumberOrNull'
+        change_value:
+          $ref: '#/components/schemas/NumberOrNull'
+    KpiTechnicalAnalysisV6:
+      type: object
+      required: [task_id, measurement_unit_id, metric_resource_id, generated_at, cross_task_history, version_comparisons]
+      properties:
+        task_id:
+          type: string
+        measurement_unit_id:
+          type: string
+        metric_resource_id:
+          type: string
+        generated_at:
+          type: string
+          description: ISO 8601 UTC。
+        cross_task_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiHistoryPointV6'
+        version_comparisons:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiVersionComparisonV6'
+    RebuildRequestV2:
+      type: object
+      required: [mode, confirmed]
+      properties:
+        mode:
+          type: string
+          enum: [full, incremental]
+        confirmed:
+          type: boolean
+          const: true
+        rule_codes:
+          oneOf:
+            - type: array
+              minItems: 1
+              uniqueItems: true
+              items:
+                type: string
+            - type: 'null'
+        trigger_source:
+          type: string
+          enum: [ui, api]
+          default: ui
+      description: 全量重建对应任务行入口；增量重建只能使用原任务规则快照中的规则。
+    TaskCreated:
+      type: object
+      required: [task_id]
+      properties:
+        task_id:
+          type: string

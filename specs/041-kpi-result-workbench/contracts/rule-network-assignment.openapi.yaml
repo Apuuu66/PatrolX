@@ -1,0 +1,703 @@
+openapi: 3.1.0
+info:
+  title: PatrolX 业务规则网元归属规划契约
+  version: 6.0.0-plan
+  description: >-
+    业务规则与运行时网元类型之间的共享归属配置。规则没有公共范围；零归属表示
+    unassigned，规则不进入任何任务执行计划，也不生成 skip。逐条和批量写入都以
+    expected_revision 做乐观锁并追加逐规则审计。本文件是 Plan 阶段契约草案。
+servers:
+  - url: /
+tags:
+  - name: KpiRuleNetworkAssignment
+    description: 业务规则目录、网元归属和变更审计
+  - name: KpiLegacyFrozen
+    description: 旧版冻结兼容接口；新前端、v6 服务和执行器不得调用
+security:
+  - bearerAuth: []
+paths:
+  /api/v6/kpi/rule-network-assignments:
+    get:
+      tags: [KpiRuleNetworkAssignment]
+      summary: 分页查询业务规则及其网元归属
+      description: >-
+        只返回当前注册表中的普通业务规则；隐藏的解压、分类和 prepare 技术单元不出现。
+        network_element_type 存在时只返回已归属该类型的规则；assignment_state=unassigned
+        时只返回零归属规则，且不得同时指定 network_element_type。两个筛选均省略时返回全部规则。
+        排序固定为 priority、rule_code。
+      operationId: listKpiRuleNetworkAssignmentsV6
+      parameters:
+        - $ref: '#/components/parameters/NetworkElementTypeQueryOptional'
+        - $ref: '#/components/parameters/AssignmentStateQuery'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: search
+          in: query
+          required: false
+          description: 同时匹配规则代码、名称、分类和描述。
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        '200':
+          description: 规则归属目录分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiRuleNetworkAssignmentPageV6'
+        '400':
+          $ref: '#/components/responses/InvalidRuleAssignmentFilter'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/rule-network-assignments/batch:
+    post:
+      tags: [KpiRuleNetworkAssignment]
+      summary: 原子批量替换规则网元归属
+      description: >-
+        所有规则在同一事务内校验并写入。任一规则 revision 冲突、网元类型非法或清空归属
+        未确认时，整批不应用。成功后每条规则各产生一条审计，全局 revision 只递增一次。
+        本接口不接受 public、*、COMMON、空字符串或全类型通配作为归属。
+      operationId: batchUpdateKpiRuleNetworkAssignmentsV6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiRuleAssignmentBatchRequestV6'
+      responses:
+        '200':
+          description: 整批保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiRuleAssignmentBatchResponseV6'
+        '400':
+          $ref: '#/components/responses/InvalidRuleAssignmentRequest'
+        '403':
+          $ref: '#/components/responses/WriteForbidden'
+        '404':
+          $ref: '#/components/responses/RuleNotFound'
+        '409':
+          $ref: '#/components/responses/RuleAssignmentRevisionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/rule-network-assignments/audits:
+    get:
+      tags: [KpiRuleNetworkAssignment]
+      summary: 分页查询规则归属变更审计
+      description: >-
+        返回成功和失败写入的追加审计。network_element_type 筛选匹配变更前或变更后集合，
+        用于追溯某条规则何时进入或离开该网元类型。审计不可编辑或删除。
+      operationId: listKpiRuleNetworkAssignmentAuditsV6
+      parameters:
+        - name: rule_code
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+        - $ref: '#/components/parameters/NetworkElementTypeQueryOptional'
+        - name: result
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiRuleAssignmentAuditResult'
+        - name: source
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/KpiRuleAssignmentAuditSource'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 规则归属审计分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiRuleAssignmentAuditPageV6'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v6/kpi/rule-network-assignments/{rule_code}:
+    patch:
+      tags: [KpiRuleNetworkAssignment]
+      summary: 替换单条规则的网元归属
+      description: >-
+        以完整集合替换规则当前归属。network_element_types 可为空数组以清空最后归属，
+        但必须同时提交 confirm_unassign=true；清空后规则进入 unassigned 并停止参与后续任务。
+        变更只影响后续启动或显式重建的任务，不重写已发布结果。
+      operationId: updateKpiRuleNetworkAssignmentV6
+      parameters:
+        - $ref: '#/components/parameters/RuleCodePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiRuleAssignmentPatchRequestV6'
+      responses:
+        '200':
+          description: 保存后的规则归属
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiRuleAssignmentWriteResultV6'
+        '400':
+          $ref: '#/components/responses/InvalidRuleAssignmentRequest'
+        '403':
+          $ref: '#/components/responses/WriteForbidden'
+        '404':
+          $ref: '#/components/responses/RuleNotFound'
+        '409':
+          $ref: '#/components/responses/RuleAssignmentRevisionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v2/inspector-states:
+    get:
+      tags: [KpiLegacyFrozen]
+      deprecated: true
+      summary: 旧版规则启停状态列表（冻结，仅兼容）
+      description: >-
+        v5 契约冻结，仅标记 deprecated，供旧客户端兼容；v6 前端、新服务和执行器不得调用，
+        也不得读取其 enabled 值参与执行范围判定。物理删除必须另行下线 v5。
+      operationId: listInspectorStatesV2
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: category
+          in: query
+          required: false
+          schema:
+            oneOf:
+              - type: string
+              - type: 'null'
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            oneOf:
+              - type: boolean
+              - type: 'null'
+        - name: search
+          in: query
+          required: false
+          schema:
+            oneOf:
+              - type: string
+              - type: 'null'
+      responses:
+        '200':
+          description: 旧版响应结构保持不变
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectorStateListResponseV5'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v2/inspector-states/{rule_code}/enabled:
+    put:
+      tags: [KpiLegacyFrozen]
+      deprecated: true
+      summary: 旧版单规则启停（冻结，仅兼容）
+      description: >-
+        v5 契约冻结，仅标记 deprecated，供旧客户端兼容；v6 前端、新服务和执行器不得调用。
+        规则执行范围只由网元归属决定，该 enabled 值不得成为第二套执行开关。
+      operationId: updateInspectorStateV2
+      parameters:
+        - name: rule_code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: authorization
+          in: header
+          required: false
+          schema:
+            oneOf:
+              - type: string
+              - type: 'null'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleStateUpdateRequestV5'
+      responses:
+        '200':
+          description: 旧版响应结构保持不变
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectorStateV5'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    NetworkElementTypeQueryOptional:
+      name: network_element_type
+      in: query
+      required: false
+      description: 运行时网元类型字典值；不得使用 public、*、COMMON 或空字符串。
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 32
+        pattern: '^[A-Z][A-Z0-9_]*$'
+        examples: [UMF, CSP]
+    AssignmentStateQuery:
+      name: assignment_state
+      in: query
+      required: false
+      description: >-
+        assigned 返回至少归属一个网元类型的规则，unassigned 返回零归属规则。
+        省略时返回全部规则；unassigned 不能与 network_element_type 组合。
+      schema:
+        $ref: '#/components/schemas/KpiRuleAssignmentState'
+    RuleCodePath:
+      name: rule_code
+      in: path
+      required: true
+      description: 普通业务规则稳定代码。
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+  responses:
+    InvalidRuleAssignmentFilter:
+      description: 筛选组合非法或网元类型不在运行时字典中
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            conflicting_filter:
+              value:
+                code: invalid_rule_assignment_filter
+                message: unassigned 筛选不能与 network_element_type 同时使用
+            invalid_type:
+              value:
+                code: invalid_network_element_type
+                message: 网元类型不在运行时字典中
+                detail:
+                  network_element_type: PUBLIC
+                  allowed: [UMF, CSP]
+    InvalidRuleAssignmentRequest:
+      description: 归属集合非法、包含公共范围或清空最后归属未确认
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unassign_confirmation_required:
+              value:
+                code: rule_unassign_confirmation_required
+                message: 清空最后一个网元归属前必须确认该规则将停止参与后续任务
+                detail:
+                  rule_code: kpi.measurement_units
+            invalid_type:
+              value:
+                code: invalid_network_element_type
+                message: 归属只能选择运行时网元类型字典中的值
+                detail:
+                  network_element_type: COMMON
+                  allowed: [UMF, CSP]
+            duplicate_rule:
+              value:
+                code: duplicate_rule_in_batch
+                message: 批量请求中的 rule_code 不得重复
+                detail:
+                  rule_code: kpi.measurement_units
+    WriteForbidden:
+      description: 当前用户没有规则维护写权限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            forbidden:
+              value:
+                code: rule_assignment_write_forbidden
+                message: 当前用户无规则网元归属维护权限
+    RuleNotFound:
+      description: 规则不存在、已下线或不是可归属的普通业务规则
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            not_found:
+              value:
+                code: business_rule_not_found
+                message: 业务规则不存在或不可维护
+                detail:
+                  rule_code: example.rule
+    RuleAssignmentRevisionConflict:
+      description: 一条或多条规则的 expected_revision 已过期
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            single_conflict:
+              value:
+                code: rule_assignment_revision_conflict
+                message: 规则网元归属已更新，请刷新后重试
+                detail:
+                  rule_code: kpi.measurement_units
+                  expected_revision: 2
+                  current_revision: 4
+            batch_conflict:
+              value:
+                code: rule_assignment_revision_conflict
+                message: 批量请求中有规则已更新，整批未应用
+                detail:
+                  applied: false
+                  conflicts:
+                    - rule_code: kpi.measurement_units
+                      expected_revision: 2
+                      current_revision: 4
+    ValidationError:
+      description: 请求结构不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HTTPValidationError'
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        detail:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+    HTTPValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    KpiRuleAssignmentState:
+      type: string
+      enum: [assigned, unassigned]
+    KpiRuleAssignmentAuditResult:
+      type: string
+      enum: [success, failed]
+    KpiRuleAssignmentAuditSource:
+      type: string
+      enum: [ui, api, migration]
+    KpiRuleNetworkElementTypes:
+      type: array
+      maxItems: 16
+      uniqueItems: true
+      description: 完整归属集合；有序且只含运行时网元类型字典值。空数组表示未归属。
+      items:
+        type: string
+        minLength: 1
+        maxLength: 32
+        pattern: '^[A-Z][A-Z0-9_]*$'
+    KpiRuleNetworkAssignmentV6:
+      type: object
+      required:
+        - rule_code
+        - name
+        - category
+        - priority
+        - rule_version
+        - description
+        - recommendation
+        - assignment_state
+        - network_element_types
+        - revision
+      properties:
+        rule_code:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        priority:
+          type: integer
+          minimum: 1
+        rule_version:
+          type: string
+        description:
+          type: string
+        recommendation:
+          type: string
+        assignment_state:
+          $ref: '#/components/schemas/KpiRuleAssignmentState'
+        network_element_types:
+          $ref: '#/components/schemas/KpiRuleNetworkElementTypes'
+        revision:
+          type: integer
+          minimum: 0
+          description: 单规则归属 revision；尚无写入记录时为 0。
+        updated_at:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: ISO 8601 UTC；从未写入时为 null。
+        updated_by:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: 最近成功写入的操作者；从未写入时为 null。
+    KpiRuleNetworkAssignmentPageV6:
+      type: object
+      required: [global_revision, page, page_size, total, can_write, items]
+      properties:
+        global_revision:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        total:
+          type: integer
+          minimum: 0
+        can_write:
+          type: boolean
+          description: false 时前端不得渲染可提交的归属编辑操作。
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiRuleNetworkAssignmentV6'
+    KpiRuleAssignmentPatchRequestV6:
+      type: object
+      required: [expected_revision, network_element_types]
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0
+        network_element_types:
+          $ref: '#/components/schemas/KpiRuleNetworkElementTypes'
+        confirm_unassign:
+          type: boolean
+          default: false
+          description: network_element_types 为空数组时必须为 true。
+      additionalProperties: false
+    KpiRuleAssignmentWriteResultV6:
+      type: object
+      required:
+        - rule_code
+        - assignment_state
+        - network_element_types
+        - revision
+        - global_revision
+        - audit_id
+        - updated_at
+      properties:
+        rule_code:
+          type: string
+        assignment_state:
+          $ref: '#/components/schemas/KpiRuleAssignmentState'
+        network_element_types:
+          $ref: '#/components/schemas/KpiRuleNetworkElementTypes'
+        revision:
+          type: integer
+          minimum: 1
+        global_revision:
+          type: integer
+          minimum: 1
+        audit_id:
+          type: string
+        updated_at:
+          type: string
+          description: ISO 8601 UTC。
+        snapshot_notice:
+          type: string
+          description: 固定提示归属变更只影响后续启动或显式重建的任务。
+    KpiRuleAssignmentBatchItemV6:
+      type: object
+      required: [rule_code, expected_revision, network_element_types]
+      properties:
+        rule_code:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
+        expected_revision:
+          type: integer
+          minimum: 0
+        network_element_types:
+          $ref: '#/components/schemas/KpiRuleNetworkElementTypes'
+        confirm_unassign:
+          type: boolean
+          default: false
+          description: network_element_types 为空数组时必须为 true。
+      additionalProperties: false
+    KpiRuleAssignmentBatchRequestV6:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/KpiRuleAssignmentBatchItemV6'
+      description: rule_code 在 items 内必须唯一，整批全成或全败。
+      additionalProperties: false
+    KpiRuleAssignmentBatchResponseV6:
+      type: object
+      required: [global_revision, items, audit_ids]
+      properties:
+        global_revision:
+          type: integer
+          minimum: 1
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiRuleAssignmentWriteResultV6'
+        audit_ids:
+          type: array
+          items:
+            type: string
+    KpiRuleAssignmentAuditV6:
+      type: object
+      required:
+        - audit_id
+        - rule_code
+        - before_network_element_types
+        - after_network_element_types
+        - rule_revision
+        - global_revision
+        - actor
+        - source
+        - result
+        - created_at
+      properties:
+        audit_id:
+          type: string
+        rule_code:
+          type: string
+        before_network_element_types:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        after_network_element_types:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        rule_revision:
+          type: integer
+          minimum: 0
+        global_revision:
+          type: integer
+          minimum: 0
+        actor:
+          type: string
+        source:
+          $ref: '#/components/schemas/KpiRuleAssignmentAuditSource'
+        result:
+          $ref: '#/components/schemas/KpiRuleAssignmentAuditResult'
+        error_code:
+          oneOf:
+            - type: string
+            - type: 'null'
+        idempotency_key:
+          oneOf:
+            - type: string
+            - type: 'null'
+        created_at:
+          type: string
+          description: ISO 8601 UTC。
+    InspectorStateV5:
+      type: object
+      required: [code, name, category, priority, enabled, updated_at]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+    InspectorStateListResponseV5:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectorStateV5'
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 100
+    RuleStateUpdateRequestV5:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+      additionalProperties: false
+
+    KpiRuleAssignmentAuditPageV6:
+      type: object
+      required: [total, page, page_size, items]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KpiRuleAssignmentAuditV6'
