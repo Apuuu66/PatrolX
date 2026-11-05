@@ -1,6 +1,6 @@
 """Pydantic v2 契约模型，字段与 docs/api/openapi.yaml 严格对齐。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import IntEnum, StrEnum
 from typing import Any, Literal
 
@@ -539,6 +539,124 @@ class Error(BaseModel):
     detail: dict[str, Any] | None = None
 
 
+class CurrentHealthStatus(StrEnum):
+    NORMAL = "normal"
+    WARN = "warn"
+    FAIL = "fail"
+    PENDING_CONFIG = "pending_config"
+    UNABLE_TO_JUDGE = "unable_to_judge"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class TrendHealthStatus(StrEnum):
+    IMPROVED = "improved"
+    STABLE = "stable"
+    WORSENED = "worsened"
+    OBSERVE = "observe"
+    NO_BASELINE = "no_baseline"
+
+
+class MetricRole(StrEnum):
+    BASE = "base"
+    DERIVED = "derived"
+
+
+class DailyAggregation(StrEnum):
+    LATEST = "latest"
+    MEAN = "mean"
+    SUM = "sum"
+    MAX = "max"
+    MIN = "min"
+
+
+class ZeroSemantics(StrEnum):
+    UNKNOWN = "unknown"
+    EXPECTED_ZERO = "expected_zero"
+    BUSINESS_NOT_TRIGGERED = "business_not_triggered"
+
+
+class ObjectMatchMode(StrEnum):
+    EXACT = "exact"
+
+
+class ConfigSource(StrEnum):
+    CUSTOM = "custom"
+    DEFAULT = "default"
+    LEGACY_RESOURCE = "legacy_resource"
+    MISSING = "missing"
+
+
+class KpiThresholdEvidence(BaseModel):
+    direction: Literal["higher_better", "lower_better", "neutral"] | None
+    warning_threshold: float | None = None
+    critical_threshold: float | None = None
+    source: ConfigSource
+
+
+class KpiChangeThresholdEvidence(BaseModel):
+    value: float | None = Field(default=None, ge=0)
+    unit: Literal["pp", "relative", "unavailable"]
+    source: ConfigSource
+
+
+class KpiConsistencyEvidence(BaseModel):
+    status: Literal["not_checked", "within_tolerance", "exceeded", "unavailable"]
+    tolerance_pp: float = Field(ge=0)
+    difference_pp: float | None = None
+
+
+class KpiDailyBucket(BaseModel):
+    date: date
+    value: float | None = None
+    numerator: float | None = None
+    denominator: float | None = None
+    valid_count: int = Field(default=0, ge=0)
+    first_measured_at: datetime | None = None
+    last_measured_at: datetime | None = None
+    status: Literal["ok", "no_data", "zero_denominator", "unreadable", "no_baseline"]
+
+
+class KpiDailyHealthGroup(BaseModel):
+    object_key: str
+    period_minutes: int | None = Field(ge=1)
+    today: KpiDailyBucket | None = None
+    yesterday: KpiDailyBucket | None = None
+    current_status: CurrentHealthStatus
+    trend_status: TrendHealthStatus
+    reason: str = ""
+    source_files: list[str] = Field(default_factory=list)
+
+
+class KpiDailyHealthMetricEvidence(BaseModel):
+    name_zh: str = ""
+    role: MetricRole
+    data_date: date | None = None
+    previous_date: date | None = None
+    daily_aggregation: str
+    formula: str | None = None
+    current_status: CurrentHealthStatus
+    trend_status: TrendHealthStatus
+    current_threshold: KpiThresholdEvidence
+    change_threshold: KpiChangeThresholdEvidence
+    consistency: KpiConsistencyEvidence
+
+
+class KpiLegacyFallback(BaseModel):
+    code: str
+    message: str
+
+
+class KpiDailyHealthMetricDetail(BaseModel):
+    task_id: str
+    rule_code: str
+    measurement_unit_id: str
+    metric_resource_id: str
+    metric: KpiDailyHealthMetricEvidence
+    groups: list[KpiDailyHealthGroup]
+    seven_day_trend: list[KpiDailyBucket] = Field(max_length=7)
+    legacy_fallback: KpiLegacyFallback | None = None
+
+
 class KpiMeasurementImportResult(BaseModel):
     added: dict[str, int] = Field(default_factory=dict)
     updated: dict[str, int] = Field(default_factory=dict)
@@ -677,6 +795,85 @@ class KpiMeasurementDerived(BaseModel):
     denominator_metric_id: str
     template: Literal["success_rate", "reverse_success_rate"] = "success_rate"
     enabled: bool
+    metric_resource_name_zh: str
+    numerator_metric_name_zh: str
+    denominator_metric_name_zh: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class KpiMeasurementDerivedList(BaseModel):
+    total: int = Field(ge=0)
+    items: list[KpiMeasurementDerived]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+
+
+class KpiMeasurementDerivedUpdateRequest(BaseModel):
+    numerator_metric_id: str | None = None
+    denominator_metric_id: str | None = None
+    template: Literal["success_rate", "reverse_success_rate"] | None = None
+    enabled: bool | None = None
+
+
+class KpiMetricMaintenanceConfig(BaseModel):
+    measurement_unit_id: str
+    metric_resource_id: str
+    name_zh: str
+    role: MetricRole
+    direction: Literal["higher_better", "lower_better", "neutral"] | None = None
+    warning_threshold: float | None = None
+    critical_threshold: float | None = None
+    daily_aggregation: DailyAggregation
+    daily_change_threshold: float | None = Field(default=None, ge=0)
+    daily_change_threshold_unit: Literal["pp", "relative", "auto"]
+    is_percentage: bool
+    zero_semantics: ZeroSemantics
+    consistency_tolerance: float = Field(ge=0)
+    object_match_mode: ObjectMatchMode
+    enabled: bool
+    config_source: ConfigSource
+    updated_at: datetime
+
+
+class KpiMetricMaintenanceConfigList(BaseModel):
+    total: int = Field(ge=0)
+    items: list[KpiMetricMaintenanceConfig]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+
+
+class KpiMetricMaintenanceConfigUpdateRequest(BaseModel):
+    role: MetricRole | None = None
+    direction: Literal["higher_better", "lower_better", "neutral"] | None = None
+    warning_threshold: float | None = None
+    critical_threshold: float | None = None
+    daily_aggregation: DailyAggregation | None = None
+    daily_change_threshold: float | None = Field(default=None, ge=0)
+    daily_change_threshold_unit: Literal["pp", "relative", "auto"] | None = None
+    is_percentage: bool | None = None
+    zero_semantics: ZeroSemantics | None = None
+    consistency_tolerance: float | None = Field(default=None, ge=0)
+    object_match_mode: ObjectMatchMode | None = None
+    enabled: bool | None = None
+
+
+class KpiMetricMaintenanceAudit(BaseModel):
+    id: int
+    measurement_unit_id: str
+    metric_resource_id: str
+    actor: str
+    changed_fields: list[str]
+    before_values: dict[str, Any]
+    after_values: dict[str, Any]
+    created_at: datetime
+
+
+class KpiMetricMaintenanceAuditList(BaseModel):
+    total: int = Field(ge=0)
+    items: list[KpiMetricMaintenanceAudit]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
 
 
 class LoginRequestV1(BaseModel):

@@ -1089,6 +1089,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/tasks/{task_id}/rules/{rule_code}/daily-health/{measurement_unit_id}/{metric_resource_id}:
+    get:
+      tags:
+      - KPI
+      summary: Get Kpi Daily Health Metric V2
+      description: 按需返回单个 KPI 指标的当前判定、昨日趋势和最近 7 个自然日证据。
+      operationId: getKpiDailyHealthMetricV2
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: rule_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Code
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiDailyHealthMetricDetail'
+        '404':
+          description: 任务、规则、测量单元或指标不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v2/inspectors:
     get:
       summary: List Inspectors V2
@@ -1672,6 +1723,250 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/metric-maintenance-configs:
+    get:
+      tags:
+      - KPI
+      summary: List Kpi Metric Maintenance Configs V5
+      description: 分页读取指标维护配置的有效视图，按测量单元、指标显示顺序和指标 ID 稳定排序。
+      operationId: listKpiMetricMaintenanceConfigsV5
+      parameters:
+      - name: measurement_unit_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Metric Resource Id
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricMaintenanceConfigList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}:
+    get:
+      tags:
+      - KPI
+      summary: Get Kpi Metric Maintenance Config V5
+      description: 读取指标维护配置的有效视图；历史资源只有阈值时以 legacy_resource 来源返回安全默认值。
+      operationId: getKpiMetricMaintenanceConfigV5
+      parameters:
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricMaintenanceConfig'
+        '404':
+          description: 指标或绑定不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - KPI
+      summary: Update Kpi Metric Maintenance Config V5
+      description: 原子更新指标维护配置并写入审计，仅管理员可操作。
+      operationId: updateKpiMetricMaintenanceConfigV5
+      parameters:
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiMetricMaintenanceConfigUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricMaintenanceConfig'
+        '400':
+          description: 请求体没有可更新字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 指标或绑定不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 角色或对象匹配配置冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}/audits:
+    get:
+      tags:
+      - KPI
+      summary: List Kpi Metric Maintenance Audits V5
+      operationId: listKpiMetricMaintenanceAuditsV5
+      parameters:
+      - name: measurement_unit_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Measurement Unit Id
+      - name: metric_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Metric Resource Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMetricMaintenanceAuditList'
+        '404':
+          description: 指标或绑定不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v5/kpi/measurement-bindings/{binding_id}/register-metric:
     post:
       summary: Register Kpi Measurement Metric V5
@@ -1753,6 +2048,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
   /api/v5/kpi/measurement-derived:
+    get:
+      tags:
+      - KPI
+      summary: List Kpi Measurement Derived V5
+      description: 分页读取聚合指标定义，返回指标名称和时间戳以便维护。
+      operationId: listKpiMeasurementDerivedV5
+      parameters:
+      - name: measurement_unit_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Measurement Unit Id
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementDerivedList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       summary: Create Kpi Measurement Derived V5
       operationId: createKpiMeasurementDerivedV5
@@ -1780,6 +2136,104 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KpiMeasurementDerived'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v5/kpi/measurement-derived/{derived_id}:
+    get:
+      tags:
+      - KPI
+      summary: Get Kpi Measurement Derived V5
+      operationId: getKpiMeasurementDerivedV5
+      parameters:
+      - name: derived_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Derived Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementDerived'
+        '404':
+          description: 派生配置不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - KPI
+      summary: Update Kpi Measurement Derived V5
+      description: 更新现有聚合指标定义；测量单元与指标 ID 不可修改，变更写入审计。
+      operationId: updateKpiMeasurementDerivedV5
+      parameters:
+      - name: derived_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Derived Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiMeasurementDerivedUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiMeasurementDerived'
+        '400':
+          description: 请求体没有可更新字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 派生配置不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 分子或分母不属于同一测量单元的已确认启用绑定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '422':
           description: Validation Error
           content:
@@ -2606,6 +3060,549 @@ components:
       - task_id
       - version_status
       title: InventoryVersionPoint
+    ConfigSource:
+      type: string
+      enum:
+      - custom
+      - default
+      - legacy_resource
+      - missing
+      title: ConfigSource
+    CurrentHealthStatus:
+      type: string
+      enum:
+      - normal
+      - warn
+      - fail
+      - pending_config
+      - unable_to_judge
+      - not_applicable
+      title: CurrentHealthStatus
+    DailyAggregation:
+      type: string
+      enum:
+      - latest
+      - mean
+      - sum
+      - max
+      - min
+      title: DailyAggregation
+    KpiChangeThresholdEvidence:
+      properties:
+        value:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Value
+        unit:
+          type: string
+          enum:
+          - pp
+          - relative
+          - unavailable
+          title: Unit
+        source:
+          $ref: '#/components/schemas/ConfigSource'
+      type: object
+      required:
+      - unit
+      - source
+      title: KpiChangeThresholdEvidence
+    KpiConsistencyEvidence:
+      properties:
+        status:
+          type: string
+          enum:
+          - not_checked
+          - within_tolerance
+          - exceeded
+          - unavailable
+          title: Status
+        tolerance_pp:
+          type: number
+          minimum: 0.0
+          title: Tolerance Pp
+        difference_pp:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Difference Pp
+      type: object
+      required:
+      - status
+      - tolerance_pp
+      title: KpiConsistencyEvidence
+    KpiDailyBucket:
+      properties:
+        date:
+          type: string
+          format: date
+          title: Date
+        value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Value
+        numerator:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Numerator
+        denominator:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Denominator
+        valid_count:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Valid Count
+        first_measured_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: First Measured At
+        last_measured_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Measured At
+        status:
+          type: string
+          enum:
+          - ok
+          - no_data
+          - zero_denominator
+          - unreadable
+          - no_baseline
+          title: Status
+      type: object
+      required:
+      - date
+      - status
+      title: KpiDailyBucket
+    KpiDailyHealthGroup:
+      properties:
+        object_key:
+          type: string
+          title: Object Key
+        period_minutes:
+          anyOf:
+          - type: integer
+            minimum: 1
+          - type: 'null'
+          title: Period Minutes
+        today:
+          anyOf:
+          - $ref: '#/components/schemas/KpiDailyBucket'
+          - type: 'null'
+        yesterday:
+          anyOf:
+          - $ref: '#/components/schemas/KpiDailyBucket'
+          - type: 'null'
+        current_status:
+          $ref: '#/components/schemas/CurrentHealthStatus'
+        trend_status:
+          $ref: '#/components/schemas/TrendHealthStatus'
+        reason:
+          type: string
+          default: ''
+          title: Reason
+        source_files:
+          items:
+            type: string
+          type: array
+          title: Source Files
+      type: object
+      required:
+      - object_key
+      - period_minutes
+      - current_status
+      - trend_status
+      title: KpiDailyHealthGroup
+    KpiDailyHealthMetricDetail:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        rule_code:
+          type: string
+          title: Rule Code
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        metric:
+          $ref: '#/components/schemas/KpiDailyHealthMetricEvidence'
+        groups:
+          items:
+            $ref: '#/components/schemas/KpiDailyHealthGroup'
+          type: array
+          title: Groups
+        seven_day_trend:
+          items:
+            $ref: '#/components/schemas/KpiDailyBucket'
+          type: array
+          maxItems: 7
+          title: Seven Day Trend
+        legacy_fallback:
+          anyOf:
+          - $ref: '#/components/schemas/KpiLegacyFallback'
+          - type: 'null'
+      type: object
+      required:
+      - task_id
+      - rule_code
+      - measurement_unit_id
+      - metric_resource_id
+      - metric
+      - groups
+      - seven_day_trend
+      title: KpiDailyHealthMetricDetail
+    KpiDailyHealthMetricEvidence:
+      properties:
+        name_zh:
+          type: string
+          default: ''
+          title: Name Zh
+        role:
+          $ref: '#/components/schemas/MetricRole'
+        data_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Data Date
+        previous_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Previous Date
+        daily_aggregation:
+          type: string
+          title: Daily Aggregation
+        formula:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Formula
+        current_status:
+          $ref: '#/components/schemas/CurrentHealthStatus'
+        trend_status:
+          $ref: '#/components/schemas/TrendHealthStatus'
+        current_threshold:
+          $ref: '#/components/schemas/KpiThresholdEvidence'
+        change_threshold:
+          $ref: '#/components/schemas/KpiChangeThresholdEvidence'
+        consistency:
+          $ref: '#/components/schemas/KpiConsistencyEvidence'
+      type: object
+      required:
+      - role
+      - daily_aggregation
+      - current_status
+      - trend_status
+      - current_threshold
+      - change_threshold
+      - consistency
+      title: KpiDailyHealthMetricEvidence
+    KpiLegacyFallback:
+      properties:
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - code
+      - message
+      title: KpiLegacyFallback
+    KpiMetricMaintenanceAudit:
+      properties:
+        id:
+          type: integer
+          title: Id
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        actor:
+          type: string
+          title: Actor
+        changed_fields:
+          items:
+            type: string
+          type: array
+          title: Changed Fields
+        before_values:
+          additionalProperties: true
+          type: object
+          title: Before Values
+        after_values:
+          additionalProperties: true
+          type: object
+          title: After Values
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - measurement_unit_id
+      - metric_resource_id
+      - actor
+      - changed_fields
+      - before_values
+      - after_values
+      - created_at
+      title: KpiMetricMaintenanceAudit
+    KpiMetricMaintenanceAuditList:
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/KpiMetricMaintenanceAudit'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1
+          title: Page
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+          title: Page Size
+      type: object
+      required:
+      - total
+      - items
+      - page
+      - page_size
+      title: KpiMetricMaintenanceAuditList
+    KpiMetricMaintenanceConfig:
+      properties:
+        measurement_unit_id:
+          type: string
+          title: Measurement Unit Id
+        metric_resource_id:
+          type: string
+          title: Metric Resource Id
+        name_zh:
+          type: string
+          title: Name Zh
+        role:
+          $ref: '#/components/schemas/MetricRole'
+        direction:
+          anyOf:
+          - type: string
+            enum:
+            - higher_better
+            - lower_better
+            - neutral
+          - type: 'null'
+          title: Direction
+        warning_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Warning Threshold
+        critical_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Critical Threshold
+        daily_aggregation:
+          $ref: '#/components/schemas/DailyAggregation'
+        daily_change_threshold:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Daily Change Threshold
+        daily_change_threshold_unit:
+          type: string
+          enum:
+          - pp
+          - relative
+          - auto
+          title: Daily Change Threshold Unit
+        is_percentage:
+          type: boolean
+          title: Is Percentage
+        zero_semantics:
+          $ref: '#/components/schemas/ZeroSemantics'
+        consistency_tolerance:
+          type: number
+          minimum: 0.0
+          title: Consistency Tolerance
+        object_match_mode:
+          $ref: '#/components/schemas/ObjectMatchMode'
+        enabled:
+          type: boolean
+          title: Enabled
+        config_source:
+          $ref: '#/components/schemas/ConfigSource'
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - measurement_unit_id
+      - metric_resource_id
+      - name_zh
+      - role
+      - daily_aggregation
+      - daily_change_threshold_unit
+      - is_percentage
+      - zero_semantics
+      - consistency_tolerance
+      - object_match_mode
+      - enabled
+      - config_source
+      - updated_at
+      title: KpiMetricMaintenanceConfig
+    KpiMetricMaintenanceConfigList:
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/KpiMetricMaintenanceConfig'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1
+          title: Page
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+          title: Page Size
+      type: object
+      required:
+      - total
+      - items
+      - page
+      - page_size
+      title: KpiMetricMaintenanceConfigList
+    KpiMetricMaintenanceConfigUpdateRequest:
+      properties:
+        role:
+          anyOf:
+          - $ref: '#/components/schemas/MetricRole'
+          - type: 'null'
+        direction:
+          anyOf:
+          - type: string
+            enum:
+            - higher_better
+            - lower_better
+            - neutral
+          - type: 'null'
+          title: Direction
+        warning_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Warning Threshold
+        critical_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Critical Threshold
+        daily_aggregation:
+          anyOf:
+          - $ref: '#/components/schemas/DailyAggregation'
+          - type: 'null'
+        daily_change_threshold:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Daily Change Threshold
+        daily_change_threshold_unit:
+          anyOf:
+          - type: string
+            enum:
+            - pp
+            - relative
+            - auto
+          - type: 'null'
+          title: Daily Change Threshold Unit
+        is_percentage:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Percentage
+        zero_semantics:
+          anyOf:
+          - $ref: '#/components/schemas/ZeroSemantics'
+          - type: 'null'
+        consistency_tolerance:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Consistency Tolerance
+        object_match_mode:
+          anyOf:
+          - $ref: '#/components/schemas/ObjectMatchMode'
+          - type: 'null'
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: KpiMetricMaintenanceConfigUpdateRequest
+    KpiThresholdEvidence:
+      properties:
+        direction:
+          anyOf:
+          - type: string
+            enum:
+            - higher_better
+            - lower_better
+            - neutral
+          - type: 'null'
+          title: Direction
+        warning_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Warning Threshold
+        critical_threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Critical Threshold
+        source:
+          $ref: '#/components/schemas/ConfigSource'
+      type: object
+      required:
+      - direction
+      - source
+      title: KpiThresholdEvidence
     KpiMeasurementBinding:
       properties:
         id:
@@ -2806,6 +3803,23 @@ components:
         enabled:
           type: boolean
           title: Enabled
+        metric_resource_name_zh:
+          type: string
+          title: Metric Resource Name Zh
+        numerator_metric_name_zh:
+          type: string
+          title: Numerator Metric Name Zh
+        denominator_metric_name_zh:
+          type: string
+          title: Denominator Metric Name Zh
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
       type: object
       required:
       - id
@@ -2814,6 +3828,11 @@ components:
       - numerator_metric_id
       - denominator_metric_id
       - enabled
+      - metric_resource_name_zh
+      - numerator_metric_name_zh
+      - denominator_metric_name_zh
+      - created_at
+      - updated_at
       title: KpiMeasurementDerived
     KpiMeasurementDerivedCreateRequest:
       properties:
@@ -2843,6 +3862,60 @@ components:
       - numerator_metric_id
       - denominator_metric_id
       title: KpiMeasurementDerivedCreateRequest
+    KpiMeasurementDerivedList:
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/KpiMeasurementDerived'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1
+          title: Page
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 200
+          title: Page Size
+      type: object
+      required:
+      - total
+      - items
+      - page
+      - page_size
+      title: KpiMeasurementDerivedList
+    KpiMeasurementDerivedUpdateRequest:
+      properties:
+        numerator_metric_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Numerator Metric Id
+        denominator_metric_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Denominator Metric Id
+        template:
+          anyOf:
+          - type: string
+            enum:
+            - success_rate
+            - reverse_success_rate
+          - type: 'null'
+          title: Template
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: KpiMeasurementDerivedUpdateRequest
     KpiMeasurementEnabledRequest:
       properties:
         enabled:
@@ -3158,6 +4231,17 @@ components:
       - total
       - items
       title: KpiMeasurementUnitList
+    MetricRole:
+      type: string
+      enum:
+      - base
+      - derived
+      title: MetricRole
+    ObjectMatchMode:
+      type: string
+      enum:
+      - exact
+      title: ObjectMatchMode
     LogEntry:
       properties:
         ts:
@@ -4797,6 +5881,15 @@ components:
       - cli
       - rerun
       title: TaskTrigger
+    TrendHealthStatus:
+      type: string
+      enum:
+      - improved
+      - stable
+      - worsened
+      - observe
+      - no_baseline
+      title: TrendHealthStatus
     UserCreateRequestV1:
       properties:
         username:
@@ -4939,3 +6032,10 @@ components:
       - downgrade
       - unchanged
       title: VersionDirection
+    ZeroSemantics:
+      type: string
+      enum:
+      - unknown
+      - expected_zero
+      - business_not_triggered
+      title: ZeroSemantics

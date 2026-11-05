@@ -9,6 +9,7 @@ from app.models.schemas import RuleResult
 KPI_RULE_CODE = "kpi.measurement_units"
 _RECORD_ONLY_METRIC_FIELDS = ("trends", "trend_points", "observations", "source_rows", "source_files")
 _RECORD_ONLY_UNIT_FIELDS = ("objects",)
+_DAILY_HEALTH_DETAIL_FIELDS = ("objects", "groups", "seven_day_trend")
 
 
 def summarize_kpi_result(result: RuleResult) -> RuleResult:
@@ -44,6 +45,24 @@ def summarize_kpi_result(result: RuleResult) -> RuleResult:
                 summary_unit["metrics"] = summary_metrics
             summary_units.append(summary_unit)
         metadata["measurement_units"] = summary_units
+
+    daily_health = metadata.get("daily_health")
+    if isinstance(daily_health, dict):
+        summary_daily_health = dict(daily_health)
+        metrics = summary_daily_health.get("metrics")
+        if isinstance(metrics, list):
+            summary_metrics: list[Any] = []
+            for metric in metrics:
+                if not isinstance(metric, dict):
+                    summary_metrics.append(metric)
+                    continue
+                summary_metric = {key: value for key, value in metric.items() if key not in _DAILY_HEALTH_DETAIL_FIELDS}
+                objects = metric.get("objects")
+                if isinstance(objects, list):
+                    summary_metric["object_count"] = len(objects)
+                summary_metrics.append(summary_metric)
+            summary_daily_health["metrics"] = summary_metrics
+        metadata["daily_health"] = summary_daily_health
 
     return result.model_copy(update={"metadata": metadata, "metrics": [], "findings": []})
 

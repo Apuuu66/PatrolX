@@ -87,6 +87,36 @@ def test_create_derived_api_validates_bindings() -> None:
         assert response.json()["code"] == "kpi_binding_not_confirmed"
 
 
+def test_create_derived_api_returns_resource_names_and_timestamps() -> None:
+    """创建派生配置后，响应必须包含维护页面所需的名称和时间字段。"""
+    with _client() as client:
+        _import_csv(client)
+        binding_id = _create_unregistered_binding(metric_resource_id="ME_CALL")
+        confirmed = client.post(
+            "/api/v5/kpi/measurement-bindings/batch-confirm",
+            json={"binding_ids": [binding_id]},
+        )
+        assert confirmed.status_code == 200, confirmed.text
+
+        response = client.post(
+            "/api/v5/kpi/measurement-derived",
+            json={
+                "measurement_unit_id": "MU_CALL",
+                "metric_resource_id": "ME_CALL",
+                "numerator_metric_id": "ME_CALL",
+                "denominator_metric_id": "ME_CALL",
+            },
+        )
+
+        assert response.status_code == 201, response.text
+        payload = response.json()
+        assert payload["metric_resource_name_zh"] == "呼叫请求次数"
+        assert payload["numerator_metric_name_zh"] == "呼叫请求次数"
+        assert payload["denominator_metric_name_zh"] == "呼叫请求次数"
+        assert payload["created_at"]
+        assert payload["updated_at"]
+
+
 def test_import_resource_csv_does_not_use_default_temp(monkeypatch: pytest.MonkeyPatch) -> None:
     """资源导入必须在内存解析，避免 Windows 默认 TEMP 无权限导致失败。"""
 

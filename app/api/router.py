@@ -35,6 +35,7 @@ from app.models.schemas import (
     InventoryQualityIssueList,
     InventoryQualityIssueType,
     InventoryVersionHistory,
+    KpiDailyHealthMetricDetail,
     KpiMeasurementBinding,
     KpiMeasurementBindingBatchConfirmRequest,
     KpiMeasurementBindingBatchConfirmResponse,
@@ -42,6 +43,8 @@ from app.models.schemas import (
     KpiMeasurementBindingStatusRequest,
     KpiMeasurementDerived,
     KpiMeasurementDerivedCreateRequest,
+    KpiMeasurementDerivedList,
+    KpiMeasurementDerivedUpdateRequest,
     KpiMeasurementEnabledRequest,
     KpiMeasurementImportResult,
     KpiMeasurementMetricRegisterRequest,
@@ -50,6 +53,10 @@ from app.models.schemas import (
     KpiMeasurementResourceList,
     KpiMeasurementResourceUpdateRequest,
     KpiMeasurementUnitList,
+    KpiMetricMaintenanceAuditList,
+    KpiMetricMaintenanceConfig,
+    KpiMetricMaintenanceConfigList,
+    KpiMetricMaintenanceConfigUpdateRequest,
     LogEntry,
     LoginRequestV1,
     LoginResponseV1,
@@ -94,6 +101,7 @@ from app.services.auth import (
 from app.services.inventory import maintenance as inventory_maintenance
 from app.services.inventory import queries as inventory_queries
 from app.services.inventory.maintenance import InventoryMaintenanceError
+from app.services.kpi_daily_health_query import get_kpi_daily_health_metric
 from app.services.kpi_history import get_history_trend, get_version_candidates, get_version_compare
 from app.services.kpi_measurement_units import (
     KpiMeasurementError,
@@ -107,6 +115,15 @@ from app.services.kpi_measurement_units import (
     set_measurement_binding_status,
     set_measurement_unit_enabled,
     update_manual_metric,
+)
+from app.services.kpi_metric_maintenance import (
+    get_measurement_derived,
+    get_metric_maintenance_config,
+    list_measurement_derived,
+    list_metric_maintenance_audits,
+    list_metric_maintenance_configs,
+    update_measurement_derived,
+    update_metric_maintenance_config,
 )
 from app.services.overview import build_overview
 from app.services.results import find_kpi_metric_detail, summarize_kpi_result
@@ -846,6 +863,30 @@ def get_measurement_metric_detail_v2(
     )
 
 
+@router.get(
+    "/tasks/{task_id}/rules/{rule_code}/daily-health/{measurement_unit_id}/{metric_resource_id}",
+    response_model=KpiDailyHealthMetricDetail,
+    operation_id="getKpiDailyHealthMetricV2",
+)
+def get_kpi_daily_health_metric_v2(
+    task_id: str = PathParam(),
+    rule_code: str = PathParam(),
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+) -> KpiDailyHealthMetricDetail:
+    """返回单指标当前判定、昨日趋势和 7 日证据。"""
+    try:
+        result = get_kpi_daily_health_metric(
+            task_id,
+            rule_code,
+            measurement_unit_id,
+            metric_resource_id,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiDailyHealthMetricDetail.model_validate(result)
+
+
 @router.get("/inspectors", response_model=list[InspectorInfo], operation_id="listInspectorsV2")
 def list_inspectors_v2(category: str | None = None, include_hidden: bool = False) -> list[InspectorInfo]:
     registry.load_all()
@@ -1133,6 +1174,161 @@ def update_kpi_measurement_resource_v5(
     except KpiMeasurementError as exc:
         raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
     return KpiMeasurementResource.model_validate(metric)
+
+
+@v5_router.get(
+    "/kpi/metric-maintenance-configs",
+    response_model=KpiMetricMaintenanceConfigList,
+    operation_id="listKpiMetricMaintenanceConfigsV5",
+)
+def list_kpi_metric_maintenance_configs_v5(
+    measurement_unit_id: str | None = Query(default=None),
+    metric_resource_id: str | None = Query(default=None),
+    enabled: bool | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiMetricMaintenanceConfigList:
+    """分页读取指标维护配置，供维护人员核对口径。"""
+    try:
+        result = list_metric_maintenance_configs(
+            measurement_unit_id=measurement_unit_id,
+            metric_resource_id=metric_resource_id,
+            enabled=enabled,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMetricMaintenanceConfigList.model_validate(result)
+
+
+@v5_router.get(
+    "/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}",
+    response_model=KpiMetricMaintenanceConfig,
+    operation_id="getKpiMetricMaintenanceConfigV5",
+)
+def get_kpi_metric_maintenance_config_v5(
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+) -> KpiMetricMaintenanceConfig:
+    """读取单个已绑定指标的有效维护配置。"""
+    try:
+        result = get_metric_maintenance_config(measurement_unit_id, metric_resource_id)
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMetricMaintenanceConfig.model_validate(result)
+
+
+@v5_router.patch(
+    "/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}",
+    response_model=KpiMetricMaintenanceConfig,
+    operation_id="updateKpiMetricMaintenanceConfigV5",
+)
+def update_kpi_metric_maintenance_config_v5(
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+    body: KpiMetricMaintenanceConfigUpdateRequest | None = None,
+    auth: AuthSession = Depends(require_role("admin")),
+) -> KpiMetricMaintenanceConfig:
+    """更新维护口径并记录操作审计。"""
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        result = update_metric_maintenance_config(
+            measurement_unit_id,
+            metric_resource_id,
+            body.model_dump(exclude_unset=True),
+            actor=auth.username,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMetricMaintenanceConfig.model_validate(result)
+
+
+@v5_router.get(
+    "/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}/audits",
+    response_model=KpiMetricMaintenanceAuditList,
+    operation_id="listKpiMetricMaintenanceAuditsV5",
+)
+def list_kpi_metric_maintenance_audits_v5(
+    measurement_unit_id: str = PathParam(),
+    metric_resource_id: str = PathParam(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiMetricMaintenanceAuditList:
+    """分页读取单个指标的维护配置审计。"""
+    try:
+        result = list_metric_maintenance_audits(
+            measurement_unit_id,
+            metric_resource_id,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMetricMaintenanceAuditList.model_validate(result)
+
+
+@v5_router.get(
+    "/kpi/measurement-derived",
+    response_model=KpiMeasurementDerivedList,
+    operation_id="listKpiMeasurementDerivedV5",
+)
+def list_kpi_measurement_derived_v5(
+    measurement_unit_id: str | None = Query(default=None),
+    enabled: bool | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+) -> KpiMeasurementDerivedList:
+    """分页读取成功率等派生指标定义。"""
+    try:
+        result = list_measurement_derived(
+            measurement_unit_id=measurement_unit_id,
+            enabled=enabled,
+            page=page,
+            page_size=page_size,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementDerivedList.model_validate(result)
+
+
+@v5_router.get(
+    "/kpi/measurement-derived/{derived_id}",
+    response_model=KpiMeasurementDerived,
+    operation_id="getKpiMeasurementDerivedV5",
+)
+def get_kpi_measurement_derived_v5(derived_id: int = PathParam()) -> KpiMeasurementDerived:
+    """读取单条派生指标定义。"""
+    try:
+        result = get_measurement_derived(derived_id)
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementDerived.model_validate(result)
+
+
+@v5_router.patch(
+    "/kpi/measurement-derived/{derived_id}",
+    response_model=KpiMeasurementDerived,
+    operation_id="updateKpiMeasurementDerivedV5",
+)
+def update_kpi_measurement_derived_v5(
+    derived_id: int = PathParam(),
+    body: KpiMeasurementDerivedUpdateRequest | None = None,
+    auth: AuthSession = Depends(require_role("admin")),
+) -> KpiMeasurementDerived:
+    """更新派生指标依赖或启用状态。"""
+    if body is None:
+        raise AppError("invalid_request", "请求体不能为空", 400)
+    try:
+        result = update_measurement_derived(
+            derived_id,
+            body.model_dump(exclude_unset=True),
+            actor=auth.username,
+        )
+    except KpiMeasurementError as exc:
+        raise AppError(exc.code, exc.message, exc.status_code, exc.detail) from exc
+    return KpiMeasurementDerived.model_validate(result)
 
 
 @v5_router.post(

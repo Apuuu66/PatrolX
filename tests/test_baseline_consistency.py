@@ -1,5 +1,6 @@
 """本地与在线模式使用同一执行契约的一致性测试。"""
 
+import io
 import shutil
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from app.services.extraction.manifest import read_manifest
 from tests.baseline_helpers import (
     SAMPLE,
     load_logs,
+    load_rule,
     setup_env,
     strip_volatile,
     upload_package,
@@ -76,6 +78,49 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
     online_manifest = read_manifest(online_env.task_dir(task_id))
     for key in ("classification", "entries", "ignored", "conflicts", "failures", "catalog", "summary"):
         assert local_manifest[key] == online_manifest[key]
+
+
+def test_cli_and_api_daily_health_results_match(tmp_path: Path, monkeypatch) -> None:
+    """同一合成任务经 CLI 执行后，API 必须返回完全一致的日健康结论。"""
+    from app.cli import run_task
+    from app.services.kpi_measurement_units import import_resource_csv
+
+    resource_csv = (
+        "资源id,中文描述,英文描述\n"
+        "MU_CALL,呼叫会话统计,Call Session API Statistics\n"
+        "ME_CALL,呼叫请求次数,Call Requests\n"
+    )
+
+    local_env = setup_env(tmp_path / "local", monkeypatch)
+    import_resource_csv(io.StringIO(resource_csv))
+    local_task = run_task(
+        SAMPLE,
+        name="日健康一致性",
+        customer={"province": "北京", "operator": "移动", "product": "UMF"},
+    )
+    local_rule = load_rule(local_env, local_task.task_id, "kpi.measurement_units")
+
+    online_env = setup_env(tmp_path / "online", monkeypatch)
+    import_resource_csv(io.StringIO(resource_csv))
+    task_id = upload_package(
+        online_env,
+        client,
+        name="日健康一致性",
+        province="北京",
+        operator="移动",
+        product="UMF",
+    )
+    wait_for_task(client, task_id)
+    response = client.get(f"/api/v2/tasks/{task_id}/rules/kpi.measurement_units")
+
+    assert response.status_code == 200, response.text
+    online_rule = response.json()
+    local_daily_health = local_rule["metadata"]["daily_health"]
+    online_daily_health = online_rule["metadata"]["daily_health"]
+    assert local_daily_health["metrics"]
+    assert sum(local_daily_health["current_counts"].values()) == len(local_daily_health["metrics"])
+    assert sum(local_daily_health["trend_counts"].values()) == len(local_daily_health["metrics"])
+    assert online_daily_health == local_daily_health
 
 
 def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> None:

@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import csv
 import gzip
 import io
+import json
 import math
 import struct
 import tarfile
 import zipfile
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -189,6 +192,277 @@ CONTAINER_INSTANCES = [
     ("UMF-Access", "umf-node-02", "42.10,55.30,48.60,62.40"),
     ("CSP-Core", "csp-node-01", "88.90,95.60,87.30,91.50"),
 ]
+
+
+KPI_DAILY_HEALTH_PACKAGE_NAME = "KPI_Daily_Health_20_Metrics_20261105.zip"
+KPI_DAILY_HEALTH_FIXED_DATE = (2026, 11, 5, 10, 0, 0)
+KPI_DAILY_HEALTH_UNITS = (
+    ("MU_CALL", "Call_Statistics", "呼叫统计"),
+    ("MU_HEALTH_CALL", "Health_Call", "健康呼叫统计"),
+    ("MU_HEALTH_SIGNAL", "Health_Signal", "健康信令统计"),
+    ("MU_HEALTH_MEDIA", "Health_Media", "健康媒体统计"),
+)
+KPI_DAILY_HEALTH_DISABLED_UNIT = ("MU_DISABLED_E2E", "Disabled_E2E", "停用测量单元 E2E")
+KPI_DAILY_HEALTH_CURRENT_STATUSES = (
+    "normal",
+    "warn",
+    "fail",
+    "pending_config",
+    "unable_to_judge",
+    "not_applicable",
+)
+KPI_DAILY_HEALTH_TREND_STATUSES = ("improved", "stable", "worsened", "observe", "no_baseline")
+
+# measurement_unit_id, metric_id, name_zh, direction, warning, critical, importance,
+# expected_current_status, expected_trend_status, 最近 7 日值。
+_KPI_DAILY_HEALTH_BASE_METRICS = (
+    (
+        "MU_CALL",
+        "ME_CALL",
+        "呼叫请求次数",
+        "higher_better",
+        90.0,
+        80.0,
+        "P1",
+        "normal",
+        "stable",
+        (100, 100, 100, 100, 100, 100, 100),
+    ),
+    (
+        "MU_CALL",
+        "ME_MAX_USERS",
+        "最大注册用户数",
+        "higher_better",
+        90.0,
+        80.0,
+        "P1",
+        "normal",
+        "improved",
+        (100, 100, 100, 100, 100, 100, 110),
+    ),
+    (
+        "MU_CALL",
+        "ME_HEALTH_CALL_VOLUME",
+        "呼叫业务量",
+        "neutral",
+        None,
+        None,
+        "normal",
+        "pending_config",
+        "observe",
+        (100, 100, 100, 100, 100, 100, 120),
+    ),
+    (
+        "MU_CALL",
+        "ME_HEALTH_REGISTERED_USERS",
+        "登记用户规模",
+        "higher_better",
+        90.0,
+        80.0,
+        "normal",
+        "unable_to_judge",
+        "no_baseline",
+        (),
+    ),
+    (
+        "MU_CALL",
+        "ME_HEALTH_RESOURCE_POOL",
+        "资源池占用",
+        "lower_better",
+        10.0,
+        20.0,
+        "normal",
+        "normal",
+        "improved",
+        (10, 10, 10, 10, 10, 10, 9),
+    ),
+    (
+        "MU_CALL",
+        "ME_HEALTH_ALARM_COUNT",
+        "告警数量",
+        "lower_better",
+        10.0,
+        20.0,
+        "P2",
+        "unable_to_judge",
+        "no_baseline",
+        (),
+    ),
+    (
+        "MU_HEALTH_CALL",
+        "ME_HEALTH_CALL_LATENCY",
+        "呼叫建立时延",
+        "lower_better",
+        60.0,
+        80.0,
+        "P1",
+        "normal",
+        "improved",
+        (62, 62, 62, 62, 62, 62, 50),
+    ),
+    (
+        "MU_HEALTH_CALL",
+        "ME_HEALTH_CALL_ERRORS",
+        "呼叫错误次数",
+        "lower_better",
+        10.0,
+        20.0,
+        "P1",
+        "warn",
+        "worsened",
+        (12, 12, 12, 12, 12, 12, 15),
+    ),
+    (
+        "MU_HEALTH_CALL",
+        "ME_HEALTH_CALL_CONCURRENCY",
+        "呼叫并发数",
+        "higher_better",
+        85.0,
+        75.0,
+        "normal",
+        "normal",
+        "stable",
+        (96, 96, 96, 96, 96, 96, 96),
+    ),
+    (
+        "MU_HEALTH_CALL",
+        "ME_HEALTH_CALL_RECOVERY",
+        "呼叫恢复次数",
+        "higher_better",
+        85.0,
+        75.0,
+        "P2",
+        "normal",
+        "worsened",
+        (105, 105, 105, 105, 105, 105, 91),
+    ),
+    (
+        "MU_HEALTH_CALL",
+        "ME_HEALTH_CALL_QUALITY",
+        "呼叫质量样本",
+        "higher_better",
+        95.0,
+        85.0,
+        "normal",
+        "pending_config",
+        "stable",
+        (0, 0, 0, 0, 0, 0, 0),
+    ),
+    (
+        "MU_HEALTH_SIGNAL",
+        "ME_HEALTH_SIGNAL_DROPS",
+        "信令丢弃次数",
+        "lower_better",
+        10.0,
+        20.0,
+        "P1",
+        "normal",
+        "improved",
+        (7, 7, 7, 7, 7, 7, 5),
+    ),
+    (
+        "MU_HEALTH_SIGNAL",
+        "ME_HEALTH_SIGNAL_LOAD",
+        "信令负载",
+        "neutral",
+        None,
+        None,
+        "normal",
+        "pending_config",
+        "observe",
+        (70, 70, 70, 70, 70, 70, 80),
+    ),
+    (
+        "MU_HEALTH_SIGNAL",
+        "ME_HEALTH_SIGNAL_LATENCY",
+        "信令处理时延",
+        "lower_better",
+        30.0,
+        50.0,
+        "normal",
+        "normal",
+        "stable",
+        (25, 25, 25, 25, 25, 25, 25),
+    ),
+    (
+        "MU_HEALTH_MEDIA",
+        "ME_HEALTH_MEDIA_LATENCY",
+        "媒体处理时延",
+        "lower_better",
+        30.0,
+        50.0,
+        "normal",
+        "normal",
+        "stable",
+        (20, 20, 20, 20, 20, 20, 20),
+    ),
+    (
+        "MU_HEALTH_MEDIA",
+        "ME_HEALTH_MEDIA_QUEUE",
+        "媒体队列深度",
+        "lower_better",
+        100.0,
+        200.0,
+        "P2",
+        "normal",
+        "improved",
+        (90, 90, 90, 90, 90, 90, 80),
+    ),
+)
+
+# measurement_unit_id, metric_id, name_zh, warning, critical,
+# expected_current_status, expected_trend_status,
+# 最近 7 日分子/分母/原始成功率。
+_KPI_DAILY_HEALTH_RATE_METRICS = (
+    (
+        "MU_HEALTH_CALL",
+        "ME_HEALTH_RATE_1",
+        "媒体资源创建成功率",
+        80.0,
+        70.0,
+        "fail",
+        "worsened",
+        (122, 132, 140, 128, 145, 150, 129),
+        (200, 200, 200, 200, 200, 200, 200),
+        (61.0, 66.0, 70.0, 64.0, 72.5, 75.0, 64.5),
+    ),
+    (
+        "MU_HEALTH_SIGNAL",
+        "ME_HEALTH_RATE_2",
+        "媒体资源创建请求成功率",
+        90.0,
+        80.0,
+        "not_applicable",
+        "no_baseline",
+        (0, 0, 0, 0, 0, 0, 0),
+        (0, 0, 0, 0, 0, 0, 0),
+        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    ),
+    (
+        "MU_HEALTH_MEDIA",
+        "ME_HEALTH_RATE_3",
+        "DC 资源更新成功率",
+        85.0,
+        75.0,
+        "normal",
+        "improved",
+        (88, 88, 88, 88, 88, 88, 90),
+        (100, 100, 100, 100, 100, 100, 100),
+        (88.0, 88.0, 88.0, 88.0, 88.0, 88.0, 90.0),
+    ),
+    (
+        "MU_HEALTH_MEDIA",
+        "ME_HEALTH_RATE_4",
+        "数据通道资源更新请求成功率",
+        75.0,
+        60.0,
+        "warn",
+        "improved",
+        (65, 65, 65, 65, 65, 65, 70),
+        (100, 100, 100, 100, 100, 100, 100),
+        (65.0, 65.0, 65.0, 65.0, 65.0, 65.0, 70.0),
+    ),
+)
 
 
 def _call_kpi(period: int) -> str:
@@ -413,6 +687,179 @@ def _corrupt_zip_member_crc(payload: bytes, member_name: str) -> bytes:
         central_offset += 46 + name_length + extra_length + comment_length
 
     raise ValueError(f"未找到 ZIP 成员: {member_name}")
+
+
+def _kpi_daily_health_metric_entries() -> list[dict[str, object]]:
+    metrics: list[dict[str, object]] = []
+    for (
+        unit_id,
+        metric_id,
+        name_zh,
+        direction,
+        warning_threshold,
+        critical_threshold,
+        importance,
+        expected_current_status,
+        expected_trend_status,
+        _values,
+    ) in _KPI_DAILY_HEALTH_BASE_METRICS:
+        metrics.append(
+            {
+                "measurement_unit_id": unit_id,
+                "metric_resource_id": metric_id,
+                "name_zh": name_zh,
+                "role": "base",
+                "raw_columns": [name_zh],
+                "direction": direction,
+                "warning_threshold": warning_threshold,
+                "critical_threshold": critical_threshold,
+                "importance": importance,
+                "expected_current_status": expected_current_status,
+                "expected_trend_status": expected_trend_status,
+            }
+        )
+    for (
+        unit_id,
+        metric_id,
+        name_zh,
+        warning_threshold,
+        critical_threshold,
+        expected_current_status,
+        expected_trend_status,
+        _numerator_values,
+        _denominator_values,
+        _raw_values,
+    ) in _KPI_DAILY_HEALTH_RATE_METRICS:
+        metrics.append(
+            {
+                "measurement_unit_id": unit_id,
+                "metric_resource_id": metric_id,
+                "name_zh": name_zh,
+                "role": "derived",
+                "raw_columns": [
+                    f"{name_zh}分子",
+                    f"{name_zh}分母",
+                    name_zh,
+                ],
+                "direction": "higher_better",
+                "warning_threshold": warning_threshold,
+                "critical_threshold": critical_threshold,
+                "importance": "P1",
+                "expected_current_status": expected_current_status,
+                "expected_trend_status": expected_trend_status,
+            }
+        )
+    return metrics
+
+
+def _kpi_daily_health_source_file(unit_id: str) -> str:
+    fragment = next(fragment for candidate, fragment, _name in KPI_DAILY_HEALTH_UNITS if candidate == unit_id)
+    return f"ne333_{fragment}_15_0_20261105000000.csv"
+
+
+def _kpi_daily_health_csv(unit_id: str) -> str:
+    base_metrics = [item for item in _KPI_DAILY_HEALTH_BASE_METRICS if item[0] == unit_id]
+    rate_metrics = [item for item in _KPI_DAILY_HEALTH_RATE_METRICS if item[0] == unit_id]
+    fieldnames = ["container", "测量开始时间", "测量结束时间", "周期(分钟)"]
+    fieldnames.extend(str(item[2]) for item in base_metrics)
+    for item in rate_metrics:
+        name_zh = str(item[2])
+        fieldnames.extend([f"{name_zh}分子", f"{name_zh}分母", name_zh])
+
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    start = datetime(*KPI_DAILY_HEALTH_FIXED_DATE)
+    for index, offset in enumerate(range(6, -1, -1)):
+        measured_at = start - timedelta(days=offset)
+        row: dict[str, object] = {
+            "container": "pod-health-a",
+            "测量开始时间": measured_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "测量结束时间": (measured_at + timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S"),
+            "周期(分钟)": 15,
+        }
+        for item in base_metrics:
+            values = item[9]
+            if values:
+                row[str(item[2])] = values[index]
+        for item in rate_metrics:
+            name_zh = str(item[2])
+            numerator_values = item[7]
+            denominator_values = item[8]
+            raw_values = item[9]
+            row[f"{name_zh}分子"] = numerator_values[index]
+            row[f"{name_zh}分母"] = denominator_values[index]
+            row[name_zh] = raw_values[index]
+        writer.writerow(row)
+    return buffer.getvalue()
+
+
+def _kpi_daily_health_manifest() -> dict[str, object]:
+    metrics = _kpi_daily_health_metric_entries()
+    current_counts = Counter(str(item["expected_current_status"]) for item in metrics)
+    trend_counts = Counter(str(item["expected_trend_status"]) for item in metrics)
+    disabled_filename = "ne333_Disabled_E2E_15_0_20261105000000.csv"
+    return {
+        "schema_version": 1,
+        "package_kind": "kpi_daily_health",
+        "data_date": "2026-11-05",
+        "timezone": "Asia/Shanghai",
+        "enabled_measurement_unit_ids": [item[0] for item in KPI_DAILY_HEALTH_UNITS],
+        "disabled_measurement_unit_ids": [KPI_DAILY_HEALTH_DISABLED_UNIT[0]],
+        "metric_count": len(metrics),
+        "metrics": metrics,
+        "expected_current_counts": {status: current_counts[status] for status in KPI_DAILY_HEALTH_CURRENT_STATUSES},
+        "expected_trend_counts": {status: trend_counts[status] for status in KPI_DAILY_HEALTH_TREND_STATUSES},
+        "boundaries": {
+            "zero_denominator_metric_ids": ["ME_HEALTH_RATE_2"],
+            "no_data_metric_ids": ["ME_HEALTH_REGISTERED_USERS", "ME_HEALTH_ALARM_COUNT"],
+            "all_zero_unknown_metric_ids": ["ME_HEALTH_CALL_QUALITY"],
+            "success_rate_evidence": {
+                "metric_resource_id": "ME_HEALTH_RATE_1",
+                "numerator": 129,
+                "denominator": 200,
+                "value": 64.5,
+            },
+            "disabled_measurement_unit_ids": [KPI_DAILY_HEALTH_DISABLED_UNIT[0]],
+            "out_of_scope_files": [disabled_filename],
+            "legacy_task_without_daily_health": True,
+        },
+    }
+
+
+def build_kpi_daily_health_fixture(directory: Path) -> Path:
+    """生成固定、幂等的 20 指标日健康样例包，覆盖当前判定与趋势关键边界。"""
+    directory.mkdir(parents=True, exist_ok=True)
+    output = directory / KPI_DAILY_HEALTH_PACKAGE_NAME
+    performance_buffer = io.BytesIO()
+    with zipfile.ZipFile(performance_buffer, "w", zipfile.ZIP_DEFLATED) as performance:
+        for unit_id, _fragment, _name_zh in KPI_DAILY_HEALTH_UNITS:
+            _add_bytes(
+                performance,
+                _kpi_daily_health_source_file(unit_id),
+                _kpi_daily_health_csv(unit_id).encode("utf-8"),
+            )
+        _add_bytes(
+            performance,
+            "ne333_Disabled_E2E_15_0_20261105000000.csv",
+            (
+                "container,测量开始时间,测量结束时间,周期(分钟),停用单元指标\n"
+                "pod-health-a,2026-11-05 10:00:00,2026-11-05 10:15:00,15,1\n"
+            ).encode(),
+        )
+
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        _add_bytes(
+            archive,
+            f"{UMF_SCENE_ROOT}/Performance Measurement Results/PerfResult_20261105000000.zip",
+            performance_buffer.getvalue(),
+        )
+        _add_bytes(
+            archive,
+            "KPI/daily-health-fixture-manifest.json",
+            json.dumps(_kpi_daily_health_manifest(), ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"),
+        )
+    return output
 
 
 def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:

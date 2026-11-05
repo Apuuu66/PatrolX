@@ -17,7 +17,7 @@ inspector = Inspector(
     category=RuleCategory.KPI,
     severity=Severity.MEDIUM,
     priority=Priority.P1,
-    rule_version="3.3.3",
+    rule_version="3.4.0",
     description="自动入库测量单元指标，检查文件归属、数值可读性、业务阈值与任务内趋势",
     recommendation="处理未匹配文件与跨单元冲突，配置阈值，并修复空值、解析失败或趋势恶化的指标",
     source_refs=["kpi_all"],
@@ -35,6 +35,7 @@ def _run(ctx: RuleContext) -> object:
         (relative.as_posix(), absolute) for relative, absolute in zip(ctx.files, ctx.resolved_files(), strict=True)
     ]
     result = inspect_measurement_files(ctx.task_id, files)
+    daily_health = result["daily_health"]
     unit_results = result["measurement_units"]
     unmatched_count = len(result["unmatched_files"])
     skipped_count = len(result.get("skipped_files", []))
@@ -44,6 +45,7 @@ def _run(ctx: RuleContext) -> object:
             status=RuleStatus.SKIP,
             summary="未发现 KPI 测量单元 CSV",
             skip_reason="未发现 KPI 测量单元 CSV",
+            metadata={"daily_health": daily_health},
         )
     if not unit_results:
         return make_result(
@@ -55,6 +57,7 @@ def _run(ctx: RuleContext) -> object:
                 "files": [item["filename"] for item in result["files"]],
                 "unmatched_files": [item["filename"] for item in result["unmatched_files"]],
                 "skipped_files": [item["filename"] for item in result.get("skipped_files", [])],
+                "daily_health": daily_health,
             },
         )
     if all(unit["status"] == "skip" for unit in unit_results):
@@ -65,7 +68,13 @@ def _run(ctx: RuleContext) -> object:
             status=RuleStatus.SKIP,
             summary=f"测量单元尚未确认指标绑定：{unconfirmed_ratio}",
             skip_reason=f"{unconfirmed_ratio} 个测量单元未确认指标绑定",
-            metadata={"measurement_units": unit_results},
+            metadata={
+                "measurement_units": unit_results,
+                "files": [item["filename"] for item in result["files"]],
+                "unmatched_files": [item["filename"] for item in result["unmatched_files"]],
+                "skipped_files": [item["filename"] for item in result.get("skipped_files", [])],
+                "daily_health": daily_health,
+            },
         )
 
     overview = result["kpi_overview"]
@@ -103,6 +112,7 @@ def _run(ctx: RuleContext) -> object:
         "files": [],
         "unmatched_files": [],
         "skipped_files": [],
+        "daily_health": daily_health,
     }
 
     # 保留展示字段，但结果契约中不携带任务现场绝对路径。

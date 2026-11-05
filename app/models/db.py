@@ -10,6 +10,7 @@ from sqlalchemy import (
     Engine,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -108,6 +109,7 @@ def init_db() -> None:
         Base.metadata.create_all(engine)
     _ensure_task_columns(engine)
     _ensure_kpi_measurement_columns(engine)
+    _ensure_kpi_measurement_constraints(engine)
     _ensure_inventory_device_columns(engine)
     _ensure_inventory_observation_columns(engine)
     # 固定顺序：建表与增量列迁移 → 启动回填 →（此后才允许留存清理）。
@@ -229,6 +231,27 @@ def _ensure_kpi_measurement_columns(engine: Engine) -> None:
         for name, ddl in wanted.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+def _ensure_kpi_measurement_constraints(engine: Engine) -> None:
+    """清理旧派生配置重复行并建立幂等唯一索引。"""
+    table = KpiMeasurementDerived.__tablename__
+    if not inspect(engine).has_table(table):
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                f"DELETE FROM {table} WHERE id NOT IN ("
+                f"SELECT MAX(id) FROM {table} "
+                "GROUP BY measurement_unit_id, metric_resource_id)"
+            )
+        )
+        connection.execute(
+            text(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS uq_kpi_measurement_derived_unit_metric "
+                f"ON {table} (measurement_unit_id, metric_resource_id)"
+            )
+        )
 
 
 class InventoryDevice(Base):
@@ -377,6 +400,9 @@ class KpiMeasurementDerived(Base):
     """新版 KPI 成功率派生定义。"""
 
     __tablename__ = "kpi_measurement_derived"
+    __table_args__ = (
+        Index("uq_kpi_measurement_derived_unit_metric", "measurement_unit_id", "metric_resource_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     measurement_unit_id: Mapped[str] = mapped_column(String(128), index=True)
@@ -387,6 +413,44 @@ class KpiMeasurementDerived(Base):
     enabled: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiMetricMaintenanceConfig(Base):
+    """指标维护口径；方向与阈值仍以既有指标资源字段为准。"""
+
+    __tablename__ = "kpi_metric_maintenance_configs"
+    __table_args__ = (
+        UniqueConstraint("measurement_unit_id", "metric_resource_id", name="uq_kpi_metric_maintenance_unit_metric"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    measurement_unit_id: Mapped[str] = mapped_column(String(128), index=True)
+    metric_resource_id: Mapped[str] = mapped_column(String(128), index=True)
+    role: Mapped[str] = mapped_column(String(16), default="base")
+    daily_aggregation: Mapped[str] = mapped_column(String(16), default="latest")
+    daily_change_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    daily_change_threshold_unit: Mapped[str] = mapped_column(String(16), default="auto")
+    is_percentage: Mapped[bool] = mapped_column(Boolean, default=False)
+    zero_semantics: Mapped[str] = mapped_column(String(32), default="unknown")
+    consistency_tolerance: Mapped[float] = mapped_column(Float, default=0.2)
+    object_match_mode: Mapped[str] = mapped_column(String(16), default="exact")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KpiMetricMaintenanceAudit(Base):
+    """指标维护配置变更审计；不保存任务值或上传包内容。"""
+
+    __tablename__ = "kpi_metric_maintenance_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    measurement_unit_id: Mapped[str] = mapped_column(String(128), index=True)
+    metric_resource_id: Mapped[str] = mapped_column(String(128), index=True)
+    actor: Mapped[str] = mapped_column(String(128))
+    changed_fields: Mapped[list] = mapped_column(JSON, default=list)
+    before_values: Mapped[dict] = mapped_column(JSON, default=dict)
+    after_values: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class AuthUser(Base):

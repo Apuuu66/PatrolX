@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import io
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.db import AuthSession
+from app.models.db import (
+    AuthSession,
+    KpiMeasurementBinding,
+    KpiMeasurementDerived,
+    KpiMeasurementResource,
+    KpiMetricMaintenanceConfig,
+    TaskRecord,
+    session_factory,
+)
 from app.services.auth import get_current_user
 from app.services.kpi_measurement_units import (
     KpiMeasurementError,
@@ -41,6 +50,144 @@ def _confirm(call_binding: bool = True) -> None:
     for binding in list_measurement_bindings()["items"]:
         if call_binding or binding["metric_resource_id"]:
             set_measurement_binding_status(binding["id"], "confirmed")
+
+
+def _seed_daily_health_catalog(
+    *,
+    disabled_unit: bool = False,
+    internal_rate_dependencies: bool = False,
+) -> None:
+    now = datetime(2026, 10, 31, 16, 0, tzinfo=UTC)
+    numerator_id = "ME_SUCCESS_COUNT_NUMERATOR" if internal_rate_dependencies else "ME_SUCCESS_COUNT"
+    denominator_id = "ME_TOTAL_COUNT_DENOMINATOR" if internal_rate_dependencies else "ME_TOTAL_COUNT"
+    numerator_name = "成功请求次数分子" if internal_rate_dependencies else "成功请求次数"
+    denominator_name = "请求总次数分母" if internal_rate_dependencies else "请求总次数"
+    with session_factory() as session:
+        session.add_all(
+            [
+                KpiMeasurementResource(
+                    resource_id="MU_DAILY",
+                    kind="mu",
+                    name_zh="日健康测量单元",
+                    name_en="Daily Health",
+                    filename_fragment="Daily_Health",
+                    enabled=not disabled_unit,
+                    display_order=1,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                KpiMeasurementResource(
+                    resource_id=numerator_id,
+                    kind="me",
+                    name_zh=numerator_name,
+                    name_en="Success Requests",
+                    enabled=True,
+                    display_order=2,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                KpiMeasurementResource(
+                    resource_id=denominator_id,
+                    kind="me",
+                    name_zh=denominator_name,
+                    name_en="Total Requests",
+                    enabled=True,
+                    display_order=3,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                KpiMeasurementResource(
+                    resource_id="ME_SUCCESS_RATE",
+                    kind="me",
+                    name_zh="请求成功率",
+                    name_en="Requests Success Rate",
+                    enabled=True,
+                    display_order=4,
+                    importance="P1",
+                    direction="higher_better",
+                    warning_threshold=90.0,
+                    critical_threshold=80.0,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                KpiMeasurementResource(
+                    resource_id="ME_NO_DATA",
+                    kind="me",
+                    name_zh="无导出指标",
+                    name_en="No Export Metric",
+                    enabled=True,
+                    display_order=5,
+                    created_at=now,
+                    updated_at=now,
+                ),
+            ]
+        )
+        session.flush()
+        for metric_id, raw_name in (
+            (numerator_id, numerator_name),
+            (denominator_id, denominator_name),
+            ("ME_NO_DATA", "无导出指标"),
+        ):
+            session.add(
+                KpiMeasurementBinding(
+                    metric_resource_id=metric_id,
+                    measurement_unit_id="MU_DAILY",
+                    raw_source_name=raw_name,
+                    base_source_name=raw_name,
+                    status="confirmed",
+                    enabled=True,
+                    task_id="task-daily-health",
+                    source_file="Daily_Health.csv",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        session.add(
+            KpiMeasurementDerived(
+                measurement_unit_id="MU_DAILY",
+                metric_resource_id="ME_SUCCESS_RATE",
+                numerator_metric_id=numerator_id,
+                denominator_metric_id=denominator_id,
+                template="success_rate",
+                enabled=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            KpiMetricMaintenanceConfig(
+                measurement_unit_id="MU_DAILY",
+                metric_resource_id="ME_SUCCESS_RATE",
+                role="derived",
+                daily_aggregation="latest",
+                daily_change_threshold=0.2,
+                daily_change_threshold_unit="pp",
+                is_percentage=True,
+                zero_semantics="unknown",
+                consistency_tolerance=0.2,
+                object_match_mode="exact",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+
+
+def _daily_health_rate_csv(
+    tmp_path: Path,
+    *,
+    numerator_name: str = "成功请求次数",
+    denominator_name: str = "请求总次数",
+) -> tuple[str, Path]:
+    path = tmp_path / "ne333_Daily_Health_15_0_20261101000000.csv"
+    path.write_text(
+        f"container,测量开始时间,测量结束时间,周期(分钟),{numerator_name},{denominator_name}\n"
+        "pod-a,2026-10-31 23:00:00,2026-10-31 23:15:00,15,99,100\n"
+        "pod-a,2026-11-01 00:00:00,2026-11-01 00:15:00,15,1,100\n"
+        "pod-a,2026-11-01 00:15:00,2026-11-01 00:30:00,15,90,100\n",
+        encoding="utf-8",
+    )
+    return path.name, path
 
 
 def test_resource_import_rejects_invalid_header() -> None:
@@ -199,6 +346,8 @@ def test_measurement_rule_end_to_end_with_task_and_single_rerun(tmp_path: Path, 
     first = load_rule(env, task_id, "kpi.measurement_units")
     assert first["status"] == "pass"
     assert first["metadata"]["measurement_units"][0]["objects"]["pod-a"]["avg_value"] == 100.0
+    assert first["metadata"]["daily_health"]["schema_version"] == 1
+    assert first["metadata"]["daily_health"]["metrics"][0]["metric_resource_id"] == "ME_CALL"
 
     run_single_rule("kpi.measurement_units", package=package, task_id=task_id)
     second = load_rule(env, task_id, "kpi.measurement_units")
@@ -539,3 +688,202 @@ def test_other_periods_are_kept_without_preferred_periods(tmp_path: Path) -> Non
         "pod-a",
         "pod-b",
     }
+
+
+def test_inspection_emits_daily_health_with_official_success_rate_aggregation(tmp_path: Path) -> None:
+    _seed_daily_health_catalog()
+    files = [_daily_health_rate_csv(tmp_path)]
+
+    result = inspect_measurement_files("task-daily-health", files)
+
+    daily_health = result["daily_health"]
+    assert daily_health["schema_version"] == 1
+    assert daily_health["timezone"] == "Asia/Shanghai"
+    assert daily_health["data_date"] == "2026-11-01"
+    assert daily_health["previous_date"] == "2026-10-31"
+    assert daily_health["scope"] == {
+        "enabled_measurement_unit_count": 1,
+        "confirmed_binding_metric_count": 3,
+        "expected_metric_count": 4,
+        "out_of_scope_file_count": 0,
+        "unconfirmed_binding_count": 0,
+        "out_of_scope_reason_counts": {},
+    }
+    assert daily_health["current_counts"] == {
+        "fail": 1,
+        "warn": 0,
+        "unable_to_judge": 1,
+        "pending_config": 2,
+        "not_applicable": 0,
+        "normal": 0,
+    }
+    assert daily_health["trend_counts"] == {
+        "worsened": 1,
+        "improved": 0,
+        "observe": 0,
+        "no_baseline": 3,
+        "stable": 0,
+    }
+    assert len(daily_health["metrics"]) == daily_health["scope"]["expected_metric_count"]
+
+    by_metric = {item["metric_resource_id"]: item for item in daily_health["metrics"]}
+    rate = by_metric["ME_SUCCESS_RATE"]
+    assert rate["measurement_unit_name_zh"] == "日健康测量单元"
+    assert rate["metric_resource_name_zh"] == "请求成功率"
+    assert rate["role"] == "derived"
+    assert rate["importance"] == "P1"
+    assert rate["current_status"] == "fail"
+    assert rate["current_reason"] == "critical_threshold"
+    assert rate["today_value"] == 45.5
+    assert rate["today_display"] == "45.5%"
+    assert rate["yesterday_value"] == 99.0
+    assert rate["delta"] == -53.5
+    assert rate["trend_status"] == "worsened"
+    assert rate["daily_aggregation"] == "formula"
+    assert rate["aggregation_source"] == "custom"
+    assert rate["objects"][0]["numerator"] == 91.0
+    assert rate["objects"][0]["denominator"] == 200.0
+    assert rate["objects"][0]["valid_count"] == 2
+
+    no_data = by_metric["ME_NO_DATA"]
+    assert no_data["current_status"] == "unable_to_judge"
+    assert no_data["current_reason"] == "no_current_data"
+    assert no_data["trend_status"] == "no_baseline"
+
+
+def test_internal_rate_dependencies_are_evidence_not_daily_health_metrics(tmp_path: Path) -> None:
+    _seed_daily_health_catalog(internal_rate_dependencies=True)
+    files = [
+        _daily_health_rate_csv(
+            tmp_path,
+            numerator_name="成功请求次数分子",
+            denominator_name="请求总次数分母",
+        )
+    ]
+
+    result = inspect_measurement_files("task-daily-health", files)
+
+    daily_health = result["daily_health"]
+    assert daily_health["scope"]["expected_metric_count"] == 2
+    assert {metric["metric_resource_id"] for metric in daily_health["metrics"]} == {
+        "ME_SUCCESS_RATE",
+        "ME_NO_DATA",
+    }
+    rate = next(metric for metric in daily_health["metrics"] if metric["metric_resource_id"] == "ME_SUCCESS_RATE")
+    assert rate["today_value"] == 45.5
+    assert rate["yesterday_value"] == 99.0
+
+
+def test_derived_validation_uses_each_measurement_units_own_dependencies(tmp_path: Path) -> None:
+    import_resource_csv(
+        io.StringIO(
+            "资源id,中文描述,英文描述\n"
+            "MU_ALPHA,Alpha 统计,Alpha Stats\n"
+            "ME_ALPHA_NUM,Alpha 分子,Alpha Numerator\n"
+            "ME_ALPHA_DEN,Alpha 分母,Alpha Denominator\n"
+            "ME_ALPHA_RATE,Alpha 成功率,Alpha Success Rate\n"
+            "MU_BETA,Beta 统计,Beta Stats\n"
+            "ME_BETA_NUM,Beta 分子,Beta Numerator\n"
+            "ME_BETA_DEN,Beta 分母,Beta Denominator\n"
+            "ME_BETA_RATE,Beta 成功率,Beta Success Rate\n"
+        )
+    )
+    files: list[tuple[str, Path]] = []
+    for _unit_id, fragment, num_name, den_name in (
+        ("alpha", "Alpha_Stats", "Alpha 分子", "Alpha 分母"),
+        ("beta", "Beta_Stats", "Beta 分子", "Beta 分母"),
+    ):
+        path = tmp_path / f"ne333_{fragment}_15_0_20261101000000.csv"
+        path.write_text(
+            f"container,测量开始时间,测量结束时间,周期(分钟),{num_name},{den_name}\n"
+            "pod-a,2026-11-01 00:00:00,2026-11-01 00:15:00,15,9,10\n",
+            encoding="utf-8",
+        )
+        files.append((path.name, path))
+    discover_measurement_bindings("task-derived-unit-scope", files)
+    _confirm()
+    create_measurement_derived("MU_ALPHA", "ME_ALPHA_RATE", "ME_ALPHA_NUM", "ME_ALPHA_DEN")
+    create_measurement_derived("MU_BETA", "ME_BETA_RATE", "ME_BETA_NUM", "ME_BETA_DEN")
+
+    result = inspect_measurement_files("task-derived-unit-scope", files)
+
+    by_unit = {item["measurement_unit_id"]: item for item in result["measurement_units"]}
+    assert [item["metric_resource_id"] for item in by_unit["MU_ALPHA"]["derived_metrics"]] == ["ME_ALPHA_RATE"]
+    assert [item["metric_resource_id"] for item in by_unit["MU_BETA"]["derived_metrics"]] == ["ME_BETA_RATE"]
+    assert all(item["status"] == "pass" for item in by_unit["MU_ALPHA"]["derived_metrics"])
+    assert all(item["status"] == "pass" for item in by_unit["MU_BETA"]["derived_metrics"])
+    assert by_unit["MU_ALPHA"]["status"] != "fail"
+    assert by_unit["MU_BETA"]["status"] != "fail"
+
+
+def test_inspection_daily_health_uses_utc_plus_8_calendar_boundary(tmp_path: Path) -> None:
+    _seed_daily_health_catalog()
+    path = tmp_path / "ne333_Daily_Health_15_1_20261101000000.csv"
+    path.write_text(
+        "container,测量开始时间,测量结束时间,周期(分钟),成功请求次数,请求总次数\n"
+        "pod-a,2026-10-31 15:59:00+00:00,2026-10-31 16:00:00+00:00,15,9,10\n"
+        "pod-a,2026-10-31 16:00:00+00:00,2026-10-31 16:15:00+00:00,15,1,10\n",
+        encoding="utf-8",
+    )
+
+    result = inspect_measurement_files("task-daily-health", [(path.name, path)])
+
+    daily_health = result["daily_health"]
+    assert daily_health["data_date"] == "2026-11-01"
+    rate = next(item for item in daily_health["metrics"] if item["metric_resource_id"] == "ME_SUCCESS_RATE")
+    assert rate["today_value"] == 10.0
+    assert rate["yesterday_value"] == 90.0
+
+
+def test_disabled_unit_files_are_out_of_scope_not_unmatched(tmp_path: Path) -> None:
+    _seed_daily_health_catalog(disabled_unit=True)
+    files = [_daily_health_rate_csv(tmp_path)]
+
+    result = inspect_measurement_files("task-disabled", files)
+
+    assert result["files"][0]["status"] == "disabled"
+    assert result["unmatched_files"] == []
+    assert result["measurement_units"] == []
+    scope = result["daily_health"]["scope"]
+    assert scope["enabled_measurement_unit_count"] == 0
+    assert scope["confirmed_binding_metric_count"] == 0
+    assert scope["expected_metric_count"] == 0
+    assert scope["out_of_scope_file_count"] == 1
+    assert scope["out_of_scope_reason_counts"] == {"disabled_unit": 1}
+    assert result["daily_health"]["metrics"] == []
+
+
+def test_daily_health_falls_back_to_task_time_when_no_measurement_time_exists(tmp_path: Path) -> None:
+    _seed_daily_health_catalog()
+    with session_factory() as session:
+        session.add(
+            TaskRecord(
+                task_id="task-no-time",
+                name="无测量时间任务",
+                mode="online",
+                status="completed",
+                trigger="upload",
+                package_file="task.zip",
+                customer={},
+                stats={},
+                created_at=datetime(2026, 10, 30, 16, 30, tzinfo=UTC),
+                completed_at=None,
+                last_run_at=None,
+            )
+        )
+        session.commit()
+    path = tmp_path / "ne333_Daily_Health_15_2_20261101000000.csv"
+    path.write_text(
+        "container,测量开始时间,测量结束时间,周期(分钟),成功请求次数,请求总次数\npod-a,,,,1,10\n",
+        encoding="utf-8",
+    )
+
+    result = inspect_measurement_files("task-no-time", [(path.name, path)])
+
+    daily_health = result["daily_health"]
+    assert daily_health["data_date"] == "2026-10-31"
+    assert daily_health["previous_date"] == "2026-10-30"
+    assert daily_health["latest_measured_at"] is None
+    assert len(daily_health["metrics"]) == 4
+    assert all(item["current_status"] == "unable_to_judge" for item in daily_health["metrics"])
+    assert all(item["trend_status"] == "no_baseline" for item in daily_health["metrics"])

@@ -17,6 +17,19 @@
     .alarm-priority .stats { margin: 0 0 12px; }
     .alarm-priority .stat { background: #fff; }
     .alarm-note { color: #8c8c8c; font-size: 12px; margin: 6px 0; }
+    .daily-health { margin: 16px 0; padding: 16px; border: 1px solid #d9e4f5; border-radius: 8px; background: #f8fbff; }
+    .daily-health .stats { flex-wrap: wrap; margin: 8px 0; }
+    .daily-health .stat { background: #fff; }
+    .daily-health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .daily-health-grid h3, .daily-health h3 { font-size: 14px; margin: 12px 0 6px; }
+    .daily-health .tag { display: inline-block; padding: 2px 7px; border-radius: 10px; background: #eef3fa; font-size: 12px; }
+    .daily-health .status-fail { color: #cf1322; background: #fff1f0; }
+    .daily-health .status-warn { color: #ad6800; background: #fffbe6; }
+    .daily-health .status-unable_to_judge { color: #595959; background: #f0f0f0; }
+    .daily-health .status-pending_config { color: #0958d9; background: #e6f4ff; }
+    .daily-health .status-not_applicable { color: #531dab; background: #f9f0ff; }
+    .daily-health .status-normal { color: #237804; background: #f6ffed; }
+    .daily-health .scope { color: #595959; font-size: 13px; }
     code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
   </style>
 </head>
@@ -73,6 +86,99 @@
     <p class="alarm-note">{{ note }}</p>
     {% endfor %}
   </div>
+  {% endif %}
+
+  {% if kpi_daily_health %}
+  {% if kpi_daily_health.legacy %}
+  <h2>KPI 日健康兼容提示</h2>
+  <div class="daily-health">
+    <p><b>旧任务无日健康结论</b></p>
+    <p class="alarm-note">{{ kpi_daily_health.message }}</p>
+  </div>
+  {% else %}
+  <h2>KPI 当前判定与昨日趋势</h2>
+  <section class="daily-health" aria-label="KPI 当前判定与昨日趋势">
+    <p>
+      数据日期 {{ kpi_daily_health.data_date }}（{{ kpi_daily_health.timezone }}）
+      ｜ 对比日 {{ kpi_daily_health.previous_date }}
+      ｜ 最新测量时间 {{ kpi_daily_health.latest_measured_at }}
+    </p>
+    <div class="daily-health-grid">
+      <div>
+        <h3>当前判定分布</h3>
+        <div class="stats">
+          {% for item in kpi_daily_health.current_distribution %}
+          <div class="stat"><span class="tag status-{{ item.status }}">{{ item.label }}</span> <b>{{ item.count }}</b></div>
+          {% endfor %}
+          <div class="stat">当前合计 <b>{{ kpi_daily_health.current_total }}</b></div>
+        </div>
+      </div>
+      <div>
+        <h3>较昨日分布</h3>
+        <div class="stats">
+          {% for item in kpi_daily_health.trend_distribution %}
+          <div class="stat"><span class="tag">{{ item.label }}</span> <b>{{ item.count }}</b></div>
+          {% endfor %}
+          <div class="stat">趋势合计 <b>{{ kpi_daily_health.trend_total }}</b></div>
+        </div>
+      </div>
+    </div>
+
+    <h3>重点关注指标</h3>
+    {% if kpi_daily_health.focus_metrics %}
+    <table>
+      <tr>
+        <th>指标</th><th>当前</th><th>今日 / 昨日</th><th>变化</th><th>较昨日</th><th>依据</th>
+      </tr>
+      {% for metric in kpi_daily_health.focus_metrics %}
+      <tr>
+        <td>{{ metric.metric_resource_name_zh }}<br><small>{{ metric.measurement_unit_name_zh }} / {{ metric.metric_resource_id }}</small></td>
+        <td><span class="tag status-{{ metric.current_status }}">{{ metric.current_status_label }}</span></td>
+        <td>{{ metric.today_display }} / {{ metric.yesterday_display }}</td>
+        <td>{{ metric.delta_display }}</td>
+        <td>{{ metric.trend_status_label }}</td>
+        <td>{{ metric.current_reason or metric.trend_reason }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="alarm-note">没有需要重点关注的指标。</p>
+    {% endif %}
+
+    {% if kpi_daily_health.zero_denominator_metrics %}
+    <h3>零分母指标</h3>
+    <table>
+      <tr><th>指标</th><th>对象 / 周期</th><th>分子</th><th>分母</th><th>有效点</th></tr>
+      {% for metric in kpi_daily_health.zero_denominator_metrics %}
+      <tr>
+        <td>{{ metric.metric_resource_name_zh }}（{{ metric.metric_resource_id }}）</td>
+        <td>{{ metric.object_label }}</td>
+        <td>{{ metric.numerator }}</td>
+        <td>{{ metric.denominator }}</td>
+        <td>{{ metric.valid_count }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+
+    <h3>范围说明</h3>
+    <p class="scope">
+      启用测量单元 <b>{{ kpi_daily_health.scope.enabled_measurement_unit_count }}</b>
+      ｜ 已确认绑定指标 <b>{{ kpi_daily_health.scope.confirmed_binding_metric_count }}</b>
+      ｜ 本次预期指标 <b>{{ kpi_daily_health.scope.expected_metric_count }}</b>
+      ｜ 范围外文件 <b>{{ kpi_daily_health.scope.out_of_scope_file_count }}</b>
+      ｜ 未确认绑定 <b>{{ kpi_daily_health.scope.unconfirmed_binding_count }}</b>
+    </p>
+    {% if kpi_daily_health.scope.reasons %}
+    <p class="scope">
+      范围外原因：
+      {% for reason in kpi_daily_health.scope.reasons %}
+      {{ reason.label }} <b>{{ reason.count }}</b>{% if not loop.last %} ｜ {% endif %}
+      {% endfor %}
+    </p>
+    {% endif %}
+  </section>
+  {% endif %}
   {% endif %}
 
   <h2>规则结果</h2>

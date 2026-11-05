@@ -10,7 +10,7 @@ import uuid
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from functools import cache
 from pathlib import Path
 from typing import Any, Literal
@@ -27,6 +27,7 @@ from app.models.db import (
     init_db,
     session_factory,
 )
+from app.services.kpi_daily_health_snapshot import build_daily_health_snapshot
 from app.services.kpi_history import write_history_index
 
 
@@ -1352,9 +1353,12 @@ def _parse_measurement_time(value: str) -> datetime | None:
     if not text_value:
         return None
     try:
-        return datetime.fromisoformat(text_value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text_value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone(timedelta(hours=8)))
+    return parsed.astimezone(UTC)
 
 
 def _parse_period_minutes(value: str) -> int | None:
@@ -1577,8 +1581,9 @@ def _kpi_overview(units: list[dict[str, Any]]) -> dict[str, Any]:
 def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
     """执行测量单元可读性巡检并返回通用结构。"""
     init_db()
+    file_items = list(files)
     # 绑定发现复用文件归属结果，并保留自动注册、冲突、重复列和解析失败诊断。
-    discovered = discover_measurement_bindings(task_id, files)
+    discovered = discover_measurement_bindings(task_id, file_items)
     matched: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
@@ -1586,6 +1591,9 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
     for file_result in discovered["files"]:
         if file_result["status"] == "matched":
             matched.append(file_result)
+        elif file_result["status"] == "disabled":
+            # 停用测量单元的文件属于明确的范围外，不制造未匹配告警。
+            continue
         elif file_result.get("reason") == "period_not_preferred":
             skipped.append(file_result)
         else:
@@ -1964,7 +1972,9 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 f"{sum(1 for metric in finalized_metrics if metric['read_status'] == 'ok')}/{len(finalized_metrics)}"
             )
             derived_rows = (
-                session.query(KpiMeasurementDerived).filter_by(measurement_unit_id=unit_id, enabled=True).all()
+                session.query(KpiMeasurementDerived)
+                .filter_by(measurement_unit_id=result["measurement_unit_id"], enabled=True)
+                .all()
             )
             result["derived_metrics"] = []
             for derived in derived_rows:
@@ -2043,8 +2053,10 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 )
             if result["status"] == "pass":
                 result["reason"] = None
-            result.pop("metric_results", None)
-            result.pop("object_results", None)
+    daily_health = build_daily_health_snapshot(task_id, unit_results, discovered["files"])
+    for result in unit_results.values():
+        result.pop("metric_results", None)
+        result.pop("object_results", None)
     # KPI 结果组织完成后立即生成任务私有历史索引；失败不影响规则结果由调用方统一处理。
     write_history_index(task_id, history_records)
     final_units = list(unit_results.values())
@@ -2062,6 +2074,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
         "files": discovered["files"],
         "unmatched_files": unmatched,
         "skipped_files": skipped,
+        "daily_health": daily_health,
     }
 
 
@@ -2102,9 +2115,11 @@ def create_measurement_derived(
             .filter_by(measurement_unit_id=measurement_unit_id, metric_resource_id=metric_resource_id)
             .first()
         )
+        resource_names = {row.resource_id: row.name_zh for row in resources}
         if existing:
             existing.numerator_metric_id = numerator_metric_id
             existing.denominator_metric_id = denominator_metric_id
+            existing.template = template
             existing.enabled = True
             existing.updated_at = _utc_now()
             row = existing
@@ -2129,6 +2144,11 @@ def create_measurement_derived(
             "denominator_metric_id": row.denominator_metric_id,
             "template": row.template,
             "enabled": row.enabled,
+            "metric_resource_name_zh": resource_names[metric_resource_id],
+            "numerator_metric_name_zh": resource_names[numerator_metric_id],
+            "denominator_metric_name_zh": resource_names[denominator_metric_id],
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
         }
         session.commit()
         return derived

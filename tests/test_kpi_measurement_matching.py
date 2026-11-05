@@ -86,7 +86,7 @@ def test_kpi_rule_consumes_only_classified_kpi_catalog_paths(tmp_path: Path) -> 
 
     registry.load_all()
     kpi_rule = registry.get("kpi.measurement_units")
-    assert kpi_rule.rule_version == "3.3.3"
+    assert kpi_rule.rule_version == "3.4.0"
     assert kpi_rule.source_patterns == [r"^kpi/.*\.csv$", r"^traffic/.*\.csv$"]
     assert set(TaskFileCatalog.build(data_dir).match(kpi_rule.source_patterns or [])) == kpi_paths
     assert all(path.parts[0] == "kpi" for path in kpi_paths)

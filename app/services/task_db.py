@@ -577,21 +577,83 @@ def list_kpi_points(task_id: str) -> list[dict[str, Any]]:
             .order_by(TaskKpiPoint.measured_at, TaskKpiPoint.id)
             .all()
         )
-        return [
-            {
-                "task_id": row.task_id,
-                "measurement_unit_id": row.measurement_unit_id,
-                "metric_resource_id": row.metric_resource_id,
-                "object_key": row.object_key or "__all__",
-                "period_minutes": row.period_minutes,
-                "measured_at": _as_utc(row.measured_at),
-                "value": row.value,
-                "source_file": row.source_file,
-                "line_number": row.line_number,
-            }
-            for row in rows
-            if row.measured_at is not None
-        ]
+        return [_kpi_point_payload(row) for row in rows if row.measured_at is not None]
+
+
+def _kpi_point_payload(row: TaskKpiPoint) -> dict[str, Any]:
+    """把持久化 KPI 点转换为展示层稳定字段。"""
+    return {
+        "task_id": row.task_id,
+        "measurement_unit_id": row.measurement_unit_id,
+        "metric_resource_id": row.metric_resource_id,
+        "object_key": row.object_key or "__all__",
+        "period_minutes": row.period_minutes,
+        "measured_at": _as_utc(row.measured_at),
+        "value": row.value,
+        "source_file": row.source_file,
+        "line_number": row.line_number,
+    }
+
+
+def list_kpi_points_for_metric(
+    task_id: str,
+    measurement_unit_id: str,
+    metric_resource_id: str,
+    *,
+    start_at: datetime,
+    end_at: datetime,
+) -> list[dict[str, Any]]:
+    """按任务、测量单元、指标和左闭右开时间窗读取 KPI 点。"""
+    start = _as_utc(start_at)
+    end = _as_utc(end_at)
+    if start is None or end is None or start >= end:
+        return []
+    with session_factory() as session:
+        rows = (
+            session.query(TaskKpiPoint)
+            .filter(
+                TaskKpiPoint.task_id == task_id,
+                TaskKpiPoint.measurement_unit_id == measurement_unit_id,
+                TaskKpiPoint.metric_resource_id == metric_resource_id,
+                TaskKpiPoint.measured_at >= start,
+                TaskKpiPoint.measured_at < end,
+            )
+            .order_by(TaskKpiPoint.measured_at, TaskKpiPoint.id)
+            .all()
+        )
+        return [_kpi_point_payload(row) for row in rows if row.measured_at is not None]
+
+
+def list_previous_completed_task_ids(
+    device_id: str,
+    *,
+    completed_before: datetime,
+    limit: int = 20,
+) -> list[str]:
+    """返回同设备、指定时刻前最近完成的候选任务 ID。"""
+    before = _as_utc(completed_before)
+    if before is None or not device_id or limit <= 0:
+        return []
+    with session_factory() as session:
+        records = (
+            session.query(TaskRecord)
+            .filter(
+                TaskRecord.status == "completed",
+                TaskRecord.completed_at.is_not(None),
+                TaskRecord.completed_at < before,
+            )
+            .order_by(TaskRecord.completed_at.desc(), TaskRecord.task_id.desc())
+            .all()
+        )
+    matched: list[str] = []
+    for record in records:
+        customer = record.customer if isinstance(record.customer, dict) else {}
+        if str(customer.get("device_id") or "") != device_id:
+            continue
+        matched.append(record.task_id)
+        if len(matched) >= limit:
+            break
+    return matched
 
 
 @dataclass(slots=True)
