@@ -6,7 +6,7 @@
 
 **Architecture:** 新增纯业务服务 `app/services/kpi_daily_health.py`，由巡检器在已有内存时间序列上生成紧凑 `metadata.daily_health`；摘要、页面和 HTML 报告只消费该结构。维护配置写入独立 SQLite 配置/审计表，旧阈值字段保持兼容。单指标 7 日详情通过按任务、测量单元、指标过滤的查询生成，禁止首屏调用全量 `list_kpi_points()`。
 
-**Tech Stack:** Python 3.11、FastAPI、Pydantic v2、SQLAlchemy/SQLite、Jinja2、React、TypeScript、Vite、Ant Design、ECharts、pytest、Playwright。
+**Tech Stack:** Python 3.11、FastAPI、Pydantic v2、SQLAlchemy/SQLite、Jinja2、React、TypeScript、Vite、Ant Design、原生 SVG、pytest、Playwright。
 
 **Spec:** `specs/040-kpi-daily-health/spec.md`
 
@@ -32,7 +32,7 @@
 ## 技术上下文
 
 - **语言/版本：** Python 3.11+；React 18 + TypeScript 5.6。
-- **主要依赖：** FastAPI、Pydantic v2、SQLAlchemy、Jinja2、Ant Design、ECharts。
+- **主要依赖：** FastAPI、Pydantic v2、SQLAlchemy、Jinja2、Ant Design；7 日趋势使用原生 SVG，不引入 ECharts。
 - **存储：** SQLite 保存任务/规则镜像和维护配置；任务私有 JSON 与历史索引仍在 `output/<task_id>/`。
 - **测试：** pytest 后端；Node test + Vitest 前端；Playwright E2E。
 - **目标平台：** 桌面浏览器访问的离线巡检系统。

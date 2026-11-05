@@ -437,6 +437,98 @@ KPI 跨任务历史的字段、降级和查询边界见 [025 历史趋势数据�
 
 SQLite 保存分类之外的 KPI 动态配置：指标规则与受控 ratio 公式、阈值（默认值和 5/15/30/60 分钟周期）、容量规则、展示规则、公共配置、配置修订和配置审计。每次原子保存或删除会记录审计并递增 `rule_config_version`。分类线索只读展示，不改变规则状态；配置或分类变更后必须手动重跑受影响的 KPI 规则。
 
+### 日健康结论与维护配置
+
+`kpi.measurement_units` 的 `RuleResult.metadata.daily_health` 是当前判定与昨日趋势的唯一任务级结论快照
+（`schema_version=1`）。任务摘要、KPI 页面和 HTML 报告只读取该快照，不在展示层重新判定。
+
+```json
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "data_date": "2026-11-05",
+  "previous_date": "2026-11-04",
+  "latest_measured_at": "2026-11-05T23:45:00+08:00",
+  "legacy_fallback": null,
+  "current_counts": {
+    "normal": 8,
+    "warn": 3,
+    "fail": 1,
+    "pending_config": 4,
+    "unable_to_judge": 2,
+    "not_applicable": 2
+  },
+  "trend_counts": {
+    "improved": 4,
+    "stable": 8,
+    "worsened": 2,
+    "observe": 1,
+    "no_baseline": 5
+  },
+  "scope": {
+    "enabled_measurement_unit_count": 4,
+    "confirmed_binding_metric_count": 20,
+    "expected_metric_count": 20,
+    "out_of_scope_file_count": 1,
+    "unconfirmed_binding_count": 0,
+    "out_of_scope_reason_counts": {"disabled_unit": 1}
+  },
+  "metrics": []
+}
+```
+
+`metrics[]` 每项只保留指标级摘要，不携带完整时间序列：
+
+| 字段组 | 关键字段 | 含义 |
+| --- | --- | --- |
+| 标识 | `measurement_unit_id`、`metric_resource_id`、中英文名、`role`、`importance` | 指标范围与稳定身份 |
+| 当前 | `current_status`、`current_reason`、`current_reason_text`、`today_value`、`today_display` | 当前判定、原因和展示值 |
+| 昨日 | `yesterday_value`、`yesterday_display`、`delta`、`delta_display` | 同对象同周期基线、绝对变化 |
+| 趋势 | `trend_status`、`trend_reason`、`trend_reason_code` | 较昨日结论及依据 |
+| 口径 | `direction`、`current_threshold`、`change_threshold`、`daily_aggregation`、`aggregation_source`、`zero_semantics`、`consistency` | 维护人员核对的配置与证据来源 |
+| 对象/周期 | `objects[]` | 每个对象的周期、当前/昨日值、分子分母、有效点数、首末测量时间和来源文件 |
+
+当前判定 `CurrentHealthStatus`：
+
+| 值 | 语义 | 可作为正常 |
+| --- | --- | --- |
+| `normal` | 数据、方向、阈值和口径完整且通过 | 是 |
+| `warn` | 触发预警阈值 | 否 |
+| `fail` | 触发失败阈值 | 否 |
+| `pending_config` | 缺少方向、阈值、聚合、零值语义或派生公式 | 否 |
+| `unable_to_judge` | 无有效数据、读取失败、依赖缺失或对象匹配失败 | 否 |
+| `not_applicable` | 分母为零或已确认业务未触发 | 否 |
+
+趋势 `TrendHealthStatus`：
+
+| 值 | 语义 |
+| --- | --- |
+| `improved` / `worsened` | 按 `higher_better` / `lower_better` 方向判断的改善或恶化 |
+| `stable` | 变化在容差内 |
+| `observe` | 方向中性且变化超过容差 |
+| `no_baseline` | 无昨日同对象同周期有效基线，或缺少方向 |
+
+日界固定为 `Asia/Shanghai`（UTC+8）自然日，锚点是任务内最新有效测量时间；存储仍为 UTC。当前判定只能覆盖
+启用测量单元、已确认绑定和启用指标资源。停用单元文件与未确认绑定文件进入 `scope.out_of_scope_reason_counts`，
+不计入未匹配业务异常。旧任务没有该 metadata 时设置 `legacy_fallback` 或由读取端明确降级，不自动补造结论。
+
+成功率按同一任务、测量单元、指标、对象、周期和测量时间配对分子/分母，日值为分子总和除以分母总和；
+分母为零时状态为 `not_applicable`，不把分钟成功率均值当作日成功率。`reverse_success_rate` 保持受控反向公式。
+原始成功率与重算值的差异以 `consistency_tolerance`（默认 `0.2pp`）核对，超差会保留证据并阻止将口径异常
+误报为正常。
+
+维护配置持久化在 SQLite：
+
+| 表 | 关键内容 |
+| --- | --- |
+| `kpi_metric_maintenance_configs` | `(measurement_unit_id, metric_resource_id)` 唯一；角色、日聚合、变化容差及单位、百分比语义、零值语义、一致性容差、对象匹配方式、启停和 UTC 时间 |
+| `kpi_metric_maintenance_audits` | 操作者、变更字段、变更前后有效配置摘要和 UTC 时间 |
+| `kpi_measurement_derived` | 成功率分子、分母、模板和启停；`(measurement_unit_id, metric_resource_id)` 唯一 |
+
+方向与静态阈值仍保存在既有指标资源字段，避免复制第二套阈值。维护配置更新是事务操作，并写审计记录。
+单指标 7 日证据由详情接口按 `task_id + measurement_unit_id + metric_resource_id + measured_at` 日期窗口查询，
+避免已完成后首屏扫描全量 KPI 点。
+
 ## 13. 局点设备台账
 
 台账把任务证据和跨任务资产分层保存。

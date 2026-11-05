@@ -606,6 +606,27 @@ KPI CSV 允许表头前存在 `key：value` 元数据行；中英文表头互斥
 - 人工注册（`/api/v5/kpi/measurement-bindings/{binding_id}/register-metric`）与绑定批量确认（`/api/v5/kpi/measurement-bindings/batch-confirm`）只作为异常修正能力。
 - 判定维度：文件归属、数值可读性、指标静态阈值、任务内趋势；单文件或单指标解析失败不中断其他单元。
 - 结果形态：`metadata.measurement_units[]` 保存每个测量单元的指标明细与状态，任务摘要与报告只读该结构。
+- 日健康结论：同一规则额外生成紧凑的 `metadata.daily_health`。数据日期取任务内最新有效测量时间的 UTC+8 自然日，逐指标输出当前判定、较昨日趋势、对象/周期证据摘要和范围说明；页面、任务摘要与 HTML 报告只消费该结构，不各自重算业务判定。
+
+#### KPI 日健康判定
+
+日健康只覆盖“测量单元启用 + 绑定已确认 + 指标资源启用”的指标。停用测量单元文件和未确认绑定文件计入范围外原因，不进入 `unmatched_files` 业务异常。当前判定和趋势是两套独立结论：
+
+| 维度 | 取值 | 规则 |
+| --- | --- | --- |
+| 当前判定 | `normal` / `warn` / `fail` / `pending_config` / `unable_to_judge` / `not_applicable` | 无方向、阈值、聚合方式、零值语义或派生公式时为待配置；无有效数据、读取失败或依赖缺失时为无法判定；无数据不得算正常 |
+| 较昨日 | `improved` / `stable` / `worsened` / `observe` / `no_baseline` | 仅在相同测量单元、指标、对象和周期之间比较；百分比默认容差 `0.2pp`，非百分比默认相对容差 `5%`，维护配置可覆盖 |
+
+基础指标按维护配置选择 `latest` / `mean` / `sum` / `max` / `min` 日聚合。成功率等受控派生指标必须按
+`当日分子总和 / 当日分母总和 × 100` 计算，不能把分钟成功率做简单平均；分母为零时为“不适用”，并保留
+分子、分母、公式、原始成功率一致性、对象、周期、首末测量时间和来源文件作为证据。全零值只有在维护人员
+明确具名“预期为零”或“业务未触发”后才能给出业务结论，否则保持“待配置”。单指标详情再按日期窗口查询
+最近 7 日，不读取任务全量 KPI 点，前端以原生 SVG 折线展示，空心点表示当日无有效值。
+
+维护人员通过 `/api/v5/kpi/metric-maintenance-configs` 维护聚合、方向与阈值（既有指标资源字段）、日变化容差、
+百分比语义、零值语义、一致性容差和对象匹配方式；每次更新写 `kpi_metric_maintenance_audits`。单指标证据通过
+`/api/v2/tasks/{task_id}/rules/{rule_code}/daily-health/{measurement_unit_id}/{metric_resource_id}` 按需读取。
+旧任务没有 `metadata.daily_health` 时，页面和报告明确提示重跑，不补造结论，也不阻断原有指标与发现查看。
 
 在线维护入口（SQLite 权威，`docs/api/openapi.yaml` 为准）：
 

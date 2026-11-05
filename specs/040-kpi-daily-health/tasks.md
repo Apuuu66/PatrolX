@@ -8,9 +8,9 @@
 
 **目的**：在契约和测试边界就绪前完成实现现场准备。
 
-- [ ] T001 确认实现 worktree、分支、规划提交与真实数据保护边界
-- [ ] T002 检查现有 KPI 规则、结果摘要、报告、API、前端和数据库模型的实际结构与兼容点
-- [ ] T003 [P] 梳理现有 KPI 测试与 `tests/fixtures/make_real_package.py`，标记需要扩展而非重复的测试层
+- [x] T001 确认实现 worktree、分支、规划提交与真实数据保护边界
+- [x] T002 检查现有 KPI 规则、结果摘要、报告、API、前端和数据库模型的实际结构与兼容点
+- [x] T003 [P] 梳理现有 KPI 测试与 `tests/fixtures/make_real_package.py`，标记需要扩展而非重复的测试层
 
 ---
 
@@ -18,16 +18,16 @@
 
 **目的**：完成契约、共享模型与纯业务核心，任何用户故事都依赖这些能力。
 
-- [ ] T004 在 `docs/api/openapi.yaml` 中先行合并日健康详情、维护配置、审计和派生配置读取/更新契约
-- [ ] T005 [P] 在 `app/models/schemas.py` 中新增与 OpenAPI 一致的 Pydantic 请求/响应模型和枚举
-- [ ] T006 [P] 在 `tests/test_kpi_daily_health.py` 中编写纯业务失败测试：UTC+8 日界、状态优先级、阈值、全零、零分母、pp 趋势和对象周期隔离
-- [ ] T007 在 `app/services/kpi_daily_health.py` 中实现纯日聚合、对象周期分组、当前判定和昨日趋势函数
-- [ ] T008 [P] 在 `tests/test_kpi_maintenance_config.py` 中编写模型/迁移失败测试：配置默认值、审计、派生重复去重与唯一约束
-- [ ] T009 在 `app/models/db.py` 中新增维护配置、审计表，并为派生配置实现去重后唯一索引迁移
-- [ ] T010 在 `app/services/kpi_measurement_units.py` 或独立服务中实现维护配置读取、更新、审计和派生配置更新事务
-- [ ] T011 修正派生成功率日聚合：仅使用当日分子总和 ÷ 当日分母总和，分目为零返回不适用，保持受控反向模板
-- [ ] T012 [P] 在 `tests/test_kpi_daily_health_api.py` 中编写 API 契约/集成失败测试，覆盖稳定排序、分页、404、409、422 和按指标过滤查询
-- [ ] T013 实现单指标日健康详情查询，使用 `task_id + measurement_unit_id + metric_resource_id + measured_at` 窗口过滤，不调用全量 `list_kpi_points()`
+- [x] T004 在 `docs/api/openapi.yaml` 中先行合并日健康详情、维护配置、审计和派生配置读取/更新契约
+- [x] T005 [P] 在 `app/models/schemas.py` 中新增与 OpenAPI 一致的 Pydantic 请求/响应模型和枚举
+- [x] T006 [P] 在 `tests/test_kpi_daily_health.py` 中编写纯业务失败测试：UTC+8 日界、状态优先级、阈值、全零、零分母、pp 趋势和对象周期隔离
+- [x] T007 在 `app/services/kpi_daily_health.py` 中实现纯日聚合、对象周期分组、当前判定和昨日趋势函数
+- [x] T008 [P] 在 `tests/test_kpi_maintenance_config.py` 中编写模型/迁移失败测试：配置默认值、审计、派生重复去重与唯一约束
+- [x] T009 在 `app/models/db.py` 中新增维护配置、审计表，并为派生配置实现去重后唯一索引迁移
+- [x] T010 在 `app/services/kpi_measurement_units.py` 或独立服务中实现维护配置读取、更新、审计和派生配置更新事务
+- [x] T011 修正派生成功率日聚合：仅使用当日分子总和 ÷ 当日分母总和，分目为零返回不适用，保持受控反向模板
+- [x] T012 [P] 在 `tests/test_kpi_daily_health_api.py` 中编写 API 契约/集成失败测试，覆盖稳定排序、分页、404、409、422 和按指标过滤查询
+- [x] T013 实现单指标日健康详情查询，使用 `task_id + measurement_unit_id + metric_resource_id + measured_at` 窗口过滤，不调用全量 `list_kpi_points()`
 
 **检查点**：契约、共享模型、纯业务判定和存储基础可用，用户故事可以开始集成。
 
@@ -41,18 +41,18 @@
 
 ### 用户故事 1 的测试
 
-- [ ] T014 [P] [US1] 在 `tests/test_kpi_measurement_scenarios.py` 中新增首屏 metadata、状态分布、范围说明和旧任务降级测试
-- [ ] T015 [P] [US1] 在 `web/src/components/KpiDailyHealthPanel.test.tsx` 中编写统计与表格一致、重点项排序、筛选与降级测试
-- [ ] T016 [P] [US1] 在 `web/e2e/kpi-daily-health.spec.ts` 中编写从任务详情进入 KPI 首屏的完整用户路径
+- [x] T014 [P] [US1] 在 `tests/test_kpi_measurement_scenarios.py` 中新增首屏 metadata、状态分布、范围说明和旧任务降级测试
+- [x] T015 [P] [US1] 在 `web/src/components/KpiDailyHealthPanel.test.tsx` 中编写统计与表格一致、重点项排序、筛选与降级测试
+- [x] T016 [P] [US1] 在 `web/e2e/kpi-daily-health.spec.ts` 中编写从任务详情进入 KPI 首屏的完整用户路径
 
 ### 用户故事 1 的实现
 
-- [ ] T017 [US1] 在 KPI 巡检器中生成紧凑 `metadata.daily_health`（指标级结论，不携带 7 日全量点），并将 `rule_version` 升级到 `3.4.0`
-- [ ] T018 [US1] 在 `app/services/results.py` 中保留并裁剪 `metadata.daily_health`，保证摘要和规则结果均为指标级
-- [ ] T019 [US1] 在 `web/src/components/KpiDailyHealthPanel.tsx` 中实现当前判定、较昨日、数据日期、范围说明和重点关注
-- [ ] T020 [US1] 在 `web/src/components/MeasurementInspectionPanel.tsx` 和 `web/src/pages/MeasurementUnitsPage.tsx` 中接入日健康首屏，同时保留既有指标/发现入口
-- [ ] T021 [US1] 在 `web/src/api/http.ts` 中使用生成契约类型封装日健康 API，移除相关手写 KPI metadata 类型
-- [ ] T022 [US1] 在 `web/src/theme.css` 中补齐六种当前状态、五种趋势状态和重点项的克制视觉样式
+- [x] T017 [US1] 在 KPI 巡检器中生成紧凑 `metadata.daily_health`（指标级结论，不携带 7 日全量点），并将 `rule_version` 升级到 `3.4.0`
+- [x] T018 [US1] 在 `app/services/results.py` 中保留并裁剪 `metadata.daily_health`，保证摘要和规则结果均为指标级
+- [x] T019 [US1] 在 `web/src/components/KpiDailyHealthPanel.tsx` 中实现当前判定、较昨日、数据日期、范围说明和重点关注
+- [x] T020 [US1] 在 `web/src/components/MeasurementInspectionPanel.tsx` 和 `web/src/pages/MeasurementUnitsPage.tsx` 中接入日健康首屏，同时保留既有指标/发现入口
+- [x] T021 [US1] 在 `web/src/api/http.ts` 中使用生成契约类型封装日健康 API，移除相关手写 KPI metadata 类型
+- [x] T022 [US1] 在 `web/src/theme.css` 中补齐六种当前状态、五种趋势状态和重点项的克制视觉样式
 
 **检查点**：首屏可独立回答“今天是否正常、较昨日如何”，统计与表格一致。
 
@@ -66,16 +66,16 @@
 
 ### 用户故事 2 的测试
 
-- [ ] T023 [P] [US2] 在 `tests/test_kpi_daily_health.py` 中补充不同分母、原始成功率一致性、依赖缺失、四个相似指标独立和 7 日查询窗口测试
-- [ ] T024 [P] [US2] 在 `web/src/components/KpiMetricHealthDetail.test.tsx` 中编写成功率证据与 7 日趋势展示测试
-- [ ] T025 [P] [US2] 在 `web/e2e/kpi-daily-health.spec.ts` 中补充点击成功率进入对象/周期详情并核对分子分母的路径
+- [x] T023 [P] [US2] 在 `tests/test_kpi_daily_health.py` 中补充不同分母、原始成功率一致性、依赖缺失、四个相似指标独立和 7 日查询窗口测试
+- [x] T024 [P] [US2] 在 `web/src/components/KpiMetricHealthDetail.test.tsx` 中编写成功率证据与 7 日趋势展示测试
+- [x] T025 [P] [US2] 在 `web/e2e/kpi-daily-health.spec.ts` 中补充点击成功率进入对象/周期详情并核对分子分母的路径
 
 ### 用户故事 2 的实现
 
-- [ ] T026 [US2] 在 `app/services/kpi_daily_health.py` 中实现受控成功率公式、反向模板、对象/周期严格匹配和原始列加权一致性校验
-- [ ] T027 [US2] 在日健康详情 API 中返回组级今日/昨日证据、公式、阈值来源、变化阈值和最近 7 个自然日
-- [ ] T028 [US2] 在 `web/src/components/KpiMetricHealthDetail.tsx` 中使用 ECharts 和表格展示 7 日趋势、分子分母、公式及一致性证据
-- [ ] T029 [US2] 在 KPI 配置/结果中保持四个名称相近成功率各自独立 `metric_resource_id`、派生配置和结论，不按名称推测依赖
+- [x] T026 [US2] 在 `app/services/kpi_daily_health.py` 中实现受控成功率公式、反向模板、对象/周期严格匹配和原始列加权一致性校验
+- [x] T027 [US2] 在日健康详情 API 中返回组级今日/昨日证据、公式、阈值来源、变化阈值和最近 7 个自然日
+- [x] T028 [US2] 在 `web/src/components/KpiMetricHealthDetail.tsx` 中使用原生 SVG 和表格展示 7 日趋势、分子分母、公式及一致性证据
+- [x] T029 [US2] 在 KPI 配置/结果中保持四个名称相近成功率各自独立 `metric_resource_id`、派生配置和结论，不按名称推测依赖
 
 **检查点**：聚合成功率日值可复算，零分母与依赖缺失不会显示 0% 或正常。
 
@@ -89,17 +89,17 @@
 
 ### 用户故事 3 的测试
 
-- [ ] T030 [P] [US3] 在 `tests/test_kpi_daily_health.py` 中补充五种基础日聚合、未知/预期/未触发全零和昨日无基线测试
-- [ ] T031 [P] [US3] 在 `tests/test_kpi_maintenance_config.py` 中补充配置 PATCH 后重新生成结论与审计的集成测试
-- [ ] T032 [P] [US3] 在 `web/src/components/KpiMetricHealthDetail.test.tsx` 中补充基础指标聚合证据和全零待配置展示测试
+- [x] T030 [P] [US3] 在 `tests/test_kpi_daily_health.py` 中补充五种基础日聚合、未知/预期/未触发全零和昨日无基线测试
+- [x] T031 [P] [US3] 在 `tests/test_kpi_maintenance_config.py` 中补充配置 PATCH 后重新生成结论与审计的集成测试
+- [x] T032 [P] [US3] 在 `web/src/components/KpiMetricHealthDetail.test.tsx` 中补充基础指标聚合证据和全零待配置展示测试
 
 ### 用户故事 3 的实现
 
-- [ ] T033 [US3] 在 `app/services/kpi_daily_health.py` 中实现基础指标日聚合、有效时间范围、来源文件和无昨日基线判定
-- [ ] T034 [US3] 在维护配置服务中实现方向、阈值、日聚合、变化阈值、百分比、零值语义、一致性容差和启用状态的读取与更新
-- [ ] T035 [US3] 在 `app/api/router.py` 中实现配置列表/详情/更新和审计列表，写操作记录 actor 并保持事务原子性
-- [ ] T036 [US3] 在 `web/src/components/KpiMetricMaintenancePanel.tsx` 中实现指标维护配置查看、编辑、校验和审计入口
-- [ ] T037 [US3] 保证巡检器与报告使用同一配置来源，配置变化只影响后续生成/查看结论且旧字段语义不变
+- [x] T033 [US3] 在 `app/services/kpi_daily_health.py` 中实现基础指标日聚合、有效时间范围、来源文件和无昨日基线判定
+- [x] T034 [US3] 在维护配置服务中实现方向、阈值、日聚合、变化阈值、百分比、零值语义、一致性容差和启用状态的读取与更新
+- [x] T035 [US3] 在 `app/api/router.py` 中实现配置列表/详情/更新和审计列表，写操作记录 actor 并保持事务原子性
+- [x] T036 [US3] 在 `web/src/components/KpiMetricMaintenancePanel.tsx` 中实现指标维护配置查看、编辑、校验和审计入口
+- [x] T037 [US3] 保证巡检器与报告使用同一配置来源，配置变化只影响后续生成/查看结论且旧字段语义不变
 
 **检查点**：维护人员能解释每个今日值的日聚合方式和全零处理依据。
 
@@ -113,16 +113,16 @@
 
 ### 用户故事 4 的测试
 
-- [ ] T038 [P] [US4] 在 `tests/test_kpi_measurement_scenarios.py` 中补充停用单元、未确认绑定、无有效点预期指标和旧任务降级测试
-- [ ] T039 [P] [US4] 在 `web/src/components/KpiDailyHealthPanel.test.tsx` 中补充 `legacy_fallback` 缺失/存在两种展示测试
-- [ ] T040 [P] [US4] 在报告测试中断言旧任务可渲染且范围外计数不进入业务异常
+- [x] T038 [P] [US4] 在 `tests/test_kpi_measurement_scenarios.py` 中补充停用单元、未确认绑定、无有效点预期指标和旧任务降级测试
+- [x] T039 [P] [US4] 在 `web/src/components/KpiDailyHealthPanel.test.tsx` 中补充 `legacy_fallback` 缺失/存在两种展示测试
+- [x] T040 [P] [US4] 在报告测试中断言旧任务可渲染且范围外计数不进入业务异常
 
 ### 用户故事 4 的实现
 
-- [ ] T041 [US4] 修复 `inspect_measurement_files()` 的范围分类，将停用单元和未确认绑定文件归入范围外而非 `unmatched`
-- [ ] T042 [US4] 在 `metadata.daily_health.scope` 中输出启用单元数、绑定数、预期指标数、范围外文件数和排除原因计数
-- [ ] T043 [US4] 在页面和报告中展示范围说明与旧任务降级原因，不阻断既有指标和发现查看
-- [ ] T044 [US4] 增加派生配置列表/详情/更新 API，验证分子分母属于同一测量单元已确认绑定并保持旧创建接口兼容
+- [x] T041 [US4] 修复 `inspect_measurement_files()` 的范围分类，将停用单元和未确认绑定文件归入范围外而非 `unmatched`
+- [x] T042 [US4] 在 `metadata.daily_health.scope` 中输出启用单元数、绑定数、预期指标数、范围外文件数和排除原因计数
+- [x] T043 [US4] 在页面和报告中展示范围说明与旧任务降级原因，不阻断既有指标和发现查看
+- [x] T044 [US4] 增加派生配置列表/详情/更新 API，验证分子分母属于同一测量单元已确认绑定并保持旧创建接口兼容
 
 **检查点**：统计分母可解释，停用文件不制造未匹配噪音，旧任务可打开。
 
@@ -132,11 +132,11 @@
 
 **目的**：确保页面、API、CLI 和 HTML 报告消费同一结论。
 
-- [ ] T045 [US1] 在 `app/services/report.py` 和 `app/reports/templates/report.html.j2` 中展示当前判定分布、较昨日分布和重点关注指标
-- [ ] T046 [P] [US1] 在报告自动化测试中覆盖分布合计、重点项、零分母与旧任务降级
-- [ ] T047 [US1] 在 `tests/fixtures/make_real_package.py` 中新增固定时间戳、幂等的日健康场景，含至少 20 个指标及所有关键边界
-- [ ] T048 [US1] 补充 CLI 与 API 对相同合成任务输出一致日健康结论的集成断言
-- [ ] T049 [US1] 完成 Playwright E2E 对首屏、重点项、成功率详情、维护配置和旧任务降级的完整路径
+- [x] T045 [US1] 在 `app/services/report.py` 和 `app/reports/templates/report.html.j2` 中展示当前判定分布、较昨日分布和重点关注指标
+- [x] T046 [P] [US1] 在报告自动化测试中覆盖分布合计、重点项、零分母与旧任务降级
+- [x] T047 [US1] 在 `tests/fixtures/make_real_package.py` 中新增固定时间戳、幂等的日健康场景，含至少 20 个指标及所有关键边界
+- [x] T048 [US1] 补充 CLI 与 API 对相同合成任务输出一致日健康结论的集成断言
+- [x] T049 [US1] 完成 Playwright E2E 对首屏、重点项、成功率详情、维护配置和旧任务降级的完整路径
 
 ---
 
@@ -144,16 +144,16 @@
 
 **目的**：质量门禁、性能、文档和真实页面验收。
 
-- [ ] T050 [P] 更新 `docs/architecture.md`、`docs/data-model.md` 和必要的规则/API 文档，保持与实现一致
-- [ ] T051 增加首屏不调用 `list_kpi_points()` 的性能保护测试，并验证详情查询使用单指标日期窗口
-- [ ] T052 [P] 检查 TypeScript 无未使用手写契约类型，生成客户端可重复且构建通过
-- [ ] T053 运行 `.venv/bin/python build.py lint` 并修复全部问题
-- [ ] T054 运行 `.venv/bin/python build.py test` 并修复全部问题
-- [ ] T055 运行 `.venv/bin/python build.py contract` 和 `.venv/bin/python build.py gen-web-api`
-- [ ] T056 运行 `.venv/bin/python build.py web-build`、前端单测与 Playwright E2E
-- [ ] T057 使用隔离临时数据库运行 `.venv/bin/python build.py verify`，记录合成样例验证结果
-- [ ] T058 使用只读真实任务或合成任务启动 `.venv/bin/python build.py run`，在浏览器打开并实际检查首屏、成功率详情、重点项与维护配置
-- [ ] T059 检查 `git status --short` 与暂存路径，确认未包含真实包、数据、日志、报告或截图
+- [x] T050 [P] 更新 `docs/architecture.md`、`docs/data-model.md` 和必要的规则/API 文档，保持与实现一致
+- [x] T051 增加首屏不调用 `list_kpi_points()` 的性能保护测试，并验证详情查询使用单指标日期窗口
+- [x] T052 [P] 检查 TypeScript 无未使用手写契约类型，生成客户端可重复且构建通过
+- [x] T053 运行 `.venv/bin/python build.py lint` 并修复全部问题
+- [x] T054 运行 `.venv/bin/python build.py test` 并修复全部问题
+- [x] T055 运行 `.venv/bin/python build.py contract` 和 `.venv/bin/python build.py gen-web-api`
+- [x] T056 运行 `.venv/bin/python build.py web-build`、前端单测与 Playwright E2E
+- [x] T057 使用隔离临时数据库运行 `.venv/bin/python build.py verify`，记录合成样例验证结果
+- [x] T058 使用只读真实任务或合成任务启动 `.venv/bin/python build.py run`，在浏览器打开并实际检查首屏、成功率详情、重点项与维护配置
+- [x] T059 检查 `git status --short` 与暂存路径，确认未包含真实包、数据、日志、报告或截图
 
 ---
 
@@ -189,3 +189,19 @@ T050 文档更新、T052 TypeScript 契约检查、T058 真实页面验收准备
 2. 交付 US1 与 US2 构成 MVP：首屏结论、正确成功率和重点项。
 3. 增加 US3 配置/基础聚合与 US4 范围/兼容。
 4. 完成报告、fixture、E2E 和真实页面打开验收。
+
+---
+
+## 验证记录（2026-11-05）
+
+- 后端：`.venv/bin/python build.py test` 为 `1096 passed, 2 warnings`；`python build.py lint` 通过，`200 files already formatted`。
+- 契约：`python build.py contract` 返回“契约与实现一致: OK”；`python build.py gen-web-api` 成功。
+- 前端单测：`npm test` 为 `35 files passed`、`185 tests passed`；`npm run build` 的 `tsc -b && vite build` 成功。
+- 全量 Playwright：默认场景 `68 passed (43.1s)`，retention 场景 `5 passed (16.0s)`；KPI 定向 E2E 为 `3 passed`。
+- SC-009 隔离 CLI 验收使用合成包 `KPI_Daily_Health_20_Metrics_20261105.zip`，退出码 `0`：4 个启用测量单元、20 个指标、16 个基础指标、4 个聚合指标、1 个停用单元范围外文件、0 个预期/实际指标不匹配。
+- CLI 当前判定分布：`normal 11 / warn 2 / fail 1 / pending_config 3 / unable_to_judge 2 / not_applicable 1`；趋势分布：`improved 7 / stable 5 / worsened 3 / observe 2 / no_baseline 3`。
+- CLI 成功率证据：`ME_HEALTH_RATE_1` 今日 `129 / 200 = 64.5%`、昨日 `75.0%`、变化 `-10.5pp`，对象 `pod-health-a`，周期 `15 分钟`。
+- 页面实测：首屏 `20` 行，当前判定与趋势合计均为 `20`；4 个启用测量单元、1 个范围外文件；重点关注 `9` 项。状态分布为 `normal 11 / warn 2 / fail 1 / pending_config 4 / unable_to_judge 1 / not_applicable 1`，趋势分布为 `improved 7 / stable 5 / worsened 3 / observe 2 / no_baseline 3`。
+- 页面首屏定位 `<30s`，所有关注项均可定位；1440px 下无横向溢出，无控制台或页面错误。实际打开页面：`/tasks/task-kpi-daily-health/rules/kpi.measurement_units`。
+- 成功率详情实测：`129 / 200 = 64.5%`、昨日 `75.0%`、对象 `pod-health-a`、周期 `15 分钟`，7/7 天有数据且 7 日趋势可见。截图位于 `/tmp/patrolx-kpi-daily-health-page.png` 与 `/tmp/patrolx-kpi-rate-detail.png`。
+- 原始合成包验证前后 SHA-256 一致：`28a9de4cce4436a4f8b0c2d472caa8abba04ee742cab65a8c418b182df7bd07a`。
