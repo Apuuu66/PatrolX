@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from tests.build.conftest import (
+    PROJECT_ROOT,
     FakeRunner,
     build,  # noqa: E402
     make_context,
@@ -54,3 +56,9 @@ def test_missing_npm_has_node_hint(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(build, "find_node_tool", lambda name: "")
     with pytest.raises(build.BuildError, match="Node.js"):
         build.cmd_web_install(context)
+
+
+def test_production_tsconfig_excludes_test_infrastructure() -> None:
+    config = json.loads((PROJECT_ROOT / "web" / "tsconfig.json").read_text(encoding="utf-8"))
+
+    assert "src/test" in config["exclude"]
