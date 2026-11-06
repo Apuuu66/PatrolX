@@ -54,7 +54,7 @@ import {
   getOverviewDistribution,
   getOverviewMetricValue,
 } from "../utils/taskOverview";
-import { TABULAR_NUMERIC_CLASS, getRelativeTimeDisplay } from "../utils/timeDisplay";
+import { TABULAR_NUMERIC_CLASS, formatFullTime } from "../utils/timeDisplay";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { PageHeader } from "../components/PageHeader";
 import { DensitySegmented } from "../components/DensitySegmented";
@@ -572,7 +572,7 @@ export function TaskListPage() {
     {
       title: "任务",
       key: "task",
-      width: 240,
+      width: 212,
       render: (_, record) => {
         const failureReason = getTaskFailureReason(record);
         return (
@@ -612,14 +612,14 @@ export function TaskListPage() {
     {
       title: "状态摘要",
       key: "stats",
-      width: 150,
+      width: 140,
       render: (_, record) => <StatusDistribution stats={record.stats} />,
     },
     {
       // 数据准备状态就地可见，问题摘要与重试收进列内弹层（FR-011）。
       title: "数据准备",
       key: "preparation",
-      width: 160,
+      width: 150,
       render: (_, record) => {
         const preparation = record.preparation;
         if (!preparation) {
@@ -649,7 +649,7 @@ export function TaskListPage() {
     {
       title: "元数据",
       key: "metadata",
-      width: 140,
+      width: 130,
       render: (_, record) => (
         // 列表行平铺前 3 项有值元数据，其余进"更多元数据"；详情 Hero 仍为 4 项（FR-011、FR-014）。
         <MetadataList items={getTaskMetadataTags(record, dicts)} maxVisible={3} />
@@ -659,10 +659,10 @@ export function TaskListPage() {
       // 创建时间 / 最后运行 / 任务时长合并为单列，层级为 耗时 → 最后运行 → 创建（FR-006、FR-007）。
       title: "时间",
       key: "time",
-      width: 160,
+      width: 230,
       render: (_, record) => {
-        const created = getRelativeTimeDisplay(record.created_at);
-        const lastRun = getRelativeTimeDisplay(record.last_run_at);
+        const created = formatFullTime(record.created_at);
+        const lastRun = formatFullTime(record.last_run_at);
         return (
           <div className="task-table-time" data-testid="task-time">
             {/* 时长取最近一次运行；运行中不展示上一次耗时，未运行显示占位（FR-008、SC-004）。 */}
@@ -671,25 +671,22 @@ export function TaskListPage() {
               className={`task-table-duration ${TABULAR_NUMERIC_CLASS}`}
               data-testid="task-duration"
             >
+              <span className="task-table-time-label">耗时</span>{" "}
               {getTaskDurationDisplay(record)}
             </Typography.Text>
-            <Tooltip title={lastRun.title || undefined}>
-              <Typography.Text
-                className={`task-table-time-line ${TABULAR_NUMERIC_CLASS}`}
-                data-testid="task-last-run"
-              >
-                {lastRun.text}
-              </Typography.Text>
-            </Tooltip>
-            <Tooltip title={created.title || undefined}>
-              <Typography.Text
-                type="secondary"
-                className={`task-table-time-created ${TABULAR_NUMERIC_CLASS}`}
-                data-testid="task-created-at"
-              >
-                {created.text}
-              </Typography.Text>
-            </Tooltip>
+            <Typography.Text
+              className={`task-table-time-line ${TABULAR_NUMERIC_CLASS}`}
+              data-testid="task-last-run"
+            >
+              <span className="task-table-time-label">最后运行</span> {lastRun}
+            </Typography.Text>
+            <Typography.Text
+              type="secondary"
+              className={`task-table-time-created ${TABULAR_NUMERIC_CLASS}`}
+              data-testid="task-created-at"
+            >
+              <span className="task-table-time-label">创建</span> {created}
+            </Typography.Text>
           </div>
         );
       },
@@ -907,8 +904,8 @@ export function TaskListPage() {
                   />
                 ),
               }}
-              // 6 列合计 1130px：1440 视口实测可用 1142px（与 031/033 verification 同口径），不出现表格内部横向滚动（FR-002）。
-              scroll={{ x: 1130 }}
+              // 6 列合计 1142px：1440 视口实测可用 1142px（与 031/033 verification 同口径），不出现表格内部横向滚动（FR-002）。
+              scroll={{ x: 1142 }}
             />
           )}
 

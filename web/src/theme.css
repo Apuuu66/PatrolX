@@ -760,6 +760,12 @@
   white-space: nowrap;
 }
 
+.task-table-time-label {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-caption);
+  font-weight: 400;
+}
+
 .task-table-duration.ant-typography {
   font-size: 14px;
   color: var(--text-primary);

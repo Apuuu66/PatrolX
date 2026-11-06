@@ -208,13 +208,15 @@ describe("TaskListPage", () => {
       document.querySelector(".ant-segmented-item-selected")?.textContent,
     ).toBe("失败");
   });
-  it("列表展示最近一次运行时间与任务时长", async () => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  it("列表直接展示具体运行时间与任务时长", async () => {
+    const lastRunAt = new Date(2026, 9, 10, 10, 30, 5).toISOString();
+    const createdAt = new Date(2026, 9, 10, 8, 15, 42).toISOString();
     vi.mocked(api.listTasks).mockResolvedValue({
       items: [
         makeTask({
           task_id: "ran",
-          last_run_at: twoHoursAgo,
+          created_at: createdAt,
+          last_run_at: lastRunAt,
           duration_ms: 95_000,
         }),
       ],
@@ -230,8 +232,15 @@ describe("TaskListPage", () => {
     });
     const row = document.querySelector<HTMLTableRowElement>(".ant-table-tbody > tr.ant-table-row");
     expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getByTestId("task-last-run").textContent).toBe("2 小时前");
-    expect(within(row as HTMLElement).getByTestId("task-duration").textContent).toBe("1 分 35 秒");
+    expect(within(row as HTMLElement).getByTestId("task-last-run").textContent).toBe(
+      "最后运行 2026-10-10 10:30:05",
+    );
+    expect(within(row as HTMLElement).getByTestId("task-duration").textContent).toBe(
+      "耗时 1 分 35 秒",
+    );
+    expect(within(row as HTMLElement).getByTestId("task-created-at").textContent).toBe(
+      "创建 2026-10-10 08:15:42",
+    );
   });
 
   it("运行中任务只显示运行中，从不运行任务显示占位", async () => {
@@ -241,7 +250,7 @@ describe("TaskListPage", () => {
           task_id: "running",
           status: "running",
           completed_at: null,
-          last_run_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+          last_run_at: new Date(2026, 9, 10, 10, 30, 0).toISOString(),
           duration_ms: null,
         }),
         makeTask({
@@ -266,10 +275,12 @@ describe("TaskListPage", () => {
       document.querySelectorAll<HTMLTableRowElement>(".ant-table-tbody > tr.ant-table-row"),
     );
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]).getByTestId("task-duration").textContent).toBe("运行中");
-    expect(within(rows[0]).getByTestId("task-last-run").textContent).toBe("5 分钟前");
-    expect(within(rows[1]).getByTestId("task-duration").textContent).toBe("-");
-    expect(within(rows[1]).getByTestId("task-last-run").textContent).toBe("-");
+    expect(within(rows[0]).getByTestId("task-duration").textContent).toBe("耗时 运行中");
+    expect(within(rows[0]).getByTestId("task-last-run").textContent).toBe(
+      "最后运行 2026-10-10 10:30:00",
+    );
+    expect(within(rows[1]).getByTestId("task-duration").textContent).toBe("耗时 -");
+    expect(within(rows[1]).getByTestId("task-last-run").textContent).toBe("最后运行 -");
   });
 
   it("运行中任务的背景轮询不重新显示表格加载态", async () => {
@@ -343,14 +354,14 @@ describe("TaskListPage", () => {
   });
 
   it("任务列表收敛为 6 列，时间三段合并进同一单元格", async () => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const createdAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+    const lastRunAt = new Date(2026, 9, 10, 10, 30, 5).toISOString();
+    const createdAt = new Date(2026, 9, 10, 8, 15, 42).toISOString();
     vi.mocked(api.listTasks).mockResolvedValue({
       items: [
         makeTask({
           task_id: "merged-time",
           created_at: createdAt,
-          last_run_at: twoHoursAgo,
+          last_run_at: lastRunAt,
           duration_ms: 95_000,
         }),
       ],
@@ -379,17 +390,18 @@ describe("TaskListPage", () => {
     const duration = within(timeCell).getByTestId("task-duration");
     const lastRun = within(timeCell).getByTestId("task-last-run");
     const created = within(timeCell).getByTestId("task-created-at");
-    expect(duration.textContent).toBe("1 分 35 秒");
-    expect(lastRun.textContent).toBe("2 小时前");
-    expect(created.textContent).toBe("5 小时前");
+    expect(duration.textContent).toBe("耗时 1 分 35 秒");
+    expect(lastRun.textContent).toBe("最后运行 2026-10-10 10:30:05");
+    expect(created.textContent).toBe("创建 2026-10-10 08:15:42");
     expect(
       Array.from(timeCell.querySelectorAll("[data-testid]")).map((node) =>
         node.getAttribute("data-testid"),
       ),
     ).toEqual(["task-duration", "task-last-run", "task-created-at"]);
 
-    // 单元格内不出现完整时间戳，完整值只能通过 Tooltip 获取（FR-007）
-    expect(timeCell.textContent ?? "").not.toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+    // 具体时间直接可见，不再显示相对时间（FR-007）
+    expect(timeCell.textContent ?? "").toContain("2026-10-10 10:30:05");
+    expect(timeCell.textContent ?? "").not.toMatch(/(小时|分钟|天)前/);
   });
 
   it("元数据平铺 3 项，其余进入更多元数据且空值不渲染", async () => {
