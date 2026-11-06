@@ -34,7 +34,7 @@ def _run(ctx: RuleContext) -> object:
     files = [
         (relative.as_posix(), absolute) for relative, absolute in zip(ctx.files, ctx.resolved_files(), strict=True)
     ]
-    result = inspect_measurement_files(ctx.task_id, files)
+    result = inspect_measurement_files(ctx.task_id, files, output_root=ctx.data_dir.parent)
     daily_health = result["daily_health"]
     unit_results = result["measurement_units"]
     unmatched_count = len(result["unmatched_files"])

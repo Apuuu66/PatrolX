@@ -1597,7 +1597,12 @@ def _kpi_overview(units: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
-def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -> dict[str, Any]:
+def inspect_measurement_files(
+    task_id: str,
+    files: Iterable[tuple[str, Path]],
+    *,
+    output_root: Path | None = None,
+) -> dict[str, Any]:
     """执行测量单元可读性巡检并返回通用结构。"""
     init_db()
     file_items = list(files)
@@ -2094,7 +2099,7 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
         result.pop("metric_results", None)
         result.pop("object_results", None)
     # KPI 结果组织完成后立即生成任务私有历史索引；失败不影响规则结果由调用方统一处理。
-    write_history_index(task_id, history_records)
+    write_history_index(task_id, history_records, output=output_root)
     final_units = list(unit_results.values())
     kpi_overview = _kpi_overview(final_units)
     kpi_overview["auto_registered_count"] = sum(

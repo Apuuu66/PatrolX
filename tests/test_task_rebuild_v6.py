@@ -243,6 +243,29 @@ def test_full_rebuild_keeps_task_id_refreshes_scope_output_and_preserves_package
     assert hashlib.sha256(SAMPLE.read_bytes()).hexdigest() == package_before
 
 
+def test_full_rebuild_publishes_kpi_history_index_from_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output, task_id = _setup_task(tmp_path, monkeypatch)
+    history_index = output / task_id / "kpi" / "history" / "index.jsonl"
+    assert history_index.is_file()
+
+    succeeded = task_service._execute_rebuild(
+        task_id,
+        RebuildPlan(mode=RebuildMode.FULL, trigger_source="ui"),
+        package=SAMPLE,
+        customer={"product": "UMF"},
+        version=None,
+        name="历史索引重建",
+        mode=TaskMode.LOCAL,
+        trigger=TaskTrigger.CLI,
+    )
+
+    assert succeeded is True
+    assert history_index.is_file(), "全量重建后不得丢失 staging 中生成的 KPI 历史索引"
+
+
 def _inventory_rows(model) -> list[dict[str, object]]:
     columns = [column.key for column in sa_inspect(model).columns]
     with session_factory() as session:
