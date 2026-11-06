@@ -272,6 +272,11 @@ export function TaskListPage() {
   const isInspection = packageKind !== "log_supplement";
   const [file, setFile] = useState<File | null>(null);
   const [deleteErrors, setDeleteErrors] = useState<Record<string, TaskDeleteError>>({});
+  const [rebuildGuidance, setRebuildGuidance] = useState<{
+    taskId: string;
+    code: string;
+    message: string;
+  } | null>(null);
   const { density, tableSize, setDensity } = useTableDensity();
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
 
@@ -337,7 +342,9 @@ export function TaskListPage() {
   }, []);
 
   useEffect(() => {
-    if (!isInspection) {
+    if (isInspection) {
+      form.setFieldsValue({ rule_network_element_type: undefined });
+    } else {
       form.setFieldsValue({ province: undefined, operator: undefined, product: undefined });
     }
   }, [form, isInspection]);
@@ -359,6 +366,11 @@ export function TaskListPage() {
       if (values.operator) fd.append("operator", values.operator);
       const product = normalizeProductValue(values.product);
       if (product) fd.append("product", product);
+    } else {
+      const ruleNetworkElementType = normalizeProductValue(values.rule_network_element_type);
+      if (ruleNetworkElementType) {
+        fd.append("rule_network_element_type", ruleNetworkElementType);
+      }
     }
     return fd;
   };
@@ -450,7 +462,13 @@ export function TaskListPage() {
         setUploadConflict({ taskId: previewTaskId, message: err.message });
       } else if (
         err instanceof ApiError &&
-        ["package_kind_conflict", "package_product_conflict"].includes(err.code)
+        [
+          "package_kind_conflict",
+          "package_product_conflict",
+          "package_rule_network_element_type_conflict",
+          "invalid_rule_network_element_type",
+          "metadata_not_applicable",
+        ].includes(err.code)
       ) {
         message.error(`${err.code}：${err.message}`);
       } else {
@@ -465,9 +483,17 @@ export function TaskListPage() {
     async (taskId: string) => {
       try {
         await api.rebuildTask(taskId, { mode: "full", confirmed: true, trigger_source: "ui" });
+        setRebuildGuidance(null);
         message.success("已受理重建");
         await load();
       } catch (err) {
+        if (
+          err instanceof ApiError &&
+          (err.code === "package_missing" || err.code === "scene_cleaned")
+        ) {
+          setRebuildGuidance({ taskId, code: err.code, message: err.message });
+          return;
+        }
         message.error(err instanceof Error ? err.message : "重建失败");
       }
     },
@@ -477,7 +503,8 @@ export function TaskListPage() {
   const confirmRebuild = (taskId: string) => {
     modal.confirm({
       title: "重建该任务？",
-      content: "将删除并重建当前任务输出目录，重新解压并重算全部规则和 KPI 快照；该操作不可撤销。",
+      content:
+        "将删除并重建任务输出，重新解压并重算全部规则和 KPI 快照；该操作不可撤销。原始上传包只读，不会被修改。",
       okText: "重建",
       okButtonProps: { danger: true },
       cancelText: "取消",
@@ -526,14 +553,16 @@ export function TaskListPage() {
     [load, message],
   );
 
-  const showUploadModal = () => {
-    const last = sortedItems[0];
-    if (last) {
+  const showUploadModal = (taskId?: string) => {
+    const sourceTask = taskId
+      ? items.find((item) => item.task_id === taskId) ?? sortedItems[0]
+      : sortedItems[0];
+    if (sourceTask) {
       form.setFieldsValue({
-        province: last.customer_province ?? undefined,
-        operator: last.customer_operator ?? undefined,
-        product: last.customer_product ?? undefined,
-        version: last.customer_version ?? undefined,
+        province: sourceTask.customer_province ?? undefined,
+        operator: sourceTask.customer_operator ?? undefined,
+        product: sourceTask.customer_product ?? undefined,
+        version: sourceTask.customer_version ?? undefined,
       });
     }
     setOpen(true);
@@ -759,7 +788,7 @@ export function TaskListPage() {
         title="巡检任务"
         description="按异常优先查看任务结果，失败原因直接显示在任务行内。"
         actions={
-          <Button type="primary" icon={<PlusOutlined />} onClick={showUploadModal}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => showUploadModal()}>
             上传数据包
           </Button>
         }
@@ -804,6 +833,30 @@ export function TaskListPage() {
         </div>
       </Card>
 
+      {rebuildGuidance && (
+        <Alert
+          type="warning"
+          showIcon
+          data-testid={`task-rebuild-guidance-${rebuildGuidance.taskId}`}
+          message={
+            <Flex align="center" gap={8} wrap="wrap">
+              <Typography.Text strong>任务无法直接重建</Typography.Text>
+              <Typography.Text code>{rebuildGuidance.code}</Typography.Text>
+            </Flex>
+          }
+          description={
+            <Flex align="center" gap={12} wrap="wrap">
+              <Typography.Text>
+                {rebuildGuidance.message}。请重新上传同名包并覆盖重建。
+              </Typography.Text>
+              <Button size="small" onClick={() => showUploadModal(rebuildGuidance.taskId)}>
+                重新上传同名包
+              </Button>
+            </Flex>
+          }
+        />
+      )}
+
       <Card
         title={
           <Flex align="center" gap={8}>
@@ -847,7 +900,7 @@ export function TaskListPage() {
                   <EmptyState
                     description="暂无巡检任务，先上传一个数据包开始巡检。"
                     action={
-                      <Button icon={<PlusOutlined />} onClick={showUploadModal}>
+                      <Button icon={<PlusOutlined />} onClick={() => showUploadModal()}>
                         上传数据包
                       </Button>
                     }
@@ -1090,12 +1143,30 @@ export function TaskListPage() {
               </Form.Item>
             </>
           ) : (
-            <Alert
-              type="info"
-              showIcon
-              message="日志补充包不采集设备信息"
-              description="不需要省份、运营商和网元类型；版本只从巡检包的 LST ME.txt 获取。"
-            />
+            <>
+              <Alert
+                type="info"
+                showIcon
+                message="日志补充包不采集设备信息"
+                description="不需要省份、运营商和网元类型；版本只从巡检包的 LST ME.txt 获取。"
+              />
+              <Form.Item
+                label="规则适用网元类型"
+                name="rule_network_element_type"
+                preserve={false}
+                initialValue=""
+                extra="仅用于匹配业务规则，不写入网元类型字段、分类 profile 或设备台账。"
+              >
+                <Select
+                  aria-label="规则适用网元类型"
+                  allowClear
+                  options={[
+                    { value: "", label: "不指定" },
+                    ...dictOptions(dicts?.product),
+                  ]}
+                />
+              </Form.Item>
+            </>
           )}
         </Form>
       </Modal>

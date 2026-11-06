@@ -47,6 +47,7 @@ def test_kpi_daily_health_fixture_covers_metrics_units_and_boundaries(tmp_path: 
     assert manifest["data_date"] == "2026-11-05"
     assert manifest["metric_count"] == 20
     assert len(metrics) == len({item["metric_resource_id"] for item in metrics}) == 20
+    assert {item["role"] for item in metrics} == {"base"}
     assert {item["measurement_unit_id"] for item in metrics} == {
         "MU_CALL",
         "MU_HEALTH_CALL",
@@ -70,7 +71,7 @@ def test_kpi_daily_health_fixture_covers_metrics_units_and_boundaries(tmp_path: 
     assert sum(current_counts.values()) == sum(trend_counts.values()) == 20
 
     boundaries = manifest["boundaries"]
-    assert boundaries["zero_denominator_metric_ids"] == ["ME_HEALTH_RATE_2"]
+    assert boundaries["all_zero_success_rate_metric_ids"] == ["ME_HEALTH_RATE_2"]
     assert set(boundaries["no_data_metric_ids"]) == {
         "ME_HEALTH_REGISTERED_USERS",
         "ME_HEALTH_ALARM_COUNT",
@@ -80,9 +81,14 @@ def test_kpi_daily_health_fixture_covers_metrics_units_and_boundaries(tmp_path: 
     assert quality["expected_current_status"] == "pending_config"
     assert boundaries["success_rate_evidence"] == {
         "metric_resource_id": "ME_HEALTH_RATE_1",
-        "numerator": 129,
-        "denominator": 200,
-        "value": 64.5,
+        "raw_source_name": "媒体资源创建成功率",
+        "expected_value": 63.7,
+        "related_source_columns": [
+            "媒体资源创建请求次数",
+            "媒体资源创建成功响应次数",
+            "媒体资源创建失败响应次数",
+        ],
+        "computed_by_patrolx": False,
     }
     assert boundaries["disabled_measurement_unit_ids"] == ["MU_DISABLED_E2E"]
     assert boundaries["out_of_scope_files"] == ["ne333_Disabled_E2E_15_0_20261105000000.csv"]
@@ -91,22 +97,17 @@ def test_kpi_daily_health_fixture_covers_metrics_units_and_boundaries(tmp_path: 
     raw_columns = {column for item in metrics for column in item["raw_columns"]}
     present_columns = {column for rows in files.values() for column in rows[0]}
     assert raw_columns <= present_columns
-    assert {item["raw_columns"][0] for item in metrics if item["role"] == "derived"} <= present_columns
+    assert not any("分子" in column or "分母" in column for column in present_columns)
     rate_rows = files["ne333_Health_Call_15_0_20261105000000.csv"]
     latest = rate_rows[-1]
-    assert (
-        latest["媒体资源创建成功率分子"],
-        latest["媒体资源创建成功率分母"],
-        latest["媒体资源创建成功率"],
-    ) == (
-        "129",
-        "200",
-        "64.5",
-    )
+    assert latest["媒体资源创建成功率"] == "63.7"
+    assert latest["媒体资源创建请求次数"] == "200"
+    assert latest["媒体资源创建成功响应次数"] == "129"
+    assert latest["媒体资源创建失败响应次数"] == "71"
     assert len(files) == 5
 
 
-def test_kpi_daily_health_fixture_uses_catalog_names_and_unique_rate_evidence_columns(tmp_path: Path) -> None:
+def test_kpi_daily_health_fixture_uses_source_rate_columns_without_generated_formula_inputs(tmp_path: Path) -> None:
     package = build_kpi_daily_health_fixture(tmp_path)
     manifest, files = _load_fixture(package)
     metrics = manifest["metrics"]
@@ -115,17 +116,18 @@ def test_kpi_daily_health_fixture_uses_catalog_names_and_unique_rate_evidence_co
     for metric in metrics:
         assert metric["name_zh"] in metric["raw_columns"]
 
-    rate_metrics = [metric for metric in metrics if metric["role"] == "derived"]
-    evidence_columns = [
-        column for metric in rate_metrics for column in metric["raw_columns"] if column != metric["name_zh"]
-    ]
-    assert len(evidence_columns) == 8
-    assert len(set(evidence_columns)) == 8
+    rate_metrics = [metric for metric in metrics if "成功率" in metric["name_zh"]]
+    assert rate_metrics
+    assert {metric["role"] for metric in rate_metrics} == {"base"}
+    assert all(metric["raw_columns"] == [metric["name_zh"]] for metric in rate_metrics)
 
     rate_rows = files["ne333_Health_Call_15_0_20261105000000.csv"]
     assert "媒体资源创建成功率" in rate_rows[0]
-    assert "媒体资源创建成功率分子" in rate_rows[0]
-    assert "媒体资源创建成功率分母" in rate_rows[0]
+    assert "媒体资源创建成功率分子" not in rate_rows[0]
+    assert "媒体资源创建成功率分母" not in rate_rows[0]
+    assert "媒体资源创建请求次数" in rate_rows[0]
+    assert "媒体资源创建成功响应次数" in rate_rows[0]
+    assert "媒体资源创建失败响应次数" in rate_rows[0]
 
 
 def test_kpi_daily_health_fixture_is_byte_repeatable(tmp_path: Path) -> None:

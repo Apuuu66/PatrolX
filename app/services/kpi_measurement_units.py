@@ -559,6 +559,22 @@ def _success_rate_denominator_indices(header_row: list[str]) -> dict[int, int]:
     return denominator_indices
 
 
+def _success_rate_alias_canonical_names(header_row: list[str]) -> dict[str, str]:
+    """将同一唯一请求数分母对应的成功率列名归并为同一逻辑指标。"""
+    groups: dict[int, list[str]] = {}
+    for rate_index, denominator_index in _success_rate_denominator_indices(header_row).items():
+        groups.setdefault(denominator_index, []).append(header_row[rate_index])
+
+    aliases: dict[str, str] = {}
+    for raw_names in groups.values():
+        if len(raw_names) < 2:
+            continue
+        canonical_name = raw_names[0]
+        for raw_name in raw_names:
+            aliases[raw_name] = canonical_name
+    return aliases
+
+
 def _normalize_header_name(value: str) -> str:
     """统一 BOM、全半角、大小写和空白，降低导出格式差异。"""
     return re.sub(r"\s+", "", normalize("NFKC", value.strip()).casefold())
@@ -767,6 +783,7 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
                 file_result.update({"status": "parse_error", "reason": header_error or "header_not_found"})
                 continue
             metric_columns = header.row[header.period_index + 1 :]
+            alias_canonical_names = _success_rate_alias_canonical_names(header.row)
             candidates: list[dict[str, Any]] = []
             matched_metrics: list[str] = []
             auto_registered: list[str] = []
@@ -774,14 +791,16 @@ def discover_measurement_bindings(task_id: str, files: Iterable[tuple[str, Path]
             duplicate_columns = [name for name, count in Counter(metric_columns).items() if count > 1]
             for raw_name in metric_columns:
                 base_name, display_unit = _split_source_name(raw_name)
+                canonical_raw_name = alias_canonical_names.get(raw_name, raw_name)
+                canonical_base_name, canonical_display_unit = _split_source_name(canonical_raw_name)
                 metric, outcome = _ensure_metric_for_column(
                     session,
                     task_id=task_id,
                     source_file=file_result["filename"],
                     measurement_unit_id=file_result["measurement_unit_id"],
-                    raw_name=raw_name,
-                    base_name=base_name,
-                    display_unit=display_unit,
+                    raw_name=canonical_raw_name,
+                    base_name=canonical_base_name,
+                    display_unit=canonical_display_unit,
                 )
                 metric_id = metric.resource_id
                 if outcome == "auto_registered":
@@ -1721,12 +1740,21 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
             start_index = header.start_index
             column_index = {name: index for index, name in enumerate(header.row)}
             success_rate_denominators = _success_rate_denominator_indices(header.row)
-            confirmed_bindings = by_unit[unit_id]
-            for binding in confirmed_bindings:
+            bindings_by_metric: dict[str, list[KpiMeasurementBinding]] = {}
+            for binding in by_unit[unit_id]:
+                if binding.metric_resource_id:
+                    bindings_by_metric.setdefault(binding.metric_resource_id, []).append(binding)
+            for metric_resource_id, metric_bindings in bindings_by_metric.items():
                 series_points: list[dict[str, Any]] = []
                 # CSV 中实际存在的列才参与巡检；历史确认但本次未导出的列直接忽略。
-                if binding.raw_source_name not in column_index:
+                present_bindings = sorted(
+                    (binding for binding in metric_bindings if binding.raw_source_name in column_index),
+                    key=lambda binding: column_index[binding.raw_source_name],
+                )
+                if not present_bindings:
                     continue
+                primary_binding = present_bindings[0]
+                raw_source_names = [binding.raw_source_name for binding in present_bindings]
                 observations: dict[str, dict[str, Any]] = {}
                 for line_number, data_row in enumerate(rows[header.row_index + 1 :], start=header.row_index + 2):
                     if not data_row or all(not cell.strip() for cell in data_row):
@@ -1749,14 +1777,25 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                         },
                     )
                     observation["row_count"] += 1
-                    value_index = column_index[binding.raw_source_name]
-                    # 兼容真实包中表头列数和部分数据行列数不一致的情况；缺列按解析异常统计。
-                    raw_value = data_row[value_index] if len(data_row) > value_index else ""
-                    valid, number = _parse_number(raw_value)
-                    if not valid and number is None:
-                        if raw_value.strip():
-                            observation["parse_error_count"] += 1
-                        else:
+                    row_sources: list[dict[str, Any]] = []
+                    valid_values: list[tuple[dict[str, Any], float]] = []
+                    zero_denominator_count = 0
+                    for binding in present_bindings:
+                        value_index = column_index[binding.raw_source_name]
+                        # 兼容真实包中表头列数和部分数据行列数不一致的情况；缺列按解析异常统计。
+                        raw_value = data_row[value_index] if len(data_row) > value_index else ""
+                        source_row = {
+                            "source_file": file_result["source_file"],
+                            "line_number": line_number,
+                            "column_name": binding.raw_source_name,
+                            "value": raw_value,
+                        }
+                        row_sources.append(source_row)
+                        valid, number = _parse_number(raw_value)
+                        if valid and number is not None:
+                            valid_values.append((source_row, number))
+                            continue
+                        if not raw_value.strip():
                             denominator_index = success_rate_denominators.get(value_index)
                             denominator_valid, denominator = (
                                 _parse_number(data_row[denominator_index])
@@ -1764,21 +1803,18 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                                 else (False, None)
                             )
                             if denominator_valid and denominator == 0:
-                                observation["not_applicable_count"] += 1
-                                observation["source_rows"].append(
-                                    {
-                                        "source_file": file_result["source_file"],
-                                        "line_number": line_number,
-                                        "value": raw_value,
-                                    }
-                                )
-                                continue
+                                zero_denominator_count += 1
+                    if not valid_values:
+                        observation["source_rows"].extend(row_sources)
+                        if any(source["value"].strip() for source in row_sources):
+                            observation["parse_error_count"] += 1
+                        elif zero_denominator_count:
+                            observation["not_applicable_count"] += 1
+                        else:
                             observation["null_count"] += 1
-                        observation["source_rows"].append(
-                            {"source_file": file_result["source_file"], "line_number": line_number, "value": raw_value}
-                        )
                         continue
-                    assert number is not None
+                    # 多个源列是同一指标的别名，不求和也不求均值；按表头顺序取首个有效源值。
+                    _, number = valid_values[0]
                     observation["valid_count"] += 1
                     observation["zero_count"] += int(number == 0)
                     observation["min_value"] = (
@@ -1799,20 +1835,14 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                                 "time": measured_at.isoformat(),
                                 "period_minutes": period_minutes,
                                 "value": number,
-                                "source_rows": [
-                                    {
-                                        "source_file": file_result["source_file"],
-                                        "line_number": line_number,
-                                        "value": raw_value,
-                                    }
-                                ],
+                                "source_rows": row_sources,
                             }
                         )
                         history_records.append(
                             {
                                 "task_id": task_id,
                                 "measurement_unit_id": unit_id,
-                                "metric_resource_id": binding.metric_resource_id,
+                                "metric_resource_id": metric_resource_id,
                                 "object_key": object_key,
                                 "period_minutes": period_minutes,
                                 "measured_at": measured_at.isoformat(),
@@ -1821,15 +1851,16 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                                 "line_number": line_number,
                             }
                         )
-                metric_key = (binding.metric_resource_id, binding.raw_source_name)
+                metric_key = metric_resource_id
                 metric_result = result["metric_results"].get(metric_key)
                 if metric_result is None:
                     result["metric_results"][metric_key] = {
-                        "metric_resource_id": binding.metric_resource_id,
-                        "metric_resource_name_zh": resource_names.get(binding.metric_resource_id or ""),
-                        "raw_source_name": binding.raw_source_name,
-                        "base_source_name": binding.base_source_name,
-                        "display_unit": binding.display_unit,
+                        "metric_resource_id": metric_resource_id,
+                        "metric_resource_name_zh": resource_names.get(metric_resource_id),
+                        "raw_source_name": primary_binding.raw_source_name,
+                        "raw_source_names": raw_source_names,
+                        "base_source_name": primary_binding.base_source_name,
+                        "display_unit": primary_binding.display_unit,
                         "observations": observations,
                         "time_series": series_points,
                         "source_files": [file_result["source_file"]],
@@ -1842,6 +1873,8 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                             metric_result["observations"][object_key] = observation
                     metric_result.setdefault("time_series", []).extend(series_points)
                     metric_result["source_files"].append(file_result["source_file"])
+                    existing_names = metric_result.setdefault("raw_source_names", [metric_result["raw_source_name"]])
+                    existing_names.extend(name for name in raw_source_names if name not in existing_names)
                 for object_key, observation in observations.items():
                     if object_key in result["object_results"]:
                         _merge_observation(result["object_results"][object_key], observation)
@@ -1909,8 +1942,11 @@ def inspect_measurement_files(task_id: str, files: Iterable[tuple[str, Path]]) -
                 finalized_metrics.append(
                     {
                         "metric_resource_id": metric_result["metric_resource_id"],
+                        # 巡检结果里的 metrics 只承载源包直出的基础指标；派生指标单独进入 derived_metrics。
+                        "role": "base",
                         "metric_resource_name_zh": metric_result.get("metric_resource_name_zh"),
                         "raw_source_name": metric_result["raw_source_name"],
+                        "raw_source_names": metric_result.get("raw_source_names", [metric_result["raw_source_name"]]),
                         "base_source_name": metric_result["base_source_name"],
                         "display_unit": metric_result["display_unit"],
                         "read_status": (

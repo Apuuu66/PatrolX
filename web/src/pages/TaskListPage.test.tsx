@@ -586,7 +586,10 @@ describe("TaskListPage 上传元数据", () => {
     vi.mocked(api.listDicts).mockResolvedValue({
       province: [{ code: "JS", name: "江苏" }],
       operator: [{ code: "CMCC", name: "中国移动" }],
-      product: [{ code: "umf", name: "UMF" }],
+      product: [
+        { code: "umf", name: "UMF" },
+        { code: "csp", name: "CSP" },
+      ],
       version: [],
     });
     vi.mocked(api.getTask).mockRejectedValue(new ApiError("not_found", "任务不存在", 404));
@@ -623,28 +626,82 @@ describe("TaskListPage 上传元数据", () => {
     expect(form.get("product")).toBe("UMF");
     expect(form.get("province")).toBe("JS");
     expect(form.get("operator")).toBe("CMCC");
+    expect(form.get("rule_network_element_type")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "规则适用网元类型" })).toBeNull();
   }, 60000);
 
-  it("日志补充包隐藏设备元数据且不会提交", async () => {
+  it("日志补充包提供不指定、UMF、CSP 单选，未指定时省略规则适用类型", async () => {
     renderPageWithRoutes();
     await waitFor(() => expect(screen.getByText("task-other")).toBeDefined());
-    await openUploadModal();
+    const user = await openUploadModal();
     selectUploadFile(new File(["payload"], "logs.zip", { type: "application/zip" }));
-    await fillInspectionMetadata();
-
     await chooseSelectOption("包类型", "日志补充包");
 
     expect(screen.queryByRole("combobox", { name: "省份" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "运营商" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "网元类型" })).toBeNull();
+
+    const ruleType = screen.getByRole("combobox", { name: "规则适用网元类型" });
+    expect(ruleType.closest(".ant-select")?.textContent).toContain("不指定");
+    const selector = ruleType.closest(".ant-select")?.querySelector(".ant-select-selector");
+    expect(selector).not.toBeNull();
+    fireEvent.mouseDown(selector as Element);
+    await waitFor(() => {
+      const options = Array.from(
+        document.querySelectorAll<HTMLElement>(".ant-select-dropdown .ant-select-item-option"),
+      ).map((item) => (item.textContent ?? "").trim());
+      expect(options).toEqual(expect.arrayContaining(["不指定", "UMF", "CSP"]));
+    });
+    await user.keyboard("{Escape}");
+
     fireEvent.click(okButton());
 
     await waitFor(() => expect(api.createTaskV3).toHaveBeenCalledTimes(1));
     const form = vi.mocked(api.createTaskV3).mock.calls[0][0];
     expect(form.get("package_kind")).toBe("log_supplement");
+    expect(form.get("rule_network_element_type")).toBeNull();
     expect(form.get("province")).toBeNull();
     expect(form.get("operator")).toBeNull();
     expect(form.get("product")).toBeNull();
+  }, 60000);
+
+  it("日志补充包将单选的规则适用网元类型提交为 UMF", async () => {
+    renderPageWithRoutes();
+    await waitFor(() => expect(screen.getByText("task-other")).toBeDefined());
+    await openUploadModal();
+    selectUploadFile(new File(["payload"], "logs.zip", { type: "application/zip" }));
+    await chooseSelectOption("包类型", "日志补充包");
+    await chooseSelectOption("规则适用网元类型", "UMF");
+
+    fireEvent.click(okButton());
+
+    await waitFor(() => expect(api.createTaskV3).toHaveBeenCalledTimes(1));
+    const form = vi.mocked(api.createTaskV3).mock.calls[0][0];
+    expect(form.get("package_kind")).toBe("log_supplement");
+    expect(form.get("rule_network_element_type")).toBe("UMF");
+    expect(form.getAll("rule_network_element_type")).toEqual(["UMF"]);
+    expect(form.get("province")).toBeNull();
+    expect(form.get("operator")).toBeNull();
+    expect(form.get("product")).toBeNull();
+  }, 60000);
+
+  it.each([
+    ["package_rule_network_element_type_conflict", "同名日志包规则适用网元类型不一致", 409],
+    ["invalid_rule_network_element_type", "规则适用网元类型不在运行时字典中", 400],
+    ["metadata_not_applicable", "巡检包禁止携带规则适用网元类型", 400],
+  ])("上传预检错误 %s 显示稳定错误码", async (code, detail, status) => {
+    vi.mocked(api.createTaskV3).mockRejectedValue(new ApiError(code, detail, status));
+    renderPageWithRoutes();
+    await waitFor(() => expect(screen.getByText("task-other")).toBeDefined());
+    await openUploadModal();
+    selectUploadFile(new File(["payload"], "sample-pkg.zip", { type: "application/zip" }));
+    await fillInspectionMetadata();
+
+    fireEvent.click(okButton());
+
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain(code);
+    });
   }, 60000);
 
   it("网元类型冲突显示稳定错误码", async () => {
@@ -955,5 +1012,72 @@ describe("TaskListPage 行内信息与操作", () => {
     const popover = document.querySelector(".ant-popover") as HTMLElement;
     expect(popover.textContent ?? "").toContain("主包 3/5");
     expect(popover.textContent ?? "").toContain("来源文件缺失");
+  }, 60000);
+
+  it("行内重建要求危险确认，确认后按同一 task_id 发起全量重建并刷新列表", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [makeTask({ task_id: "task-001" })],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+    vi.mocked(api.rebuildTask).mockResolvedValue({ task_id: "task-001" });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("task-001")).toBeDefined());
+    const row = screen.getByText("task-001").closest("tr") as HTMLElement;
+    const user = userEvent.setup();
+    await user.click(within(row).getByRole("button", { name: "重建" }));
+
+    await waitFor(() => expect(confirmDialog()).not.toBeNull());
+    const dialogText = confirmDialog().textContent ?? "";
+    expect(dialogText).toContain("删除并重建任务输出");
+    expect(dialogText).toContain("操作不可撤销");
+    expect(dialogText).toContain("原始上传包只读");
+    expect(api.rebuildTask).not.toHaveBeenCalled();
+
+    await user.click(within(confirmDialog()).getByRole("button", { name: /^重\s*建$/ }));
+
+    await waitFor(() => {
+      expect(api.rebuildTask).toHaveBeenCalledWith("task-001", {
+        mode: "full",
+        confirmed: true,
+        trigger_source: "ui",
+      });
+    });
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledTimes(2));
+    expect(api.listTasks).toHaveBeenLastCalledWith({
+      page: 1,
+      page_size: 10,
+      status: undefined,
+    });
+  }, 60000);
+
+  it.each([
+    ["package_missing", 409, "原始数据包缺失，请重新上传同名包后重建"],
+    ["scene_cleaned", 410, "任务现场已清理"],
+  ])("重建失败 %s 时持久展示重新上传同名包的引导", async (code, status, message) => {
+    vi.mocked(api.listTasks).mockResolvedValue({
+      items: [makeTask({ task_id: "task-001" })],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+    vi.mocked(api.rebuildTask).mockRejectedValue(new ApiError(code, message, status));
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("task-001")).toBeDefined());
+    const row = screen.getByText("task-001").closest("tr") as HTMLElement;
+    const user = userEvent.setup();
+    await user.click(within(row).getByRole("button", { name: "重建" }));
+    await waitFor(() => expect(confirmDialog()).not.toBeNull());
+    await user.click(within(confirmDialog()).getByRole("button", { name: /^重\s*建$/ }));
+
+    const guidance = await screen.findByTestId("task-rebuild-guidance-task-001");
+    expect(guidance.textContent ?? "").toContain(code);
+    expect(guidance.textContent ?? "").toContain("重新上传同名包并覆盖重建");
+    await user.click(within(guidance).getByRole("button", { name: "重新上传同名包" }));
+    expect(screen.getByText("上传数据包（一个压缩包 = 一个任务）")).toBeDefined();
+    expect(api.listTasks).toHaveBeenCalledTimes(1);
   }, 60000);
 });

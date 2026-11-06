@@ -262,6 +262,7 @@ class TaskSummary(InspectionTask):
     customer_province: str | None = None
     customer_operator: str | None = None
     customer_product: str | None = None
+    rule_network_element_type: str | None = None
     customer_version: str | None = None
 
 
@@ -630,6 +631,7 @@ class KpiDailyHealthGroup(BaseModel):
 class KpiDailyHealthMetricEvidence(BaseModel):
     name_zh: str = ""
     role: MetricRole
+    is_percentage: bool
     data_date: date | None = None
     previous_date: date | None = None
     daily_aggregation: str
@@ -946,6 +948,7 @@ class TaskCreateErrorCode(StrEnum):
     MISSING_OPERATOR = "missing_operator"
     MISSING_PRODUCT = "missing_product"
     INVALID_PRODUCT = "invalid_product"
+    INVALID_RULE_NETWORK_ELEMENT_TYPE = "invalid_rule_network_element_type"
     METADATA_NOT_APPLICABLE = "metadata_not_applicable"
 
 
@@ -955,6 +958,7 @@ class TaskConflictCode(StrEnum):
     PACKAGE_CHECKSUM_CONFLICT = "package_checksum_conflict"
     PACKAGE_KIND_CONFLICT = "package_kind_conflict"
     PACKAGE_PRODUCT_CONFLICT = "package_product_conflict"
+    PACKAGE_RULE_NETWORK_ELEMENT_TYPE_CONFLICT = "package_rule_network_element_type_conflict"
 
 
 class TaskUploadMetadata(BaseModel):
@@ -964,6 +968,7 @@ class TaskUploadMetadata(BaseModel):
     province: str | None = None
     operator: str | None = None
     product: Product | None = None
+    rule_network_element_type: str | None = Field(default=None, min_length=1, max_length=32)
 
     @model_validator(mode="before")
     @classmethod
@@ -989,6 +994,14 @@ class TaskUploadMetadata(BaseModel):
             return normalized or None
         return value
 
+    @field_validator("rule_network_element_type", mode="before")
+    @classmethod
+    def normalize_rule_network_element_type(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip().upper()
+            return normalized or None
+        return value
+
     @model_validator(mode="after")
     def validate_package_kind_metadata(self) -> "TaskUploadMetadata":
         if self.package_kind == PackageKind.INSPECTION:
@@ -998,6 +1011,8 @@ class TaskUploadMetadata(BaseModel):
                 raise ValueError("missing_operator: 巡检包必须提供运营商")
             if self.product is None:
                 raise ValueError("missing_product: 巡检包必须提供网元类型")
+            if self.rule_network_element_type is not None:
+                raise ValueError("metadata_not_applicable: 巡检包禁止携带规则适用网元类型")
             return self
         if self.province is not None or self.operator is not None or self.product is not None:
             raise ValueError("metadata_not_applicable: 日志补充包禁止携带省份、运营商或网元类型")

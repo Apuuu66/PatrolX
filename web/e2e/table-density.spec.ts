@@ -1,5 +1,14 @@
 import { expect, test } from "@playwright/test";
 
+async function loginAdmin(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^登\s*录$/ }).first().click();
+  await page.getByLabel("用户名").fill("e2e-admin");
+  await page.getByLabel("密码").fill("e2e-admin-123");
+  await page.locator(".ant-modal").getByRole("button", { name: /^登\s*录$/ }).click();
+  await expect(page.getByText("e2e-admin")).toBeVisible();
+}
+
 /** 读取表格首行行高，用于验证密度切换真实改变行距（FR-016）。 */
 async function firstRowHeight(page: import("@playwright/test").Page, rootSelector: string) {
   const row = page.locator(`${rootSelector} .ant-table-tbody > tr.ant-table-row`).first();
@@ -24,7 +33,6 @@ test("密度偏好在任务列表、任务详情与规则管理之间沿用并�
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
 
-  const taskDensity = page.locator('.task-table ~ *, [data-testid="density-control"]').first();
   await expect(page.locator('[data-testid="density-control"]').first()).toBeVisible();
   await expect(page.locator('[data-testid="density-control"] button[aria-pressed="true"]')).toHaveText(
     "紧凑",
@@ -38,23 +46,21 @@ test("密度偏好在任务列表、任务详情与规则管理之间沿用并�
   await expect(page.locator(".task-table")).toHaveClass(/density-comfortable/);
 
   // 进入任务详情：重点关注表的密度控件应沿用同一偏好。
-  const failedTaskRow = page
-    .locator(".task-table .ant-table-tbody > tr.ant-table-row")
-    .filter({ hasText: "task-home-failed" })
-    .first();
-  await failedTaskRow.getByRole("button", { name: "详情" }).click();
+  // 任务详情入口已由 task-home.spec.ts 覆盖；这里直接进入固定失败任务，
+  // 避免新工作台种子任务增加后，目标任务落到第二页而让密度断言依赖分页。
+  await page.goto("/tasks/task-home-failed");
   await expect(page).toHaveURL(/\/tasks\/task-home-failed$/);
   await expect(page.locator('[data-testid="attention-panel"]')).toBeVisible();
   await expect(page.locator(".task-detail-attention-table")).toHaveClass(/density-comfortable/);
 
-  // 进入规则管理：同一偏好继续生效。
+  // 进入规则管理：v6 规则归属接口要求登录，登录后同一密度偏好继续生效。
+  await loginAdmin(page);
   await page.goto("/inspectors");
   await expect(page.locator(".inspectors-table")).toHaveClass(/density-comfortable/);
   await expect(page.locator('[data-testid="density-control"] button[aria-pressed="true"]')).toHaveText(
     "舒适",
   );
 
-  void taskDensity;
 });
 
 test("任务列表紧凑密度同视口比舒适密度多显示至少 2 行", async ({ page }) => {
@@ -94,6 +100,7 @@ test("任务列表紧凑密度同视口比舒适密度多显示至少 2 行", as
 
 test("规则管理页更新时间以相对时间呈现并支持点击表头排序", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAdmin(page);
   await page.goto("/inspectors");
 
   const rows = page.locator(".inspectors-table .ant-table-tbody > tr.ant-table-row");
@@ -122,7 +129,7 @@ test("规则管理页更新时间以相对时间呈现并支持点击表头排�
   await expect(rows.first()).toBeVisible();
 
   // 相对时间 + 完整时间 Tooltip（放在排序交互之后，避免悬浮提示遮挡表头点击）。
-  const updatedAt = rows.first().locator('[data-testid="inspector-updated-at"]');
+  const updatedAt = rows.first().locator('[data-testid="rule-assignment-updated-at"]');
   await expect(updatedAt).toHaveText(/前|刚刚/);
   await updatedAt.hover();
   await expect(page.locator(".ant-tooltip").filter({ hasText: /\d{4}-\d{2}-\d{2}/ })).toBeVisible();

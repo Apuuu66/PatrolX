@@ -34,7 +34,7 @@ def test_explain_match_reports_manifest_v5_catalog_and_pattern_matches(
 
     assert report["task_id"] == task_id
     assert report["package_file"] is None
-    assert report["rule"]["enabled"] is True
+    assert "enabled" not in report["rule"]
     assert report["source_patterns"]
     assert report["manifest"]["version"] == 5
     assert report["manifest"]["classification"] == manifest["classification"]

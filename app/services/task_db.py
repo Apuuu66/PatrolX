@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +23,18 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.db import (
     InventoryParseResult,
+    KpiTeamFocusItem,
+    KpiV6MeasurementResource,
+    KpiV6MeasurementUnit,
+    TaskKpiMetricResultV6,
     TaskKpiPoint,
+    TaskKpiPointV6,
+    TaskKpiScopeItem,
+    TaskKpiScopeSnapshot,
     TaskRecord,
     TaskRuleResult,
+    TaskRuleScopeItem,
+    TaskRuleScopeSnapshot,
     session_factory,
 )
 from app.models.schemas import (
@@ -50,6 +59,159 @@ logger = get_logger("patrolx.task_db")
 _KPI_RULE_CODE = "kpi.measurement_units"
 _KPI_INSERT_BATCH_SIZE = 1_000
 _EMPTY_STATS = {"total": 0, "pass": 0, "warn": 0, "fail": 0, "error": 0, "skip": 0, "systems": 0}
+
+
+@dataclass(frozen=True, slots=True)
+class RuleScopeItemData:
+    """任务规则快照中的单条业务规则。"""
+
+    rule_code: str
+    rule_version: str
+    category: str
+    priority: int
+    execution_order: int
+    assignment_snapshot: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class RuleScopeSnapshotData:
+    """任务启动时冻结的普通规则范围。"""
+
+    task_id: str
+    network_element_type: str | None
+    assignment_revision: int
+    registry_fingerprint: str
+    trigger: str
+    source: str
+    frozen_at: datetime
+    snapshot_state: str
+    items: tuple[RuleScopeItemData, ...]
+
+    @property
+    def rule_codes(self) -> frozenset[str]:
+        """冻结快照中的普通规则代码集合。"""
+        return frozenset(item.rule_code for item in self.items)
+
+
+@dataclass(frozen=True, slots=True)
+class KpiScopeItemData:
+    """任务 KPI 范围中的单个指标与配置快照。"""
+
+    measurement_unit_id: str
+    metric_resource_id: str
+    metric_kind: str
+    config_snapshot: dict[str, Any]
+    scope_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class KpiScopeSnapshotData:
+    """任务启动时冻结的 KPI 配置范围摘要与指标集合。"""
+
+    task_id: str
+    network_element_type: str | None
+    team_focus_revision: int
+    config_fingerprint: str
+    data_date: date | None
+    frozen_at: datetime
+    snapshot_payload: dict[str, Any]
+    items: tuple[KpiScopeItemData, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class KpiMetricResultData:
+    """待原子发布的 v6 单指标最终判定。"""
+
+    task_id: str
+    network_element_type: str
+    measurement_unit_id: str
+    metric_resource_id: str
+    source_rule_code: str | None
+    decision: str
+    special_state: str | None
+    yesterday_trend: str | None
+    needs_attention_group: str | None
+    today_value: float | None
+    yesterday_value: float | None
+    change: float | None
+    unit: str | None
+    importance: str | None
+    reason: str
+    effective_point_count: int
+    result_payload: dict[str, Any]
+    result_fingerprint: str
+    published_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class KpiPointData:
+    """待原子发布的 v6 复合作用域 KPI 点。"""
+
+    task_id: str
+    network_element_type: str
+    source_rule_code: str | None
+    measurement_unit_id: str
+    metric_resource_id: str
+    object_key: str
+    period_minutes: int | None
+    measured_at: datetime
+    value: float | None
+    source_file: str | None
+    line_number: int | None
+    point_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class KpiWorkbenchScopeItemData:
+    """结果工作台读取所需的任务指标范围与展示名称。"""
+
+    measurement_unit_id: str
+    measurement_unit_name: str
+    measurement_unit_enabled: bool
+    metric_resource_id: str
+    metric_name: str
+    metric_kind: str
+    config_snapshot: dict[str, Any]
+    scope_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class KpiWorkbenchFocusItemData:
+    """当前网元类型共享关注项及可用于不可用占位的展示信息。"""
+
+    measurement_unit_id: str
+    measurement_unit_name: str
+    measurement_unit_enabled: bool
+    metric_resource_id: str
+    metric_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class KpiWorkbenchSourceData:
+    """任务工作台一次性读取的冻结范围、当前关注与最终结果。"""
+
+    task_id: str
+    network_element_type: str | None
+    snapshot_present: bool
+    team_focus_revision: int
+    data_date: date | None
+    frozen_at: datetime | None
+    snapshot_payload: dict[str, Any]
+    scope_items: tuple[KpiWorkbenchScopeItemData, ...]
+    focus_items: tuple[KpiWorkbenchFocusItemData, ...]
+    metric_results: tuple[dict[str, Any], ...]
+    latest_measured_at: datetime | None
+    business_rule_count: int
+
+
+class KpiV6DataError(Exception):
+    """v6 任务数据不满足冻结范围或可发布条件。"""
+
+    def __init__(self, code: str, message: str, status_code: int = 409) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -210,6 +372,653 @@ def sync_task_row(task: InspectionTask) -> None:
         session.commit()
 
 
+def ensure_task_execution_row(
+    *,
+    task_id: str,
+    name: str,
+    mode: TaskMode,
+    trigger: TaskTrigger,
+    package_file: str,
+    customer: dict[str, str],
+    version: str | None,
+    package_kind: PackageKind,
+    rule_network_element_type: str | None,
+    created_at: datetime,
+) -> bool:
+    """任务开始前确保任务行存在；已预留的在线任务保持原创建信息不变。
+
+    任务范围快照通过外键依赖 ``tasks.task_id``。在线任务在排队时已有任务行，
+    本地 CLI 任务则可能到执行阶段才首次落库；本函数只补齐缺失行，不覆盖已存在行。
+    """
+    with session_factory() as session:
+        record = session.get(TaskRecord, task_id)
+        if record is not None:
+            return False
+        session.add(
+            TaskRecord(
+                task_id=task_id,
+                name=name,
+                mode=mode.value,
+                status=TaskStatus.RUNNING.value,
+                trigger=trigger.value,
+                package_file=package_file,
+                customer=dict(customer),
+                version=version,
+                stats=dict(_EMPTY_STATS),
+                package_kind=package_kind.value,
+                rule_network_element_type=rule_network_element_type,
+                created_at=created_at,
+            )
+        )
+        session.commit()
+        return True
+
+
+def _validate_network_scope(network_element_type: str | None, *, allow_none: bool) -> None:
+    if network_element_type is None:
+        if allow_none:
+            return
+        raise KpiV6DataError("kpi_network_scope_required", "KPI 结果必须指定网元类型", 400)
+    if not network_element_type or network_element_type in {"*", "COMMON", "PUBLIC"}:
+        raise KpiV6DataError("invalid_network_element_type", "网元类型不能使用公共作用域", 400)
+
+
+def save_task_scope_snapshots(
+    *,
+    rule_snapshot: RuleScopeSnapshotData,
+    kpi_snapshot: KpiScopeSnapshotData,
+) -> None:
+    """在同一事务中替换任务规则与 KPI 范围快照。"""
+    if rule_snapshot.task_id != kpi_snapshot.task_id:
+        raise KpiV6DataError("task_scope_identity_mismatch", "规则与 KPI 快照任务不一致", 400)
+    _validate_network_scope(rule_snapshot.network_element_type, allow_none=True)
+    _validate_network_scope(kpi_snapshot.network_element_type, allow_none=not kpi_snapshot.items)
+
+    with session_factory() as session:
+        session.query(TaskRuleScopeItem).filter(TaskRuleScopeItem.task_id == rule_snapshot.task_id).delete()
+        session.query(TaskRuleScopeSnapshot).filter(TaskRuleScopeSnapshot.task_id == rule_snapshot.task_id).delete()
+        session.query(TaskKpiScopeItem).filter(TaskKpiScopeItem.task_id == kpi_snapshot.task_id).delete()
+        session.query(TaskKpiScopeSnapshot).filter(TaskKpiScopeSnapshot.task_id == kpi_snapshot.task_id).delete()
+
+        session.add(
+            TaskRuleScopeSnapshot(
+                task_id=rule_snapshot.task_id,
+                network_element_type=rule_snapshot.network_element_type,
+                assignment_revision=rule_snapshot.assignment_revision,
+                registry_fingerprint=rule_snapshot.registry_fingerprint,
+                trigger=rule_snapshot.trigger,
+                source=rule_snapshot.source,
+                frozen_at=rule_snapshot.frozen_at,
+                snapshot_state=rule_snapshot.snapshot_state,
+            )
+        )
+        for item in rule_snapshot.items:
+            session.add(
+                TaskRuleScopeItem(
+                    task_id=rule_snapshot.task_id,
+                    rule_code=item.rule_code,
+                    rule_version=item.rule_version,
+                    category=item.category,
+                    priority=item.priority,
+                    execution_order=item.execution_order,
+                    assignment_snapshot=item.assignment_snapshot,
+                )
+            )
+
+        session.add(
+            TaskKpiScopeSnapshot(
+                task_id=kpi_snapshot.task_id,
+                network_element_type=kpi_snapshot.network_element_type,
+                team_focus_revision=kpi_snapshot.team_focus_revision,
+                config_fingerprint=kpi_snapshot.config_fingerprint,
+                data_date=kpi_snapshot.data_date,
+                frozen_at=kpi_snapshot.frozen_at,
+                snapshot_payload=kpi_snapshot.snapshot_payload,
+            )
+        )
+        for item in kpi_snapshot.items:
+            if kpi_snapshot.network_element_type is None:
+                raise KpiV6DataError("task_kpi_scope_network_missing", "KPI 快照有指标但缺少网元类型", 400)
+            session.add(
+                TaskKpiScopeItem(
+                    task_id=kpi_snapshot.task_id,
+                    network_element_type=kpi_snapshot.network_element_type,
+                    measurement_unit_id=item.measurement_unit_id,
+                    metric_resource_id=item.metric_resource_id,
+                    metric_kind=item.metric_kind,
+                    config_snapshot=item.config_snapshot,
+                    scope_status=item.scope_status,
+                )
+            )
+        session.flush()
+        session.commit()
+
+
+def get_rule_scope_snapshot(
+    task_id: str,
+    *,
+    network_element_type: str | None,
+) -> RuleScopeSnapshotData | None:
+    """读取任务规则快照；任务或网元作用域不匹配时返回 None。"""
+    _validate_network_scope(network_element_type, allow_none=True)
+    with session_factory() as session:
+        query = session.query(TaskRuleScopeSnapshot).filter(TaskRuleScopeSnapshot.task_id == task_id)
+        if network_element_type is None:
+            query = query.filter(TaskRuleScopeSnapshot.network_element_type.is_(None))
+        else:
+            query = query.filter(TaskRuleScopeSnapshot.network_element_type == network_element_type)
+        row = query.one_or_none()
+        if row is None:
+            return None
+        items = (
+            session.query(TaskRuleScopeItem)
+            .filter(TaskRuleScopeItem.task_id == task_id)
+            .order_by(TaskRuleScopeItem.execution_order, TaskRuleScopeItem.rule_code)
+            .all()
+        )
+        frozen_at = _as_utc(row.frozen_at)
+        assert frozen_at is not None
+        return RuleScopeSnapshotData(
+            task_id=row.task_id,
+            network_element_type=row.network_element_type,
+            assignment_revision=row.assignment_revision,
+            registry_fingerprint=row.registry_fingerprint,
+            trigger=row.trigger,
+            source=row.source,
+            frozen_at=frozen_at,
+            snapshot_state=row.snapshot_state,
+            items=tuple(
+                RuleScopeItemData(
+                    rule_code=item.rule_code,
+                    rule_version=item.rule_version,
+                    category=item.category,
+                    priority=item.priority,
+                    execution_order=item.execution_order,
+                    assignment_snapshot=dict(item.assignment_snapshot or {}),
+                )
+                for item in items
+            ),
+        )
+
+
+def get_kpi_scope_snapshot(
+    task_id: str,
+    *,
+    network_element_type: str | None,
+) -> KpiScopeSnapshotData | None:
+    """读取任务 KPI 快照；任务或网元作用域不匹配时返回 None。"""
+    _validate_network_scope(network_element_type, allow_none=True)
+    with session_factory() as session:
+        query = session.query(TaskKpiScopeSnapshot).filter(TaskKpiScopeSnapshot.task_id == task_id)
+        if network_element_type is None:
+            query = query.filter(TaskKpiScopeSnapshot.network_element_type.is_(None))
+        else:
+            query = query.filter(TaskKpiScopeSnapshot.network_element_type == network_element_type)
+        row = query.one_or_none()
+        if row is None:
+            return None
+        items = (
+            (
+                session.query(TaskKpiScopeItem)
+                .filter(
+                    TaskKpiScopeItem.task_id == task_id,
+                    TaskKpiScopeItem.network_element_type == network_element_type,
+                )
+                .order_by(TaskKpiScopeItem.measurement_unit_id, TaskKpiScopeItem.metric_resource_id)
+                .all()
+            )
+            if network_element_type is not None
+            else []
+        )
+        frozen_at = _as_utc(row.frozen_at)
+        assert frozen_at is not None
+        return KpiScopeSnapshotData(
+            task_id=row.task_id,
+            network_element_type=row.network_element_type,
+            team_focus_revision=row.team_focus_revision,
+            config_fingerprint=row.config_fingerprint,
+            data_date=row.data_date,
+            frozen_at=frozen_at,
+            snapshot_payload=dict(row.snapshot_payload or {}),
+            items=tuple(
+                KpiScopeItemData(
+                    measurement_unit_id=item.measurement_unit_id,
+                    metric_resource_id=item.metric_resource_id,
+                    metric_kind=item.metric_kind,
+                    config_snapshot=dict(item.config_snapshot or {}),
+                    scope_status=item.scope_status,
+                )
+                for item in items
+            ),
+        )
+
+
+def _validate_result_scope(
+    result: KpiMetricResultData,
+    *,
+    task_id: str,
+    network_element_type: str,
+    scope_ids: set[tuple[str, str]],
+) -> None:
+    identity = (result.measurement_unit_id, result.metric_resource_id)
+    if result.task_id != task_id or result.network_element_type != network_element_type or identity not in scope_ids:
+        raise KpiV6DataError(
+            "kpi_result_scope_mismatch",
+            "KPI 结果不属于任务冻结范围",
+            409,
+        )
+
+
+def _validate_point_scope(
+    point: KpiPointData,
+    *,
+    task_id: str,
+    network_element_type: str,
+    scope_ids: set[tuple[str, str]],
+) -> None:
+    identity = (point.measurement_unit_id, point.metric_resource_id)
+    if point.task_id != task_id or point.network_element_type != network_element_type or identity not in scope_ids:
+        raise KpiV6DataError(
+            "kpi_point_scope_mismatch",
+            "KPI 点不属于任务冻结范围",
+            409,
+        )
+
+
+def publish_kpi_v6_snapshot(
+    task: InspectionTask,
+    *,
+    metric_results: Iterable[KpiMetricResultData],
+    metric_points: Iterable[KpiPointData],
+    replace_source_rule_codes: set[str] | None = None,
+) -> None:
+    """单事务发布 v6 KPI 结果、点与任务摘要。
+
+    ``replace_source_rule_codes`` 为 None 时全量替换；否则只替换给定来源规则的
+    结果与点，用于单规则或增量重跑。
+    """
+    results = list(metric_results)
+    points = list(metric_points)
+    with session_factory() as session:
+        snapshot = session.get(TaskKpiScopeSnapshot, task.task_id)
+        if snapshot is None:
+            raise KpiV6DataError(
+                "task_result_requires_rebuild",
+                "旧任务没有 v6 KPI 快照，请按当前配置重建",
+                409,
+            )
+        network_element_type = snapshot.network_element_type
+        if network_element_type is None:
+            _validate_network_scope(network_element_type, allow_none=False)
+        assert network_element_type is not None
+        scope_rows = (
+            session.query(TaskKpiScopeItem)
+            .filter(
+                TaskKpiScopeItem.task_id == task.task_id,
+                TaskKpiScopeItem.network_element_type == network_element_type,
+            )
+            .all()
+        )
+        scope_ids = {(row.measurement_unit_id, row.metric_resource_id) for row in scope_rows}
+        for result in results:
+            _validate_result_scope(
+                result,
+                task_id=task.task_id,
+                network_element_type=network_element_type,
+                scope_ids=scope_ids,
+            )
+        for point in points:
+            _validate_point_scope(
+                point,
+                task_id=task.task_id,
+                network_element_type=network_element_type,
+                scope_ids=scope_ids,
+            )
+        if replace_source_rule_codes is not None:
+            allowed_codes = set(replace_source_rule_codes)
+            if any(result.source_rule_code not in allowed_codes for result in results) or any(
+                point.source_rule_code not in allowed_codes for point in points
+            ):
+                raise KpiV6DataError(
+                    "kpi_incremental_publish_scope_mismatch",
+                    "增量发布的行必须属于待替换来源规则",
+                    409,
+                )
+
+        _upsert_task_row(session, task)
+        result_delete = session.query(TaskKpiMetricResultV6).filter(TaskKpiMetricResultV6.task_id == task.task_id)
+        point_delete = session.query(TaskKpiPointV6).filter(TaskKpiPointV6.task_id == task.task_id)
+        if replace_source_rule_codes is None:
+            result_delete.delete()
+            point_delete.delete()
+        elif replace_source_rule_codes:
+            codes = sorted(replace_source_rule_codes)
+            result_delete.filter(TaskKpiMetricResultV6.source_rule_code.in_(codes)).delete(synchronize_session=False)
+            point_delete.filter(TaskKpiPointV6.source_rule_code.in_(codes)).delete(synchronize_session=False)
+
+        for result in results:
+            session.add(
+                TaskKpiMetricResultV6(
+                    task_id=result.task_id,
+                    network_element_type=result.network_element_type,
+                    measurement_unit_id=result.measurement_unit_id,
+                    metric_resource_id=result.metric_resource_id,
+                    source_rule_code=result.source_rule_code,
+                    decision=result.decision,
+                    special_state=result.special_state,
+                    yesterday_trend=result.yesterday_trend,
+                    needs_attention_group=result.needs_attention_group,
+                    today_value=result.today_value,
+                    yesterday_value=result.yesterday_value,
+                    change=result.change,
+                    unit=result.unit,
+                    importance=result.importance,
+                    reason=result.reason,
+                    effective_point_count=result.effective_point_count,
+                    result_payload=result.result_payload,
+                    result_fingerprint=result.result_fingerprint,
+                    published_at=result.published_at,
+                )
+            )
+        for point in points:
+            session.add(
+                TaskKpiPointV6(
+                    task_id=point.task_id,
+                    network_element_type=point.network_element_type,
+                    source_rule_code=point.source_rule_code,
+                    measurement_unit_id=point.measurement_unit_id,
+                    metric_resource_id=point.metric_resource_id,
+                    object_key=point.object_key,
+                    period_minutes=point.period_minutes,
+                    measured_at=point.measured_at,
+                    value=point.value,
+                    source_file=point.source_file,
+                    line_number=point.line_number,
+                    point_fingerprint=point.point_fingerprint,
+                )
+            )
+        session.flush()
+        session.commit()
+
+
+def _metric_result_payload(row: TaskKpiMetricResultV6) -> dict[str, Any]:
+    return {
+        "task_id": row.task_id,
+        "network_element_type": row.network_element_type,
+        "measurement_unit_id": row.measurement_unit_id,
+        "metric_resource_id": row.metric_resource_id,
+        "source_rule_code": row.source_rule_code,
+        "decision": row.decision,
+        "special_state": row.special_state,
+        "yesterday_trend": row.yesterday_trend,
+        "needs_attention_group": row.needs_attention_group,
+        "today_value": row.today_value,
+        "yesterday_value": row.yesterday_value,
+        "change": row.change,
+        "unit": row.unit,
+        "importance": row.importance,
+        "reason": row.reason,
+        "effective_point_count": row.effective_point_count,
+        "result_payload": dict(row.result_payload or {}),
+        "result_fingerprint": row.result_fingerprint,
+        "published_at": _as_utc(row.published_at),
+    }
+
+
+def list_kpi_metric_results_v6(
+    task_id: str,
+    *,
+    network_element_type: str,
+) -> list[dict[str, Any]]:
+    """读取任务内指定网元类型的全部 v6 指标最终判定。"""
+    _validate_network_scope(network_element_type, allow_none=False)
+    with session_factory() as session:
+        rows = (
+            session.query(TaskKpiMetricResultV6)
+            .filter(
+                TaskKpiMetricResultV6.task_id == task_id,
+                TaskKpiMetricResultV6.network_element_type == network_element_type,
+            )
+            .order_by(TaskKpiMetricResultV6.id)
+            .all()
+        )
+        return [_metric_result_payload(row) for row in rows]
+
+
+def get_kpi_metric_result_v6(
+    task_id: str,
+    *,
+    network_element_type: str,
+    measurement_unit_id: str,
+    metric_resource_id: str,
+) -> dict[str, Any] | None:
+    """按完整复合身份读取单条 v6 指标最终判定。"""
+    _validate_network_scope(network_element_type, allow_none=False)
+    with session_factory() as session:
+        row = (
+            session.query(TaskKpiMetricResultV6)
+            .filter(
+                TaskKpiMetricResultV6.task_id == task_id,
+                TaskKpiMetricResultV6.network_element_type == network_element_type,
+                TaskKpiMetricResultV6.measurement_unit_id == measurement_unit_id,
+                TaskKpiMetricResultV6.metric_resource_id == metric_resource_id,
+            )
+            .one_or_none()
+        )
+        return _metric_result_payload(row) if row is not None else None
+
+
+def _kpi_point_v6_payload(row: TaskKpiPointV6) -> dict[str, Any]:
+    return {
+        "task_id": row.task_id,
+        "network_element_type": row.network_element_type,
+        "source_rule_code": row.source_rule_code,
+        "measurement_unit_id": row.measurement_unit_id,
+        "metric_resource_id": row.metric_resource_id,
+        "object_key": row.object_key or "__all__",
+        "period_minutes": row.period_minutes,
+        "measured_at": _as_utc(row.measured_at),
+        "value": row.value,
+        "source_file": row.source_file,
+        "line_number": row.line_number,
+        "point_fingerprint": row.point_fingerprint,
+    }
+
+
+def list_kpi_points_v6(
+    task_id: str,
+    *,
+    network_element_type: str,
+    measurement_unit_id: str | None = None,
+    metric_resource_id: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """读取指定任务与网元类型的 v6 KPI 点，可按复合身份和时间窗过滤。"""
+    _validate_network_scope(network_element_type, allow_none=False)
+    start = _as_utc(start_at)
+    end = _as_utc(end_at)
+    if start_at is not None and start is None:
+        return []
+    if end_at is not None and end is None:
+        return []
+    if start is not None and end is not None and start >= end:
+        return []
+    with session_factory() as session:
+        query = session.query(TaskKpiPointV6).filter(
+            TaskKpiPointV6.task_id == task_id,
+            TaskKpiPointV6.network_element_type == network_element_type,
+        )
+        if measurement_unit_id is not None:
+            query = query.filter(TaskKpiPointV6.measurement_unit_id == measurement_unit_id)
+        if metric_resource_id is not None:
+            query = query.filter(TaskKpiPointV6.metric_resource_id == metric_resource_id)
+        if start is not None:
+            query = query.filter(TaskKpiPointV6.measured_at >= start)
+        if end is not None:
+            query = query.filter(TaskKpiPointV6.measured_at < end)
+        rows = query.order_by(TaskKpiPointV6.measured_at, TaskKpiPointV6.id).all()
+        return [_kpi_point_v6_payload(row) for row in rows]
+
+
+def _kpi_scope_metric_name(
+    row: TaskKpiScopeItem,
+    resource_map: dict[str, KpiV6MeasurementResource],
+) -> str:
+    """优先使用任务冻结名称，缺失时回退当前资源目录和稳定 ID。"""
+    config_name = (row.config_snapshot or {}).get("name_zh")
+    if isinstance(config_name, str) and config_name.strip():
+        return config_name
+    resource = resource_map.get(row.metric_resource_id)
+    if resource is not None and resource.name_zh.strip():
+        return resource.name_zh
+    return row.metric_resource_id
+
+
+def get_kpi_workbench_source_data(task_id: str) -> KpiWorkbenchSourceData | None:
+    """读取工作台所需的冻结范围、共享关注、来源名称与最终判定。
+
+    任务不存在返回 ``None``；任务存在但缺少 KPI 快照时以
+    ``snapshot_present=False`` 返回，由服务层统一映射为重建提示。
+    """
+    with session_factory() as session:
+        task = session.get(TaskRecord, task_id)
+        if task is None:
+            return None
+
+        snapshot = session.get(TaskKpiScopeSnapshot, task_id)
+        customer = task.customer if isinstance(task.customer, dict) else {}
+        customer_type = customer.get("product")
+        # KPI 作用域只由巡检包 product 决定；日志补充包的规则适用类型不得兜底为 KPI 类型。
+        network_element_type = (
+            snapshot.network_element_type
+            if snapshot is not None
+            else (str(customer_type).strip().upper() if customer_type else None)
+        )
+
+        business_rule_count = (
+            session.query(func.count(TaskRuleScopeItem.id)).filter(TaskRuleScopeItem.task_id == task_id).scalar() or 0
+        )
+        if snapshot is None:
+            return KpiWorkbenchSourceData(
+                task_id=task_id,
+                network_element_type=network_element_type,
+                snapshot_present=False,
+                team_focus_revision=0,
+                data_date=None,
+                frozen_at=None,
+                snapshot_payload={},
+                scope_items=(),
+                focus_items=(),
+                metric_results=(),
+                latest_measured_at=None,
+                business_rule_count=int(business_rule_count),
+            )
+
+        scope_query = session.query(TaskKpiScopeItem).filter(TaskKpiScopeItem.task_id == task_id)
+        result_query = session.query(TaskKpiMetricResultV6).filter(TaskKpiMetricResultV6.task_id == task_id)
+        point_query = session.query(func.max(TaskKpiPointV6.measured_at)).filter(TaskKpiPointV6.task_id == task_id)
+        unit_map: dict[str, KpiV6MeasurementUnit] = {}
+        resource_map: dict[str, KpiV6MeasurementResource] = {}
+        focus_rows: list[KpiTeamFocusItem] = []
+        if network_element_type is not None:
+            scope_query = scope_query.filter(TaskKpiScopeItem.network_element_type == network_element_type)
+            result_query = result_query.filter(TaskKpiMetricResultV6.network_element_type == network_element_type)
+            point_query = point_query.filter(TaskKpiPointV6.network_element_type == network_element_type)
+            unit_map = {
+                row.measurement_unit_id: row
+                for row in session.query(KpiV6MeasurementUnit)
+                .filter(KpiV6MeasurementUnit.network_element_type == network_element_type)
+                .all()
+            }
+            resource_map = {
+                row.resource_id: row
+                for row in session.query(KpiV6MeasurementResource)
+                .filter(KpiV6MeasurementResource.network_element_type == network_element_type)
+                .all()
+            }
+            focus_rows = (
+                session.query(KpiTeamFocusItem)
+                .filter(KpiTeamFocusItem.network_element_type == network_element_type)
+                .order_by(
+                    KpiTeamFocusItem.measurement_unit_id,
+                    KpiTeamFocusItem.metric_resource_id,
+                )
+                .all()
+            )
+
+        scope_rows = scope_query.order_by(
+            TaskKpiScopeItem.measurement_unit_id,
+            TaskKpiScopeItem.metric_resource_id,
+        ).all()
+        snapshot_payload = dict(snapshot.snapshot_payload or {})
+        frozen_enabled_unit_ids_raw = snapshot_payload.get("enabled_measurement_unit_ids")
+        frozen_enabled_unit_ids = (
+            {str(value) for value in frozen_enabled_unit_ids_raw if str(value).strip()}
+            if isinstance(frozen_enabled_unit_ids_raw, list)
+            else None
+        )
+        scope_items = tuple(
+            KpiWorkbenchScopeItemData(
+                measurement_unit_id=row.measurement_unit_id,
+                measurement_unit_name=(
+                    unit_map[row.measurement_unit_id].name_zh
+                    if row.measurement_unit_id in unit_map
+                    else row.measurement_unit_id
+                ),
+                # 历史工作台只认任务启动时冻结的启用测量单元，不读取当前启停状态。
+                measurement_unit_enabled=(
+                    row.measurement_unit_id in frozen_enabled_unit_ids if frozen_enabled_unit_ids is not None else True
+                ),
+                metric_resource_id=row.metric_resource_id,
+                metric_name=_kpi_scope_metric_name(row, resource_map),
+                metric_kind=row.metric_kind,
+                config_snapshot=dict(row.config_snapshot or {}),
+                scope_status=row.scope_status,
+            )
+            for row in scope_rows
+        )
+        focus_items = tuple(
+            KpiWorkbenchFocusItemData(
+                measurement_unit_id=row.measurement_unit_id,
+                measurement_unit_name=(
+                    unit_map[row.measurement_unit_id].name_zh
+                    if row.measurement_unit_id in unit_map
+                    else row.measurement_unit_id
+                ),
+                measurement_unit_enabled=(
+                    unit_map[row.measurement_unit_id].inspection_enabled
+                    if row.measurement_unit_id in unit_map
+                    else False
+                ),
+                metric_resource_id=row.metric_resource_id,
+                metric_name=(
+                    resource_map[row.metric_resource_id].name_zh
+                    if row.metric_resource_id in resource_map
+                    else row.metric_resource_id
+                ),
+            )
+            for row in focus_rows
+        )
+        frozen_at = _as_utc(snapshot.frozen_at)
+        assert frozen_at is not None
+        latest_measured_at = _as_utc(point_query.scalar())
+        return KpiWorkbenchSourceData(
+            task_id=task_id,
+            network_element_type=network_element_type,
+            snapshot_present=True,
+            team_focus_revision=snapshot.team_focus_revision,
+            data_date=snapshot.data_date,
+            frozen_at=frozen_at,
+            snapshot_payload=snapshot_payload,
+            scope_items=scope_items,
+            focus_items=focus_items,
+            metric_results=tuple(_metric_result_payload(row) for row in result_query.all()),
+            latest_measured_at=latest_measured_at,
+            business_rule_count=int(business_rule_count),
+        )
+
+
 def publish_snapshot(
     task: InspectionTask,
     *,
@@ -288,6 +1097,7 @@ class TaskIdentity:
 
     package_kind: PackageKind
     product: str | None
+    rule_network_element_type: str | None
 
 
 def get_task_identity(task_id: str) -> TaskIdentity | None:
@@ -307,7 +1117,15 @@ def get_task_identity(task_id: str) -> TaskIdentity | None:
             product = None
         else:
             product = str(raw_product).strip().upper() or None
-        return TaskIdentity(package_kind=package_kind, product=product)
+        raw_rule_type = getattr(record, "rule_network_element_type", None)
+        rule_network_element_type = str(raw_rule_type).strip().upper() if raw_rule_type else None
+        if package_kind == PackageKind.INSPECTION and rule_network_element_type is None:
+            rule_network_element_type = product
+        return TaskIdentity(
+            package_kind=package_kind,
+            product=product,
+            rule_network_element_type=rule_network_element_type,
+        )
 
 
 def set_package_checksum(task_id: str, checksum: str) -> None:
@@ -502,6 +1320,11 @@ def _summary_from_record(session: Session, record: TaskRecord, snapshot: TaskInv
         customer_province=customer.get("province"),
         customer_operator=customer.get("operator"),
         customer_product=customer.get("product"),
+        rule_network_element_type=(
+            str(record.rule_network_element_type).strip().upper()
+            if getattr(record, "rule_network_element_type", None)
+            else None
+        ),
         customer_version=record.version,
     )
 

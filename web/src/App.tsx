@@ -10,6 +10,11 @@ const TaskListPage = lazy(() =>
 const TaskDetailPage = lazy(() =>
   import("./pages/TaskDetailPage").then(({ TaskDetailPage }) => ({ default: TaskDetailPage })),
 );
+const KpiResultWorkbenchPage = lazy(() =>
+  import("./pages/KpiResultWorkbenchPage").then(({ KpiResultWorkbenchPage }) => ({
+    default: KpiResultWorkbenchPage,
+  })),
+);
 const RuleDetailPage = lazy(() =>
   import("./pages/RuleDetailPage").then(({ RuleDetailPage }) => ({ default: RuleDetailPage })),
 );
@@ -39,6 +44,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <TaskListPage /> },
       { path: "tasks", element: <TaskListPage /> },
+      { path: "tasks/:taskId/kpi", element: <KpiResultWorkbenchPage /> },
       { path: "tasks/:taskId", element: <TaskDetailPage /> },
       { path: "tasks/:taskId/rules/:ruleCode", element: <RuleDetailPage /> },
       { path: "tasks/:taskId/report", element: <ReportPage /> },

@@ -102,6 +102,41 @@ describe("KpiMetricMaintenancePanel", () => {
     expect(screen.queryByRole("button", { name: "编辑聚合配置" })).toBeNull();
   });
 
+  it("明确基础指标直出，仅派生指标按分子分母计算", async () => {
+    vi.mocked(api.listKpiMetricMaintenanceConfigs).mockResolvedValue({
+      total: 2,
+      items: [config, baseConfig("ME_MEDIA_CREATE_RATE", "媒体资源创建成功率")],
+      page: 1,
+      page_size: 20,
+    });
+    renderPanel();
+
+    expect(await screen.findByText("基础指标直接读取源包值；仅派生指标按分子/分母计算")).toBeDefined();
+    expect(screen.queryByText("成功率按同一对象/周期的分子总和 ÷ 分母总和计算")).toBeNull();
+  });
+
+  it("历史停用状态不再形成指标级巡检门禁", async () => {
+    authState.role = "admin";
+    vi.mocked(api.listKpiMetricMaintenanceConfigs).mockResolvedValue({
+      total: 1,
+      items: [{ ...config, enabled: false }],
+      page: 1,
+      page_size: 20,
+    });
+    vi.mocked(api.listKpiMeasurementDerived).mockResolvedValue({
+      total: 1,
+      items: [{ ...derived, enabled: false }],
+      page: 1,
+      page_size: 20,
+    });
+    renderPanel();
+
+    const configTable = await screen.findByRole("table", { name: "指标维护配置" });
+    expect(within(configTable).getByText("聚合指标")).toBeDefined();
+    expect(screen.queryByText("已停用")).toBeNull();
+    expect(screen.queryByText("停用")).toBeNull();
+  });
+
   it("管理员更新维护配置并刷新审计", async () => {
     authState.role = "admin";
     vi.mocked(api.listKpiMetricMaintenanceAudits).mockResolvedValue({ total: 0, items: [], page: 1, page_size: 20 });
@@ -109,16 +144,21 @@ describe("KpiMetricMaintenancePanel", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "编辑维护配置" }));
     const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByText("启用配置")).toBeNull();
     const warningInput = within(dialog).getByLabelText("预警阈值");
     await userEvent.clear(warningInput);
     await userEvent.type(warningInput, "98.5");
     await userEvent.click(within(dialog).getByRole("button", { name: /保\s*存/ }));
 
-    await waitFor(() => expect(api.updateKpiMetricMaintenanceConfig).toHaveBeenCalledWith(
-      "MU_CALL",
-      "ME_RATE",
-      expect.objectContaining({ warning_threshold: 98.5 }),
-    ));
+    await waitFor(() => {
+      expect(api.updateKpiMetricMaintenanceConfig).toHaveBeenCalledWith(
+        "MU_CALL",
+        "ME_RATE",
+        expect.objectContaining({ warning_threshold: 98.5 }),
+      );
+      const payload = vi.mocked(api.updateKpiMetricMaintenanceConfig).mock.calls[0]?.[2];
+      expect(payload).not.toHaveProperty("enabled");
+    });
   });
 
   it("管理员更新聚合公式并保留独立指标标识", async () => {
@@ -137,6 +177,7 @@ describe("KpiMetricMaintenancePanel", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "编辑聚合配置" }));
     const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByText("启用配置")).toBeNull();
     await userEvent.click(within(dialog).getByLabelText("分子指标"));
     await userEvent.click(await screen.findByRole("option", { name: /成功次数/ }));
     await userEvent.click(within(dialog).getByLabelText("分母指标"));
@@ -144,13 +185,17 @@ describe("KpiMetricMaintenancePanel", () => {
     await userEvent.click(within(dialog).getByLabelText("反向成功率"));
     await userEvent.click(within(dialog).getByRole("button", { name: /保\s*存/ }));
 
-    await waitFor(() => expect(api.updateKpiMeasurementDerived).toHaveBeenCalledWith(
-      8,
-      expect.objectContaining({
-        numerator_metric_id: "ME_SUCCESS",
-        denominator_metric_id: "ME_TOTAL",
-        template: "reverse_success_rate",
-      }),
-    ));
+    await waitFor(() => {
+      expect(api.updateKpiMeasurementDerived).toHaveBeenCalledWith(
+        8,
+        expect.objectContaining({
+          numerator_metric_id: "ME_SUCCESS",
+          denominator_metric_id: "ME_TOTAL",
+          template: "reverse_success_rate",
+        }),
+      );
+      const payload = vi.mocked(api.updateKpiMeasurementDerived).mock.calls[0]?.[1];
+      expect(payload).not.toHaveProperty("enabled");
+    });
   });
 });

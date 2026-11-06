@@ -7,8 +7,6 @@ import shutil
 from pathlib import Path
 
 from app.core.checksum import sha256_file
-from app.services.executor import Executor
-from app.services.rule_states import get_enabled_rule_codes
 from tests.baseline_helpers import SAMPLE, load_rule, setup_env
 from tests.fixtures.make_real_package import build_real_package, isolate_umf_scene
 
@@ -20,10 +18,10 @@ def test_sample_task_runs_only_kpi_and_preserves_package(tmp_path: Path, monkeyp
     from app.cli import run_task
     from app.inspectors.registry import registry
 
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     checksum = sha256_file(SAMPLE)
     registry.load_all()
-    expected = set(Executor(registry, get_enabled_rule_codes()).inspect_plan())
+    expected = set(registry.inspect_plan())
 
     task = run_task(
         SAMPLE,
@@ -48,7 +46,7 @@ def test_sample_task_runs_only_kpi_and_preserves_package(tmp_path: Path, monkeyp
 def test_task_without_kpi_returns_skip_and_preserves_non_kpi_files(tmp_path: Path, monkeypatch) -> None:
     from app.cli import run_task
 
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="CSP")
     package = build_real_package(tmp_path / "boundary", include_kpi=False)
     checksum = sha256_file(package)
 
@@ -87,7 +85,7 @@ def test_real_structure_umf_package_runs_kpi_from_scene(tmp_path: Path, monkeypa
     """真实 UMF 场景中的 KPI 可被分类，并且只执行既有 KPI 普通规则。"""
     from app.cli import run_task
 
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.services.kpi_measurement_units import import_resource_csv, io
 
     import_resource_csv(
@@ -114,20 +112,26 @@ def test_real_structure_umf_package_runs_kpi_from_scene(tmp_path: Path, monkeypa
         metric["raw_source_name"] for unit in result["metadata"]["measurement_units"] for metric in unit["metrics"]
     }
     assert {"呼叫请求次数", "Call Requests"} <= raw_metric_names
-    rate_metric_names = {
-        "Media Resource Creation Success Rate(%)",
-        "DC Resource Update Success Rate(%)",
-        "Media Resource Creation Requests Success Rate(%)",
-        "Data Channel Resource Update Requests Success Rate(%)",
+    rate_metric_aliases = {
+        "Media Resource Creation Success Rate(%)": {
+            "Media Resource Creation Success Rate(%)",
+            "Media Resource Creation Requests Success Rate(%)",
+        },
+        "DC Resource Update Success Rate(%)": {
+            "DC Resource Update Success Rate(%)",
+            "Data Channel Resource Update Requests Success Rate(%)",
+        },
     }
     rate_metrics = [
         metric
         for unit in result["metadata"]["measurement_units"]
         for metric in unit["metrics"]
-        if metric["raw_source_name"] in rate_metric_names
+        if metric["raw_source_name"] in rate_metric_aliases
     ]
-    assert {metric["raw_source_name"] for metric in rate_metrics} == rate_metric_names
+    assert {metric["raw_source_name"] for metric in rate_metrics} == set(rate_metric_aliases)
     for metric in rate_metrics:
+        assert metric["role"] == "base"
+        assert set(metric["raw_source_names"]) == rate_metric_aliases[metric["raw_source_name"]]
         observations = metric["observations"]
         assert sum(observation["not_applicable_count"] for observation in observations) == 2
         assert sum(observation["valid_count"] for observation in observations) == 1

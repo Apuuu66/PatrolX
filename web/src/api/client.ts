@@ -354,7 +354,7 @@ export interface paths {
         put?: never;
         /**
          * Rebuild Task V2
-         * @description 按当前活动普通规则库重建任务；活动规则库仅包含 KPI 巡检规则。已删除或未注册的历史规则不会被恢复或重建，其历史结果仍可只读查看。
+         * @description 既有契约，不新增 v6 重建接口。任务列表行内“重建”使用 mode=full，必须二次确认；重建保持同一 task_id，并按当前规则归属与 KPI 配置生成新快照。对旧任务执行全量重建后，v6 工作台方可读取结果。原始上传包只读。
          */
         post: operations["rebuildTaskV2"];
         delete?: never;
@@ -502,8 +502,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Inspector States V2
-         * @description 返回普通规则启停状态分页列表。
+         * 旧版规则启停状态列表（冻结，仅兼容）
+         * @deprecated
+         * @description v2 契约冻结，仅标记 deprecated，供旧客户端兼容；v6 前端、新服务和执行器不得调用，也不得读取其 enabled 值参与执行范围判定。列表入口由 `/api/v6/kpi/rule-network-assignments` 取代；同路径替代接口不适用。物理删除必须另行下线 v5。
          */
         get: operations["listInspectorStatesV2"];
         put?: never;
@@ -523,8 +524,9 @@ export interface paths {
         };
         get?: never;
         /**
-         * Update Inspector State V2
-         * @description 更新一条普通规则的启停状态。
+         * 旧版单规则启停（冻结，仅兼容）
+         * @deprecated
+         * @description v2 契约冻结，仅标记 deprecated，供旧客户端兼容；该能力由 v6 规则网元归属取代，同路径替代接口 **不适用**。v6 前端、新服务和执行器不得调用；规则执行范围只由网元归属决定，该 enabled 值不得成为第二套执行开关。
          */
         put: operations["updateInspectorStateV2"];
         post?: never;
@@ -579,7 +581,7 @@ export interface paths {
         put?: never;
         /**
          * Create Task V3
-         * @description 创建 v3 任务；版本和设备身份不允许人工输入。inspection 包必须携带非空 province、operator 和 product，product 按 trim().upper() 规范化后只允许 UMF 或 CSP。log_supplement 包不包含网元类型， product 为 null，且禁止携带非空 province、operator、product。同名任务固定按 checksum → kind → product 顺序校验并恢复现场，一致时返回 202 且不自动重跑。界面重传同名包采用 “覆盖确认 + 全量重建”，不依赖本接口的幂等恢复路径。
+         * @description 创建任务或按同名 checksum 恢复既有现场，成功返回 202 + Location。inspection 包以 province、operator、product 作为任务元数据；product 经 trim().upper() 后只能取运行时网元类型字典值。log_supplement 包的 product 必须为空，可使用独立字段 rule_network_element_type 选择一个规则适用网元类型，或省略表示不选择。rule_network_element_type 对巡检包不适用，且不会写入 product、分类 profile 或设备台账。同名任务固定按 checksum → package_kind → product → rule_network_element_type 顺序校验；四项均一致时只恢复现场并返回 202，不自动重跑。
          */
         post: operations["createTaskV3"];
         delete?: never;
@@ -612,7 +614,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Kpi Measurement Units V5 */
+        /**
+         * List Kpi Measurement Units V5
+         * @deprecated
+         * @description v5 读取入口已冻结，仅供旧客户端兼容；新工作台与服务不得调用。替代入口为 /api/v6/kpi/measurement-units。
+         */
         get: operations["listKpiMeasurementUnitsV5"];
         put?: never;
         post?: never;
@@ -646,7 +652,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Kpi Measurement Bindings V5 */
+        /**
+         * List Kpi Measurement Bindings V5
+         * @deprecated
+         * @description v5 读取入口已冻结，仅供旧客户端兼容；新工作台与服务不得调用。替代入口为 /api/v6/kpi/measurement-bindings。
+         */
         get: operations["listKpiMeasurementBindingsV5"];
         put?: never;
         post?: never;
@@ -665,7 +675,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Batch Confirm Kpi Measurement Bindings V5 */
+        /**
+         * 旧版批量确认绑定（冻结，仅兼容）
+         * @deprecated
+         * @description v5 契约冻结，仅标记 deprecated，供旧客户端兼容；v6 UI、新服务和执行器不得调用。同路径的 v6 替代接口 **不适用**；物理删除必须另行下线 v5，不在本功能中破坏既有字段含义。
+         */
         post: operations["batchConfirmKpiMeasurementBindingsV5"];
         delete?: never;
         options?: never;
@@ -878,11 +892,370 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v6/kpi/team-focus/{network_element_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取当前任务上下文中的共享团队关注
+         * @description 返回指定网元类型的共享关注项和 revision，并按 task_id 计算当前任务可用性。 不可用项不得自动删除，必须保留并标记原因；团队关注总数只统计当前任务可用项。 当前任务可关注指标全集由 GET /api/v6/kpi/tasks/{task_id}/metrics?view=all 提供， 不另建第二套指标目录。
+         */
+        get: operations["listKpiTeamFocusV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 原子保存团队关注差异
+         * @description 在一个事务内校验 revision、去重、验证加入项属于当前任务可关注范围， 应用 add/remove、递增 revision。add 与 remove 必须至少一个非空且二者不得重叠。 remove 可按共享身份移出当前任务不可用项。冲突时不应用任何变更并返回当前 revision。
+         */
+        patch: operations["patchKpiTeamFocusV6"];
+        trace?: never;
+    };
+    "/api/v6/kpi/measurement-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询网元类型下的测量单元巡检范围 */
+        get: operations["listKpiMeasurementUnitsV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/measurement-units/{network_element_type}/{measurement_unit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取测量单元巡检范围详情 */
+        get: operations["getKpiMeasurementUnitV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 启用或停用测量单元
+         * @description 这是唯一日常巡检启停开关。停用只影响后续任务，不删除绑定、派生、维护口径、 团队关注或历史结果；启用后全部已确认基础指标和已定义派生指标纳入后续任务。
+         */
+        patch: operations["setKpiMeasurementInspectionEnabledV6"];
+        trace?: never;
+    };
+    "/api/v6/kpi/measurement-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 分页查询测量单元绑定诊断
+         * @description 正常入库自动确认绑定；本接口只用于诊断和单条异常修正，不提供批量确认。
+         */
+        get: operations["listKpiMeasurementBindingsV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/measurement-bindings/{network_element_type}/{binding_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 单条修正绑定异常
+         * @description 仅允许将 candidate/conflict 修正为 confirmed 或 ignored，并记录 revision、原因和操作来源。 不存在批量确认接口；ignored 绑定不进入有效指标集合。
+         */
+        patch: operations["correctKpiMeasurementBindingV6"];
+        trace?: never;
+    };
+    "/api/v6/kpi/legacy-recovery-audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询历史指标级停用恢复审计 */
+        get: operations["listKpiLegacyRecoveryAuditsV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/legacy-recovery-audits/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 批量重试历史停用恢复
+         * @description 按对象异步重试，成功项不回滚，失败项保留错误和 attempt_count。 idempotency_key 相同且请求相同时返回同一 maintenance operation，不重复执行。
+         */
+        post: operations["retryKpiLegacyRecoveryV6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/pending-attributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询待归属配置 */
+        get: operations["listKpiPendingAttributionsV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/pending-attributions/{pending_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 为待归属配置指定网元类型
+         * @description 由维护人员显式指定一个网元类型后异步物化 v6 配置。不接受公共范围，不默认选择 UMF/CSP， 未完成前记录不进入任何巡检范围。
+         */
+        post: operations["resolveKpiPendingAttributionV6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/maintenance-operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询恢复或归属操作进度
+         * @description 操作可处于 partial_success；页面必须展示成功数、失败数和逐项错误，不得把部分失败显示为完成。
+         */
+        get: operations["getKpiMaintenanceOperationV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/rule-network-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 分页查询业务规则及其网元归属
+         * @description 只返回当前注册表中的普通业务规则；隐藏的解压、分类和 prepare 技术单元不出现。 network_element_type 存在时只返回已归属该类型的规则；assignment_state=unassigned 时只返回零归属规则，且不得同时指定 network_element_type。两个筛选均省略时返回全部规则。 排序固定为 priority、rule_code。
+         */
+        get: operations["listKpiRuleNetworkAssignmentsV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/rule-network-assignments/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 原子批量替换规则网元归属
+         * @description 所有规则在同一事务内校验并写入。任一规则 revision 冲突、网元类型非法或清空归属 未确认时，整批不应用。成功后每条规则各产生一条审计，全局 revision 只递增一次。 本接口不接受 public、*、COMMON、空字符串或全类型通配作为归属。
+         */
+        post: operations["batchUpdateKpiRuleNetworkAssignmentsV6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/rule-network-assignments/audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 分页查询规则归属变更审计
+         * @description 返回成功和失败写入的追加审计。network_element_type 筛选匹配变更前或变更后集合， 用于追溯某条规则何时进入或离开该网元类型。审计不可编辑或删除。
+         */
+        get: operations["listKpiRuleNetworkAssignmentAuditsV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/rule-network-assignments/{rule_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 替换单条规则的网元归属
+         * @description 以完整集合替换规则当前归属。network_element_types 可为空数组以清空最后归属， 但必须同时提交 confirm_unassign=true；清空后规则进入 unassigned 并停止参与后续任务。 变更只影响后续启动或显式重建的任务，不重写已发布结果。
+         */
+        patch: operations["updateKpiRuleNetworkAssignmentV6"];
+        trace?: never;
+    };
+    "/api/v6/kpi/tasks/{task_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取 KPI 工作台汇总
+         * @description 返回当前任务冻结范围内的全局汇总。needs_attention 与 no_action 互斥， 且二者之和等于当前任务可用的团队关注数；不可用关注项单独计数。 如果任务没有 v6 KPI 快照，固定返回 409 task_result_requires_rebuild。
+         */
+        get: operations["getKpiTaskSummaryV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/tasks/{task_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 分页查询 KPI 结果视图
+         * @description view=needs_attention 只返回团队关注中需处理的可用指标； view=team_focus 返回团队关注中可用和不可用的全部项； view=all 返回任务快照中的全部指标。total 是应用筛选后的分页总数， view_total 是筛选前该视图总数，用于显示“当前可见 x / 总计 y”。 排序固定为 needs_attention_group、importance_rank、measurement_unit_id、metric_resource_id。
+         */
+        get: operations["listKpiTaskMetricsV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/tasks/{task_id}/metrics/{measurement_unit_id}/{metric_resource_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 按需获取单个指标证据
+         * @description 证据必须来自任务快照中的指标定义与结果，不得按指标名称硬编码。 单个证据读取失败只影响该请求，不影响汇总或其他结果行。
+         */
+        get: operations["getKpiMetricEvidenceV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v6/kpi/tasks/{task_id}/metrics/{measurement_unit_id}/{metric_resource_id}/technical-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 按需获取指标技术分析
+         * @description 返回跨任务历史趋势和同设备版本对比，作为证据抽屉中的次级内容； 不参与首屏汇总、需处理队列或全局排序。
+         */
+        get: operations["getKpiMetricTechnicalAnalysisV6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** Body_createTaskV3 */
+        /**
+         * Body_createTaskV3
+         * @description package_file 与 package_kind 必填。条件必填和禁填规则由服务端运行时校验，以兼容 multipart 客户端生成。
+         */
         Body_createTaskV3: {
             /** Package File */
             package_file: string;
@@ -905,6 +1278,11 @@ export interface components {
              * @description inspection 条件必填；值执行 trim().upper() 后只允许 UMF 或 CSP，并统一以大写保存和传播。 log_supplement 必须为空或 null，禁止携带网元类型。该字段保持 optional nullable string， 以兼容 OpenAPI 3.1 multipart 客户端生成；条件必填由服务端运行时校验。
              */
             product?: string | null;
+            /**
+             * Rule Network Element Type
+             * @description log_supplement 可选且至多一个值，仅用于业务规则匹配，经 trim().upper() 规范化；省略或空值表示未选择。inspection 禁止携带非空值。
+             */
+            rule_network_element_type?: string | null;
         };
         /** Body_importKpiMeasurementUnitsV5 */
         Body_importKpiMeasurementUnitsV5: {
@@ -1400,6 +1778,8 @@ export interface components {
              */
             name_zh: string;
             role: components["schemas"]["MetricRole"];
+            /** Is Percentage */
+            is_percentage: boolean;
             /** Data Date */
             data_date?: string | null;
             /** Previous Date */
@@ -2188,7 +2568,7 @@ export interface components {
         };
         /**
          * PackageKind
-         * @description 上传任务包类型；日志补充包显式声明且不参与设备台账。
+         * @description 上传任务包类型；日志补充包显式声明且不参与设备台账、分类 profile 或网元精细分类。
          * @enum {string}
          */
         PackageKind: "inspection" | "log_supplement";
@@ -2363,16 +2743,16 @@ export interface components {
         SystemStatus: "completed" | "failed";
         /**
          * TaskConflictCode
-         * @description 同名任务冲突稳定错误码；判定顺序固定为 checksum → kind → product。
+         * @description 同名任务冲突稳定错误码；判定顺序固定为 checksum → package_kind → product → rule_network_element_type。
          * @enum {string}
          */
-        TaskConflictCode: "package_checksum_conflict" | "package_kind_conflict" | "package_product_conflict";
+        TaskConflictCode: "package_checksum_conflict" | "package_kind_conflict" | "package_product_conflict" | "package_rule_network_element_type_conflict";
         /**
          * TaskCreateErrorCode
-         * @description POST /api/v3/tasks 上传元数据校验稳定错误码。
+         * @description POST /api/v3/tasks 的稳定元数据校验错误码。
          * @enum {string}
          */
-        TaskCreateErrorCode: "missing_province" | "missing_operator" | "missing_product" | "invalid_product" | "metadata_not_applicable";
+        TaskCreateErrorCode: "missing_province" | "missing_operator" | "missing_product" | "invalid_product" | "invalid_rule_network_element_type" | "metadata_not_applicable";
         /** TaskCreated */
         TaskCreated: {
             /** Task Id */
@@ -2681,6 +3061,11 @@ export interface components {
             customer_operator?: string | null;
             /** Customer Product */
             customer_product?: string | null;
+            /**
+             * Rule Network Element Type
+             * @description 日志补充包可选的规则适用网元类型；巡检包为 null，仅用于业务规则匹配，不代表任务 product。
+             */
+            rule_network_element_type?: string | null;
             /** Customer Version */
             customer_version?: string | null;
         };
@@ -2777,11 +3162,787 @@ export interface components {
          * @enum {string}
          */
         ZeroSemantics: "unknown" | "expected_zero" | "business_not_triggered";
+        /** @enum {string} */
+        FocusAvailability: "available" | "unavailable";
+        /** @enum {string} */
+        FocusAvailabilityReason: "not_in_task_scope" | "measurement_unit_disabled";
+        /** @description network_element_type 来自请求路径，不属于数组项的可变字段。 */
+        KpiFocusIdentity: {
+            measurement_unit_id: string;
+            metric_resource_id: string;
+        };
+        KpiTeamFocusItemV6: {
+            network_element_type: string;
+            measurement_unit_id: string;
+            measurement_unit_name: string;
+            metric_resource_id: string;
+            metric_name: string;
+            availability: components["schemas"]["FocusAvailability"];
+            availability_reason?: components["schemas"]["FocusAvailabilityReason"] | null;
+            added_by: string;
+            /** @description ISO 8601 UTC。 */
+            added_at: string;
+        };
+        KpiTeamFocusPageV6: {
+            network_element_type: string;
+            revision: number;
+            page: number;
+            page_size: number;
+            /** @description 当前过滤条件下的关注项总数，包含 unavailable。 */
+            total: number;
+            /** @description 当前任务可用关注数；作为 summary.team_focus_count。 */
+            available_count: number;
+            /** @description 当前任务不可用但被保留的关注数。 */
+            unavailable_count: number;
+            items: components["schemas"]["KpiTeamFocusItemV6"][];
+            /** @description false 时前端不得渲染可提交的保存操作。 */
+            can_write: boolean;
+        };
+        /** @description add/remove 必须至少一个非空，数组内身份唯一，且同一身份不能同时出现在两数组中。 服务端按请求整体原子应用，不逐项部分提交。 */
+        KpiTeamFocusPatchRequestV6: {
+            /** @description 用于验证 add 项属于当前任务可关注范围。 */
+            task_id: string;
+            expected_revision: number;
+            add: components["schemas"]["KpiFocusIdentity"][];
+            remove: components["schemas"]["KpiFocusIdentity"][];
+        };
+        KpiTeamFocusPatchResponseV6: {
+            network_element_type: string;
+            revision: number;
+            added_count: number;
+            removed_count: number;
+            available_count: number;
+            unavailable_count: number;
+        };
+        /** @enum {string} */
+        KpiConfigurationState: "ready" | "incomplete";
+        /** @enum {string} */
+        KpiRecoveryState: "none" | "pending" | "partial_failure" | "completed";
+        /** @enum {string} */
+        KpiBindingState: "candidate" | "confirmed" | "conflict" | "ignored";
+        /** @enum {string} */
+        KpiRecoveryResult: "pending" | "running" | "recovered" | "failed" | "skipped";
+        /** @enum {string} */
+        KpiRecoveryObjectKind: "metric" | "binding" | "derived";
+        /** @enum {string} */
+        KpiRecoverySource: "migration" | "ui" | "api";
+        /** @enum {string} */
+        KpiPendingResolutionState: "pending" | "assigned" | "materialized" | "failed";
+        /** @enum {string} */
+        KpiPendingReason: "missing_product" | "ambiguous_product" | "orphan_reference";
+        KpiMeasurementUnitV6: {
+            network_element_type: string;
+            measurement_unit_id: string;
+            name_zh: string;
+            name_en: string;
+            /** @description 唯一日常巡检启停状态。 */
+            inspection_enabled: boolean;
+            revision: number;
+            base_metric_count: number;
+            derived_metric_count: number;
+            confirmed_binding_count: number;
+            candidate_binding_count: number;
+            configuration_state: components["schemas"]["KpiConfigurationState"];
+            recovery_state: components["schemas"]["KpiRecoveryState"];
+            /** @enum {string} */
+            source?: "preset" | "discovered" | "manual";
+            /** @description ISO 8601 UTC。 */
+            updated_at: string;
+            /** @description 停用时常返回“只影响后续巡检，现有配置与关注保留”。 */
+            notice?: string;
+        };
+        KpiMeasurementUnitPageV6: {
+            total: number;
+            page: number;
+            page_size: number;
+            items: components["schemas"]["KpiMeasurementUnitV6"][];
+        };
+        KpiMeasurementInspectionPatchV6: {
+            expected_revision: number;
+            inspection_enabled: boolean;
+        };
+        KpiMeasurementBindingV6: {
+            id: number;
+            network_element_type: string;
+            measurement_unit_id: string;
+            measurement_unit_name?: string;
+            raw_source_name: string;
+            base_source_name: string;
+            metric_resource_id?: string | null;
+            metric_resource_name?: string | null;
+            display_unit?: string | null;
+            status: components["schemas"]["KpiBindingState"];
+            source_file: string;
+            origin_task_id: string;
+            revision: number;
+            /** @description ISO 8601 UTC。 */
+            updated_at: string;
+            diagnostic?: string | null;
+        };
+        KpiMeasurementBindingPageV6: {
+            total: number;
+            page: number;
+            page_size: number;
+            items: components["schemas"]["KpiMeasurementBindingV6"][];
+        };
+        KpiMeasurementBindingPatchV6: {
+            expected_revision: number;
+            /** @enum {string} */
+            status: "confirmed" | "ignored";
+            reason: string;
+        };
+        KpiLegacyRecoveryAuditV6: {
+            audit_id: number;
+            source_table: string;
+            source_record_id: string;
+            source_key: string;
+            network_element_type?: string | null;
+            measurement_unit_id?: string | null;
+            metric_resource_id?: string | null;
+            object_kind: components["schemas"]["KpiRecoveryObjectKind"];
+            before_snapshot: {
+                [key: string]: unknown;
+            };
+            result: components["schemas"]["KpiRecoveryResult"];
+            error_code?: string | null;
+            error_message?: string | null;
+            attempt_count: number;
+            actor?: string | null;
+            source: components["schemas"]["KpiRecoverySource"];
+            /** @description ISO 8601 UTC。 */
+            created_at: string;
+            /** @description ISO 8601 UTC。 */
+            updated_at: string;
+        };
+        KpiLegacyRecoveryAuditPageV6: {
+            total: number;
+            page: number;
+            page_size: number;
+            items: components["schemas"]["KpiLegacyRecoveryAuditV6"][];
+        };
+        KpiLegacyRecoveryRetryRequestV6: {
+            audit_ids: number[];
+            idempotency_key: string;
+        };
+        KpiPendingAttributionV6: {
+            pending_id: number;
+            source_table: string;
+            source_record_id: string;
+            source_key: string;
+            source_payload: {
+                [key: string]: unknown;
+            };
+            candidate_network_element_types: string[];
+            reason: components["schemas"]["KpiPendingReason"];
+            resolution_state: components["schemas"]["KpiPendingResolutionState"];
+            assigned_network_element_type?: string | null;
+            attempt_count: number;
+            last_error?: string | null;
+            idempotency_key: string;
+            created_at: string;
+            updated_at: string;
+        };
+        KpiPendingAttributionPageV6: {
+            total: number;
+            page: number;
+            page_size: number;
+            items: components["schemas"]["KpiPendingAttributionV6"][];
+        };
+        KpiPendingAttributionResolveRequestV6: {
+            network_element_type: string;
+            idempotency_key: string;
+        };
+        KpiMaintenanceOperationAcceptedV6: {
+            operation_id: string;
+            /** @enum {string} */
+            status: "queued" | "running";
+        };
+        KpiMaintenanceOperationItemV6: {
+            target_id: string;
+            /** @enum {string} */
+            result: "pending" | "running" | "succeeded" | "failed" | "skipped";
+            error_code?: string | null;
+            error_message?: string | null;
+        };
+        KpiMaintenanceOperationV6: {
+            operation_id: string;
+            /** @enum {string} */
+            operation_type: "legacy_recovery_retry" | "pending_attribution_resolve";
+            /** @enum {string} */
+            status: "queued" | "running" | "succeeded" | "partial_success" | "failed";
+            idempotency_key: string;
+            total_count: number;
+            succeeded_count: number;
+            failed_count: number;
+            pending_count: number;
+            items: components["schemas"]["KpiMaintenanceOperationItemV6"][];
+            created_at: string;
+            completed_at?: string | null;
+        };
+        /** @enum {string} */
+        KpiRuleAssignmentState: "assigned" | "unassigned";
+        /** @enum {string} */
+        KpiRuleAssignmentAuditResult: "success" | "failed";
+        /** @enum {string} */
+        KpiRuleAssignmentAuditSource: "ui" | "api" | "migration";
+        /** @description 完整归属集合；有序且只含运行时网元类型字典值。空数组表示未归属。 */
+        KpiRuleNetworkElementTypes: string[];
+        KpiRuleNetworkAssignmentV6: {
+            rule_code: string;
+            name: string;
+            category: string;
+            priority: number;
+            rule_version: string;
+            description: string;
+            recommendation: string;
+            assignment_state: components["schemas"]["KpiRuleAssignmentState"];
+            network_element_types: components["schemas"]["KpiRuleNetworkElementTypes"];
+            /** @description 单规则归属 revision；尚无写入记录时为 0。 */
+            revision: number;
+            /** @description ISO 8601 UTC；从未写入时为 null。 */
+            updated_at?: string | null;
+            /** @description 最近成功写入的操作者；从未写入时为 null。 */
+            updated_by?: string | null;
+        };
+        KpiRuleNetworkAssignmentPageV6: {
+            global_revision: number;
+            page: number;
+            page_size: number;
+            total: number;
+            /** @description false 时前端不得渲染可提交的归属编辑操作。 */
+            can_write: boolean;
+            items: components["schemas"]["KpiRuleNetworkAssignmentV6"][];
+        };
+        KpiRuleAssignmentPatchRequestV6: {
+            expected_revision: number;
+            network_element_types: components["schemas"]["KpiRuleNetworkElementTypes"];
+            /**
+             * @description network_element_types 为空数组时必须为 true。
+             * @default false
+             */
+            confirm_unassign: boolean;
+        };
+        KpiRuleAssignmentWriteResultV6: {
+            rule_code: string;
+            assignment_state: components["schemas"]["KpiRuleAssignmentState"];
+            network_element_types: components["schemas"]["KpiRuleNetworkElementTypes"];
+            revision: number;
+            global_revision: number;
+            audit_id: string;
+            /** @description ISO 8601 UTC。 */
+            updated_at: string;
+            /** @description 固定提示归属变更只影响后续启动或显式重建的任务。 */
+            snapshot_notice?: string;
+        };
+        KpiRuleAssignmentBatchItemV6: {
+            rule_code: string;
+            expected_revision: number;
+            network_element_types: components["schemas"]["KpiRuleNetworkElementTypes"];
+            /**
+             * @description network_element_types 为空数组时必须为 true。
+             * @default false
+             */
+            confirm_unassign: boolean;
+        };
+        /** @description rule_code 在 items 内必须唯一，整批全成或全败。 */
+        KpiRuleAssignmentBatchRequestV6: {
+            items: components["schemas"]["KpiRuleAssignmentBatchItemV6"][];
+        };
+        KpiRuleAssignmentBatchResponseV6: {
+            global_revision: number;
+            items: components["schemas"]["KpiRuleAssignmentWriteResultV6"][];
+            audit_ids: string[];
+        };
+        KpiRuleAssignmentAuditV6: {
+            audit_id: string;
+            rule_code: string;
+            before_network_element_types: string[];
+            after_network_element_types: string[];
+            rule_revision: number;
+            global_revision: number;
+            actor: string;
+            source: components["schemas"]["KpiRuleAssignmentAuditSource"];
+            result: components["schemas"]["KpiRuleAssignmentAuditResult"];
+            error_code?: string | null;
+            idempotency_key?: string | null;
+            /** @description ISO 8601 UTC。 */
+            created_at: string;
+        };
+        KpiRuleAssignmentAuditPageV6: {
+            total: number;
+            page: number;
+            page_size: number;
+            items: components["schemas"]["KpiRuleAssignmentAuditV6"][];
+        };
+        /**
+         * @description 默认值为 needs_attention。
+         * @enum {string}
+         */
+        KpiResultView: "needs_attention" | "team_focus" | "all";
+        /** @enum {string} */
+        NeedsAttentionGroup: "failure" | "warning" | "trend_degraded" | "unjudgeable" | "needs_config";
+        /** @enum {string} */
+        MetricAvailability: "available" | "unavailable";
+        /** @enum {string} */
+        MetricSpecialState: "no_action" | "not_applicable" | "no_baseline" | "all_zero" | "zero_denominator" | "no_data" | "unavailable";
+        /** @enum {string} */
+        Importance: "P0" | "P1" | "P2" | "normal";
+        NumberOrNull: number | null;
+        KpiRuleScopeStatusV6: {
+            business_rule_count: number;
+            has_executable_rules: boolean;
+            /** @description 无业务规则时明确提示“当前网元类型未配置可执行业务规则”。 */
+            notice?: string | null;
+        };
+        /** @description needs_attention_count + no_action_count 必须等于 team_focus_count。 */
+        KpiSummaryCountsV6: {
+            enabled_measurement_unit_count: number;
+            all_metric_count: number;
+            /** @description 当前任务可用的团队关注数；不包含 unavailable_focus_count。 */
+            team_focus_count: number;
+            needs_attention_count: number;
+            no_action_count: number;
+            unavailable_focus_count: number;
+        };
+        KpiNeedsAttentionGroupSummary: {
+            group: components["schemas"]["NeedsAttentionGroup"];
+            order: number;
+            count: number;
+        };
+        KpiTaskSummaryV6: {
+            task_id: string;
+            /** @description 标准巡检包为 product；日志补充包未选择规则适用网元类型时为 null。 */
+            network_element_type: string | null;
+            /** @constant */
+            result_contract_version: "v6";
+            /** @description 无数据时可为 null；有值时为 YYYY-MM-DD。 */
+            data_date: string | null;
+            /** @description 对比日期；无对比基线时可为 null。 */
+            previous_date: string | null;
+            /** @description ISO 8601 UTC。 */
+            latest_measured_at: string | null;
+            counts: components["schemas"]["KpiSummaryCountsV6"];
+            /** @description 固定按 failure、warning、trend_degraded、unjudgeable、needs_config 返回。 */
+            needs_attention_groups: components["schemas"]["KpiNeedsAttentionGroupSummary"][];
+            rule_scope: components["schemas"]["KpiRuleScopeStatusV6"];
+            notices?: string[];
+        };
+        KpiMetricResultV6: {
+            task_id: string;
+            network_element_type: string;
+            measurement_unit_id: string;
+            measurement_unit_name: string;
+            metric_resource_id: string;
+            metric_name: string;
+            role: components["schemas"]["MetricRole"];
+            importance: components["schemas"]["Importance"];
+            importance_rank: number;
+            availability: components["schemas"]["MetricAvailability"];
+            /** @enum {string} */
+            availability_reason?: "not_in_task_scope" | "measurement_unit_disabled";
+            is_team_focus: boolean;
+            current_status?: components["schemas"]["CurrentHealthStatus"] | null;
+            yesterday_trend?: components["schemas"]["TrendHealthStatus"] | null;
+            needs_attention_group?: components["schemas"]["NeedsAttentionGroup"] | null;
+            special_state?: components["schemas"]["MetricSpecialState"] | null;
+            today_value?: components["schemas"]["NumberOrNull"];
+            yesterday_value?: components["schemas"]["NumberOrNull"];
+            change_value?: components["schemas"]["NumberOrNull"];
+            /** @enum {string} */
+            change_unit?: "pp" | "relative" | "absolute" | "unavailable";
+            reason?: string;
+            evidence_available?: boolean;
+        };
+        KpiAppliedFiltersV6: {
+            search?: string | null;
+            measurement_unit_id?: string | null;
+            current_status?: components["schemas"]["CurrentHealthStatus"] | null;
+            yesterday_trend?: components["schemas"]["TrendHealthStatus"] | null;
+            needs_attention_group?: components["schemas"]["NeedsAttentionGroup"] | null;
+        };
+        KpiMetricResultPageV6: {
+            items: components["schemas"]["KpiMetricResultV6"][];
+            /** @description 应用筛选后的总数。 */
+            total: number;
+            /** @description 应用筛选前当前视图总数。 */
+            view_total: number;
+            page: number;
+            page_size: number;
+            /** @enum {string} */
+            empty_state: "none" | "no_task_metrics" | "team_focus_empty" | "no_matching_metrics";
+            applied_filters: components["schemas"]["KpiAppliedFiltersV6"];
+        };
+        KpiThresholdEvidenceV6: {
+            /** @enum {string} */
+            direction: "higher_better" | "lower_better" | "neutral";
+            warning_threshold: components["schemas"]["NumberOrNull"];
+            critical_threshold: components["schemas"]["NumberOrNull"];
+            /** @enum {string} */
+            source: "custom" | "default" | "legacy_resource" | "missing";
+        };
+        KpiDailyBucketV6: {
+            /** Format: date */
+            date: string;
+            value?: components["schemas"]["NumberOrNull"];
+            numerator?: components["schemas"]["NumberOrNull"];
+            denominator?: components["schemas"]["NumberOrNull"];
+            valid_count: number;
+            first_measured_at?: string | null;
+            last_measured_at?: string | null;
+            /** @enum {string} */
+            status: "ok" | "no_data" | "zero_denominator" | "unreadable" | "no_baseline";
+        };
+        KpiEvidenceComponentV6: {
+            metric_resource_id: string;
+            name: string;
+            /** @enum {string} */
+            role: "numerator" | "denominator";
+            value?: components["schemas"]["NumberOrNull"];
+        };
+        KpiEvidenceGroupV6: {
+            object_key: string;
+            period_minutes: number | null;
+            today?: components["schemas"]["KpiDailyBucketV6"] | null;
+            yesterday?: components["schemas"]["KpiDailyBucketV6"] | null;
+            current_status: components["schemas"]["CurrentHealthStatus"];
+            trend_status: components["schemas"]["TrendHealthStatus"];
+            reason?: string;
+            source_files: string[];
+        };
+        KpiMetricEvidenceV6: {
+            task_id: string;
+            network_element_type: string;
+            measurement_unit_id: string;
+            metric_resource_id: string;
+            metric: {
+                name: string;
+                role: components["schemas"]["MetricRole"];
+                is_percentage: boolean;
+                formula?: string | null;
+                /** @enum {string} */
+                daily_aggregation: "latest" | "mean" | "sum" | "max" | "min";
+                current_status: components["schemas"]["CurrentHealthStatus"];
+                trend_status: components["schemas"]["TrendHealthStatus"];
+            };
+            current: components["schemas"]["KpiDailyBucketV6"];
+            previous: components["schemas"]["KpiDailyBucketV6"] | null;
+            change_value?: components["schemas"]["NumberOrNull"];
+            /** @enum {string} */
+            change_unit?: "pp" | "relative" | "absolute" | "unavailable";
+            reason?: string;
+            reason_codes?: string[];
+            valid_count?: number;
+            current_threshold: components["schemas"]["KpiThresholdEvidenceV6"];
+            change_threshold?: {
+                value?: components["schemas"]["NumberOrNull"];
+                /** @enum {string} */
+                unit?: "pp" | "relative" | "unavailable";
+                /** @enum {string} */
+                source?: "custom" | "default" | "legacy_resource" | "missing";
+            };
+            components?: components["schemas"]["KpiEvidenceComponentV6"][];
+            groups: components["schemas"]["KpiEvidenceGroupV6"][];
+            seven_day_trend: components["schemas"]["KpiDailyBucketV6"][];
+            sources: {
+                file: string;
+                record_group?: string | null;
+                raw_source_names: string[];
+            }[];
+            config_snapshot?: {
+                config_revision?: number;
+                config_fingerprint?: string;
+            };
+        };
+        KpiHistoryPointV6: {
+            task_id: string;
+            /** Format: date */
+            data_date: string;
+            value: components["schemas"]["NumberOrNull"];
+            /** @enum {string} */
+            status: "ok" | "no_data" | "zero_denominator" | "unreadable" | "no_baseline" | "pending_config";
+        };
+        KpiVersionComparisonV6: {
+            task_id: string;
+            device_id: string;
+            version: string;
+            /** Format: date */
+            data_date: string;
+            current_value: components["schemas"]["NumberOrNull"];
+            comparison_value: components["schemas"]["NumberOrNull"];
+            change_value?: components["schemas"]["NumberOrNull"];
+        };
+        KpiTechnicalAnalysisV6: {
+            task_id: string;
+            measurement_unit_id: string;
+            metric_resource_id: string;
+            /** @description ISO 8601 UTC。 */
+            generated_at: string;
+            cross_task_history: components["schemas"]["KpiHistoryPointV6"][];
+            version_comparisons: components["schemas"]["KpiVersionComparisonV6"][];
+        };
+        /**
+         * @description 运行时网元类型字典值，经 trim().upper() 规范化；当前为 UMF、CSP， 不得使用 public、*、COMMON 或空字符串。最终允许集合由服务端字典校验。
+         * @example UMF
+         * @example CSP
+         */
+        NetworkElementType: string;
     };
-    responses: never;
-    parameters: never;
+    responses: {
+        /** @description 关注差异为空、重叠、重复或加入项不属于当前任务可关注范围 */
+        InvalidFocusRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 旧任务没有 v6 KPI 快照，或 revision 已过期；两种错误均不应用任何关注变更 */
+        TeamFocusPatchConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 当前用户没有维护写权限 */
+        KpiTeamFocusWriteForbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 指定网元类型下不存在测量单元 */
+        MeasurementUnitNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 测量单元配置 revision 已过期 */
+        MeasurementUnitRevisionConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 指定网元类型下不存在绑定 */
+        BindingNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 当前绑定状态不允许人工修正 */
+        BindingNotCorrectable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 绑定 revision 已过期 */
+        MeasurementBindingRevisionConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 待归属记录不存在 */
+        PendingAttributionNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 维护操作不存在 */
+        MaintenanceOperationNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 重试目标为空、重复或不属于可重试状态 */
+        InvalidMaintenanceTargets: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 相同 idempotency_key 已用于不同请求 */
+        MaintenanceOperationIdempotencyConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 当前用户没有维护写权限 */
+        KpiMeasurementScopeWriteForbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 筛选组合非法或网元类型不在运行时字典中 */
+        InvalidRuleAssignmentFilter: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 归属集合非法、包含公共范围或清空最后归属未确认 */
+        InvalidRuleAssignmentRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 规则不存在、已下线或不是可归属的普通业务规则 */
+        RuleNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 一条或多条规则的 expected_revision 已过期 */
+        RuleAssignmentRevisionConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 当前用户没有规则维护写权限 */
+        KpiRuleAssignmentWriteForbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 请求参数不合法 */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 任务或任务范围内的指标不存在 */
+        MetricOrTaskNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 任务现场已清理，不能再执行业务规则或生成证据 */
+        SceneCleaned: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 指标证据无法读取；其他结果保持可用 */
+        EvidenceUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 请求结构不合法 */
+        ValidationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["HTTPValidationError"];
+            };
+        };
+        /** @description 任务不存在 */
+        TaskNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 旧任务没有 v6 KPI 快照，必须从任务行重建 */
+        TaskResultRequiresRebuild: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+    };
+    parameters: {
+        /** @description 运行时网元类型字典值。禁止使用 *、COMMON、空字符串或公共范围。 */
+        NetworkElementType: string;
+        /** @description 用于计算当前任务可用性；不改变关注项的跨任务共享身份。 */
+        TaskIdQuery: string;
+        NetworkElementTypeQuery: string;
+        NetworkElementTypePath: string;
+        MeasurementUnitIdPath: string;
+        /** @description assigned 返回至少归属一个网元类型的规则，unassigned 返回零归属规则。 省略时返回全部规则；unassigned 不能与 network_element_type 组合。 */
+        AssignmentStateQuery: components["schemas"]["KpiRuleAssignmentState"];
+        /** @description 普通业务规则稳定代码。 */
+        RuleCodePath: string;
+        TaskId: string;
+        MeasurementUnitId: string;
+        MetricResourceId: string;
+        Page: number;
+        PageSize: number;
+        /** @description 运行时网元类型字典值；不得使用 public、*、COMMON 或空字符串。 */
+        NetworkElementTypeQueryOptional: string;
+    };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description 异步维护操作资源位置 */
+        KpiMaintenanceLocation: string;
+        /** @description 重建任务的既有资源位置 */
+        KpiRebuildLocation: string;
+        /** @description 新建或恢复的任务资源位置 */
+        TaskCreateLocation: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -3587,13 +4748,24 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description 已接受重建，Location 指向既有任务资源 */
             202: {
                 headers: {
+                    Location: components["headers"]["KpiRebuildLocation"];
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["TaskCreated"];
+                };
+            };
+            404: components["responses"]["TaskNotFound"];
+            /** @description 原始包缺失；需重新上传同名包并确认覆盖后重建 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description 任务现场已按留存策略清理（scene_cleaned），需重新上传同名数据包，确认覆盖后全量重建 */
@@ -4012,13 +5184,14 @@ export interface operations {
             /** @description Successful Response */
             202: {
                 headers: {
+                    Location: components["headers"]["TaskCreateLocation"];
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["TaskCreated"];
                 };
             };
-            /** @description 上传任务元数据不合法：巡检包缺失省份、运营商或 product，product 非法，或日志补充包携带 province、operator、product 时拒绝创建。 */
+            /** @description 上传元数据不合法。巡检包缺少省份、运营商或 product，product 或日志包规则适用网元类型不在运行时字典中；日志包携带 province、operator、product；或巡检包携带 rule_network_element_type 时拒绝创建。 */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4027,7 +5200,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description 同名任务冲突，固定按 checksum → kind → product 顺序判定：checksum 不同返回 package_checksum_conflict；checksum 相同但 package_kind 不同返回 package_kind_conflict； 巡检包 checksum 与 kind 均相同但 product 不同或历史 product 缺失返回 package_product_conflict。 */
+            /** @description 同名任务冲突，严格按 checksum → package_kind → product → rule_network_element_type 顺序判定，前项不一致即返回，不再比较后续字段。checksum 不一致返回 package_checksum_conflict；包类型、product 或规则适用网元类型不一致分别返回对应冲突码。相同 checksum/kind/product/type 才执行幂等恢复。 */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4786,6 +5959,602 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+        };
+    };
+    listKpiTeamFocusV6: {
+        parameters: {
+            query: {
+                /** @description 用于计算当前任务可用性；不改变关注项的跨任务共享身份。 */
+                task_id: components["parameters"]["TaskIdQuery"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                search?: string;
+                measurement_unit_id?: string;
+                availability?: components["schemas"]["FocusAvailability"];
+            };
+            header?: never;
+            path: {
+                /** @description 运行时网元类型字典值。禁止使用 *、COMMON、空字符串或公共范围。 */
+                network_element_type: components["parameters"]["NetworkElementType"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 团队关注分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiTeamFocusPageV6"];
+                };
+            };
+            404: components["responses"]["TaskNotFound"];
+            409: components["responses"]["TaskResultRequiresRebuild"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    patchKpiTeamFocusV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 运行时网元类型字典值。禁止使用 *、COMMON、空字符串或公共范围。 */
+                network_element_type: components["parameters"]["NetworkElementType"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiTeamFocusPatchRequestV6"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiTeamFocusPatchResponseV6"];
+                };
+            };
+            400: components["responses"]["InvalidFocusRequest"];
+            403: components["responses"]["KpiTeamFocusWriteForbidden"];
+            404: components["responses"]["TaskNotFound"];
+            409: components["responses"]["TeamFocusPatchConflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listKpiMeasurementUnitsV6: {
+        parameters: {
+            query: {
+                network_element_type: components["parameters"]["NetworkElementTypeQuery"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                search?: string;
+                inspection_enabled?: boolean;
+                configuration_state?: components["schemas"]["KpiConfigurationState"];
+                recovery_state?: components["schemas"]["KpiRecoveryState"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 测量单元分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementUnitPageV6"];
+                };
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getKpiMeasurementUnitV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                network_element_type: components["parameters"]["NetworkElementTypePath"];
+                measurement_unit_id: components["parameters"]["MeasurementUnitIdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 测量单元详情 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementUnitV6"];
+                };
+            };
+            404: components["responses"]["MeasurementUnitNotFound"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    setKpiMeasurementInspectionEnabledV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                network_element_type: components["parameters"]["NetworkElementTypePath"];
+                measurement_unit_id: components["parameters"]["MeasurementUnitIdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementInspectionPatchV6"];
+            };
+        };
+        responses: {
+            /** @description 更新后的测量单元 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementUnitV6"];
+                };
+            };
+            403: components["responses"]["KpiMeasurementScopeWriteForbidden"];
+            404: components["responses"]["MeasurementUnitNotFound"];
+            409: components["responses"]["MeasurementUnitRevisionConflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listKpiMeasurementBindingsV6: {
+        parameters: {
+            query: {
+                network_element_type: components["parameters"]["NetworkElementTypeQuery"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                measurement_unit_id?: string;
+                status?: components["schemas"]["KpiBindingState"];
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 绑定分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementBindingPageV6"];
+                };
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    correctKpiMeasurementBindingV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                network_element_type: components["parameters"]["NetworkElementTypePath"];
+                binding_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiMeasurementBindingPatchV6"];
+            };
+        };
+        responses: {
+            /** @description 修正后的绑定 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMeasurementBindingV6"];
+                };
+            };
+            400: components["responses"]["BindingNotCorrectable"];
+            403: components["responses"]["KpiMeasurementScopeWriteForbidden"];
+            404: components["responses"]["BindingNotFound"];
+            409: components["responses"]["MeasurementBindingRevisionConflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listKpiLegacyRecoveryAuditsV6: {
+        parameters: {
+            query?: {
+                /** @description 运行时网元类型字典值；不得使用 public、*、COMMON 或空字符串。 */
+                network_element_type?: components["parameters"]["NetworkElementTypeQueryOptional"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                result?: components["schemas"]["KpiRecoveryResult"];
+                object_kind?: components["schemas"]["KpiRecoveryObjectKind"];
+                measurement_unit_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 恢复审计分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiLegacyRecoveryAuditPageV6"];
+                };
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    retryKpiLegacyRecoveryV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiLegacyRecoveryRetryRequestV6"];
+            };
+        };
+        responses: {
+            /** @description 已接受重试 */
+            202: {
+                headers: {
+                    Location: components["headers"]["KpiMaintenanceLocation"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMaintenanceOperationAcceptedV6"];
+                };
+            };
+            400: components["responses"]["InvalidMaintenanceTargets"];
+            403: components["responses"]["KpiMeasurementScopeWriteForbidden"];
+            409: components["responses"]["MaintenanceOperationIdempotencyConflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listKpiPendingAttributionsV6: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                resolution_state?: components["schemas"]["KpiPendingResolutionState"];
+                reason?: components["schemas"]["KpiPendingReason"];
+                source_table?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 待归属分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiPendingAttributionPageV6"];
+                };
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    resolveKpiPendingAttributionV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pending_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiPendingAttributionResolveRequestV6"];
+            };
+        };
+        responses: {
+            /** @description 已接受归属物化 */
+            202: {
+                headers: {
+                    Location: components["headers"]["KpiMaintenanceLocation"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMaintenanceOperationAcceptedV6"];
+                };
+            };
+            403: components["responses"]["KpiMeasurementScopeWriteForbidden"];
+            404: components["responses"]["PendingAttributionNotFound"];
+            409: components["responses"]["MaintenanceOperationIdempotencyConflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getKpiMaintenanceOperationV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 维护操作详情 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMaintenanceOperationV6"];
+                };
+            };
+            404: components["responses"]["MaintenanceOperationNotFound"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listKpiRuleNetworkAssignmentsV6: {
+        parameters: {
+            query?: {
+                /** @description 运行时网元类型字典值；不得使用 public、*、COMMON 或空字符串。 */
+                network_element_type?: components["parameters"]["NetworkElementTypeQueryOptional"];
+                /** @description assigned 返回至少归属一个网元类型的规则，unassigned 返回零归属规则。 省略时返回全部规则；unassigned 不能与 network_element_type 组合。 */
+                assignment_state?: components["parameters"]["AssignmentStateQuery"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                /** @description 同时匹配规则代码、名称、分类和描述。 */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 规则归属目录分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiRuleNetworkAssignmentPageV6"];
+                };
+            };
+            400: components["responses"]["InvalidRuleAssignmentFilter"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    batchUpdateKpiRuleNetworkAssignmentsV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiRuleAssignmentBatchRequestV6"];
+            };
+        };
+        responses: {
+            /** @description 整批保存成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiRuleAssignmentBatchResponseV6"];
+                };
+            };
+            400: components["responses"]["InvalidRuleAssignmentRequest"];
+            403: components["responses"]["KpiRuleAssignmentWriteForbidden"];
+            404: components["responses"]["RuleNotFound"];
+            409: components["responses"]["RuleAssignmentRevisionConflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listKpiRuleNetworkAssignmentAuditsV6: {
+        parameters: {
+            query?: {
+                rule_code?: string;
+                /** @description 运行时网元类型字典值；不得使用 public、*、COMMON 或空字符串。 */
+                network_element_type?: components["parameters"]["NetworkElementTypeQueryOptional"];
+                result?: components["schemas"]["KpiRuleAssignmentAuditResult"];
+                source?: components["schemas"]["KpiRuleAssignmentAuditSource"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 规则归属审计分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiRuleAssignmentAuditPageV6"];
+                };
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    updateKpiRuleNetworkAssignmentV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 普通业务规则稳定代码。 */
+                rule_code: components["parameters"]["RuleCodePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KpiRuleAssignmentPatchRequestV6"];
+            };
+        };
+        responses: {
+            /** @description 保存后的规则归属 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiRuleAssignmentWriteResultV6"];
+                };
+            };
+            400: components["responses"]["InvalidRuleAssignmentRequest"];
+            403: components["responses"]["KpiRuleAssignmentWriteForbidden"];
+            404: components["responses"]["RuleNotFound"];
+            409: components["responses"]["RuleAssignmentRevisionConflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getKpiTaskSummaryV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 工作台汇总 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiTaskSummaryV6"];
+                };
+            };
+            404: components["responses"]["TaskNotFound"];
+            409: components["responses"]["TaskResultRequiresRebuild"];
+            410: components["responses"]["SceneCleaned"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listKpiTaskMetricsV6: {
+        parameters: {
+            query?: {
+                /** @description 默认 needs_attention。 */
+                view?: components["schemas"]["KpiResultView"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+                /** @description 同时匹配指标名称、指标 ID、测量单元名称和测量单元 ID。 */
+                search?: string;
+                measurement_unit_id?: string;
+                current_status?: components["schemas"]["CurrentHealthStatus"];
+                yesterday_trend?: components["schemas"]["TrendHealthStatus"];
+                needs_attention_group?: components["schemas"]["NeedsAttentionGroup"];
+            };
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description KPI 结果分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricResultPageV6"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["TaskNotFound"];
+            409: components["responses"]["TaskResultRequiresRebuild"];
+            410: components["responses"]["SceneCleaned"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getKpiMetricEvidenceV6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+                measurement_unit_id: components["parameters"]["MeasurementUnitId"];
+                metric_resource_id: components["parameters"]["MetricResourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 指标证据 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiMetricEvidenceV6"];
+                };
+            };
+            404: components["responses"]["MetricOrTaskNotFound"];
+            409: components["responses"]["TaskResultRequiresRebuild"];
+            410: components["responses"]["SceneCleaned"];
+            422: components["responses"]["ValidationError"];
+            424: components["responses"]["EvidenceUnavailable"];
+        };
+    };
+    getKpiMetricTechnicalAnalysisV6: {
+        parameters: {
+            query?: {
+                history_days?: number;
+                version_limit?: number;
+            };
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+                measurement_unit_id: components["parameters"]["MeasurementUnitId"];
+                metric_resource_id: components["parameters"]["MetricResourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 技术分析 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiTechnicalAnalysisV6"];
+                };
+            };
+            404: components["responses"]["MetricOrTaskNotFound"];
+            409: components["responses"]["TaskResultRequiresRebuild"];
+            410: components["responses"]["SceneCleaned"];
+            422: components["responses"]["ValidationError"];
         };
     };
 }

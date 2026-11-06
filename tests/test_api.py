@@ -8,12 +8,14 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.kpi_measurement_units import import_resource_csv
+from tests.baseline_helpers import assign_all_business_rules
 
 SAMPLE = Path(__file__).resolve().parent / "fixtures" / "sample" / "sample.zip"
 client = TestClient(app)
 
 
 def _upload(package_name: str = "sample.zip") -> str:
+    assign_all_business_rules("UMF")
     with SAMPLE.open("rb") as fh:
         resp = client.post(
             "/api/v3/tasks",

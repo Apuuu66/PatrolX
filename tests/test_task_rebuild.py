@@ -28,7 +28,13 @@ from app.models.schemas import (
 from app.services import store
 from app.services.executor import make_result
 from app.services.tasks import task_service
-from tests.baseline_helpers import load_rule, setup_env, strip_volatile, wait_for_task
+from tests.baseline_helpers import (
+    assign_all_business_rules,
+    load_rule,
+    setup_env,
+    strip_volatile,
+    wait_for_task,
+)
 
 
 def test_full_rebuild_request_is_valid() -> None:
@@ -71,6 +77,7 @@ def _rebuild(client: TestClient, task_id: str, **body) -> dict:
 
 def _setup_task(tmp_path, monkeypatch):
     env = setup_env(tmp_path, monkeypatch)
+    assign_all_business_rules("UMF")
     client = TestClient(app)
     task_id = None
     sample = Path(__file__).parent / "fixtures" / "sample" / "sample.zip"
@@ -237,6 +244,7 @@ def test_rebuild_prechecks_reject_without_output_change(tmp_path, monkeypatch) -
 def test_full_rebuild_keeps_local_task_visible(tmp_path, monkeypatch) -> None:
     """本地全量重建期间 task.json 必须保留，列表不能出现任务消失。"""
     env = setup_env(tmp_path, monkeypatch)
+    assign_all_business_rules("UMF")
     uploads_dir = env.uploads / "local-rebuild-visible"
     uploads_dir.mkdir(parents=True)
     package = uploads_dir / "rebuild-sample.zip"
@@ -252,13 +260,17 @@ def test_full_rebuild_keeps_local_task_visible(tmp_path, monkeypatch) -> None:
 
     entered = threading.Event()
     release = threading.Event()
+    staging_root: list[Path] = []
 
     def fake_run_task(*args, **kwargs):
         entered.set()
+        output_root = kwargs["output_root"]
+        staging_root.append(output_root)
+        assert output_root.parent == env.output.parent
         assert release.wait(timeout=5)
         current = store.load_task_meta(env.output, "local-rebuild-visible")
         completed = current.model_copy(update={"status": TaskStatus.COMPLETED, "completed_at": current.created_at})
-        store.save_task_meta(env.output, completed)
+        store.save_task_meta(output_root, completed, sync_db=False)
         return completed
 
     monkeypatch.setattr("app.services.tasks.run_task", fake_run_task)
@@ -274,5 +286,11 @@ def test_full_rebuild_keeps_local_task_visible(tmp_path, monkeypatch) -> None:
     visible = {item.task_id: item for item in items}
     assert total >= 1
     assert "local-rebuild-visible" in visible
-    assert visible["local-rebuild-visible"].status == TaskStatus.PENDING
+    assert visible["local-rebuild-visible"].status in {TaskStatus.PENDING, TaskStatus.RUNNING}
+    official = store.load_task_meta(env.output, "local-rebuild-visible")
+    assert official is not None
+    assert official.status == TaskStatus.COMPLETED
+    assert staging_root and not staging_root[0].joinpath("local-rebuild-visible", "task.json").exists()
     release.set()
+    with TestClient(app) as client:
+        assert wait_for_task(client, "local-rebuild-visible")["status"] == "completed"

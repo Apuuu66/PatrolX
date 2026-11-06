@@ -40,11 +40,12 @@ from app.services.auth import AuthError, create_user, ensure_default_admin
 from app.services.executor import Executor, RuleContext, RuleDependencyError
 from app.services.extraction.manifest import LEGACY_TARGET_ROOTS
 from app.services.extraction.manifest import read_manifest as read_manifest_v5
-from app.services.inventory.ledger import archive_inventory
+from app.services.inventory.ledger import archive_inventory, write_inventory_evidence
 from app.services.inventory.parser import parse_inventory
 from app.services.report import render_report
-from app.services.rule_states import assert_rule_enabled, get_enabled_rule_codes
+from app.services.rule_scope import RuleScopeError, RuleScopeResolver
 from app.services.scanning import TaskFileCatalog
+from app.services.task_execution_scope import TaskExecutionScope, freeze_task_execution_scope
 
 logger = get_logger("patrolx.cli")
 
@@ -196,8 +197,8 @@ def latest_package() -> Path:
     return max(packages, key=lambda p: p.stat().st_mtime)
 
 
-def _make_log_fn(task_id: str):
-    log_path = settings.output / task_id / "execution.log"
+def _make_log_fn(task_id: str, output_root: Path | None = None):
+    log_path = (output_root or settings.output) / task_id / "execution.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(level: str, message: str, detail: dict | None = None) -> None:
@@ -210,6 +211,41 @@ def _make_log_fn(task_id: str):
     return log
 
 
+def _frozen_rule_scope(
+    task_id: str,
+    *,
+    network_element_type: Product | str | None,
+) -> task_db.RuleScopeSnapshotData:
+    """读取既有任务冻结规则范围；旧任务不得静默采用当前配置。"""
+    normalized_type = None
+    if network_element_type is not None:
+        normalized_type = str(getattr(network_element_type, "value", network_element_type)).strip().upper() or None
+    snapshot = task_db.get_rule_scope_snapshot(
+        task_id,
+        network_element_type=normalized_type,
+    )
+    if snapshot is None:
+        raise RuleScopeError(
+            "task_result_requires_rebuild",
+            "旧任务没有冻结规则范围，请按当前配置全量重建",
+            409,
+            {"task_id": task_id, "network_element_type": normalized_type},
+        )
+    return snapshot
+
+
+def _validate_frozen_rule_scope(
+    task_id: str,
+    rule_codes: list[str],
+    *,
+    network_element_type: Product | str | None,
+) -> tuple[task_db.RuleScopeSnapshotData, tuple]:
+    """校验规则属于原任务快照且版本未漂移，返回冻结范围与当前实现。"""
+    snapshot = _frozen_rule_scope(task_id, network_element_type=network_element_type)
+    rules = RuleScopeResolver(registry).validate_frozen_rules(snapshot, rule_codes)
+    return snapshot, rules
+
+
 def _new_context(
     task_id: str,
     package: Path,
@@ -217,12 +253,14 @@ def _new_context(
     *,
     product: Product | str | None = None,
     package_kind: PackageKind | str = PackageKind.INSPECTION,
+    output_root: Path | None = None,
 ) -> RuleContext:
-    task_dir = settings.output / task_id
+    base = output_root or settings.output
+    task_dir = base / task_id
     return RuleContext(
         task_id=task_id,
         data_dir=task_dir,
-        log=_make_log_fn(task_id),
+        log=_make_log_fn(task_id, base),
         package_path=package,
         package_checksum=package_checksum,
         result_dir=task_dir / "rules",
@@ -237,10 +275,10 @@ def _rebuild_system(
     package_name: str,
     customer: dict,
     version: str | None,
-    enabled_rules: set[str] | None = None,
+    frozen_rule_codes: set[str] | frozenset[str] | None = None,
 ) -> SystemInspection:
     """单规则重跑后重建 system.json（保持摘要一致）。"""
-    plan = Executor(registry, enabled_rules).inspect_plan()
+    plan = Executor(registry, frozen_rule_codes).inspect_plan()
     results = [store.load_rule_result(settings.output, task_id, code) for code in plan]
     results = [result for result in results if result is not None and not registry.get(result.code).hidden]
     for index, result in enumerate(results):
@@ -263,12 +301,18 @@ def _load_old_task(task_id: str) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _publish_terminal(task: InspectionTask, publish: Callable[[InspectionTask], None] | None) -> None:
+def _publish_terminal(
+    task: InspectionTask,
+    publish: Callable[[InspectionTask], None] | None,
+    *,
+    output_root: Path | None = None,
+) -> None:
     """终态发布：默认写 ``output/<task_id>/task.json``。
 
     在线模式由 ``TaskService`` 注入发布器，先收敛 SQLite 记录再写文件，使「文件显示终态」
     成为任务现场的最后一次写入；读方看到终态时报告、收尾日志与数据库记录均已就绪。
     """
+    base = output_root or settings.output
     if publish is not None:
         publish(task)
     else:
@@ -276,16 +320,22 @@ def _publish_terminal(task: InspectionTask, publish: Callable[[InspectionTask], 
         # 再写 task.json；KPI 镜像独立执行，不能阻塞终态可见。
         from app.services import task_db
 
-        task_db.publish_from_scene(task, output=settings.output, include_kpi=False)
-        store.save_task_meta(settings.output, task)
+        task_db.publish_from_scene(task, output=base, include_kpi=False)
+        store.save_task_meta(base, task)
         try:
-            task_db.publish_kpi_from_scene(task.task_id, output=settings.output)
+            task_db.publish_kpi_from_scene(task.task_id, output=base)
         except Exception:  # noqa: BLE001 - KPI 镜像失败不得把已完成任务改回失败
             logger.exception("task_kpi_mirror_failed", task_id=task.task_id)
+        try:
+            from app.services.kpi_v6_terminal_publish import publish_kpi_v6_from_scene
+
+            publish_kpi_v6_from_scene(task, output=base)
+        except Exception:  # noqa: BLE001 - v6 发布失败不得把已完成任务改回失败
+            logger.exception("task_kpi_v6_publish_failed", task_id=task.task_id)
         # 本地模式与在线模式共用留存清理语义：终态发布后清理超期现场。
         from app.services import retention
 
-        retention.cleanup_safely(output=settings.output, uploads=settings.uploads)
+        retention.cleanup_safely(output=base, uploads=settings.uploads)
 
 
 def run_task(
@@ -299,14 +349,57 @@ def run_task(
     trigger: TaskTrigger = TaskTrigger.CLI,
     created_at: datetime | None = None,
     package_kind: PackageKind = PackageKind.INSPECTION,
+    rule_network_element_type: Product | str | None = None,
     publish: Callable[[InspectionTask], None] | None = None,
+    output_root: Path | None = None,
+    execution_scope: TaskExecutionScope | None = None,
+    persist_package_checksum: bool = True,
+    persist_inventory_ledger: bool = True,
 ) -> InspectionTask:
+    init_db()
     registry.load_all()
-    enabled_rules = get_enabled_rule_codes()
     task_id = task_id or generate_task_id(package.name)
     run_started_at = _now()
+    task_created_at = created_at or _now()
+    customer_values = customer or {}
+    base = output_root or settings.output
+    product_value = customer_values.get("product")
+    kpi_network_element_type = (
+        str(product_value).strip().upper() if (package_kind == PackageKind.INSPECTION and product_value) else None
+    )
+    if package_kind == PackageKind.INSPECTION:
+        resolved_rule_network_element_type = kpi_network_element_type
+    else:
+        resolved_rule_network_element_type = (
+            str(getattr(rule_network_element_type, "value", rule_network_element_type)).strip().upper()
+            if rule_network_element_type is not None
+            else None
+        ) or None
+    task_db.ensure_task_execution_row(
+        task_id=task_id,
+        name=name or package.name,
+        mode=mode,
+        trigger=trigger,
+        package_file=package.name,
+        customer=customer_values,
+        version=version,
+        package_kind=package_kind,
+        rule_network_element_type=resolved_rule_network_element_type,
+        created_at=task_created_at,
+    )
+    scope = execution_scope or freeze_task_execution_scope(
+        task_id=task_id,
+        rule_network_element_type=resolved_rule_network_element_type,
+        kpi_network_element_type=kpi_network_element_type,
+        trigger=trigger.value,
+        source="task_service" if mode == TaskMode.ONLINE else "cli",
+        now=run_started_at,
+        registry_override=registry,
+    )
+    if scope.rule_snapshot.task_id != task_id:
+        raise ValueError("冻结规则范围与任务 ID 不一致")
     store.append_log(
-        settings.output,
+        base,
         task_id,
         "info",
         "任务开始执行",
@@ -318,10 +411,11 @@ def run_task(
     ctx = _new_context(
         task_id,
         package,
-        product=(customer or {}).get("product"),
+        product=product_value,
         package_kind=package_kind,
+        output_root=base,
     )
-    executor = Executor(registry, enabled_rules)
+    executor = Executor(registry, frozen_rule_codes=scope.rule_codes)
     results = executor.run_all(ctx)
     extract_errors = [
         result
@@ -331,7 +425,7 @@ def run_task(
     if extract_errors:
         executor.assign_order(results)
         for result in results.values():
-            store.save_rule_result(settings.output, task_id, result)
+            store.save_rule_result(base, task_id, result)
         summary = store.compute_summary([])
         system = SystemInspection(
             package_file=package.name,
@@ -349,7 +443,7 @@ def run_task(
             mode=mode,
             status=TaskStatus.FAILED,
             trigger=trigger,
-            created_at=_now(),
+            created_at=task_created_at,
             completed_at=failed_at,
             last_run_at=run_started_at,
             duration_ms=task_db.elapsed_ms(run_started_at, failed_at),
@@ -357,24 +451,25 @@ def run_task(
             system=system,
             package_kind=package_kind,
         )
-        store.save_system(settings.output, task_id, system)
+        store.save_system(base, task_id, system)
         store.append_log(
-            settings.output,
+            base,
             task_id,
             "error",
             "解压失败，任务失败",
             failed_units=[result.code for result in extract_errors],
         )
         TASKS_TOTAL.labels(result="failed", mode=mode.value).inc()
-        print(f"\n任务 {task_id} 失败：解压失败 | 日志: {settings.output / task_id / 'execution.log'}")
-        _publish_terminal(task, publish)
+        print(f"\n任务 {task_id} 失败：解压失败 | 日志: {base / task_id / 'execution.log'}")
+        _publish_terminal(task, publish, output_root=base)
         # 首次接收的 checksum 是恢复现场与冲突判定的唯一依据，失败任务同样必须落库。
-        task_db.set_package_checksum(task_id, sha256_file(package))
+        if persist_package_checksum:
+            task_db.set_package_checksum(task_id, sha256_file(package))
         return task
     executor.assign_order(results)
     ordered = [results[code] for code in executor.plan() if code in results]
     for result in ordered:
-        store.save_rule_result(settings.output, task_id, result)
+        store.save_rule_result(base, task_id, result)
     visible = [result for result in ordered if not registry.get(result.code).hidden]
     summary = store.compute_summary(visible)
     checksum = sha256_file(package)
@@ -387,7 +482,7 @@ def run_task(
         customer=customer or {},
         version=version,
     )
-    store.save_system(settings.output, task_id, system)
+    store.save_system(base, task_id, system)
     stats = TaskStats(
         total=summary.total,
         pass_=summary.pass_,
@@ -404,7 +499,7 @@ def run_task(
         mode=mode,
         status=TaskStatus.COMPLETED,
         trigger=trigger,
-        created_at=created_at or _now(),
+        created_at=task_created_at,
         completed_at=completed_at,
         last_run_at=run_started_at,
         duration_ms=task_db.elapsed_ms(run_started_at, completed_at),
@@ -417,7 +512,7 @@ def run_task(
         province = customer_values.get("province")
         operator = customer_values.get("operator")
         evidence = parse_inventory(
-            settings.output / task_id,
+            base / task_id,
             task_id=task_id,
             province=province,
             operator=operator,
@@ -425,19 +520,23 @@ def run_task(
             package_kind=package_kind,
             completed_at=task.completed_at,
         )
-        archive_inventory(
-            evidence,
-            task_id=task_id,
-            package_kind=package_kind,
-            completed_at=task.completed_at or _now(),
-        )
+        if persist_inventory_ledger:
+            archive_inventory(
+                evidence,
+                task_id=task_id,
+                package_kind=package_kind,
+                completed_at=task.completed_at or _now(),
+                output_root=base,
+            )
+        else:
+            write_inventory_evidence(evidence, task_id=task_id, output_root=base)
         task = task.model_copy(update={"inventory": TaskInventory.model_validate(evidence)})
     except Exception:  # noqa: BLE001 - 台账失败不能影响巡检任务
-        store.append_log(settings.output, task_id, "error", "设备台账归档失败，任务结果不受影响")
-    report = render_report(settings.output, task_id, system, completed_at=task.completed_at)
+        store.append_log(base, task_id, "error", "设备台账归档失败，任务结果不受影响")
+    report = render_report(base, task_id, system, completed_at=task.completed_at)
     TASKS_TOTAL.labels(result="completed", mode=mode.value).inc()
     store.append_log(
-        settings.output,
+        base,
         task_id,
         "info",
         "任务完成",
@@ -448,11 +547,12 @@ def run_task(
     print(
         f"\n任务 {task_id} 完成：pass={summary.pass_} warn={summary.warn} fail={summary.fail} "
         f"error={summary.error} skip={summary.skip} | 报告: {report} "
-        f"| 日志: {settings.output / task_id / 'execution.log'}"
+        f"| 日志: {base / task_id / 'execution.log'}"
     )
     # 终态发布是任务现场的最后一次写入：读方看到 completed 时，报告、收尾日志与台账均已就绪。
-    _publish_terminal(task, publish)
-    task_db.set_package_checksum(task_id, checksum)
+    _publish_terminal(task, publish, output_root=base)
+    if persist_package_checksum:
+        task_db.set_package_checksum(task_id, checksum)
     return completed_summary
 
 
@@ -465,22 +565,36 @@ def run_incremental_rebuild(
     publish: Callable[[InspectionTask], None] | None = None,
     product: Product | str | None = None,
     package_kind: PackageKind | str | None = None,
+    rule_network_element_type: Product | str | None = None,
 ) -> list[str]:
     """强制重建解压现场后只执行指定普通规则及其私有 prepare。"""
     if not rule_codes:
         raise ValueError("增量重建必须指定至少一条普通规则")
     run_started_at = _now()
     registry.load_all()
-    enabled_rules = get_enabled_rule_codes()
-    for code in rule_codes:
-        assert_rule_enabled(code)
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
+    existing = _load_old_task(task_id) or {}
+    customer = existing.get("system", {}).get("customer") or {}
+    task_product = product if product is not None else customer.get("product")
+    scope_package_kind = (
+        PackageKind(package_kind)
+        if package_kind is not None
+        else (PackageKind(existing.get("package_kind")) if existing.get("package_kind") else PackageKind.INSPECTION)
+    )
+    task_rule_network_element_type = (
+        rule_network_element_type
+        if rule_network_element_type is not None
+        else (task_product if scope_package_kind == PackageKind.INSPECTION else None)
+    )
+    scope, _ = _validate_frozen_rule_scope(
+        task_id,
+        rule_codes,
+        network_element_type=task_rule_network_element_type,
+    )
     task_dir = settings.output / task_id
 
     checksum = package_checksum or sha256_file(package)
-    old = _load_old_task(task_id) or {}
-    customer = old.get("system", {}).get("customer") or {}
     resolved_product, resolved_package_kind = _resolve_task_metadata(
         product,
         package_kind,
@@ -495,7 +609,7 @@ def run_incremental_rebuild(
         product=resolved_product,
         package_kind=resolved_package_kind,
     )
-    executor = Executor(registry, enabled_rules)
+    executor = Executor(registry, frozen_rule_codes=scope.rule_codes)
 
     # 只删除解压 manifest 和工作分类目录；规则结果、prepared 数据与任务元数据保留。
     extraction_manifest = task_dir / EXTRACT_MANIFEST
@@ -516,13 +630,13 @@ def run_incremental_rebuild(
             result.execution_order = old_result.execution_order
         store.save_rule_result(settings.output, task_id, result)
 
-    version = old.get("system", {}).get("version")
-    system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
+    version = existing.get("system", {}).get("version")
+    system = _rebuild_system(task_id, package.name, customer, version, scope.rule_codes)
     store.save_system(settings.output, task_id, system)
     completed: InspectionTask | None = None
-    if old is not None:
+    if existing:
         current_meta = store.load_task_meta(settings.output, task_id)
-        base = current_meta or InspectionTask.model_validate(old)
+        base = current_meta or InspectionTask.model_validate(existing)
         completed_at = _now()
         completed = base.model_copy(
             update={
@@ -568,16 +682,31 @@ def run_single_rule(
     *,
     product: Product | str | None = None,
     package_kind: PackageKind | str | None = None,
+    rule_network_element_type: Product | str | None = None,
 ) -> None:
     run_started_at = _now()
     registry.load_all()
-    assert_rule_enabled(code)
-    enabled_rules = get_enabled_rule_codes()
     package = package or latest_package()
     task_id = task_id or generate_task_id(package.name)
-    task_path = settings.output / task_id / "task.json"
     old = _load_old_task(task_id) or {}
     customer = old.get("system", {}).get("customer") or {}
+    task_product = product if product is not None else customer.get("product")
+    package_kind_value = (
+        PackageKind(package_kind)
+        if package_kind is not None
+        else (PackageKind(old.get("package_kind")) if old.get("package_kind") else PackageKind.INSPECTION)
+    )
+    task_rule_network_element_type = (
+        rule_network_element_type
+        if rule_network_element_type is not None
+        else (task_product if package_kind_value == PackageKind.INSPECTION else None)
+    )
+    scope, _ = _validate_frozen_rule_scope(
+        task_id,
+        [code],
+        network_element_type=task_rule_network_element_type,
+    )
+    task_path = settings.output / task_id / "task.json"
     resolved_product, resolved_package_kind = _resolve_task_metadata(
         product,
         package_kind,
@@ -592,7 +721,7 @@ def run_single_rule(
         product=resolved_product,
         package_kind=resolved_package_kind,
     )
-    executor = Executor(registry, enabled_rules)
+    executor = Executor(registry, frozen_rule_codes=scope.rule_codes)
     if not (settings.output / task_id / EXTRACT_MANIFEST).exists():
         extraction = executor.run_rule("pkg.extract.main", ctx)
         store.save_rule_result(settings.output, task_id, extraction)
@@ -607,7 +736,7 @@ def run_single_rule(
             result.execution_order = old_result.execution_order
         store.save_rule_result(settings.output, task_id, result)
     version = old.get("system", {}).get("version")
-    system = _rebuild_system(task_id, package.name, customer, version, enabled_rules)
+    system = _rebuild_system(task_id, package.name, customer, version, scope.rule_codes)
     store.save_system(settings.output, task_id, system)
     if old:
         completed_at = _now()
@@ -655,7 +784,6 @@ def explain_match(
         raise ValueError("隐藏解压规则不支持 explain-match")
     if not rule.source_patterns:
         raise ValueError(f"规则 {code} 没有可解释的 source_patterns")
-    enabled_rules = get_enabled_rule_codes()
     if task_id is None:
         package = package or latest_package()
         task_id = generate_task_id(package.name)
@@ -717,7 +845,6 @@ def explain_match(
             "name": rule.name,
             "priority": rule.priority.value,
             "rule_version": rule.rule_version,
-            "enabled": code in enabled_rules,
             "has_prepare": rule.prepare is not None,
         },
         "source_patterns": list(rule.source_patterns),

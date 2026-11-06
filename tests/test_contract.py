@@ -4,8 +4,12 @@
 G-04（生成客户端零漂移）由 CI 门禁以 git diff 校验，不在 pytest 内。
 """
 
+import hashlib
+import json
 import re
+from functools import cache
 from pathlib import Path
+from typing import Any
 
 import yaml
 from fastapi import APIRouter
@@ -16,6 +20,7 @@ from app.models.schemas import PackageKind, Product, TaskConflictCode, TaskCreat
 from app.services.inventory import parser as inventory_parser
 
 
+@cache
 def _load_contract() -> dict:
     return yaml.safe_load(CONTRACT_PATH.read_text(encoding="utf-8"))
 
@@ -171,6 +176,81 @@ def _synthetic_contract(operations: list[tuple[str, str, dict[str, object]]]) ->
     for path, method, operation in operations:
         paths.setdefault(path, {})[method.lower()] = operation
     return {"openapi": "3.1.0", "info": {"title": "synthetic", "version": "0"}, "paths": paths}
+
+
+_CONTRACT_DOCUMENTATION_FIELDS = frozenset(
+    {"description", "summary", "title", "examples", "example", "deprecated", "tags"}
+)
+
+
+def _strip_contract_documentation(value: Any) -> Any:
+    """移除只影响文档展示、不承载字段语义的契约内容。"""
+    if isinstance(value, dict):
+        return {
+            key: _strip_contract_documentation(item)
+            for key, item in value.items()
+            if key not in _CONTRACT_DOCUMENTATION_FIELDS
+        }
+    if isinstance(value, list):
+        return [_strip_contract_documentation(item) for item in value]
+    return value
+
+
+def _contract_refs(value: Any) -> list[str]:
+    """递归收集契约对象中的本地引用。"""
+    refs: list[str] = []
+    if isinstance(value, dict):
+        ref = value.get("$ref")
+        if isinstance(ref, str):
+            refs.append(ref)
+        for item in value.values():
+            refs.extend(_contract_refs(item))
+    elif isinstance(value, list):
+        for item in value:
+            refs.extend(_contract_refs(item))
+    return refs
+
+
+def _resolve_contract_ref(contract: dict[str, Any], ref: str) -> dict[str, Any]:
+    """解析本地 JSON Pointer 引用。"""
+    current: Any = contract
+    for part in ref.removeprefix("#/").split("/"):
+        current = current[part.replace("~1", "/").replace("~0", "~")]
+    assert isinstance(current, dict), ref
+    return current
+
+
+def _v5_kpi_semantic_surface(contract: dict[str, Any]) -> dict[str, Any]:
+    """生成 v5 KPI 契约的语义表面，忽略可原地更新的文档字段。"""
+    operations = _strip_contract_documentation(
+        {path: item for path, item in contract["paths"].items() if path.startswith("/api/v5/kpi/")}
+    )
+    pending = _contract_refs(operations)
+    seen: set[str] = set()
+    components: dict[str, Any] = {}
+    while pending:
+        ref = pending.pop()
+        if ref in seen or not ref.startswith("#/components/"):
+            continue
+        seen.add(ref)
+        component = _strip_contract_documentation(_resolve_contract_ref(contract, ref))
+        components[ref.removeprefix("#/")] = component
+        pending.extend(_contract_refs(component))
+    return {
+        "operations": operations,
+        "components": dict(sorted(components.items())),
+    }
+
+
+def _canonical_contract_json(value: Any) -> str:
+    """返回规范化 JSON 的 SHA-256，供冻结契约语义使用。"""
+    serialized = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def test_operation_ids_unique_and_non_empty() -> None:
@@ -371,6 +451,17 @@ def test_task_run_fields_nullable_in_contract() -> None:
         assert "duration_ms" not in required, name
 
 
+def test_task_summary_exposes_optional_rule_network_element_type() -> None:
+    """日志补充包的规则适用网元类型必须随任务列表摘要返回。"""
+    schemas = _load_contract()["components"]["schemas"]
+    schema = schemas["TaskSummary"]
+    rule_type = schema["properties"]["rule_network_element_type"]
+
+    assert _is_nullable(rule_type)
+    assert _non_null_branch(rule_type).get("type") == "string"
+    assert "rule_network_element_type" not in schema.get("required", [])
+
+
 def test_scene_cleaned_returns_410_in_contract() -> None:
     """FR-011：报告、日志、重跑、重建在现场清理后返回 410 并说明留存语义。"""
     paths = _load_contract()["paths"]
@@ -417,12 +508,14 @@ def test_task_product_package_kind_contract_matches_schema_and_client() -> None:
         "missing_operator",
         "missing_product",
         "invalid_product",
+        "invalid_rule_network_element_type",
         "metadata_not_applicable",
     }
     expected_conflicts = {
         "package_checksum_conflict",
         "package_kind_conflict",
         "package_product_conflict",
+        "package_rule_network_element_type_conflict",
     }
 
     assert set(_schema_enum({"$ref": "#/components/schemas/Product"}, schemas)) == expected_products
@@ -450,7 +543,7 @@ def test_task_product_package_kind_contract_matches_schema_and_client() -> None:
     assert responses["400"]["content"]["application/json"]["schema"]["$ref"].endswith("/Error")
     assert set(responses["409"]["x-error-codes"]) == expected_conflicts
     assert responses["409"]["content"]["application/json"]["schema"]["$ref"].endswith("/Error")
-    assert "checksum → kind → product" in responses["409"]["description"]
+    assert "checksum → package_kind → product → rule_network_element_type" in responses["409"]["description"]
 
     client_path = Path(__file__).resolve().parents[1] / "web" / "src" / "api" / "client.ts"
     client = client_path.read_text(encoding="utf-8")
@@ -458,3 +551,50 @@ def test_task_product_package_kind_contract_matches_schema_and_client() -> None:
     assert _client_enum_values(client, "TaskCreateErrorCode") == expected_create_errors
     assert _client_enum_values(client, "TaskConflictCode") == expected_conflicts
     assert re.search(r"product\?: string \| null;", client)
+
+
+def test_v5_kpi_contract_semantics_are_frozen() -> None:
+    """FR-034：v5 KPI 请求/响应字段语义不得原地变化。"""
+    semantic_surface = _v5_kpi_semantic_surface(_load_contract())
+
+    assert _canonical_contract_json(semantic_surface) == (
+        "04c99b623ebe1ef4f7d8b3b862ad67db196ed6f9bf4c55a79edd6951b173fdde"
+    )
+    assert set(semantic_surface["operations"]) == {
+        "/api/v5/kpi/measurement-units/import",
+        "/api/v5/kpi/measurement-units",
+        "/api/v5/kpi/measurement-units/{resource_id}",
+        "/api/v5/kpi/measurement-bindings",
+        "/api/v5/kpi/measurement-bindings/batch-confirm",
+        "/api/v5/kpi/measurement-bindings/{binding_id}",
+        "/api/v5/kpi/measurement-resources",
+        "/api/v5/kpi/metric-maintenance-configs",
+        "/api/v5/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}",
+        "/api/v5/kpi/metric-maintenance-configs/{measurement_unit_id}/{metric_resource_id}/audits",
+        "/api/v5/kpi/measurement-bindings/{binding_id}/register-metric",
+        "/api/v5/kpi/measurement-resources/{resource_id}",
+        "/api/v5/kpi/measurement-derived",
+        "/api/v5/kpi/measurement-derived/{derived_id}",
+    }
+
+
+def test_v6_frontend_requests_use_generated_client_paths() -> None:
+    """FR-034：v6 页面不得直连 URL，适配层路径必须来自生成契约。"""
+    root = Path(__file__).resolve().parents[1] / "web" / "src"
+    generated = (root / "api" / "client.ts").read_text(encoding="utf-8")
+    adapter_path = root / "api" / "http.ts"
+    adapter = adapter_path.read_text(encoding="utf-8")
+
+    generated_v6_paths = set(re.findall(r'^    "(/api/v6/[^"]+)": \{', generated, re.MULTILINE))
+    adapter_v6_paths = set(re.findall(r'"(/api/v6/[^"]+)"', adapter))
+    assert generated_v6_paths
+    assert adapter_v6_paths == generated_v6_paths
+    assert 'import type { components, operations, paths } from "./client";' in adapter
+    assert "satisfies Record<string, V6PathKey>" in adapter
+
+    direct_violations: list[str] = []
+    for path in sorted((root / "pages").rglob("*.ts*")) + sorted((root / "components").rglob("*.ts*")):
+        source = path.read_text(encoding="utf-8")
+        if "/api/v6" in source:
+            direct_violations.append(str(path.relative_to(root)))
+    assert direct_violations == []

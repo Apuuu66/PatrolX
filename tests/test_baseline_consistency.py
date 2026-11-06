@@ -22,7 +22,7 @@ client = TestClient(app)
 
 
 def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) -> None:
-    local_env = setup_env(tmp_path / "local", monkeypatch)
+    local_env = setup_env(tmp_path / "local", monkeypatch, assign_rules_to="UMF")
     from app.cli import run_task
 
     local_task = run_task(
@@ -32,7 +32,7 @@ def test_local_and_online_contract_results_match(tmp_path: Path, monkeypatch) ->
     )
     local_system = local_task.system.model_dump(by_alias=True, mode="json")
 
-    online_env = setup_env(tmp_path / "online", monkeypatch)
+    online_env = setup_env(tmp_path / "online", monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(
         online_env,
         client,
@@ -91,7 +91,7 @@ def test_cli_and_api_daily_health_results_match(tmp_path: Path, monkeypatch) -> 
         "ME_CALL,呼叫请求次数,Call Requests\n"
     )
 
-    local_env = setup_env(tmp_path / "local", monkeypatch)
+    local_env = setup_env(tmp_path / "local", monkeypatch, assign_rules_to="UMF")
     import_resource_csv(io.StringIO(resource_csv))
     local_task = run_task(
         SAMPLE,
@@ -100,7 +100,7 @@ def test_cli_and_api_daily_health_results_match(tmp_path: Path, monkeypatch) -> 
     )
     local_rule = load_rule(local_env, local_task.task_id, "kpi.measurement_units")
 
-    online_env = setup_env(tmp_path / "online", monkeypatch)
+    online_env = setup_env(tmp_path / "online", monkeypatch, assign_rules_to="UMF")
     import_resource_csv(io.StringIO(resource_csv))
     task_id = upload_package(
         online_env,
@@ -125,7 +125,7 @@ def test_cli_and_api_daily_health_results_match(tmp_path: Path, monkeypatch) -> 
 
 def test_same_metadata_packages_remain_isolated(tmp_path: Path, monkeypatch) -> None:
     """相同系统元数据下，不同包名必须形成互不覆盖的任务现场。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     first_package = tmp_path / "metadata-a.zip"
     second_package = tmp_path / "metadata-b.zip"
     shutil.copyfile(SAMPLE, first_package)

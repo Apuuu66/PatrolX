@@ -79,9 +79,9 @@ def test_version_history_uses_execution_time_and_marks_direction_and_gap(
         )
 
     with session_factory() as session:
-        device = session.query(InventoryDevice).one()
-        points, total = get_version_history(session, device.device_id, page=1, page_size=10)
-        listed, listed_total = list_observations(session, device.device_id, page=1, page_size=10, order="asc")
+        device_id = session.query(InventoryDevice).one().device_id
+    points, total = get_version_history(device_id, page=1, page_size=10)
+    listed, listed_total = list_observations(device_id, page=1, page_size=10, order="asc")
 
     assert total == 5
     assert [point.task_id for point in points] == ["task-a", "task-b", "task-c", "task-d", "task-e"]

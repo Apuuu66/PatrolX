@@ -1,12 +1,14 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "antd";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ApiError,
   api,
   type DataPreparation,
+  type KpiTaskSummaryV6,
   type PreparationItem,
   type RuleResult,
   type SystemInspection,
@@ -14,11 +16,23 @@ import {
   type TaskSummary,
 } from "../api/http";
 import { AuthProvider } from "../auth/AuthContext";
+import { apiMe, setSession } from "../api/auth";
 import { TABLE_DENSITY_STORAGE_KEY } from "../hooks/useTableDensity";
 import { TaskDetailPage } from "./TaskDetailPage";
 
 vi.mock("../api/http", () => ({
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    code: string;
+    status: number;
+    detail?: unknown;
+
+    constructor(code: string, message: string, status = 400, detail?: unknown) {
+      super(message);
+      this.code = code;
+      this.status = status;
+      this.detail = detail;
+    }
+  },
   api: {
     getTask: vi.fn(),
     getSystem: vi.fn(),
@@ -27,8 +41,14 @@ vi.mock("../api/http", () => ({
     rerunTask: vi.fn(),
     updateTaskDeviceId: vi.fn(),
     rebuildTask: vi.fn(),
+    getKpiTaskSummaryV6: vi.fn(),
   },
 }));
+
+vi.mock("../api/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/auth")>();
+  return { ...actual, apiMe: vi.fn() };
+});
 
 function makeStats(overrides: Partial<TaskStats> = {}): TaskStats {
   return { total: 1, pass: 1, warn: 0, fail: 0, error: 0, skip: 0, systems: 1, ...overrides };
@@ -103,6 +123,32 @@ function makePreparation(items: PreparationItem[]): DataPreparation {
   };
 }
 
+function makeKpiSummary(overrides: Partial<KpiTaskSummaryV6> = {}): KpiTaskSummaryV6 {
+  return {
+    task_id: "task-001",
+    network_element_type: "UMF",
+    result_contract_version: "v6",
+    data_date: "2026-10-10",
+    previous_date: "2026-10-09",
+    latest_measured_at: "2026-10-10T00:00:00Z",
+    counts: {
+      enabled_measurement_unit_count: 2,
+      all_metric_count: 20,
+      team_focus_count: 10,
+      needs_attention_count: 3,
+      no_action_count: 7,
+      unavailable_focus_count: 0,
+    },
+    needs_attention_groups: [],
+    rule_scope: {
+      business_rule_count: 1,
+      has_executable_rules: true,
+      notice: null,
+    },
+    ...overrides,
+  };
+}
+
 function renderPage(taskId = "task-001") {
   return render(
     <App>
@@ -110,6 +156,7 @@ function renderPage(taskId = "task-001") {
         <MemoryRouter initialEntries={[`/tasks/${taskId}`]}>
           <Routes>
             <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
+            <Route path="/tasks/:taskId/kpi" element={<div data-testid="kpi-route">KPI 工作台</div>} />
           </Routes>
         </MemoryRouter>
       </AuthProvider>
@@ -120,8 +167,10 @@ function renderPage(taskId = "task-001") {
 describe("TaskDetailPage", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    vi.mocked(apiMe).mockResolvedValue({ username: "admin", role: "admin" });
     vi.mocked(api.listInspectors).mockResolvedValue([]);
     vi.mocked(api.getTaskLogs).mockResolvedValue({ task_id: "task-001", entries: [] });
+    vi.mocked(api.getKpiTaskSummaryV6).mockResolvedValue(makeKpiSummary());
   });
 
   it("全通过任务首屏只保留结论 Hero 与全部规则，不出现重点关注提示条", async () => {
@@ -269,5 +318,101 @@ describe("TaskDetailPage", () => {
     expect(screen.queryByTestId("preparation-pkg.extract.kpi")).toBeNull();
     expect(screen.getByText("落位 98 · 忽略 7 · 失败 2")).toBeDefined();
     expect(screen.getByText(/archive_corrupt/)).toBeDefined();
+  });
+
+  it("已有 v6 KPI 结果时提供唯一工作台入口，不展示健康分、风险排序或旧关注页签", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(makeTask());
+    vi.mocked(api.getSystem).mockResolvedValue(makeSystem());
+    setSession("task-detail-test-token", { username: "admin", role: "admin" });
+
+    renderPage();
+
+    const entry = await screen.findByTestId("task-kpi-entry");
+    await waitFor(() => expect(api.getKpiTaskSummaryV6).toHaveBeenCalledWith("task-001"));
+    expect(entry.textContent ?? "").toContain("需要处理 3");
+    expect(entry.textContent ?? "").toContain("团队关注 10");
+    expect(screen.queryByText("健康分")).toBeNull();
+    expect(screen.queryByText("风险排序")).toBeNull();
+    expect(screen.queryByRole("tab", { name: "关注指标" })).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(within(entry).getByRole("button", { name: "查看 KPI 巡检结果" }));
+
+    expect(await screen.findByTestId("kpi-route")).toBeDefined();
+  });
+
+  it("访客查看任务详情时不请求需要登录的 KPI 汇总", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(makeTask());
+    vi.mocked(api.getSystem).mockResolvedValue(makeSystem());
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("conclusion-hero")).toBeDefined();
+    });
+    expect(api.getKpiTaskSummaryV6).not.toHaveBeenCalled();
+  });
+
+  it("旧任务没有 v6 快照时只展示全量重建动作，不渲染 KPI 降级入口", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(makeTask());
+    vi.mocked(api.getSystem).mockResolvedValue(makeSystem());
+    setSession("task-detail-test-token", { username: "admin", role: "admin" });
+    vi.mocked(api.getKpiTaskSummaryV6).mockRejectedValue(
+      new ApiError("task_result_requires_rebuild", "任务结果需要重建", 409),
+    );
+    vi.mocked(api.rebuildTask).mockResolvedValue({ task_id: "task-001" });
+
+    renderPage();
+
+    const rebuildRequired = await screen.findByTestId("task-kpi-rebuild-required");
+    expect(rebuildRequired.textContent ?? "").toContain("task_result_requires_rebuild");
+    expect(rebuildRequired.textContent ?? "").toContain("任务结果需要重建");
+    expect(screen.queryByTestId("task-kpi-entry")).toBeNull();
+    expect(screen.queryByRole("button", { name: "查看 KPI 巡检结果" })).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(within(rebuildRequired).getByRole("button", { name: "重建任务" }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeDefined());
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^重\s*建$/ }));
+
+    await waitFor(() => {
+      expect(api.rebuildTask).toHaveBeenCalledWith("task-001", {
+        mode: "full",
+        confirmed: true,
+        trigger_source: "ui",
+      });
+    });
+  });
+
+  it("日志补充包未选择规则适用网元类型时明确提示，不给出全绿结论", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(
+      makeTask({ stats: makeStats({ total: 0, pass: 0, systems: 1 }) }),
+    );
+    vi.mocked(api.getSystem).mockResolvedValue(makeSystem({ rules: [], summary: makeStats({ total: 0, pass: 0 }) }));
+    vi.mocked(api.getKpiTaskSummaryV6).mockResolvedValue(
+      makeKpiSummary({
+        network_element_type: null,
+        counts: {
+          enabled_measurement_unit_count: 0,
+          all_metric_count: 0,
+          team_focus_count: 0,
+          needs_attention_count: 0,
+          no_action_count: 0,
+          unavailable_focus_count: 0,
+        },
+        rule_scope: {
+          business_rule_count: 0,
+          has_executable_rules: false,
+          notice: "当前网元类型未配置可执行业务规则",
+        },
+      }),
+    );
+    setSession("task-detail-test-token", { username: "admin", role: "admin" });
+
+    renderPage();
+
+    const entry = await screen.findByTestId("task-kpi-entry");
+    expect(entry.textContent ?? "").toContain("未选择规则适用网元类型");
+    expect(screen.queryByText("全部通过")).toBeNull();
   });
 });

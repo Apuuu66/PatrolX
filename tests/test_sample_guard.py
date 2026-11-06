@@ -1,9 +1,7 @@
 """真实样例包规则覆盖看护：防止规则因真实数据缺失被静默跳过。"""
 
 from app.inspectors.registry import registry
-from app.services.executor import Executor
 from app.services.kpi_measurement_units import import_resource_csv, io
-from app.services.rule_states import get_enabled_rule_codes
 from tests.baseline_helpers import load_rule, setup_env
 from tests.fixtures.make_real_package import build_real_package
 
@@ -12,12 +10,12 @@ ACTIVE_RULES = {"alarm.active_state", "alarm.recurrence", "kpi.measurement_units
 
 def test_real_package_covers_app_scene_rules(tmp_path, monkeypatch) -> None:
     """真实包触发当前活动的告警与 KPI 普通规则，并保留其他证据分类。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_task
 
     import_resource_csv(io.StringIO("资源id,中文描述,英文描述\nMU_CALL,呼叫会话统计,Call Session API Statistics\n"))
     registry.load_all()
-    expected_codes = set(Executor(registry, get_enabled_rule_codes()).inspect_plan())
+    expected_codes = set(registry.inspect_plan())
     assert expected_codes, "普通规则计划不能为空"
     assert ACTIVE_RULES == expected_codes
 

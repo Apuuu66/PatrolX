@@ -22,7 +22,6 @@ import type { AlarmFlappingMetadata } from "../components/AlarmFlappingPanel";
 import type { AlarmRecurrenceMetadata } from "../components/AlarmRecurrencePanel";
 import { CopyTextButton } from "../components/CopyTextButton";
 import { getStatusTextColor } from "../utils/statusTextColors";
-import { MeasurementInspectionPanel } from "../components/MeasurementInspectionPanel";
 import { PageHeader } from "../components/PageHeader";
 import { FindingItem } from "../components/FindingItem";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
@@ -190,12 +189,11 @@ export function RuleDetailPage() {
   const findings = result.findings ?? [];
   const metrics = result.metrics ?? [];
   const sourcePatterns = meta?.source_patterns ?? [];
-  const hasMeasurementResults = Object.prototype.hasOwnProperty.call(result.metadata ?? {}, "measurement_units");
   const alarmActive = (result.metadata ?? {})["alarm_active"] as AlarmActiveMetadata | undefined;
   const alarmRecurrence = (result.metadata ?? {})["alarm_recurrence"] as AlarmRecurrenceMetadata | undefined;
   const alarmFlapping = (result.metadata ?? {})["alarm_flapping"] as AlarmFlappingMetadata | undefined;
   const hasEvidence =
-    Boolean(alarmActive) || Boolean(alarmRecurrence) || Boolean(alarmFlapping) || hasMeasurementResults || metrics.length > 0;
+    Boolean(alarmActive) || Boolean(alarmRecurrence) || Boolean(alarmFlapping) || metrics.length > 0;
 
   return (
     <div className="rule-detail-page">
@@ -370,19 +368,6 @@ export function RuleDetailPage() {
                 <Suspense fallback={<Card size="small" loading />}>
                   <AlarmFlappingPanel metadata={alarmFlapping} showAllColumns={showAllColumns} />
                 </Suspense>
-              </section>
-            )}
-            {hasMeasurementResults && (
-              <section className="rule-evidence-section">
-                <Typography.Text strong className="rule-evidence-title">
-                  KPI 测量单元巡检
-                </Typography.Text>
-                <MeasurementInspectionPanel
-                  metadata={result.metadata}
-                  taskId={taskId}
-                  ruleCode={ruleCode}
-                  showAllColumns={showAllColumns}
-                />
               </section>
             )}
             {metrics.length > 0 && (

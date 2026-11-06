@@ -18,6 +18,7 @@ const ROLE_LABELS: Record<string, string> = {
  */
 const PAGE_TITLE_RULES: readonly { pattern: RegExp; title: string }[] = [
   { pattern: /^\/tasks\/[^/]+\/rules\/[^/]+$/, title: "规则详情" },
+  { pattern: /^\/tasks\/[^/]+\/kpi$/, title: "KPI 巡检结果" },
   { pattern: /^\/tasks\/[^/]+\/report$/, title: "巡检报告" },
   { pattern: /^\/tasks\/[^/]+\/logs$/, title: "执行日志" },
   { pattern: /^\/tasks\/[^/]+$/, title: "任务详情" },

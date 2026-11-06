@@ -32,7 +32,7 @@ def _list_item(task_id: str) -> dict:
 
 
 def test_display_reads_survive_scene_cleanup(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(env, client, name="清理后追溯")
     wait_for_task(client, task_id)
 
@@ -54,7 +54,7 @@ def test_display_reads_survive_scene_cleanup(tmp_path: Path, monkeypatch) -> Non
 
 def test_rule_detail_falls_back_to_db_when_rule_file_missing(tmp_path: Path, monkeypatch) -> None:
     """现场规则文件被删除（未清理整目录）时，规则详情仍从库中读取。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(env, client, name="规则文件缺失")
     wait_for_task(client, task_id)
 
@@ -68,7 +68,7 @@ def test_rule_detail_falls_back_to_db_when_rule_file_missing(tmp_path: Path, mon
 
 def test_legacy_scene_without_snapshot_is_readable_and_backfilled(tmp_path: Path, monkeypatch) -> None:
     """未入库的历史现场（只有 task.json / rules）仍可读，并在读取后补齐库内快照。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(env, client, name="历史现场")
     wait_for_task(client, task_id)
     before = _snapshot(task_id)

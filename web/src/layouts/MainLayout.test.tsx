@@ -45,6 +45,7 @@ describe("MainLayout", () => {
     expect(resolvePageTitle("/tasks/task-a")).toBe("任务详情");
     expect(resolvePageTitle("/tasks/task-a/rules/log.filter")).toBe("规则详情");
     expect(resolvePageTitle("/tasks/task-a/report")).toBe("巡检报告");
+    expect(resolvePageTitle("/tasks/task-a/kpi")).toBe("KPI 巡检结果");
     expect(resolvePageTitle("/inventory/devices/dev-1")).toBe("设备详情");
     expect(resolvePageTitle("/inspectors")).toBe("规则管理");
     expect(resolvePageTitle("/unknown")).toBe("巡检任务");

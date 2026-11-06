@@ -1,7 +1,12 @@
 """预制数据字典加载测试。"""
 
 import re
+from pathlib import Path
 
+import pytest
+
+import app.core.dicts as dicts_module
+from app.core.config import settings
 from app.core.dicts import load_dicts, match_product
 
 
@@ -50,3 +55,36 @@ def test_product_dict_codes_are_canonical_and_match_case_insensitively() -> None
 
 def test_match_product_rejects_unknown_value() -> None:
     assert match_product("MME") is None
+
+
+def test_unchanged_dictionary_content_is_parsed_once_and_changes_are_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """字典文件未变化时复用解析结果，内容变化时不得返回旧缓存。"""
+    config_file = tmp_path / "dicts.yaml"
+    config_file.write_text(
+        "# cache-behavior-test\nprovince: []\noperator: []\nproduct: [{code: UMF, name: UMF}]\nversion: []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(settings, "config_dir", tmp_path)
+
+    original_safe_load = dicts_module.yaml.safe_load
+    parse_calls = 0
+
+    def counted_safe_load(text: str) -> object:
+        nonlocal parse_calls
+        parse_calls += 1
+        return original_safe_load(text)
+
+    monkeypatch.setattr(dicts_module.yaml, "safe_load", counted_safe_load)
+
+    assert load_dicts() == load_dicts()
+    assert parse_calls == 1
+
+    config_file.write_text(
+        "# cache-behavior-test\nprovince: []\noperator: []\nproduct: [{code: CSP, name: CSP}]\nversion: []\n",
+        encoding="utf-8",
+    )
+
+    assert [item.code for item in load_dicts().product] == ["CSP"]
+    assert parse_calls == 2

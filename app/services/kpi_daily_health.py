@@ -812,6 +812,7 @@ def build_metric_daily_health(
         "metric": {
             "name_zh": config.name_zh,
             "role": config.role,
+            "is_percentage": config.is_percentage,
             "data_date": resolved_date,
             "previous_date": previous_date,
             "daily_aggregation": aggregation,

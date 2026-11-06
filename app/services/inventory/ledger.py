@@ -20,14 +20,14 @@ from app.services.inventory.parser import iso_utc, resolve_observation_time, utc
 from app.services.store import write_json_atomic
 
 
-def evidence_path(task_id: str) -> Path:
+def evidence_path(task_id: str, *, output_root: Path | None = None) -> Path:
     """返回任务台账证据文件路径。"""
-    return settings.output / task_id / "inventory.json"
+    return (output_root or settings.output) / task_id / "inventory.json"
 
 
-def load_evidence(task_id: str) -> dict | None:
+def load_evidence(task_id: str, *, output_root: Path | None = None) -> dict | None:
     """读取任务台账证据。"""
-    path = evidence_path(task_id)
+    path = evidence_path(task_id, output_root=output_root)
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
@@ -78,33 +78,31 @@ def _audit_id(task_id: str | None, observation_id_value: str | None, action: str
     return sha256(payload).hexdigest()
 
 
-def _write_parse_result(evidence: dict[str, object], now: datetime) -> None:
-    with session_factory() as session:
-        existing = session.get(InventoryParseResult, str(evidence["task_id"]))
-        created = existing.created_at if existing else now
-        result = InventoryParseResult(
-            task_id=str(evidence["task_id"]),
-            package_kind=str(evidence["package_kind"]),
-            status=str(evidence["status"]),
-            parser_id=str(evidence["parser_id"]),
-            parser_version=str(evidence["parser_version"]),
-            schema_version=int(evidence["schema_version"]),
-            site_status=str(evidence["site"]["status"]) if evidence["site"] else "missing",
-            site_source=str(evidence["site"]["source"]) if evidence["site"] else "none",
-            site_key=evidence["site"].get("site_key") if evidence["site"] else None,
-            province=evidence["site"].get("province") if evidence["site"] else None,
-            operator=evidence["site"].get("operator") if evidence["site"] else None,
-            device_status=str(evidence["device"]["status"]) if evidence["device"] else "missing",
-            version_status=str(evidence["version"]["status"]) if evidence["version"] else "not_applicable",
-            source_files=list(evidence["source_files"]),
-            conflicts=list(evidence["conflicts"]),
-            errors=list(evidence["errors"]),
-            snapshot=evidence,
-            created_at=created,
-            updated_at=now,
-        )
-        session.merge(result)
-        session.commit()
+def _write_parse_result(session, evidence: dict[str, object], now: datetime) -> None:
+    existing = session.get(InventoryParseResult, str(evidence["task_id"]))
+    created = existing.created_at if existing else now
+    result = InventoryParseResult(
+        task_id=str(evidence["task_id"]),
+        package_kind=str(evidence["package_kind"]),
+        status=str(evidence["status"]),
+        parser_id=str(evidence["parser_id"]),
+        parser_version=str(evidence["parser_version"]),
+        schema_version=int(evidence["schema_version"]),
+        site_status=str(evidence["site"]["status"]) if evidence["site"] else "missing",
+        site_source=str(evidence["site"]["source"]) if evidence["site"] else "none",
+        site_key=evidence["site"].get("site_key") if evidence["site"] else None,
+        province=evidence["site"].get("province") if evidence["site"] else None,
+        operator=evidence["site"].get("operator") if evidence["site"] else None,
+        device_status=str(evidence["device"]["status"]) if evidence["device"] else "missing",
+        version_status=str(evidence["version"]["status"]) if evidence["version"] else "not_applicable",
+        source_files=list(evidence["source_files"]),
+        conflicts=list(evidence["conflicts"]),
+        errors=list(evidence["errors"]),
+        snapshot=evidence,
+        created_at=created,
+        updated_at=now,
+    )
+    session.merge(result)
 
 
 def _recalculate_device(session, device: InventoryDevice, now: datetime) -> None:
@@ -193,25 +191,37 @@ def _observation_values(
     }
 
 
-def archive_inventory(
+def write_inventory_evidence(
+    evidence: dict[str, object],
+    *,
+    task_id: str,
+    output_root: Path | None = None,
+) -> Path:
+    """只写任务现场证据，供全量重建在 staging 阶段隔离数据库副作用。"""
+    path = evidence_path(task_id, output_root=output_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_json_atomic(path, evidence)
+    return path
+
+
+def publish_inventory_ledger(
     evidence: dict[str, object],
     *,
     task_id: str,
     package_kind: PackageKind | str,
     completed_at: datetime,
 ) -> dict[str, object]:
-    """写入可重建证据并按任务、按设备覆盖台账观测；台账数据本身持久保留。"""
+    """把已写入现场的台账证据原子发布到 SQLite。"""
     kind = PackageKind(package_kind)
     now = utc_now()
-    path = evidence_path(task_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write_json_atomic(path, evidence)
-    _write_parse_result(evidence, now)
     actions: list[str] = []
-    if kind == PackageKind.LOG_SUPPLEMENT:
-        return {"status": InventoryParseStatus.NOT_APPLICABLE.value, "archived": False, "audits": actions}
 
     with session_factory() as session:
+        _write_parse_result(session, evidence, now)
+        if kind == PackageKind.LOG_SUPPLEMENT:
+            session.commit()
+            return {"status": InventoryParseStatus.NOT_APPLICABLE.value, "archived": False, "audits": actions}
+
         legacy_device = evidence.get("device") if isinstance(evidence.get("device"), dict) else {}
         archived = evidence.get("archived") if isinstance(evidence.get("archived"), dict) else {}
         archived_devices = archived.get("devices") if isinstance(archived.get("devices"), list) else []
@@ -368,6 +378,24 @@ def archive_inventory(
         "archived": bool(can_archive),
         "audits": actions,
     }
+
+
+def archive_inventory(
+    evidence: dict[str, object],
+    *,
+    task_id: str,
+    package_kind: PackageKind | str,
+    completed_at: datetime,
+    output_root: Path | None = None,
+) -> dict[str, object]:
+    """写入可重建证据并发布台账；保留既有调用方的一步式语义。"""
+    write_inventory_evidence(evidence, task_id=task_id, output_root=output_root)
+    return publish_inventory_ledger(
+        evidence,
+        task_id=task_id,
+        package_kind=package_kind,
+        completed_at=completed_at,
+    )
 
 
 def _strip_dynamic(data: dict[str, object]) -> dict[str, object]:

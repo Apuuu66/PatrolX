@@ -20,7 +20,7 @@ from app.models.schemas import PackageKind, Product, RebuildMode, TaskMode, Task
 from app.services import task_db
 from app.services.executor import Executor
 from app.services.tasks import RebuildPlan, task_service
-from tests.baseline_helpers import SAMPLE, setup_env
+from tests.baseline_helpers import SAMPLE, assign_all_business_rules, setup_env
 
 client = TestClient(app)
 
@@ -56,6 +56,7 @@ def test_terminal_task_records_run_fields_and_keeps_created_at() -> None:
 
 def test_rerun_refreshes_last_run_at_and_clears_duration_while_running(monkeypatch) -> None:
     """重跑开始即刷新最近运行时间并清空旧耗时，终态写入本次耗时。"""
+    assign_all_business_rules("UMF")
     task_id = _upload("run-fields-rerun.zip")
     _wait(task_id)
     first_last_run_at, first_duration, _ = task_db.get_run_fields(task_id)
@@ -120,6 +121,7 @@ def test_never_running_task_keeps_run_fields_null(tmp_path, monkeypatch) -> None
 def test_local_cli_run_task_writes_run_fields(tmp_path, monkeypatch) -> None:
     """本地 CLI 终态同样写入运行字段，保证历史回填后展示口径一致。"""
     env = setup_env(tmp_path, monkeypatch)
+    assign_all_business_rules("UMF")
     from app.cli import run_task
 
     task = run_task(
@@ -142,6 +144,7 @@ def test_local_cli_run_task_writes_run_fields(tmp_path, monkeypatch) -> None:
 def test_local_cli_single_rule_rerun_refreshes_run_fields(tmp_path, monkeypatch) -> None:
     """``verify-one`` 单规则重跑也要覆盖现场与库内的运行字段。"""
     env = setup_env(tmp_path, monkeypatch)
+    assign_all_business_rules("UMF")
     from app.cli import run_single_rule, run_task
 
     task = run_task(
@@ -204,6 +207,7 @@ def test_cli_run_log_supplement_context_has_null_product(tmp_path, monkeypatch) 
 def test_cli_single_rule_reads_persisted_context_metadata(tmp_path, monkeypatch) -> None:
     """单规则重跑未显式传参时必须读取 task.json 中的 product/package kind。"""
     setup_env(tmp_path, monkeypatch)
+    assign_all_business_rules("CSP")
     from app.cli import run_single_rule, run_task
 
     task = run_task(
@@ -229,6 +233,7 @@ def test_cli_single_rule_reads_persisted_context_metadata(tmp_path, monkeypatch)
 def test_cli_single_rule_does_not_rewrite_classification_result(tmp_path, monkeypatch) -> None:
     """verify-one 只写目标规则结果，分类门禁不得生成额外 JSON。"""
     env = setup_env(tmp_path, monkeypatch)
+    assign_all_business_rules("UMF")
     from app.cli import run_single_rule, run_task
 
     task = run_task(SAMPLE, customer={"product": "UMF"})
@@ -248,6 +253,7 @@ def test_cli_single_rule_does_not_rewrite_classification_result(tmp_path, monkey
 def test_cli_incremental_rebuild_reads_persisted_context_metadata(tmp_path, monkeypatch) -> None:
     """增量重建未显式传参时必须读取 task.json 中的 product/package kind。"""
     setup_env(tmp_path, monkeypatch)
+    assign_all_business_rules("CSP")
     from app.cli import run_incremental_rebuild, run_task
 
     task = run_task(

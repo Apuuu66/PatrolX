@@ -7,7 +7,7 @@ from hashlib import sha256
 
 from sqlalchemy.orm import Session
 
-from app.models.db import InventoryDevice, InventoryObservation, InventoryParseResult
+from app.models.db import InventoryDevice, InventoryObservation, InventoryParseResult, session_factory
 from app.models.schemas import (
     InventoryDevice as InventoryDeviceModel,
 )
@@ -62,7 +62,7 @@ def _device_issue_types(device: InventoryDevice) -> list[InventoryQualityIssueTy
     return issues
 
 
-def list_devices(
+def _list_devices(
     session: Session,
     *,
     page: int,
@@ -90,7 +90,7 @@ def list_devices(
     return [_device_model(row, _device_issue_types(row)) for row in rows], total
 
 
-def get_device(session: Session, device_id: str) -> InventoryDeviceModel | None:
+def _get_device(session: Session, device_id: str) -> InventoryDeviceModel | None:
     device = session.get(InventoryDevice, device_id)
     return _device_model(device, _device_issue_types(device)) if device else None
 
@@ -132,7 +132,7 @@ def _observation_model(observation: InventoryObservation) -> InventoryObservatio
     )
 
 
-def list_observations(
+def _list_observations(
     session: Session,
     device_id: str,
     *,
@@ -194,7 +194,7 @@ def _version_history_points(observations: list[InventoryObservation]) -> list[In
     return points
 
 
-def get_version_history(
+def _get_version_history(
     session: Session,
     device_id: str,
     *,
@@ -219,7 +219,7 @@ def _issue_id(*parts: object) -> str:
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
-def list_quality_issues(
+def _list_quality_issues(
     session: Session,
     *,
     page: int,
@@ -343,3 +343,79 @@ def list_quality_issues(
         issues = [issue for issue in issues if issue.issue_type == issue_type]
     issues.sort(key=lambda item: (item.detected_at, item.issue_id), reverse=True)
     return issues[(page - 1) * page_size : (page - 1) * page_size + page_size], len(issues)
+
+
+def list_devices(
+    *,
+    page: int,
+    page_size: int,
+    province: str | None = None,
+    operator: str | None = None,
+    quality_status: str = "all",
+) -> tuple[list[InventoryDeviceModel], int]:
+    with session_factory() as session:
+        return _list_devices(
+            session,
+            page=page,
+            page_size=page_size,
+            province=province,
+            operator=operator,
+            quality_status=quality_status,
+        )
+
+
+def get_device(device_id: str) -> InventoryDeviceModel | None:
+    with session_factory() as session:
+        return _get_device(session, device_id)
+
+
+def list_observations(
+    device_id: str,
+    *,
+    page: int,
+    page_size: int,
+    order: str,
+    site_key: str | None = None,
+) -> tuple[list[InventoryObservationModel], int]:
+    with session_factory() as session:
+        return _list_observations(
+            session,
+            device_id,
+            page=page,
+            page_size=page_size,
+            order=order,
+            site_key=site_key,
+        )
+
+
+def get_version_history(
+    device_id: str,
+    *,
+    page: int,
+    page_size: int,
+) -> tuple[list[InventoryVersionPoint], int]:
+    with session_factory() as session:
+        return _get_version_history(session, device_id, page=page, page_size=page_size)
+
+
+def list_quality_issues(
+    *,
+    page: int,
+    page_size: int,
+    issue_type: InventoryQualityIssueType | None = None,
+    province: str | None = None,
+    operator: str | None = None,
+    task_id: str | None = None,
+    device_id: str | None = None,
+) -> tuple[list[InventoryQualityIssue], int]:
+    with session_factory() as session:
+        return _list_quality_issues(
+            session,
+            page=page,
+            page_size=page_size,
+            issue_type=issue_type,
+            province=province,
+            operator=operator,
+            task_id=task_id,
+            device_id=device_id,
+        )

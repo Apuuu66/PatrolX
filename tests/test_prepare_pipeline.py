@@ -413,7 +413,7 @@ def test_matcher_matches_relative_files_safely() -> None:
 def test_sample_rules_create_isolated_prepared_data(tmp_path: Path, monkeypatch) -> None:
     from tests.baseline_helpers import SAMPLE, load_task, setup_env
 
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_task
 
     task = run_task(

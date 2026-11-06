@@ -3,13 +3,21 @@
 import shutil
 from pathlib import Path
 
-from tests.baseline_helpers import SAMPLE, Env, load_logs, load_rule, load_task, setup_env
+from tests.baseline_helpers import (
+    SAMPLE,
+    Env,
+    assign_rules_to_network_element,
+    load_logs,
+    load_rule,
+    load_task,
+    setup_env,
+)
 
 NORMAL_RULES = ("kpi.measurement_units",)
 
 
 def test_single_package_creates_single_task_site(tmp_path: Path, monkeypatch) -> None:
-    env: Env = setup_env(tmp_path, monkeypatch)
+    env: Env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_task
 
     task = run_task(
@@ -33,7 +41,7 @@ def test_single_package_creates_single_task_site(tmp_path: Path, monkeypatch) ->
 
 
 def test_package_name_derives_isolated_task_ids(tmp_path: Path, monkeypatch) -> None:
-    env: Env = setup_env(tmp_path, monkeypatch)
+    env: Env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_task
 
     first_package = env.uploads / "package-a.zip"
@@ -60,7 +68,7 @@ def test_same_name_reuses_site_and_checksum_conflict_is_rejected(tmp_path: Path,
     from app.main import app
     from tests.baseline_helpers import wait_for_task
 
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     client = TestClient(app)
     with SAMPLE.open("rb") as fh:
         first = client.post(
@@ -117,7 +125,7 @@ def test_rule_exception_becomes_error_and_task_completes(tmp_path: Path, monkeyp
     from app.inspectors.registry import registry
     from app.models.schemas import Priority, RuleCategory, Severity
 
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
 
     def raise_runtime_error(_ctx) -> None:
         raise RuntimeError("注入的运行时异常")
@@ -135,6 +143,7 @@ def test_rule_exception_becomes_error_and_task_completes(tmp_path: Path, monkeyp
         run=raise_runtime_error,
     )
     monkeypatch.setitem(registry._rules, rule.code, rule)
+    assign_rules_to_network_element([rule.code], "UMF")
 
     task = run_task(SAMPLE, task_id="task-sample", customer={"product": "UMF"})
     result = load_rule(env, task.task_id, rule.code)

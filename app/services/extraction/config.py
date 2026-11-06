@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -1127,6 +1128,7 @@ def parse_classification_config(payload: object) -> ClassificationConfig:
     )
 
 
+@lru_cache(maxsize=8)
 def loads_classification_config(text: str) -> ClassificationConfig:
     """从 YAML 字符串读取并严格校验分类配置。"""
     try:

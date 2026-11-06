@@ -32,7 +32,7 @@ client = TestClient(app)
 def test_review_endpoints_follow_contract(tmp_path: Path, monkeypatch) -> None:
     from tests.baseline_helpers import setup_env
 
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     package = env.uploads / "partial.zip"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr(

@@ -318,53 +318,84 @@ GET /api/v2/inspectors   调用 registry.all(include_hidden=...) 返回规则元
 3. 阈值继续收敛到可配置参数，并保持结果契约稳定。
 4. 为 KPI 大文件解析补充流式处理和内存边界测试。
 
-## 12. KPI 测量单元与指标自动入库机制
+## 12. KPI 测量单元、团队关注与结果工作台
 
 ### 目标设计
 
-KPI 指标列必须按测量单元归属，并在任务执行时完成归属与登记：目录未覆盖的指标自动入库且默认启用，
-人工注册与绑定确认只作为异常修正手段；派生指标以受控公式（成功率/反向成功率）在前台维护。
+KPI 以网元类型为隔离边界，以测量单元为唯一日常巡检启停粒度，以任务快照解释历史结果：
+
+1. 测量单元启用后，其全部已确认基础指标和已定义派生指标进入巡检。
+2. 指标、绑定、派生和维护配置不再通过 `enabled` 排除巡检。
+3. 团队关注仅决定默认查看范围，按网元类型共享，不改变巡检执行或历史结果。
+4. 业务规则通过运行时网元归属决定适用性，不提供公共规则，零归属即不执行。
+5. 任务开始时冻结规则范围、KPI 配置指纹和指标集合；后续配置修改只影响后续任务或显式重建。
 
 ### 当前实现
 
-#### 文件归属与指标登记
+#### 文件、测量单元与指标登记
 
 任务执行 `kpi.measurement_units` 规则时（`app/services/kpi_measurement_units.py`）：
 
-- 按文件名主干匹配已启用测量单元；未匹配文件计入 `unmatched_files`，多周期文件中非首选周期计入 `skipped_files` 并记录原因。
-- 解析 CSV 表头（允许表头前存在 `key：value` 元数据行）；中英文表头互斥，中文按 `测量开始时间`、`测量结束时间`、`周期(分钟)` 定位，英文按 `StarTime`/`StartTime`、`EndTime`、`Period(Minute)` 定位。
-- 成功率空值只有在业务主体唯一匹配的请求数为 `0` 时记为 `not_applicable_count`，不再计为空值异常；正分母、分母缺失或匹配歧义仍按异常处理。名称相近的 Media / DC / Data Channel 成功率指标保持独立。
+- 按文件名主干匹配当前网元类型下的 v6 测量单元；未匹配文件计入 `unmatched_files`，
+  多周期文件中非首选周期计入 `skipped_files` 并记录原因。
+- 解析 CSV 表头（允许表头前存在 `key：value` 元数据行）；中英文表头互斥，中文按
+  `测量开始时间`、`测量结束时间`、`周期(分钟)` 定位，英文按 `StarTime`/`StartTime`、`EndTime`、
+  `Period(Minute)` 定位。
+- 成功率空值只有在业务主体唯一匹配的请求数为 `0` 时记为 `not_applicable_count`；
+  正分母、分母缺失或匹配歧义仍按异常处理。名称相近的 Media / DC / Data Channel 成功率指标保持独立。
 - 指标列归属规则：
   - 目录已有同名指标 → 复用既有指标，不重复创建；
-  - 指标已归属其他测量单元 → 生成跨测量单元冲突记录，不自动改绑；
-  - 目录中不存在 → 自动创建指标资源并归属当前测量单元，默认启用（specs/021）。
-- 绑定状态为 `confirmed` / `candidate` / `conflict`；只有绑定 `status=confirmed`、绑定 `enabled=true` 且 ME 指标资源 `enabled=true` 的指标参与解析、判定和历史索引，停用指标不写入 `kpi/history/index.jsonl`；人工注册指标走
-  `POST /api/v5/kpi/measurement-bindings/{binding_id}/register-metric`，批量确认走 `POST /api/v5/kpi/measurement-bindings/batch-confirm`。
+  - 指标无法唯一归属当前测量单元 → 生成冲突记录，不自动改绑；
+  - 目录中不存在 → 自动创建指标资源并绑定到当前测量单元。
+- 正常绑定直接进入 `confirmed`。仅 `conflict` 等异常需要人工单条修正；
+  v5 `batch-confirm` 已标记 `deprecated`，新 UI、服务和执行器不得调用。
+- 测量单元、绑定、派生和维护配置均不再具有巡检启停语义。历史 v5 `enabled=false`
+  只进入恢复审计，迁移不得改写既有任务结果，也不得自动生成团队关注。
 
-#### 判定维度
+#### 团队关注
 
-| 维度 | 说明 |
-| --- | --- |
-| 文件归属 | 未匹配、周期跳过与解析失败按文件记录，不中断其他测量单元 |
-| 数值可读性 | 空值、非数值、时间列异常计入数据异常 |
-| 业务阈值 | 按指标方向（higher_better / lower_better / neutral）与预警、失败阈值输出 warn / fail（specs/022） |
-| 任务内趋势 | 同一指标在任务内多个时间点上的恶化判定计入趋势恶化计数 |
+- 关注唯一身份为 `network_element_type + measurement_unit_id + metric_resource_id`，不含设备、任务或用户名。
+- 同一网元类型共享一份关注和 revision；UMF 与 CSP 即使使用相同测量单元 ID、指标 ID 也完全隔离。
+- 初始关注为空，不从旧指标启用状态迁移。关注项不可用时保留配置并标明
+  `measurement_unit_disabled` 或 `not_in_task_scope`，不得静默删除。
+- “需处理 + 无需处理 = 当前任务可用团队关注数”；“全部指标”独立取自任务 KPI 范围快照。
+- 关注写操作使用 `expected_revision` 乐观锁；PATCH 在单一事务中递增 revision，不改变任何巡检结果。
 
-#### 派生指标
+#### 结果工作台
 
-界面派生指标保存在 SQLite `kpi_measurement_derived`（测量单元 + 指标资源 + 分子/分母指标 + 模板），
-经 `POST /api/v5/kpi/measurement-derived` 维护；模板限 `success_rate` 与 `reverse_success_rate`，
-依赖的分子、分母指标必须已确认绑定。
+- 默认“需处理”，另有“团队关注”和“全部指标”。汇总与计数由 `/api/v6/kpi/tasks/{task_id}/...` 服务端计算，
+  前端不得自行重算判定或复制第二套指标目录。
+- 指标证据按需加载，包含今日/昨日值、变化、原因、阈值、日聚合、有效点、对象/周期和来源文件。
+  7 日趋势、跨任务历史和版本对比只属于证据抽屉中的次级技术分析。
+- 单个证据失败返回局部错误，不影响汇总、其他结果行或筛选；页面不得回退到 v5 旧 KPI 总览。
+- 页面不展示健康分、风险排序或旧关注 tab。状态必须同时有文字/图标语义，不能只依赖颜色。
 
-#### 结果形态
+#### 规则网元归属与任务范围
 
-规则结果 `output/<task_id>/rules/kpi.measurement_units.json` 的 `metadata.measurement_units[]` 保存每个测量单元的
-指标明细、状态与来源文件；结果组织完成后重建任务私有历史索引 `kpi/history/index.jsonl`，跨任务趋势按需流式读取候选任务索引。
+- 业务规则没有公共范围。`kpi_rule_network_assignments` 为每个 `rule_code` 保存一个或多个网元类型；
+  零行表示未归属，规则不进入执行计划，也不生成 `skip`。
+- 隐藏解压/分类单元不参与归属配置；规则私有 `prepare` 只在 owner 命中当前任务时执行。
+- 标准巡检包以 `product` 作为任务网元类型；日志补充包可单选一个规则适用类型或选择不指定。
+  该选择不写入 `product`，不改变 `GENERIC` 分类，不触发台账。未指定时只执行内部技术单元，
+  页面明确显示范围为空，不得显示全部通过。
+- 任务开始时冻结普通规则代码、版本、priority、归属 revision 和注册表指纹。执行中修改归属不影响当前任务；
+  显式重建使用当前配置。单规则/增量重跑只允许原快照中的规则，禁止静默换规则或版本。
+- `/api/v2/inspector-states*` 与 `scan_rules.disabled_rules` 仅为 deprecated 兼容面，执行器不得读取。
+
+#### 旧任务与结果发布
+
+- v6 结果发布以 `task_kpi_scope_snapshots`、`task_kpi_scope_items`、`task_kpi_metric_results_v6` 和
+  `task_kpi_points_v6` 为权威镜像，摘要、指标结果和点在同一发布事务中替换。
+- 旧任务没有 v6 快照时，v6 读取固定返回 `409 task_result_requires_rebuild`。不得从 v5 结果即时推导、
+  降级展示或提供回退面板。
+- 唯一升级路径是任务行内全量重建：保持同一 `task_id`，按当前规则归属和 KPI 配置生成新快照；
+  原始包只读。现场清理或原包缺失时先提示重新上传同名包，不得伪造重建成功。
 
 ### 差异
 
-历史设计的 v4 动态口径配置中心、任务级分类线索接口与
-`metric-rules.json` 公式配置已被测量单元模型替代，不再作为现行实现描述。
+历史 v4 动态口径配置中心、任务级分类线索、公共 KPI 配置和规则级全局启停均已退出执行路径；
+v5 KPI 表与接口只作为冻结兼容面保留。v5 批量确认和 v2 inspector-states 仅标记 `deprecated`，
+新工作台、团队关注、测量范围和规则归属统一使用 `/api/v6/kpi/...`。
 
 ## 13. SQLite 数据库文件使用注意
 

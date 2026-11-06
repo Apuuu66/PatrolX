@@ -41,7 +41,7 @@ def _config(**overrides: object) -> MetricDailyHealthConfig:
 
 def _point(
     measured_at: datetime,
-    value: float,
+    value: float | None,
     *,
     object_key: str = "pod-a",
     period_minutes: int = 15,
@@ -49,6 +49,7 @@ def _point(
     denominator: float | None = None,
     raw_value: float | None = None,
     source_file: str = "metric.csv",
+    unreadable: bool | None = None,
 ) -> DailyPoint:
     return DailyPoint(
         object_key=object_key,
@@ -59,6 +60,7 @@ def _point(
         denominator=denominator,
         raw_value=raw_value,
         source_file=source_file,
+        unreadable=value is None if unreadable is None else unreadable,
     )
 
 
@@ -265,6 +267,98 @@ def test_success_rate_uses_sum_over_sum_not_mean_of_rates() -> None:
     assert group["today"]["value"] == pytest.approx(51 / 10100 * 100, abs=0.0001)
     mean_of_point_rates = ((1.0 / 100.0 * 100.0) + (50.0 / 10000.0 * 100.0)) / 2
     assert group["today"]["value"] != pytest.approx(mean_of_point_rates, abs=0.0001)
+
+
+def test_source_success_rate_stays_base_and_ignores_request_response_counts() -> None:
+    """源包成功率直出，请求/成功/失败数不得参与重算或回填。"""
+    measured_at = datetime(2026, 11, 2, 8, 0, tzinfo=UTC)
+    result = build_metric_daily_health(
+        _config(
+            metric_resource_id="ME_MEDIA_CREATION_SUCCESS_RATE",
+            name_zh="媒体资源创建成功率",
+            role="base",
+        ),
+        [_point(measured_at, 64.5, source_file="media-rate.csv")],
+        numerator_points=[_point(measured_at, 129.0, source_file="media-success.csv")],
+        denominator_points=[_point(measured_at, 200.0, source_file="media-request.csv")],
+    )
+
+    assert result["metric"]["role"] == "base"
+    assert result["metric"]["formula"] is None
+    assert result["metric"]["daily_aggregation"] == "mean"
+    today = result["groups"][0]["today"]
+    assert today["value"] == 64.5
+    assert today["numerator"] is None
+    assert today["denominator"] is None
+    assert result["groups"][0]["source_files"] == ["media-rate.csv"]
+
+
+def test_missing_source_success_rate_stays_missing_even_when_related_counts_exist() -> None:
+    """CSP 源成功率缺失时保持缺失，不以请求数、成功响应数和失败响应数回填。"""
+    measured_at = datetime(2026, 11, 2, 8, 0, tzinfo=UTC)
+    result = build_metric_daily_health(
+        _config(metric_resource_id="ME_MEDIA_CREATION_SUCCESS_RATE", role="base"),
+        [_point(measured_at, None, source_file="media-rate.csv")],
+        numerator_points=[_point(measured_at, 129.0)],
+        denominator_points=[_point(measured_at, 200.0)],
+        anchor_date=date(2026, 11, 2),
+    )
+
+    today = result["groups"][0]["today"]
+    assert today["status"] == "unreadable"
+    assert today["value"] is None
+    assert today["numerator"] is None
+    assert today["denominator"] is None
+    assert result["groups"][0]["current_status"] == "unable_to_judge"
+
+
+def test_no_data_zero_denominator_and_no_baseline_keep_distinct_evidence_states() -> None:
+    anchor = datetime(2026, 11, 2, 8, 0, tzinfo=UTC)
+    no_data = build_metric_daily_health(
+        _config(role="base", daily_aggregation="sum"),
+        [_point(anchor, None, unreadable=False)],
+        anchor_date=date(2026, 11, 2),
+    )
+    unreadable = build_metric_daily_health(
+        _config(role="base"),
+        [_point(anchor, None, unreadable=True)],
+        anchor_date=date(2026, 11, 2),
+    )
+    zero_denominator = build_metric_daily_health(
+        _config(role="derived", numerator_metric_id="ME_SUCCESS", denominator_metric_id="ME_TOTAL"),
+        [],
+        numerator_points=[_point(anchor, 0.0)],
+        denominator_points=[_point(anchor, 0.0)],
+    )
+    no_baseline = build_metric_daily_health(
+        _config(role="base"),
+        [_point(anchor, 90.0)],
+    )
+
+    assert no_data["groups"][0]["today"]["status"] == "no_data"
+    assert unreadable["groups"][0]["today"]["status"] == "unreadable"
+    assert zero_denominator["groups"][0]["today"]["status"] == "zero_denominator"
+    assert zero_denominator["groups"][0]["current_status"] == "not_applicable"
+    assert no_baseline["groups"][0]["trend_status"] == "no_baseline"
+    assert no_baseline["groups"][0]["today"]["status"] == "ok"
+
+
+def test_only_derived_metrics_expose_formula_and_numerator_denominator() -> None:
+    anchor = datetime(2026, 11, 2, 8, 0, tzinfo=UTC)
+    base = build_metric_daily_health(_config(role="base"), [_point(anchor, 64.5)])
+    derived = build_metric_daily_health(
+        _config(role="derived", numerator_metric_id="ME_SUCCESS", denominator_metric_id="ME_TOTAL"),
+        [],
+        numerator_points=[_point(anchor, 129.0)],
+        denominator_points=[_point(anchor, 200.0)],
+    )
+
+    assert base["metric"]["formula"] is None
+    assert base["groups"][0]["today"]["numerator"] is None
+    assert base["groups"][0]["today"]["denominator"] is None
+    assert derived["metric"]["formula"] == "numerator_sum / denominator_sum * 100"
+    assert derived["groups"][0]["today"]["numerator"] == 129.0
+    assert derived["groups"][0]["today"]["denominator"] == 200.0
 
 
 def test_reverse_success_rate_and_weighted_raw_consistency() -> None:

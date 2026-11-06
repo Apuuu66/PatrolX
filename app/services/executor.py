@@ -56,13 +56,13 @@ class Executor:
     def __init__(
         self,
         registry: RuleRegistry,
-        enabled_rules: set[str] | None = None,
+        frozen_rule_codes: set[str] | frozenset[str] | None = None,
         *,
         policy: ParallelPolicy | None = None,
         worker_setup: Callable[[], None] | None = None,
     ) -> None:
         self.registry = registry
-        self.enabled_rules = enabled_rules
+        self.frozen_rule_codes = frozenset(frozen_rule_codes) if frozen_rule_codes is not None else None
         self.collected: dict[str, RuleResult] = {}
         self.policy = policy or ParallelPolicy()
         self._worker_setup = worker_setup
@@ -75,16 +75,16 @@ class Executor:
             key=lambda code: (0 if code == "pkg.extract.main" else 1, code),
         )
 
-    def _owner_enabled(self, owner_code: str) -> bool:
-        return self.enabled_rules is None or owner_code in self.enabled_rules
+    def _owner_in_scope(self, owner_code: str) -> bool:
+        return self.frozen_rule_codes is None or owner_code in self.frozen_rule_codes
 
     def prepare_plan(self) -> list[str]:
         """prepare 阶段计划：owner priority → owner code → prepare code。"""
-        return [prepare.code for owner, prepare in self.registry.prepares() if self._owner_enabled(owner.code)]
+        return [prepare.code for owner, prepare in self.registry.prepares() if self._owner_in_scope(owner.code)]
 
     def inspect_plan(self) -> list[str]:
         """普通规则 inspect 计划：priority → code。"""
-        return [rule.code for rule in self.registry.all() if not rule.hidden and self._owner_enabled(rule.code)]
+        return [rule.code for rule in self.registry.all() if not rule.hidden and self._owner_in_scope(rule.code)]
 
     def plan(self) -> list[str]:
         """兼容旧调用：返回 extract + inspect 的完整规则序列。"""
@@ -391,7 +391,7 @@ class Executor:
             prepare_plans = [
                 self._plan_prepare(owner, prepare, ctx)
                 for owner, prepare in self.registry.prepares()
-                if self._owner_enabled(owner.code)
+                if self._owner_in_scope(owner.code)
             ]
             runner.run_stage(STAGE_PREPARE, prepare_plans, ctx, on_outcome=partial(self._finish_prepare, ctx))
             inspect_plans = [self._plan_inspect(code, ctx) for code in self.inspect_plan()]
@@ -470,8 +470,8 @@ class Executor:
         该路径永不建进程池（契约 C10），只改动目标规则的产物。
         """
         rule = self.registry.get(code)
-        if not rule.hidden and not self._owner_enabled(code):
-            raise ValueError(f"规则已停用: {code}")
+        if not rule.hidden and not self._owner_in_scope(code):
+            raise ValueError(f"规则不在任务冻结范围内: {code}")
         if code.startswith("pkg.extract."):
             return self.run_one(code, ctx)
         self.ensure_rule_dependencies(code, ctx)

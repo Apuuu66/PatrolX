@@ -9,7 +9,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -213,23 +213,7 @@ def write_history_index(
     return target
 
 
-def iter_history_index(
-    task_id: str,
-    *,
-    output: Path | None = None,
-) -> Iterator[IndexRecord]:
-    """读取任务历史点：DB 优先，旧任务现场索引兜底。"""
-    points = task_db.list_kpi_points(task_id)
-    if points:
-        for point in points:
-            measured_at = point.get("measured_at")
-            if isinstance(measured_at, datetime):
-                measured_at = measured_at.isoformat()
-            record = _valid_index_record({**point, "measured_at": measured_at}, task_id)
-            if record is not None:
-                yield record
-        return
-    path = index_path(output or settings.output, task_id)
+def _iter_scene_history_index(path: Path, task_id: str) -> Iterator[IndexRecord]:
     if not path.is_file():
         raise FileNotFoundError(path)
     with path.open("r", encoding="utf-8") as fh:
@@ -241,6 +225,29 @@ def iter_history_index(
             record = _valid_index_record(raw, task_id)
             if record is not None:
                 yield record
+
+
+def iter_history_index(
+    task_id: str,
+    *,
+    output: Path | None = None,
+    source: Literal["auto", "scene"] = "auto",
+) -> Iterator[IndexRecord]:
+    """读取任务历史点；默认 DB 优先，``scene`` 强制读取当前任务现场。"""
+    if source not in {"auto", "scene"}:
+        raise ValueError(f"不支持的历史点来源: {source}")
+    if source == "auto":
+        points = task_db.list_kpi_points(task_id)
+        if points:
+            for point in points:
+                measured_at = point.get("measured_at")
+                if isinstance(measured_at, datetime):
+                    measured_at = measured_at.isoformat()
+                record = _valid_index_record({**point, "measured_at": measured_at}, task_id)
+                if record is not None:
+                    yield record
+            return
+    yield from _iter_scene_history_index(index_path(output or settings.output, task_id), task_id)
 
 
 def _task_completed_at(task_id: str, output: Path) -> datetime:

@@ -3,12 +3,14 @@
 import os
 import queue
 import shutil
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
@@ -33,8 +35,13 @@ from app.models.schemas import (
 )
 from app.services import preparation, retention, store, task_db
 from app.services.extraction.layout import PathLimitPolicy
-from app.services.rule_states import RuleStateError, assert_rule_enabled, ensure_rule_states
+from app.services.inventory.ledger import load_evidence, publish_inventory_ledger
+from app.services.rule_scope import RuleScopeError, RuleScopeResolver
 from app.services.store import append_log, load_task_meta, write_json_atomic
+from app.services.task_execution_scope import (
+    publish_task_execution_scope,
+    resolve_task_execution_scope,
+)
 
 logger = get_logger("patrolx.tasks")
 NOW = datetime.now
@@ -183,10 +190,19 @@ class TaskService:
                     with self._state_lock:
                         self._active_task = None
             except Exception:  # noqa: BLE001
+                # 单个任务的执行或收尾失败不得终止常驻 worker；否则后续任务会永久滞留队列。
                 logger.exception("task_failed", task_id=task_id)
-                append_log(settings.output, task_id, "error", "任务执行失败")
+                try:
+                    append_log(settings.output, task_id, "error", "任务执行失败")
+                except Exception:  # noqa: BLE001 - 日志写入失败不能阻断失败状态收口
+                    logger.exception("task_failure_log_failed", task_id=task_id)
                 TASKS_TOTAL.labels(result="failed", mode="online").inc()
-                self._finish_run(task_id, TaskStatus.FAILED)
+                try:
+                    self._finish_run(task_id, TaskStatus.FAILED)
+                except Exception:  # noqa: BLE001 - 失败收口异常不能阻断队列继续消费
+                    logger.exception("task_failure_finalize_failed", task_id=task_id)
+            finally:
+                self._queue.task_done()
 
     def _publish_terminal(self, task: InspectionTask) -> None:
         """在线任务终态发布：先提交任务与规则快照，再写 task.json。
@@ -216,6 +232,12 @@ class TaskService:
             task_db.publish_kpi_from_scene(published.task_id, output=settings.output)
         except Exception:  # noqa: BLE001 - KPI 镜像失败不得回滚已经可见的任务终态
             logger.exception("task_kpi_mirror_failed", task_id=published.task_id)
+        try:
+            from app.services.kpi_v6_terminal_publish import publish_kpi_v6_from_scene
+
+            publish_kpi_v6_from_scene(published, output=settings.output)
+        except Exception:  # noqa: BLE001 - v6 发布失败不得回滚已经可见的任务终态
+            logger.exception("task_kpi_v6_publish_failed", task_id=published.task_id)
         # 终态发布完成后执行磁盘留存清理；清理失败只记日志，不改变任务终态。
         retention.cleanup_safely(output=settings.output, uploads=settings.uploads)
 
@@ -249,7 +271,17 @@ class TaskService:
                 session.commit()
 
     def _execute(self, task_id: str) -> None:
-        package, customer, version, name, mode, trigger, package_kind, created_at = self._task_info(task_id)
+        (
+            package,
+            customer,
+            version,
+            name,
+            mode,
+            trigger,
+            package_kind,
+            rule_network_element_type,
+            created_at,
+        ) = self._task_info(task_id)
         if package is None:
             return
         started = NOW(UTC)
@@ -269,6 +301,7 @@ class TaskService:
                         trigger_retention=False,
                         product=customer.get("product"),
                         package_kind=package_kind,
+                        rule_network_element_type=rule_network_element_type,
                     )
                 append_log(settings.output, task_id, "info", "重跑完成，报告已更新")
                 current = load_task_meta(settings.output, task_id)
@@ -280,7 +313,7 @@ class TaskService:
                 else:
                     self._finish_run(task_id, TaskStatus.COMPLETED)
             elif rebuild_plan is not None:
-                self._execute_rebuild(
+                succeeded = self._execute_rebuild(
                     task_id,
                     rebuild_plan,
                     package=package,
@@ -290,7 +323,13 @@ class TaskService:
                     mode=mode,
                     trigger=trigger,
                     package_kind=package_kind,
+                    rule_network_element_type=rule_network_element_type,
                 )
+                if not succeeded:
+                    TASKS_DURATION.observe((NOW(UTC) - started).total_seconds())
+                    TASKS_TOTAL.labels(result="failed", mode=mode.value).inc()
+                    self._finish_run(task_id, TaskStatus.FAILED)
+                    return
             else:
                 executed = run_task(
                     package,
@@ -302,6 +341,7 @@ class TaskService:
                     trigger=trigger,
                     created_at=created_at,
                     package_kind=package_kind,
+                    rule_network_element_type=rule_network_element_type,
                     publish=self._publish_terminal,
                 )
                 if executed.status == TaskStatus.FAILED:
@@ -331,9 +371,13 @@ class TaskService:
         mode: TaskMode,
         trigger: TaskTrigger,
         package_kind: PackageKind = PackageKind.INSPECTION,
-    ) -> None:
+        rule_network_element_type: str | None = None,
+    ) -> bool:
         """执行显式重建重跑；预检和输出清理已经通过 TaskService.rebuild 完成。"""
         old_task = load_task_meta(settings.output, task_id)
+        if rule_network_element_type is None and package_kind == PackageKind.INSPECTION:
+            product = customer.get("product")
+            rule_network_element_type = str(product).strip().upper() if product else None
         rule_codes = list(plan.rule_codes)
         log_detail = {
             "operation": "rebuild",
@@ -342,12 +386,82 @@ class TaskService:
             "trigger_source": plan.trigger_source,
         }
         if plan.mode == RebuildMode.FULL:
-            _remove_tree(settings.output / task_id, task_id, [f"output/{task_id}"])
-            # 本地任务没有 SQLite 兜底；全量重建期间必须保留任务元数据，避免列表闪空。
-            if old_task:
-                pending_task = old_task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
-                store.save_task_meta(settings.output, pending_task)
-            append_log(settings.output, task_id, "info", "全量重建重跑开始", **log_detail)
+            return self._execute_full_rebuild(
+                task_id,
+                package=package,
+                customer=customer,
+                version=version,
+                name=name,
+                mode=mode,
+                trigger=trigger,
+                package_kind=package_kind,
+                rule_network_element_type=rule_network_element_type,
+                old_task=old_task,
+                log_detail=log_detail,
+            )
+
+        append_log(settings.output, task_id, "info", "增量重建重跑开始", **log_detail)
+        run_incremental_rebuild(
+            rule_codes,
+            package=package,
+            task_id=task_id,
+            publish=self._publish_terminal,
+            product=customer.get("product"),
+            package_kind=package_kind,
+            rule_network_element_type=rule_network_element_type,
+        )
+        append_log(settings.output, task_id, "info", "增量重建重跑完成", **log_detail)
+        return True
+
+    def _execute_full_rebuild(
+        self,
+        task_id: str,
+        *,
+        package: Path,
+        customer: dict,
+        version: str | None,
+        name: str | None,
+        mode: TaskMode,
+        trigger: TaskTrigger,
+        package_kind: PackageKind,
+        rule_network_element_type: str | None,
+        old_task: InspectionTask | None,
+        log_detail: dict[str, object],
+    ) -> bool:
+        """在独立 staging 现场执行全量重建，成功后才原子替换正式输出。"""
+        product = customer.get("product")
+        kpi_network_element_type = (
+            str(product).strip().upper() if (package_kind == PackageKind.INSPECTION and product) else None
+        )
+        scope = resolve_task_execution_scope(
+            task_id=task_id,
+            rule_network_element_type=rule_network_element_type,
+            kpi_network_element_type=kpi_network_element_type,
+            trigger=trigger.value,
+            source="task_service_rebuild" if mode == TaskMode.ONLINE else "cli_rebuild",
+            now=NOW(UTC),
+            registry_override=registry,
+        )
+        previous_rule_snapshot = task_db.get_rule_scope_snapshot(
+            task_id,
+            network_element_type=rule_network_element_type,
+        )
+        previous_kpi_snapshot = task_db.get_kpi_scope_snapshot(
+            task_id,
+            network_element_type=kpi_network_element_type,
+        )
+        package_checksum = sha256_file(package)
+        settings.output.parent.mkdir(parents=True, exist_ok=True)
+        staging_root = Path(tempfile.mkdtemp(prefix=f".{task_id}.rebuild-", dir=settings.output.parent))
+        staged_task_dir = staging_root / task_id
+        final_task_dir = settings.output / task_id
+        backup_task_dir: Path | None = None
+
+        def publish_staged(task: InspectionTask) -> None:
+            store.save_task_meta(staging_root, task, sync_db=False)
+
+        try:
+            append_log(staging_root, task_id, "info", "全量重建重跑开始", **log_detail)
             executed = run_task(
                 package,
                 name=name,
@@ -358,26 +472,119 @@ class TaskService:
                 trigger=trigger,
                 created_at=old_task.created_at if old_task else None,
                 package_kind=package_kind,
-                publish=self._publish_terminal,
+                rule_network_element_type=rule_network_element_type,
+                publish=publish_staged,
+                output_root=staging_root,
+                execution_scope=scope,
+                persist_package_checksum=False,
+                persist_inventory_ledger=False,
             )
-            if executed.status != TaskStatus.FAILED:
-                append_log(settings.output, task_id, "info", "全量重建重跑完成", **log_detail)
-            return
+            if executed.status == TaskStatus.FAILED:
+                logger.error("full_rebuild_failed_staged", task_id=task_id, reason="task_failed")
+                return False
+            if sha256_file(package) != package_checksum:
+                logger.error("full_rebuild_package_changed", task_id=task_id)
+                return False
+            if not staged_task_dir.is_dir():
+                logger.error("full_rebuild_staging_missing", task_id=task_id)
+                return False
 
-        append_log(settings.output, task_id, "info", "增量重建重跑开始", **log_detail)
-        run_incremental_rebuild(
-            rule_codes,
-            package=package,
-            task_id=task_id,
-            publish=self._publish_terminal,
-            product=customer.get("product"),
-            package_kind=package_kind,
-        )
-        append_log(settings.output, task_id, "info", "增量重建重跑完成", **log_detail)
+            append_log(staging_root, task_id, "info", "全量重建重跑完成", **log_detail)
+            backup_task_dir = self._replace_task_output(final_task_dir, staged_task_dir)
+            try:
+                evidence = load_evidence(task_id, output_root=settings.output)
+                if evidence is not None:
+                    publish_inventory_ledger(
+                        evidence,
+                        task_id=task_id,
+                        package_kind=package_kind,
+                        completed_at=executed.completed_at or NOW(UTC),
+                    )
+                publish_task_execution_scope(scope)
+                self._publish_terminal(executed)
+            except Exception:
+                logger.exception("full_rebuild_publish_failed", task_id=task_id)
+                self._rollback_full_rebuild(
+                    task_id,
+                    final_task_dir=final_task_dir,
+                    backup_task_dir=backup_task_dir,
+                    old_task=old_task,
+                    previous_rule_snapshot=previous_rule_snapshot,
+                    previous_kpi_snapshot=previous_kpi_snapshot,
+                )
+                backup_task_dir = None
+                return False
+            if backup_task_dir is not None:
+                shutil.rmtree(backup_task_dir, ignore_errors=True)
+            return True
+        except Exception:  # noqa: BLE001 - staging 失败保持正式现场不变
+            logger.exception("full_rebuild_staging_failed", task_id=task_id)
+            if backup_task_dir is not None:
+                self._restore_task_output(final_task_dir, backup_task_dir)
+            return False
+        finally:
+            shutil.rmtree(staging_root, ignore_errors=True)
+
+    @staticmethod
+    def _replace_task_output(final_task_dir: Path, staged_task_dir: Path) -> Path | None:
+        """把旧现场移到备份，再将 staging 原子换入正式路径。"""
+        backup_task_dir = final_task_dir.with_name(f".{final_task_dir.name}.rebuild-backup-{uuid4().hex}")
+        if final_task_dir.exists():
+            os.replace(final_task_dir, backup_task_dir)
+        try:
+            os.replace(staged_task_dir, final_task_dir)
+        except Exception:
+            if backup_task_dir.exists():
+                os.replace(backup_task_dir, final_task_dir)
+            raise
+        return backup_task_dir if backup_task_dir.exists() else None
+
+    @staticmethod
+    def _restore_task_output(final_task_dir: Path, backup_task_dir: Path) -> None:
+        """发布失败时删除新现场并恢复完整旧现场。"""
+        if final_task_dir.exists():
+            shutil.rmtree(final_task_dir, ignore_errors=True)
+        if backup_task_dir.exists():
+            os.replace(backup_task_dir, final_task_dir)
+
+    def _rollback_full_rebuild(
+        self,
+        task_id: str,
+        *,
+        final_task_dir: Path,
+        backup_task_dir: Path | None,
+        old_task: InspectionTask | None,
+        previous_rule_snapshot: task_db.RuleScopeSnapshotData | None,
+        previous_kpi_snapshot: task_db.KpiScopeSnapshotData | None,
+    ) -> None:
+        """尽力恢复发布失败前的文件与 SQLite 快照。"""
+        if backup_task_dir is not None:
+            self._restore_task_output(final_task_dir, backup_task_dir)
+        if previous_rule_snapshot is not None and previous_kpi_snapshot is not None:
+            task_db.save_task_scope_snapshots(
+                rule_snapshot=previous_rule_snapshot,
+                kpi_snapshot=previous_kpi_snapshot,
+            )
+        if old_task is not None and final_task_dir.is_dir():
+            try:
+                task_db.publish_from_scene(old_task, output=settings.output, include_kpi=True)
+                store.save_task_meta(settings.output, old_task)
+            except Exception:  # noqa: BLE001 - 回滚日志不能掩盖原始发布失败
+                logger.exception("full_rebuild_rollback_publish_failed", task_id=task_id)
 
     def _task_info(
         self, task_id: str
-    ) -> tuple[Path | None, dict, str | None, str | None, TaskMode, TaskTrigger, PackageKind, datetime | None]:
+    ) -> tuple[
+        Path | None,
+        dict,
+        str | None,
+        str | None,
+        TaskMode,
+        TaskTrigger,
+        PackageKind,
+        str | None,
+        datetime | None,
+    ]:
         """获取任务执行信息；本地任务从 output/ 元数据兜底。
 
         ``created_at`` 是任务创建时刻，执行期只透传、不得覆盖；现场元数据与库内任务行
@@ -386,6 +593,11 @@ class TaskService:
         with session_factory() as session:
             record = session.get(TaskRecord, task_id)
             if record is not None:
+                package_kind = PackageKind(getattr(record, "package_kind", "inspection"))
+                product = (record.customer or {}).get("product")
+                rule_type = getattr(record, "rule_network_element_type", None)
+                if rule_type is None and package_kind == PackageKind.INSPECTION:
+                    rule_type = product
                 return (
                     settings.uploads / task_id / record.package_file,
                     record.customer or {},
@@ -393,18 +605,31 @@ class TaskService:
                     record.name,
                     TaskMode(record.mode),
                     TaskTrigger(record.trigger),
-                    PackageKind(getattr(record, "package_kind", "inspection")),
+                    package_kind,
+                    str(rule_type).strip().upper() if rule_type else None,
                     record.created_at,
                 )
 
         task = load_task_meta(settings.output, task_id)
         if task is None or task.system is None:
-            return None, {}, None, None, TaskMode.LOCAL, TaskTrigger.CLI, PackageKind.INSPECTION, None
+            return (
+                None,
+                {},
+                None,
+                None,
+                TaskMode.LOCAL,
+                TaskTrigger.CLI,
+                PackageKind.INSPECTION,
+                None,
+                None,
+            )
         package_file = task.system.package_file
         package = settings.uploads / task_id / package_file
         if not package.exists():
             package = settings.uploads / package_file
         package_kind = task.package_kind or PackageKind.INSPECTION
+        product = task.system.customer.get("product")
+        rule_type = product if package_kind == PackageKind.INSPECTION else None
         return (
             package,
             task.system.customer,
@@ -413,8 +638,49 @@ class TaskService:
             task.mode,
             task.trigger,
             package_kind,
+            str(rule_type).strip().upper() if rule_type else None,
             task.created_at,
         )
+
+    @staticmethod
+    def _network_element_type_for_task(task_id: str, task: InspectionTask) -> str | None:
+        """从持久化任务身份取得规则范围网元类型。"""
+        identity = task_db.get_task_identity(task_id)
+        if identity is not None:
+            return identity.rule_network_element_type
+        customer = task.system.customer if task.system is not None else {}
+        value = (customer or {}).get("product")
+        return str(value).strip().upper() if value else None
+
+    def _validated_frozen_rule_codes(
+        self,
+        task_id: str,
+        task: InspectionTask,
+        rule_codes: list[str] | None,
+    ) -> list[str] | None:
+        """校验重跑规则均属于原任务冻结快照且版本未漂移。
+
+        ``None`` 表示全量重跑，必须保留给执行器以走 ``run_task``；
+        明确传入的规则子集才交给逐规则重跑路径。
+        """
+        registry.load_all()
+        network_element_type = self._network_element_type_for_task(task_id, task)
+        snapshot = task_db.get_rule_scope_snapshot(
+            task_id,
+            network_element_type=network_element_type,
+        )
+        if snapshot is None:
+            raise TaskRebuildError(
+                "task_result_requires_rebuild",
+                "旧任务没有冻结规则范围，请按当前配置全量重建",
+                409,
+            )
+        selected = rule_codes if rule_codes is not None else [item.rule_code for item in snapshot.items]
+        try:
+            RuleScopeResolver(registry).validate_frozen_rules(snapshot, selected)
+        except RuleScopeError as exc:
+            raise TaskRebuildError(exc.code, exc.message, exc.status_code) from exc
+        return None if rule_codes is None else list(selected)
 
     def _scene_or_db_task(self, task_id: str) -> InspectionTask | None:
         """重跑/重建元数据：现场 task.json 优先；现场已清理时使用 SQLite 快照。"""
@@ -465,6 +731,7 @@ class TaskService:
         product: str | None = None,
         device_id: str | None = None,
         package_kind: PackageKind = PackageKind.INSPECTION,
+        rule_network_element_type: str | None = None,
     ) -> TaskCreated:
         task_id = generate_task_id(package_file)
         customer: dict[str, str] = {}
@@ -492,6 +759,7 @@ class TaskService:
                     version=version,
                     stats={},
                     package_kind=package_kind.value,
+                    rule_network_element_type=rule_network_element_type,
                     created_at=NOW(UTC),
                 )
             )
@@ -669,15 +937,10 @@ class TaskService:
         task = self._scene_or_db_task(task_id)
         if task is None or task.system is None:
             return False
+        resolved_rule_codes = self._validated_frozen_rule_codes(task_id, task, rule_codes)
         # 预检原始包：包缺失时按现场是否仍在抛 409/410，不发起重跑。
         self._resolve_run_package(task_id, task)
-        ensure_rule_states()
-        for code in rule_codes or []:
-            try:
-                assert_rule_enabled(code)
-            except RuleStateError as exc:
-                raise TaskRebuildError(exc.code, exc.message, exc.status_code) from exc
-        self._rerun_plan[task_id] = rule_codes
+        self._rerun_plan[task_id] = resolved_rule_codes
         pending_task = task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
         store.save_task_meta(settings.output, pending_task)
         self._update_status(task_id, TaskStatus.PENDING)
@@ -709,12 +972,10 @@ class TaskService:
                     400,
                 )
             rule_codes = list(request.rule_codes or [])
-            ensure_rule_states()
-            for code in rule_codes:
-                try:
-                    assert_rule_enabled(code)
-                except RuleStateError as exc:
-                    raise TaskRebuildError(exc.code, exc.message, exc.status_code) from exc
+            task = self._scene_or_db_task(task_id)
+            if task is None:
+                raise TaskRebuildError("not_found", "任务不存在", 404)
+            rule_codes = self._validated_frozen_rule_codes(task_id, task, rule_codes)
 
         task, package = self._rebuild_package(task_id)
         if task.status in {TaskStatus.PENDING, TaskStatus.RUNNING}:
@@ -725,8 +986,6 @@ class TaskService:
             trigger_source=request.trigger_source.value,
         )
         self._rebuild_plan[task_id] = plan
-        pending_task = task.model_copy(update={"status": TaskStatus.PENDING, "completed_at": None})
-        store.save_task_meta(settings.output, pending_task)
         self._update_status(task_id, TaskStatus.PENDING)
         self._queue.put(task_id)
         return True

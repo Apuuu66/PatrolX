@@ -180,3 +180,17 @@ def test_iter_history_index_falls_back_to_scene_file_for_legacy_task(tmp_path, m
 
     indexed = list(iter_history_index(task.task_id, output=env.output))
     assert [point["value"] for point in indexed] == [42.0]
+
+
+def test_iter_history_index_can_force_current_scene_over_stale_db_points(tmp_path, monkeypatch) -> None:
+    env = setup_env(tmp_path, monkeypatch)
+    task = _meta("task-kpi-scene-authority", completed_at=COMPLETED_AT)
+    store.save_task_meta(env.output, task)
+    write_history_index(task.task_id, [_record(task.task_id, value=77)], output=env.output)
+    task_db.publish_from_scene(task, output=env.output)
+    # DB 中残留旧点，当前任务现场必须仍由 source="scene" 强制读取。
+    write_history_index(task.task_id, [_record(task.task_id, value=88)], output=env.output)
+
+    indexed = list(iter_history_index(task.task_id, output=env.output, source="scene"))
+
+    assert [point["value"] for point in indexed] == [88.0]

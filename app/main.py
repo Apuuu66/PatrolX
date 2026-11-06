@@ -12,7 +12,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app import __version__
-from app.api.router import AppError, router, v1_router, v3_router, v5_router
+from app.api.errors import AppError
+from app.api.router import router, v1_router, v3_router, v5_router, v6_router
 from app.core.logging import configure_logging, get_logger
 from app.core.metrics import render_metrics
 from app.models.schemas import Error
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(router)
     app.include_router(v3_router)
     app.include_router(v5_router)
+    app.include_router(v6_router)
     app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     @app.middleware("http")

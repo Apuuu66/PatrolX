@@ -87,6 +87,8 @@ export interface ConclusionHeroProps {
   onOpenLogs: () => void;
   /** 页头右侧的次级操作（如「更多操作」菜单） */
   extraActions?: ReactNode;
+  /** 规则范围未配置时的中性结论，避免把“无业务规则”误判为全部通过。 */
+  scopeNotice?: string | null;
 }
 
 /**
@@ -103,8 +105,17 @@ export function ConclusionHero({
   onOpenReport,
   onOpenLogs,
   extraActions,
+  scopeNotice = null,
 }: ConclusionHeroProps) {
-  const conclusion = deriveTaskConclusion(task, failureReason, getTaskFailureStage(task));
+  const conclusion = scopeNotice
+    ? {
+        tone: "neutral" as const,
+        label: "规则范围未配置",
+        sentence: scopeNotice,
+        detail: "未执行普通业务规则，不生成通过或跳过结论。",
+        nextAction: null,
+      }
+    : deriveTaskConclusion(task, failureReason, getTaskFailureStage(task));
   const toneStatus = TONE_STATUS[conclusion.tone];
   const toneColor = STATUS_COLOR.get(toneStatus) ?? "#8c8c8c";
   // 文字用文本安全色、填充色保留标准状态色，两者分离满足 AA（FR-019、R13）。

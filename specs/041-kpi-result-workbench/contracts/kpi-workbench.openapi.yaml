@@ -817,7 +817,7 @@ components:
           type: array
           items:
             type: object
-            required: [file]
+            required: [file, raw_source_names]
             properties:
               file:
                 type: string
@@ -825,6 +825,10 @@ components:
                 oneOf:
                   - type: string
                   - type: 'null'
+              raw_source_names:
+                type: array
+                items:
+                  type: string
         config_snapshot:
           type: object
           properties:

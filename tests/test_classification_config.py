@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import app.services.extraction.config as config_module
 from app.services.extraction.config import (
     ClassificationConfigError,
     load_classification_config,
@@ -296,6 +297,26 @@ def test_load_uses_default_configuration_path(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(settings, "config_dir", tmp_path)
 
     assert load_classification_config().version == 1
+
+
+def test_unchanged_classification_content_is_parsed_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """相同分类配置内容应复用已严格校验的对象，避免重复 YAML 解析。"""
+    text = _valid_yaml() + "# classification-cache-behavior-test\n"
+    original_load = config_module.yaml.load
+    parse_calls = 0
+
+    def counted_load(stream: str, Loader: type[config_module._UniqueKeyLoader]) -> object:  # noqa: N803
+        nonlocal parse_calls
+        parse_calls += 1
+        return original_load(stream, Loader=Loader)
+
+    monkeypatch.setattr(config_module.yaml, "load", counted_load)
+
+    first = loads_classification_config(text)
+    second = loads_classification_config(text)
+
+    assert first is second
+    assert parse_calls == 1
 
 
 def _route_yaml(

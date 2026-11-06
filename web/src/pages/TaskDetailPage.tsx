@@ -1,7 +1,14 @@
-import { useCallback, useMemo, useState } from "react";
-import { Alert, Button, Card, Collapse, Descriptions, Flex, Tag, Tabs, Typography } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, App, Button, Card, Collapse, Descriptions, Flex, Tag, Tabs, Typography } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
-import type { DataPreparation, PreparationItem, RuleStatus } from "../api/http";
+import {
+  api,
+  ApiError,
+  type DataPreparation,
+  type KpiTaskSummaryV6,
+  type PreparationItem,
+  type RuleStatus,
+} from "../api/http";
 import { EmptyState, LoadErrorState, PageSkeleton } from "../components/PageState";
 import { DensitySegmented } from "../components/DensitySegmented";
 import { useTableDensity } from "../hooks/useTableDensity";
@@ -84,8 +91,12 @@ export function TaskDetailPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const navigate = useNavigate();
+  const { message, modal } = App.useApp();
   const { filters, updateFilters } = useTaskDetailFilters();
   const [attentionExpanded, setAttentionExpanded] = useState(false);
+  const [kpiSummary, setKpiSummary] = useState<KpiTaskSummaryV6 | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(false);
+  const [kpiError, setKpiError] = useState<{ code?: string; message: string } | null>(null);
   const { density, tableSize, setDensity } = useTableDensity();
 
   const { data, loading, busy, reload } = useTaskDetailData(taskId);
@@ -100,6 +111,69 @@ export function TaskDetailPage() {
   const actions = useTaskActions(taskId, reload);
   const canRebuild = task?.status === "completed" || task?.status === "failed";
   const statusFilter = filters.status;
+
+  const loadKpiSummary = useCallback(async () => {
+    if (!user) {
+      setKpiSummary(null);
+      setKpiError(null);
+      setKpiLoading(false);
+      return;
+    }
+    setKpiLoading(true);
+    setKpiError(null);
+    try {
+      setKpiSummary(await api.getKpiTaskSummaryV6(taskId));
+    } catch (error) {
+      setKpiSummary(null);
+      setKpiError({
+        code: error instanceof ApiError ? error.code : undefined,
+        message: error instanceof Error ? error.message : "KPI 巡检结果加载失败",
+      });
+    } finally {
+      setKpiLoading(false);
+    }
+  }, [taskId, user]);
+
+  useEffect(() => {
+    if (task?.status !== "completed" && task?.status !== "failed") {
+      setKpiSummary(null);
+      setKpiError(null);
+      return;
+    }
+    if (!user) {
+      setKpiSummary(null);
+      setKpiError(null);
+      setKpiLoading(false);
+      return;
+    }
+    void loadKpiSummary();
+  }, [loadKpiSummary, task?.status, user]);
+
+  const confirmKpiRebuild = useCallback(() => {
+    modal.confirm({
+      title: "重建该任务？",
+      content:
+        "将删除并重建任务输出，重新解压并重算全部规则和 KPI 快照；该操作不可撤销。原始上传包只读，不会被修改。",
+      okText: "重建",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          await api.rebuildTask(taskId, {
+            mode: "full",
+            confirmed: true,
+            trigger_source: "ui",
+          });
+          message.success("已受理重建");
+          await reload();
+          await loadKpiSummary();
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : "重建失败");
+          throw error;
+        }
+      },
+    });
+  }, [loadKpiSummary, message, modal, reload, taskId]);
 
   const handleStatusClick = useCallback(
     (status: RuleStatus) => {
@@ -168,6 +242,12 @@ export function TaskDetailPage() {
     ? attentionRules
     : attentionRules.slice(0, ATTENTION_PREVIEW_LIMIT);
   const attentionHiddenCount = attentionRules.length - visibleAttentionRules.length;
+  const kpiScopeNotice =
+    kpiSummary && !kpiSummary.rule_scope.has_executable_rules
+      ? kpiSummary.network_element_type === null
+        ? "未选择规则适用网元类型"
+        : kpiSummary.rule_scope.notice || "当前网元类型未配置可执行业务规则"
+      : null;
 
   return (
     <div>
@@ -182,6 +262,7 @@ export function TaskDetailPage() {
         failureReason={failure}
         onOpenReport={() => navigate(`/tasks/${taskId}/report`)}
         onOpenLogs={() => navigate(`/tasks/${taskId}/logs`)}
+        scopeNotice={kpiScopeNotice}
         extraActions={
           <TaskDetailMoreMenu
             busy={busy}
@@ -194,6 +275,69 @@ export function TaskDetailPage() {
           />
         }
       />
+
+      {kpiError?.code === "task_result_requires_rebuild" ? (
+        <Alert
+          type="warning"
+          showIcon
+          className="task-detail-alert"
+          data-testid="task-kpi-rebuild-required"
+          message="任务结果需要重建"
+          description={
+            <span>
+              task_result_requires_rebuild：{kpiError.message}。旧任务不迁移结果，需按当前规则和 KPI 配置全量重建。
+            </span>
+          }
+          action={
+            <Button danger onClick={confirmKpiRebuild}>
+              重建任务
+            </Button>
+          }
+        />
+      ) : kpiError ? (
+        <Alert
+          type="error"
+          showIcon
+          className="task-detail-alert"
+          data-testid="task-kpi-load-error"
+          message="KPI 巡检结果加载失败"
+          description={kpiError.message}
+          action={
+            <Button size="small" loading={kpiLoading} onClick={() => void loadKpiSummary()}>
+              重试
+            </Button>
+          }
+        />
+      ) : kpiSummary ? (
+        <Card
+          title="KPI 巡检结果"
+          className="task-detail-panel task-kpi-entry"
+          data-testid="task-kpi-entry"
+          extra={
+            <Button type="primary" onClick={() => navigate(`/tasks/${taskId}/kpi`)}>
+              查看 KPI 巡检结果
+            </Button>
+          }
+        >
+          <Flex align="center" gap={20} wrap>
+            <Tag color={kpiSummary.network_element_type ? "blue" : "default"}>
+              {kpiSummary.network_element_type ?? "未选择规则适用网元类型"}
+            </Tag>
+            <Typography.Text type="secondary">
+              数据日期 {kpiSummary.data_date ?? "暂无"}
+            </Typography.Text>
+            <Typography.Text>启用测量单元 {kpiSummary.counts.enabled_measurement_unit_count}</Typography.Text>
+            <Typography.Text>全部指标 {kpiSummary.counts.all_metric_count}</Typography.Text>
+            <Typography.Text>团队关注 {kpiSummary.counts.team_focus_count}</Typography.Text>
+            <Typography.Text strong>需要处理 {kpiSummary.counts.needs_attention_count}</Typography.Text>
+          </Flex>
+          {kpiScopeNotice ? (
+            <Typography.Paragraph type="secondary" className="task-kpi-scope-notice">
+              {kpiScopeNotice}。未执行普通业务规则，不生成通过或跳过结论。
+            </Typography.Paragraph>
+          ) : null}
+        </Card>
+      ) : null}
 
       {systemError && !rulesUnavailable && (
         <Alert

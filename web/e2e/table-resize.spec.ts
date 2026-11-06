@@ -1,37 +1,25 @@
 import { expect, test } from "@playwright/test";
 
-const inspectors = {
-  items: [
-    {
-      code: "baseline.demo",
-      name: "表格列宽测试",
-      category: "config",
-      priority: 1,
-      enabled: true,
-      updated_at: "2026-10-07T00:00:00Z",
-    },
-  ],
-  total: 1,
-  page: 1,
-  page_size: 20,
-};
+async function loginAdmin(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^登\s*录$/ }).first().click();
+  await page.getByLabel("用户名").fill("e2e-admin");
+  await page.getByLabel("密码").fill("e2e-admin-123");
+  await page.locator(".ant-modal").getByRole("button", { name: /^登\s*录$/ }).click();
+  await expect(page.getByText("e2e-admin")).toBeVisible();
+}
 
 test("表格列宽支持拖拽调整并持久到当前页面交互", async ({ page }) => {
-  await page.route("**/api/v2/inspector-states**", (route) => route.fulfill({ json: inspectors }));
-
+  await loginAdmin(page);
   await page.goto("/inspectors");
-  await expect(page.getByText("表格列宽测试")).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "kpi.measurement_units" })).toBeVisible();
 
-  const firstCol = page.locator(".ant-table colgroup col").nth(0);
-  await expect
-    .poll(() => firstCol.evaluate((element) => element.style.width))
-    .toBe("220px");
+  const codeHeader = page.getByRole("columnheader", { name: "规则编码" });
+  const handle = codeHeader.locator(".column-resize-handle");
+  await expect(handle).toHaveAttribute("data-column-width", "220");
+  const initialBox = await codeHeader.boundingBox();
+  expect(initialBox).not.toBeNull();
 
-  const handle = page
-    .locator(".ant-table-cell")
-    .filter({ hasText: "规则编码" })
-    .first()
-    .locator('[data-testid="column-resize-handle-code"]');
   const box = await handle.boundingBox();
   expect(box).not.toBeNull();
 
@@ -40,7 +28,8 @@ test("表格列宽支持拖拽调整并持久到当前页面交互", async ({ pa
   await page.mouse.move(box!.x + box!.width / 2 + 80, box!.y + box!.height / 2, { steps: 4 });
   await page.mouse.up();
 
+  await expect(handle).toHaveAttribute("data-column-width", "300");
   await expect
-    .poll(() => firstCol.evaluate((element) => element.style.width))
-    .toBe("300px");
+    .poll(async () => (await codeHeader.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(initialBox!.width + 70);
 });

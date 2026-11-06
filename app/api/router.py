@@ -15,12 +15,13 @@ from fastapi import Path as PathParam
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BeforeValidator, ValidationError
 
+from app.api import kpi_v6
+from app.api.errors import AppError
 from app.cli import generate_task_id
 from app.core.checksum import sha256_file
 from app.core.config import settings
 from app.core.dicts import load_dicts
 from app.inspectors.registry import registry
-from app.models.db import session_factory
 from app.models.schemas import (
     DictItem,
     DictsResponse,
@@ -66,7 +67,6 @@ from app.models.schemas import (
     MeasurementVersionComparison,
     OverviewSummary,
     PackageKind,
-    Product,
     RebuildRequest,
     RerunRequest,
     RuleResult,
@@ -153,20 +153,11 @@ v1_router = APIRouter(prefix="/api/v1")
 router = APIRouter(prefix="/api/v2")
 v3_router = APIRouter(prefix="/api/v3")
 v5_router = APIRouter(prefix="/api/v5")
+v6_router = APIRouter(prefix="/api/v6")
+v6_router.include_router(kpi_v6.router)
 DICT_NAMES = ("province", "operator", "product")
 SCENE_CLEANED_REPORT_MESSAGE = "报告已随磁盘现场清理，不可查看；任务详情、规则结果与 KPI 等核心数据仍可在界面查询"
 SCENE_CLEANED_LOG_MESSAGE = "执行日志不入库，已随磁盘现场清理，不可查看"
-
-
-class AppError(Exception):
-    def __init__(
-        self, code: str, message: str, status_code: int = 400, detail: dict[str, object] | None = None
-    ) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-        self.detail = detail
 
 
 async def _receive_upload(package_file: UploadFile) -> tuple[str, int, Path]:
@@ -206,6 +197,90 @@ def _hash_existing_package(path: Path) -> str:
         ) from exc
 
 
+_PUBLIC_RULE_NETWORK_ELEMENT_TYPES = frozenset({"*", "COMMON", "PUBLIC", "GENERIC"})
+
+
+def _normalize_rule_network_element_type(value: str | None) -> str | None:
+    """规范化日志补充包的规则适用网元类型，并校验运行时字典。"""
+    normalized = value.strip().upper() if value else ""
+    if not normalized:
+        return None
+    allowed = tuple(item.code.strip().upper() for item in load_dicts().product)
+    if normalized in _PUBLIC_RULE_NETWORK_ELEMENT_TYPES or normalized not in allowed:
+        raise AppError(
+            "invalid_rule_network_element_type",
+            "规则适用网元类型不在运行时字典中，且不能使用公共值",
+            400,
+            detail={"value": value, "allowed": list(allowed)},
+        )
+    return normalized
+
+
+def _validate_task_upload_metadata(
+    *,
+    package_kind: PackageKind,
+    province: str | None,
+    operator: str | None,
+    product: str | None,
+    rule_network_element_type: str | None,
+) -> tuple[str | None, str | None]:
+    """按包类型校验上传元数据，返回规范化的 product 与规则网元类型。"""
+    province_value = province.strip() if province else ""
+    operator_value = operator.strip() if operator else ""
+    product_value = product.strip().upper() if product else ""
+    rule_type_value = rule_network_element_type.strip().upper() if rule_network_element_type else ""
+
+    if package_kind == PackageKind.INSPECTION:
+        if not province_value:
+            raise AppError("missing_province", "巡检包必须选择省份", 400)
+        if not operator_value:
+            raise AppError("missing_operator", "巡检包必须选择运营商", 400)
+        if not product_value:
+            raise AppError(
+                "missing_product",
+                "巡检包必须选择网元类型",
+                400,
+                detail={"package_kind": PackageKind.INSPECTION.value, "field": "product"},
+            )
+        allowed = tuple(item.code.strip().upper() for item in load_dicts().product)
+        if product_value not in allowed:
+            raise AppError(
+                "invalid_product",
+                "巡检包网元类型不在运行时字典中",
+                400,
+                detail={"value": product, "allowed": list(allowed)},
+            )
+        if rule_type_value:
+            raise AppError(
+                "metadata_not_applicable",
+                "巡检包不允许携带规则适用网元类型",
+                400,
+                detail={
+                    "package_kind": PackageKind.INSPECTION.value,
+                    "fields": ["rule_network_element_type"],
+                },
+            )
+        return product_value, None
+
+    forbidden_fields = [
+        field
+        for field, value in (
+            ("province", province_value),
+            ("operator", operator_value),
+            ("product", product_value),
+        )
+        if value
+    ]
+    if forbidden_fields:
+        raise AppError(
+            "metadata_not_applicable",
+            "日志补充包不允许携带省份、运营商或网元类型",
+            400,
+            detail={"package_kind": PackageKind.LOG_SUPPLEMENT.value, "fields": forbidden_fields},
+        )
+    return None, _normalize_rule_network_element_type(rule_network_element_type)
+
+
 def _resolve_existing_task(
     *,
     task_id: str,
@@ -213,6 +288,9 @@ def _resolve_existing_task(
     checksum: str,
     package_kind: PackageKind,
     product: str | None,
+    rule_network_element_type: str | None,
+    province: str | None,
+    operator: str | None,
     temp_path: Path,
     response: Response,
 ) -> TaskCreated:
@@ -258,6 +336,7 @@ def _resolve_existing_task(
     identity = task_db.get_task_identity(task_id)
     existing_kind = identity.package_kind if identity is not None else PackageKind.INSPECTION
     existing_product = identity.product if identity is not None else None
+    existing_rule_type = identity.rule_network_element_type if identity is not None else None
 
     if package_kind != existing_kind:
         raise AppError(
@@ -281,6 +360,25 @@ def _resolve_existing_task(
                 "requested": product,
             },
         )
+    if package_kind == PackageKind.LOG_SUPPLEMENT and rule_network_element_type != existing_rule_type:
+        raise AppError(
+            "package_rule_network_element_type_conflict",
+            "同名日志补充包已存在，但规则适用网元类型不同",
+            409,
+            detail={
+                "task_id": task_id,
+                "existing": existing_rule_type,
+                "requested": rule_network_element_type,
+            },
+        )
+
+    _validate_task_upload_metadata(
+        package_kind=package_kind,
+        province=province,
+        operator=operator,
+        product=product,
+        rule_network_element_type=rule_network_element_type,
+    )
 
     if not scene_package.is_file():
         scene_package.parent.mkdir(parents=True, exist_ok=True)
@@ -298,6 +396,7 @@ async def create_task_v3(
     province: str | None = Form(None),
     operator: str | None = Form(None),
     product: str | None = Form(None),
+    rule_network_element_type: str | None = Form(None),
 ) -> TaskCreated:
     """创建 v3 任务；版本和设备身份不允许人工输入。"""
     filename = PureWindowsPath(package_file.filename or "package.zip").name or "package.zip"
@@ -314,66 +413,37 @@ async def create_task_v3(
             raise AppError("invalid_package", "数据包不能为空", 400)
         if size > settings.max_upload_mb * 1024 * 1024:
             raise AppError("package_too_large", f"数据包超过 {settings.max_upload_mb}MB 限制", 413)
-        province_value = province.strip() if province else ""
-        operator_value = operator.strip() if operator else ""
-        product_value = product.strip() if product else ""
-        normalized_product: str | None = None
-        if package_kind == PackageKind.INSPECTION:
-            if not province_value:
-                raise AppError("missing_province", "巡检包必须选择省份", 400)
-            if not operator_value:
-                raise AppError("missing_operator", "巡检包必须选择运营商", 400)
-            if not product_value:
-                raise AppError(
-                    "missing_product",
-                    "巡检包必须选择网元类型",
-                    400,
-                    detail={"package_kind": PackageKind.INSPECTION.value, "field": "product"},
-                )
-            try:
-                normalized_product = Product(product_value).value
-            except ValueError as exc:
-                raise AppError(
-                    "invalid_product",
-                    "巡检包网元类型仅支持 UMF 或 CSP",
-                    400,
-                    detail={"value": product, "allowed": [Product.UMF.value, Product.CSP.value]},
-                ) from exc
-        else:
-            forbidden_fields = [
-                field
-                for field, value in (
-                    ("province", province_value),
-                    ("operator", operator_value),
-                    ("product", product_value),
-                )
-                if value
-            ]
-            if forbidden_fields:
-                raise AppError(
-                    "metadata_not_applicable",
-                    "日志补充包不允许携带省份、运营商或网元类型",
-                    400,
-                    detail={"package_kind": PackageKind.LOG_SUPPLEMENT.value, "fields": forbidden_fields},
-                )
+        requested_product = product.strip().upper() if product else None
+        requested_rule_type = rule_network_element_type.strip().upper() if rule_network_element_type else None
         if task_service.exists(task_id):
             return _resolve_existing_task(
                 task_id=task_id,
                 filename=filename,
                 checksum=checksum,
                 package_kind=package_kind,
-                product=normalized_product,
+                product=requested_product,
+                rule_network_element_type=requested_rule_type,
+                province=province,
+                operator=operator,
                 temp_path=temp_path,
                 response=response,
             )
+        normalized_product, normalized_rule_type = _validate_task_upload_metadata(
+            package_kind=package_kind,
+            province=province,
+            operator=operator,
+            product=product,
+            rule_network_element_type=rule_network_element_type,
+        )
         created = task_service.reserve(
             filename,
             name,
-            province_value or None,
-            operator_value or None,
+            province.strip() if province and province.strip() else None,
+            operator.strip() if operator and operator.strip() else None,
             None,
             product=normalized_product,
             package_kind=package_kind,
+            rule_network_element_type=normalized_rule_type,
         )
         task_dir = settings.uploads / created.task_id
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -402,22 +472,19 @@ def list_inventory_devices(
     operator: str | None = None,
     quality_status: str = Query("all", pattern="^(all|issue)$"),
 ) -> InventoryDeviceList:
-    with session_factory() as session:
-        items, total = inventory_queries.list_devices(
-            session,
-            page=page,
-            page_size=page_size,
-            province=province,
-            operator=operator,
-            quality_status=quality_status,
-        )
+    items, total = inventory_queries.list_devices(
+        page=page,
+        page_size=page_size,
+        province=province,
+        operator=operator,
+        quality_status=quality_status,
+    )
     return InventoryDeviceList(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/inventory/devices/{device_id}", response_model=InventoryDevice, operation_id="getInventoryDevice")
 def get_inventory_device(device_id: str = PathParam()) -> InventoryDevice:
-    with session_factory() as session:
-        device = inventory_queries.get_device(session, device_id)
+    device = inventory_queries.get_device(device_id)
     if device is None:
         raise AppError("not_found", "设备不存在", 404)
     return device
@@ -451,15 +518,13 @@ def list_inventory_observations(
     order: str = Query("desc", pattern="^(asc|desc)$"),
     site_key: str | None = None,
 ) -> InventoryObservationList:
-    with session_factory() as session:
-        items, total = inventory_queries.list_observations(
-            session,
-            device_id,
-            page=page,
-            page_size=page_size,
-            order=order,
-            site_key=site_key,
-        )
+    items, total = inventory_queries.list_observations(
+        device_id,
+        page=page,
+        page_size=page_size,
+        order=order,
+        site_key=site_key,
+    )
     return InventoryObservationList(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -473,8 +538,7 @@ def get_inventory_version_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
 ) -> InventoryVersionHistory:
-    with session_factory() as session:
-        items, total = inventory_queries.get_version_history(session, device_id, page=page, page_size=page_size)
+    items, total = inventory_queries.get_version_history(device_id, page=page, page_size=page_size)
     return InventoryVersionHistory(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -492,17 +556,15 @@ def list_inventory_quality_issues(
     task_id: str | None = None,
     device_id: str | None = None,
 ) -> InventoryQualityIssueList:
-    with session_factory() as session:
-        items, total = inventory_queries.list_quality_issues(
-            session,
-            page=page,
-            page_size=page_size,
-            issue_type=issue_type,
-            province=province,
-            operator=operator,
-            task_id=task_id,
-            device_id=device_id,
-        )
+    items, total = inventory_queries.list_quality_issues(
+        page=page,
+        page_size=page_size,
+        issue_type=issue_type,
+        province=province,
+        operator=operator,
+        task_id=task_id,
+        device_id=device_id,
+    )
     return InventoryQualityIssueList(items=items, total=total, page=page, page_size=page_size)
 
 

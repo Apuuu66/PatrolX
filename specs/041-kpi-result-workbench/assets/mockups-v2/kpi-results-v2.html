@@ -113,7 +113,7 @@
               <div class="result-row selected">
                 <div class="result-group"><span class="result-group-label fail"><span class="status-dot fail"></span>失败</span><span class="trend-label bad">昨日恶化</span></div>
                 <div class="result-metric"><div class="result-name">媒体资源创建成功率</div><div class="result-path">UMF-AMF-01 · <span class="mono">kpi.media_resource.create_rate</span></div></div>
-                <div class="result-value bad">64.5%</div><div class="result-value">75.0%</div><div class="result-change bad">-10.5pp</div><div class="evidence-link">查看</div>
+                <div class="result-value bad">63.7%</div><div class="result-value">75.0%</div><div class="result-change bad">-11.3pp</div><div class="evidence-link">查看</div>
               </div>
 
               <div class="result-row">
@@ -155,18 +155,19 @@
             <div class="evidence-title">媒体资源创建成功率</div>
             <div class="evidence-id mono">kpi.media_resource.create_rate · 健康媒体统计 · base</div>
             <div class="value-grid">
-              <div class="value-cell"><div class="value-label">今日</div><div class="value-main bad">64.5%</div><div class="value-sub bad">-10.5pp 较昨日</div></div>
+              <div class="value-cell"><div class="value-label">今日</div><div class="value-main bad">63.7%</div><div class="value-sub bad">-11.3pp 较昨日</div></div>
               <div class="value-cell"><div class="value-label">昨日</div><div class="value-main">75.0%</div><div class="value-sub">源包日值</div></div>
               <div class="value-cell"><div class="value-label">有效点</div><div class="value-main">7</div><div class="value-sub">7 / 7 天有数据</div></div>
             </div>
             <div class="reason-box"><div class="reason-title">判定原因</div><div class="reason-text">源包成功率低于失败阈值 70.0%，且较昨日下降超过 0.20pp 容差。对象与周期分组一致。</div></div>
             <div class="evidence-section-title">判定依据 <span>阈值来源：维护配置 v12</span></div>
             <div class="basis-grid">
-              <div class="basis-cell"><div class="basis-label">判定方向</div><div class="basis-value">越高越好 · 日成功率</div></div>
+              <div class="basis-cell"><div class="basis-label">判定方向</div><div class="basis-value">越高越好 · 全日聚合</div></div>
               <div class="basis-cell"><div class="basis-label">指标类型</div><div class="basis-value">源包直出 · <span class="mono">base</span></div></div>
               <div class="basis-cell"><div class="basis-label">预警 / 失败阈值</div><div class="basis-value">75.0% / 70.0%</div></div>
-              <div class="basis-cell"><div class="basis-label">来源列 / 口径</div><div class="basis-value mono">Media Resource Creation Requests Success Rate(%) · 全日聚合</div></div>
-              <div class="basis-cell"><div class="basis-label">关联证据 · 不参与计算</div><div class="basis-value mono">请求 200 / 成功 129 / 失败 71</div></div>
+              <div class="basis-cell"><div class="basis-label">来源列（原样）</div><div class="basis-value mono">Media Resource Creation Success Rate(%)</div></div>
+              <div class="basis-cell"><div class="basis-label">同组源列名（原样）</div><div class="basis-value mono">Media Resource Creation Requests Success Rate(%)</div></div>
+              <div class="basis-cell"><div class="basis-label">来源文件</div><div class="basis-value mono">ports_umf_media_20261105_1000.csv</div></div>
             </div>
             <div class="evidence-section-title">近 7 日趋势 <span>2026-10-30 → 11-05</span></div>
             <div class="trend-card">

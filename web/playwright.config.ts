@@ -5,6 +5,7 @@ export default defineConfig({
   // 留存治理场景使用独立后端与数据根，由 playwright.retention.config.ts 单独运行。
   testIgnore: /retention\.spec\.ts/,
   timeout: 30_000,
+  workers: 1,
   use: {
     baseURL: "http://127.0.0.1:5183",
     trace: "retain-on-failure",

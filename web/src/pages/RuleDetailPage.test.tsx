@@ -242,6 +242,29 @@ describe("RuleDetailPage", () => {
     });
   });
 
+  it("KPI 规则详情不复制旧结果面板，结论只在 v6 工作台呈现", async () => {
+    vi.mocked(api.getRuleResult).mockResolvedValue(
+      makeRule({
+        code: "kpi.measurement_units",
+        name: "KPI 测量单元巡检",
+        findings: [],
+        metrics: [],
+        metadata: { measurement_units: [] },
+      }),
+    );
+    vi.mocked(api.listInspectors).mockResolvedValue([
+      makeInspector({ code: "kpi.measurement_units", name: "KPI 测量单元巡检" }),
+    ]);
+
+    renderPage("kpi.measurement_units");
+
+    await waitFor(() => expect(screen.getByTestId("rule-section-evidence")).toBeDefined());
+    expect(screen.queryByTestId("measurement-inspection-panel")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "KPI 日健康兼容提示" })).toBeNull();
+    expect(screen.queryByText("KPI 总览")).toBeNull();
+    expect(screen.queryByText(/健康分/)).toBeNull();
+  });
+
   it("skip 且无跳过原因时给出兜底文案，不静默通过", async () => {
     vi.mocked(api.getRuleResult).mockResolvedValue(
       makeRule({ status: "skip", skip_reason: null, metrics: [], findings: [], metadata: {} }),

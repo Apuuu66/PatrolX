@@ -63,14 +63,12 @@ interface MaintenanceValues {
   zero_semantics: "unknown" | "expected_zero" | "business_not_triggered";
   consistency_tolerance: number;
   object_match_mode: "exact";
-  enabled: boolean;
 }
 
 interface DerivedValues {
   numerator_metric_id: string;
   denominator_metric_id: string;
   template: "success_rate" | "reverse_success_rate";
-  enabled: boolean;
 }
 
 function derivedFormula(item: KpiMeasurementDerived): string {
@@ -93,8 +91,7 @@ function formatTimestamp(value: string): string {
   }).format(date);
 }
 
-function ConfigStatusTag({ config }: { config: KpiMetricMaintenanceConfig }) {
-  if (!config.enabled) return <Tag>已停用</Tag>;
+function MetricRoleTag({ config }: { config: KpiMetricMaintenanceConfig }) {
   if (config.role === "derived") return <Tag color="blue">聚合指标</Tag>;
   return <Tag color="green">基础指标</Tag>;
 }
@@ -121,8 +118,7 @@ export function KpiMetricMaintenancePanel() {
   const derivedCandidates = configs
     .filter((item) =>
       item.measurement_unit_id === derivedEditing?.measurement_unit_id
-      && item.metric_resource_id !== derivedEditing?.metric_resource_id
-      && item.enabled,
+      && item.metric_resource_id !== derivedEditing?.metric_resource_id,
     )
     .map((item) => ({
       value: item.metric_resource_id,
@@ -180,7 +176,6 @@ export function KpiMetricMaintenancePanel() {
       zero_semantics: config.zero_semantics,
       consistency_tolerance: config.consistency_tolerance,
       object_match_mode: config.object_match_mode,
-      enabled: config.enabled,
     });
   };
 
@@ -217,7 +212,6 @@ export function KpiMetricMaintenancePanel() {
       numerator_metric_id: item.numerator_metric_id,
       denominator_metric_id: item.denominator_metric_id,
       template: item.template,
-      enabled: item.enabled,
     });
   };
 
@@ -266,11 +260,11 @@ export function KpiMetricMaintenancePanel() {
       <section className="kpi-maintenance-intro">
         <div>
           <h3>指标维护配置</h3>
-          <p>当前判定只使用启用测量单元、已确认且启用的绑定以及启用指标；配置变更后会记录审计。</p>
+          <p>测量单元启用后，已确认绑定和已定义派生均进入巡检；维护配置只影响判定口径，不控制巡检启停。</p>
         </div>
         <div className="kpi-maintenance-legend">
           <Tag>未知全零会进入待配置</Tag>
-          <Tag>成功率按同一对象/周期的分子总和 ÷ 分母总和计算</Tag>
+          <Tag>基础指标直接读取源包值；仅派生指标按分子/分母计算</Tag>
         </div>
       </section>
 
@@ -302,7 +296,7 @@ export function KpiMetricMaintenancePanel() {
                       <span className="kpi-health-secondary">{config.measurement_unit_id}</span>
                     </td>
                     <td>
-                      <ConfigStatusTag config={config} />
+                      <MetricRoleTag config={config} />
                       <span>{DIRECTION_LABELS[config.direction ?? "neutral"] ?? "未配置方向"}</span>
                       <span className="kpi-health-secondary">
                         预警 {config.warning_threshold ?? "—"} / 失败 {config.critical_threshold ?? "—"}
@@ -350,7 +344,6 @@ export function KpiMetricMaintenancePanel() {
                   <th scope="col">分子</th>
                   <th scope="col">分母</th>
                   <th scope="col">公式</th>
-                  <th scope="col">状态</th>
                   <th scope="col">操作</th>
                 </tr>
               </thead>
@@ -364,7 +357,6 @@ export function KpiMetricMaintenancePanel() {
                     <td>{item.numerator_metric_name_zh}</td>
                     <td>{item.denominator_metric_name_zh}</td>
                     <td><code>{derivedFormula(item)}</code></td>
-                    <td><Tag color={item.enabled ? "green" : "default"}>{item.enabled ? "启用" : "停用"}</Tag></td>
                     <td>
                       {canWrite ? (
                         <Button size="small" type="primary" onClick={() => openDerivedEditor(item)}>
@@ -447,9 +439,6 @@ export function KpiMetricMaintenancePanel() {
             <Form.Item label="百分比指标" name="is_percentage" valuePropName="checked">
               <Switch />
             </Form.Item>
-            <Form.Item label="启用配置" name="enabled" valuePropName="checked">
-              <Switch />
-            </Form.Item>
           </div>
         </Form>
       </Modal>
@@ -498,9 +487,6 @@ export function KpiMetricMaintenancePanel() {
               })}</code>
             </div>
           ) : null}
-          <Form.Item label="启用配置" name="enabled" valuePropName="checked">
-            <Switch />
-          </Form.Item>
         </Form>
       </Modal>
 

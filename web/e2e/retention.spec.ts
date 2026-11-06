@@ -70,6 +70,15 @@ async function fillInspectionMetadata(page: Page) {
   }
 }
 
+async function loginAdmin(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^登\s*录$/ }).first().click();
+  await page.getByLabel("用户名").fill("e2e-admin");
+  await page.getByLabel("密码").fill("e2e-admin-123");
+  await page.locator(".ant-modal").getByRole("button", { name: /^登\s*录$/ }).click();
+  await expect(page.getByText("e2e-admin")).toBeVisible();
+}
+
 test("51 个任务现场只保留最近 50 个，最旧任务的磁盘现场被清理", async () => {
   expect(report.cleaned_task_id).toBe(CLEANED_TASK_ID);
   expect(report.newest_task_id).toBe(NEWEST_TASK_ID);
@@ -87,7 +96,9 @@ test("51 个任务现场只保留最近 50 个，最旧任务的磁盘现场被�
   expect(existsSync(path.join(E2E_DIR, "uploads", NEWEST_TASK_ID, NEWEST_PACKAGE))).toBe(true);
 });
 
-test("清理后任务详情、规则结果与 KPI 趋势仍可查", async ({ page }) => {
+test("清理后任务详情、规则结果与 KPI 证据仍可查", async ({ page }) => {
+  await loginAdmin(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/tasks/${CLEANED_TASK_ID}`);
   await expect(page.getByTestId("conclusion-hero").getByRole("heading", { name: "留存场景 01" })).toBeVisible();
   // 规则结果完全来自数据库，现场缺失不影响展示。
@@ -97,36 +108,35 @@ test("清理后任务详情、规则结果与 KPI 趋势仍可查", async ({ pag
   await expect(ruleRow).toBeVisible();
   await expect(ruleRow).toContainText(KPI_RULE_CODE);
 
-  await page.goto(`/tasks/${CLEANED_TASK_ID}/rules/${KPI_RULE_CODE}`);
-  await expect(page.getByText("呼叫统计", { exact: true })).toBeVisible();
+  // KPI 结果走 v6 工作台；任务详情入口和结果快照都来自数据库。
+  const entry = page.getByTestId("task-kpi-entry");
+  await expect(entry).toContainText("UMF");
+  await expect(entry).toContainText("全部指标 1");
+  await expect(entry).toContainText("团队关注 1");
+  await entry.getByRole("button", { name: "查看 KPI 巡检结果" }).click();
+  await expect(page).toHaveURL(new RegExp(`/tasks/${CLEANED_TASK_ID}/kpi$`));
+
+  const viewTabs = page.getByRole("tablist", { name: "KPI 结果视图" });
+  await viewTabs.getByRole("tab", { name: /团队关注/ }).click();
+  const metricRow = page.getByTestId("kpi-metric-row").filter({ hasText: "呼叫请求次数" });
+  await expect(metricRow).toBeVisible();
 
   const detailResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&
-      isRequestTo(response, `/api/v2/tasks/${CLEANED_TASK_ID}/rules/${KPI_RULE_CODE}/measurement-units/MU_CALL/metrics/ME_CALL`),
-  );
-  await page.getByRole("button", { name: "查看呼叫请求次数完整趋势" }).click();
-  const detailResponse = await detailResponsePromise;
-  expect(detailResponse.status()).toBe(200);
-  // 完整趋势的时间点明细来自数据库中的 KPI 明细，两条窗口仍可核对。
-  const timepointTable = page.getByRole("table", { name: "时间点明细" });
-  await expect(timepointTable.getByRole("cell", { name: "101 次", exact: true })).toBeVisible();
-  await expect(timepointTable.getByRole("cell", { name: "105 次", exact: true })).toBeVisible();
-
-  const historyResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "GET" &&
       isRequestTo(
         response,
-        `/api/v2/tasks/${CLEANED_TASK_ID}/rules/${KPI_RULE_CODE}/measurement-units/MU_CALL/metrics/ME_CALL/history-trend`,
+        `/api/v6/kpi/tasks/${CLEANED_TASK_ID}/metrics/MU_CALL/ME_CALL/evidence`,
       ),
   );
-  await page.getByRole("tab", { name: "历史对比" }).click();
-  const historyResponse = await historyResponsePromise;
-  expect(historyResponse.status()).toBe(200);
-  // 设备身份与窗口来自数据库中的任务记录（现场已删除）。
-  await expect(page.getByText("设备 retention-device-001")).toBeVisible();
-  await expect(page.getByText("暂无历史")).toBeVisible();
+  await page.getByRole("button", { name: "查看呼叫请求次数证据" }).click();
+  const detailResponse = await detailResponsePromise;
+  expect(detailResponse.status()).toBe(200);
+  const evidence = page.getByRole("region", { name: "呼叫请求次数证据" });
+  await expect(evidence).toBeVisible();
+  await expect(evidence).toContainText("7 日趋势");
+  await expect(evidence.getByRole("row", { name: /2026-09-16/ })).toContainText("101");
+  await expect(evidence.getByRole("row", { name: /2026-09-17/ })).toContainText("105");
 });
 
 test("报告与执行日志在磁盘现场缺失时给出明确提示，不静默空白", async ({ page }) => {

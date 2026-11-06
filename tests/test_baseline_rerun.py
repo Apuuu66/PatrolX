@@ -13,6 +13,7 @@ from app.models.schemas import Priority, RuleCategory, RuleStatus, Severity
 from app.services.executor import make_result
 from tests.baseline_helpers import (
     SAMPLE,
+    assign_rules_to_network_element,
     load_rule,
     load_task,
     setup_env,
@@ -39,11 +40,12 @@ def _register_unrelated_test_rule(monkeypatch) -> str:
     )
     inspector.run = lambda _ctx: make_result(inspector, status=RuleStatus.PASS, summary="无关结果")
     monkeypatch.setitem(registry._rules, inspector.code, inspector)
+    assign_rules_to_network_element([inspector.code], "UMF")
     return inspector.code
 
 
 def test_local_single_rule_rerun_preserves_unrelated_results(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_single_rule, run_task
 
     unrelated_code = _register_unrelated_test_rule(monkeypatch)
@@ -67,7 +69,7 @@ def test_local_single_rule_rerun_preserves_unrelated_results(tmp_path: Path, mon
 
 
 def test_online_single_rule_rerun_refreshes_summary_and_report(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     unrelated_code = _register_unrelated_test_rule(monkeypatch)
     task_id = upload_package(env, client)
     wait_for_task(client, task_id)
@@ -92,7 +94,7 @@ def test_online_single_rule_rerun_refreshes_summary_and_report(tmp_path: Path, m
 
 
 def test_single_rule_rerun_rebuilds_missing_task_site(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_single_rule, run_task
 
     package = SAMPLE
@@ -107,7 +109,7 @@ def test_single_rule_rerun_rebuilds_missing_task_site(tmp_path: Path, monkeypatc
 
 
 def test_single_rule_rerun_reports_kpi_skip_without_kpi_sources(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_single_rule, run_task
 
     package = tmp_path / "no-kpi.zip"
@@ -124,7 +126,7 @@ def test_single_rule_rerun_reports_kpi_skip_without_kpi_sources(tmp_path: Path, 
 
 
 def test_kpi_measurement_rerun_without_prepare_and_deterministically(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_single_rule, run_task
 
     package = SAMPLE
@@ -142,7 +144,7 @@ def test_kpi_measurement_rerun_without_prepare_and_deterministically(tmp_path: P
 
 def test_single_rule_rerun_reuses_valid_manifest(tmp_path: Path, monkeypatch) -> None:
     """manifest 与主包 checksum 一致时，单规则重跑不得重建解压现场。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_single_rule, run_task
     from app.services.extraction import site
 

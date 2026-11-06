@@ -12,7 +12,7 @@ client = TestClient(app)
 
 
 def test_delete_removes_all_task_state(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(env, client)
     wait_for_task(client, task_id)
 
@@ -56,7 +56,7 @@ def test_delete_removes_all_task_state(tmp_path: Path, monkeypatch) -> None:
 
 def test_delete_retries_transient_windows_directory_not_empty(tmp_path: Path, monkeypatch) -> None:
     """Windows 145 常见于目录刚关闭后的瞬时状态；删除应短暂重试。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(env, client)
     wait_for_task(client, task_id)
     task_dir = env.task_dir(task_id)

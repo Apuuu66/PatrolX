@@ -1,6 +1,8 @@
 """预制数据字典加载与维护。"""
 
+from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -12,8 +14,19 @@ def _dict_path() -> Path:
     return settings.config / "dicts.yaml"
 
 
+@lru_cache(maxsize=8)
+def _parse_dicts(text: str) -> dict[str, Any]:
+    """按原文缓存字典 YAML 解析结果，文件内容变化时自然失效。"""
+    payload = yaml.safe_load(text)
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise ValueError("字典配置必须是 YAML 对象")
+    return payload
+
+
 def load_dicts() -> DictsResponse:
-    raw = yaml.safe_load(_dict_path().read_text(encoding="utf-8")) or {}
+    raw = _parse_dicts(_dict_path().read_text(encoding="utf-8"))
     return DictsResponse(
         **{
             name: [DictItem(**item) for item in raw.get(name, []) or []]

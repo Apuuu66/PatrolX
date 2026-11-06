@@ -17,6 +17,11 @@ from app.models.db import (
     KpiMeasurementDerived,
     KpiMeasurementResource,
     KpiMetricMaintenanceConfig,
+    KpiV6MeasurementBinding,
+    KpiV6MeasurementDerived,
+    KpiV6MeasurementResource,
+    KpiV6MeasurementUnit,
+    KpiV6MetricMaintenanceConfig,
     TaskRecord,
     session_factory,
 )
@@ -31,7 +36,8 @@ from app.services.kpi_measurement_units import (
     list_measurement_units,
     set_measurement_binding_status,
 )
-from tests.baseline_helpers import load_rule, setup_env
+from tests.baseline_helpers import assign_rules_to_network_element, load_rule, setup_env
+from tests.fixtures import make_real_package as fixture_module
 
 HEADER = "container,测量开始时间,测量结束时间,周期(分钟),呼叫请求次数(次)\n"
 RESOURCE_CSV = (
@@ -41,9 +47,160 @@ RESOURCE_CSV = (
     "ME_RATE,呼叫成功率,Call Success Rate\n"
 )
 
+V6_NETWORK_ELEMENT_TYPE = "UMF"
+V6_CONFIG_FINGERPRINT = "d" * 64
+
 
 def _import_resources() -> None:
     import_resource_csv(io.StringIO(RESOURCE_CSV))
+
+
+def _kpi_v6_workbench_csv_file(tmp_path: Path, network_element_type: str = "UMF") -> Path:
+    package = fixture_module.build_kpi_v6_workbench_fixture(
+        tmp_path / f"kpi-v6-{network_element_type.lower()}",
+        network_element_type=network_element_type,
+    )
+    with zipfile.ZipFile(package) as outer:
+        performance_name = next(name for name in outer.namelist() if name.endswith(".zip"))
+        with zipfile.ZipFile(io.BytesIO(outer.read(performance_name))) as performance:
+            csv_name = next(name for name in performance.namelist() if name.endswith(".csv"))
+            path = tmp_path / Path(csv_name).name
+            path.write_bytes(performance.read(csv_name))
+            return path
+
+
+def _seed_kpi_v6_rate_resources() -> dict[str, str]:
+    now = datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
+    metric_ids = {
+        "creation": "ME_MEDIA_CREATION_SUCCESS_RATE",
+        "data_channel": "ME_DATA_CHANNEL_UPDATE_SUCCESS_RATE",
+    }
+    with session_factory() as session:
+        session.add_all(
+            [
+                KpiMeasurementResource(
+                    resource_id=fixture_module.KPI_V6_WORKBENCH_MEASUREMENT_UNIT_ID,
+                    kind="mu",
+                    name_zh=fixture_module.KPI_V6_WORKBENCH_MEASUREMENT_UNIT_NAME,
+                    name_en="Media Data Channel Call",
+                    filename_fragment="Call_Media",
+                    enabled=True,
+                    display_order=1,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                KpiMeasurementResource(
+                    resource_id=metric_ids["creation"],
+                    kind="me",
+                    name_zh="媒体资源创建成功率",
+                    name_en="Media Resource Creation Success Rate",
+                    enabled=True,
+                    display_order=2,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                KpiMeasurementResource(
+                    resource_id=metric_ids["data_channel"],
+                    kind="me",
+                    name_zh="数据通道资源更新成功率",
+                    name_en="DC Resource Update Success Rate",
+                    enabled=True,
+                    display_order=3,
+                    created_at=now,
+                    updated_at=now,
+                ),
+            ]
+        )
+        session.commit()
+    return metric_ids
+
+
+def test_success_rate_source_aliases_discover_as_one_logical_metric(
+    tmp_path: Path,
+    isolated_db: Path,
+) -> None:
+    del isolated_db
+    path = _kpi_v6_workbench_csv_file(tmp_path)
+    metric_ids = _seed_kpi_v6_rate_resources()
+    alias_groups = {
+        metric_ids["creation"]: (
+            "Media Resource Creation Success Rate(%)",
+            "Media Resource Creation Requests Success Rate(%)",
+        ),
+        metric_ids["data_channel"]: (
+            "DC Resource Update Success Rate(%)",
+            "Data Channel Resource Update Requests Success Rate(%)",
+        ),
+    }
+
+    discover_measurement_bindings("task-kpi-v6-alias", [(path.name, path)])
+
+    with session_factory() as session:
+        for metric_id, raw_names in alias_groups.items():
+            bindings = (
+                session.query(KpiMeasurementBinding).filter(KpiMeasurementBinding.raw_source_name.in_(raw_names)).all()
+            )
+            assert {binding.raw_source_name for binding in bindings} == set(raw_names)
+            assert {binding.metric_resource_id for binding in bindings} == {metric_id}
+
+
+def test_success_rate_aliases_inspect_as_one_logical_metric_with_source_evidence(
+    tmp_path: Path,
+    isolated_db: Path,
+) -> None:
+    del isolated_db
+    metric_id = "ME_MEDIA_CREATION_SUCCESS_RATE"
+    raw_names = (
+        "Media Resource Creation Success Rate(%)",
+        "Media Resource Creation Requests Success Rate(%)",
+    )
+    _seed_kpi_v6_rate_resources()
+    path = _kpi_v6_workbench_csv_file(tmp_path)
+
+    result = inspect_measurement_files("task-kpi-v6-alias-inspect", [(path.name, path)])
+
+    metrics = [
+        metric for metric in result["measurement_units"][0]["metrics"] if metric["metric_resource_id"] == metric_id
+    ]
+    assert len(metrics) == 1
+    metric = metrics[0]
+    assert metric["role"] == "base"
+    assert metric["raw_source_name"] == raw_names[0]
+    assert set(metric["raw_source_names"]) == set(raw_names)
+    assert [point["value"] for point in metric["trend_points"]] == [75.0, 63.7]
+    assert metric.get("formula") is None
+    assert metric.get("numerator") is None
+    assert metric.get("denominator") is None
+    assert metric.get("components") is None
+
+
+def test_missing_success_rate_source_remains_missing_when_aliases_are_empty(
+    tmp_path: Path,
+    isolated_db: Path,
+) -> None:
+    del isolated_db
+    metric_id = "ME_MEDIA_CREATION_SUCCESS_RATE"
+    raw_names = (
+        "Media Resource Creation Success Rate(%)",
+        "Media Resource Creation Requests Success Rate(%)",
+    )
+    _seed_kpi_v6_rate_resources()
+    path = _kpi_v6_workbench_csv_file(tmp_path, "CSP")
+
+    result = inspect_measurement_files("task-kpi-v6-csp-missing", [(path.name, path)])
+
+    metrics = [
+        metric for metric in result["measurement_units"][0]["metrics"] if metric["metric_resource_id"] == metric_id
+    ]
+    assert len(metrics) == 1
+    metric = metrics[0]
+    assert metric["role"] == "base"
+    assert set(metric["raw_source_names"]) == set(raw_names)
+    assert metric["observations"][0]["row_count"] == 2
+    assert metric["observations"][0]["valid_count"] == 0
+    assert metric["observations"][0]["null_count"] == 2
+    assert metric["observations"][0]["avg_value"] is None
+    assert metric["trend_points"] == []
 
 
 def _confirm(call_binding: bool = True) -> None:
@@ -52,8 +209,116 @@ def _confirm(call_binding: bool = True) -> None:
             set_measurement_binding_status(binding["id"], "confirmed")
 
 
+def _ensure_v6_task(
+    session,
+    task_id: str,
+    *,
+    created_at: datetime,
+) -> None:
+    task = session.get(TaskRecord, task_id)
+    if task is None:
+        session.add(
+            TaskRecord(
+                task_id=task_id,
+                name=f"{task_id} 测试任务",
+                mode="online",
+                status="pending",
+                trigger="upload",
+                package_file=f"{task_id}.zip",
+                customer={"product": V6_NETWORK_ELEMENT_TYPE},
+                stats={},
+                created_at=created_at,
+                completed_at=None,
+                last_run_at=None,
+            )
+        )
+        return
+    task.customer = {"product": V6_NETWORK_ELEMENT_TYPE}
+
+
+def _clear_v6_scope(session, measurement_unit_id: str, resource_ids: tuple[str, ...]) -> None:
+    """清理共享测试库中的同作用域行，避免 v6 配置跨用例累积。"""
+    session.query(KpiV6MetricMaintenanceConfig).filter(
+        KpiV6MetricMaintenanceConfig.network_element_type == V6_NETWORK_ELEMENT_TYPE,
+        KpiV6MetricMaintenanceConfig.measurement_unit_id == measurement_unit_id,
+    ).delete(synchronize_session=False)
+    session.query(KpiV6MeasurementDerived).filter(
+        KpiV6MeasurementDerived.network_element_type == V6_NETWORK_ELEMENT_TYPE,
+        KpiV6MeasurementDerived.measurement_unit_id == measurement_unit_id,
+    ).delete(synchronize_session=False)
+    session.query(KpiV6MeasurementBinding).filter(
+        KpiV6MeasurementBinding.network_element_type == V6_NETWORK_ELEMENT_TYPE,
+        KpiV6MeasurementBinding.measurement_unit_id == measurement_unit_id,
+    ).delete(synchronize_session=False)
+    session.query(KpiV6MeasurementUnit).filter(
+        KpiV6MeasurementUnit.network_element_type == V6_NETWORK_ELEMENT_TYPE,
+        KpiV6MeasurementUnit.measurement_unit_id == measurement_unit_id,
+    ).delete(synchronize_session=False)
+    session.query(KpiV6MeasurementResource).filter(
+        KpiV6MeasurementResource.network_element_type == V6_NETWORK_ELEMENT_TYPE,
+        KpiV6MeasurementResource.resource_id.in_(resource_ids),
+    ).delete(synchronize_session=False)
+
+
+def _seed_v6_call_scope(task_id: str) -> None:
+    """为端到端用例预置与 v5 解析资源对应的 v6 作用域。"""
+    now = datetime(2026, 9, 2, 0, 0, tzinfo=UTC)
+    with session_factory() as session:
+        _clear_v6_scope(session, "MU_CALL", ("ME_CALL",))
+        _ensure_v6_task(session, task_id, created_at=now)
+        session.add(
+            KpiV6MeasurementUnit(
+                network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                measurement_unit_id="MU_CALL",
+                name_zh="呼叫统计",
+                name_en="Call Statistics",
+                inspection_enabled=True,
+                revision=1,
+                config_fingerprint=V6_CONFIG_FINGERPRINT,
+                source="preset",
+                origin_task_id=task_id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            KpiV6MeasurementResource(
+                network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                resource_id="ME_CALL",
+                kind="me",
+                name_zh="呼叫请求次数",
+                name_en="Call Requests",
+                display_order=1,
+                importance="P1",
+                direction="higher_better",
+                source="preset",
+                origin_task_id=task_id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            KpiV6MeasurementBinding(
+                network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                measurement_unit_id="MU_CALL",
+                raw_source_name="呼叫请求次数(次)",
+                base_source_name="呼叫请求次数",
+                metric_resource_id="ME_CALL",
+                display_unit="times",
+                binding_state="confirmed",
+                source_file="Call_Statistics.csv",
+                origin_task_id=task_id,
+                revision=1,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+
+
 def _seed_daily_health_catalog(
     *,
+    task_ids: tuple[str, ...] = ("task-daily-health",),
     disabled_unit: bool = False,
     internal_rate_dependencies: bool = False,
 ) -> None:
@@ -63,6 +328,17 @@ def _seed_daily_health_catalog(
     numerator_name = "成功请求次数分子" if internal_rate_dependencies else "成功请求次数"
     denominator_name = "请求总次数分母" if internal_rate_dependencies else "请求总次数"
     with session_factory() as session:
+        _clear_v6_scope(
+            session,
+            "MU_DAILY",
+            (
+                "MU_DAILY",
+                numerator_id,
+                denominator_id,
+                "ME_SUCCESS_RATE",
+                "ME_NO_DATA",
+            ),
+        )
         session.add_all(
             [
                 KpiMeasurementResource(
@@ -166,6 +442,107 @@ def _seed_daily_health_catalog(
                 zero_semantics="unknown",
                 consistency_tolerance=0.2,
                 object_match_mode="exact",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        for task_id in task_ids:
+            _ensure_v6_task(
+                session,
+                task_id,
+                created_at=datetime(2026, 10, 30, 16, 30, tzinfo=UTC),
+            )
+        session.add(
+            KpiV6MeasurementUnit(
+                network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                measurement_unit_id="MU_DAILY",
+                name_zh="日健康测量单元",
+                name_en="Daily Health",
+                inspection_enabled=not disabled_unit,
+                revision=1,
+                config_fingerprint=V6_CONFIG_FINGERPRINT,
+                source="preset",
+                origin_task_id=task_ids[0],
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        for resource_id, kind, name_zh, name_en, display_order in (
+            ("MU_DAILY", "mu", "日健康测量单元", "Daily Health", 1),
+            (numerator_id, "me", numerator_name, "Success Requests", 2),
+            (denominator_id, "me", denominator_name, "Total Requests", 3),
+            ("ME_SUCCESS_RATE", "me", "请求成功率", "Requests Success Rate", 4),
+            ("ME_NO_DATA", "me", "无导出指标", "No Export Metric", 5),
+        ):
+            session.add(
+                KpiV6MeasurementResource(
+                    network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                    resource_id=resource_id,
+                    kind=kind,
+                    name_zh=name_zh,
+                    name_en=name_en,
+                    display_order=display_order,
+                    importance="P1" if resource_id == "ME_SUCCESS_RATE" else None,
+                    direction="higher_better" if resource_id == "ME_SUCCESS_RATE" else None,
+                    source="preset",
+                    origin_task_id=task_ids[0],
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        for metric_id, raw_name in (
+            (numerator_id, numerator_name),
+            (denominator_id, denominator_name),
+            ("ME_NO_DATA", "无导出指标"),
+        ):
+            session.add(
+                KpiV6MeasurementBinding(
+                    network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                    measurement_unit_id="MU_DAILY",
+                    raw_source_name=raw_name,
+                    base_source_name=raw_name,
+                    metric_resource_id=metric_id,
+                    display_unit="times",
+                    binding_state="confirmed",
+                    source_file="Daily_Health.csv",
+                    origin_task_id=task_ids[0],
+                    revision=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        session.add(
+            KpiV6MeasurementDerived(
+                network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                measurement_unit_id="MU_DAILY",
+                metric_resource_id="ME_SUCCESS_RATE",
+                numerator_metric_id=numerator_id,
+                denominator_metric_id=denominator_id,
+                template="success_rate",
+                definition_state="defined",
+                revision=1,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            KpiV6MetricMaintenanceConfig(
+                network_element_type=V6_NETWORK_ELEMENT_TYPE,
+                measurement_unit_id="MU_DAILY",
+                metric_resource_id="ME_SUCCESS_RATE",
+                role="derived",
+                direction="higher_better",
+                warning_threshold=90.0,
+                critical_threshold=80.0,
+                daily_aggregation="formula",
+                daily_change_threshold=0.2,
+                daily_change_threshold_unit="pp",
+                is_percentage=True,
+                zero_semantics="unknown",
+                consistency_tolerance=0.2,
+                object_match_mode="exact",
+                config_state="ready",
+                revision=1,
                 created_at=now,
                 updated_at=now,
             )
@@ -342,7 +719,10 @@ def test_measurement_rule_end_to_end_with_task_and_single_rerun(tmp_path: Path, 
         )
     from app.cli import run_single_rule, run_task
 
-    task_id = run_task(package, customer={"product": "UMF"}).task_id
+    task_id = "task-measurement-e2e"
+    _seed_v6_call_scope(task_id)
+    assign_rules_to_network_element(["kpi.measurement_units"], V6_NETWORK_ELEMENT_TYPE)
+    task_id = run_task(package, customer={"product": "UMF"}, task_id=task_id).task_id
     first = load_rule(env, task_id, "kpi.measurement_units")
     assert first["status"] == "pass"
     assert first["metadata"]["measurement_units"][0]["objects"]["pod-a"]["avg_value"] == 100.0
@@ -836,7 +1216,7 @@ def test_inspection_daily_health_uses_utc_plus_8_calendar_boundary(tmp_path: Pat
 
 
 def test_disabled_unit_files_are_out_of_scope_not_unmatched(tmp_path: Path) -> None:
-    _seed_daily_health_catalog(disabled_unit=True)
+    _seed_daily_health_catalog(task_ids=("task-disabled",), disabled_unit=True)
     files = [_daily_health_rate_csv(tmp_path)]
 
     result = inspect_measurement_files("task-disabled", files)
@@ -854,24 +1234,7 @@ def test_disabled_unit_files_are_out_of_scope_not_unmatched(tmp_path: Path) -> N
 
 
 def test_daily_health_falls_back_to_task_time_when_no_measurement_time_exists(tmp_path: Path) -> None:
-    _seed_daily_health_catalog()
-    with session_factory() as session:
-        session.add(
-            TaskRecord(
-                task_id="task-no-time",
-                name="无测量时间任务",
-                mode="online",
-                status="completed",
-                trigger="upload",
-                package_file="task.zip",
-                customer={},
-                stats={},
-                created_at=datetime(2026, 10, 30, 16, 30, tzinfo=UTC),
-                completed_at=None,
-                last_run_at=None,
-            )
-        )
-        session.commit()
+    _seed_daily_health_catalog(task_ids=("task-no-time",))
     path = tmp_path / "ne333_Daily_Health_15_2_20261101000000.csv"
     path.write_text(
         "container,测量开始时间,测量结束时间,周期(分钟),成功请求次数,请求总次数\npod-a,,,,1,10\n",

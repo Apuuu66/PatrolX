@@ -1,6 +1,10 @@
 """CLI 无子命令入口回归测试。"""
 
 import json
+import os
+import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -402,3 +406,46 @@ def test_cli_rejects_persisted_package_kind_conflict(
     output = capsys.readouterr().out
     assert "[package_kind_conflict]" in output
     assert calls == []
+
+
+def test_cli_run_initializes_fresh_sqlite_before_task_execution(tmp_path: Path) -> None:
+    """本地全流程在全新 SQLite 上必须先建表，再执行会产生任务记录的任务。"""
+    repo_root = Path(__file__).resolve().parents[1]
+    sqlite_path = tmp_path / "patrolx.db"
+    output_dir = tmp_path / "output"
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATROLX_SQLITE_PATH": str(sqlite_path),
+            "PATROLX_OUTPUT_DIR": str(output_dir),
+            "PATROLX_UPLOADS_DIR": str(SAMPLE.parent),
+            "PATROLX_LOCAL_RUN_DIR": str(tmp_path / "local_run"),
+            "PATROLX_CONFIG_DIR": str(repo_root / "deploy" / "config"),
+        }
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.cli",
+            "run",
+            "--task-id",
+            "task-fresh-database",
+            "--product",
+            "UMF",
+        ],
+        cwd=repo_root,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    with sqlite3.connect(sqlite_path) as connection:
+        row = connection.execute(
+            "SELECT status FROM tasks WHERE task_id = ?",
+            ("task-fresh-database",),
+        ).fetchone()
+    assert row == ("completed",)

@@ -1,4 +1,4 @@
-import type { components } from "./client";
+import type { components, operations, paths } from "./client";
 import { clearSession, getToken } from "./auth.ts";
 import { createLogger } from "../utils/logger.ts";
 
@@ -62,6 +62,62 @@ export type KpiMetricMaintenanceAuditList = components["schemas"]["KpiMetricMain
 export type KpiMeasurementDerived = components["schemas"]["KpiMeasurementDerived"];
 export type KpiMeasurementDerivedList = components["schemas"]["KpiMeasurementDerivedList"];
 export type KpiMeasurementDerivedUpdateRequest = components["schemas"]["KpiMeasurementDerivedUpdateRequest"];
+export type KpiTaskSummaryV6 = components["schemas"]["KpiTaskSummaryV6"];
+export type KpiMetricResultV6 = components["schemas"]["KpiMetricResultV6"];
+export type KpiMetricResultPageV6 = components["schemas"]["KpiMetricResultPageV6"];
+export type KpiTeamFocusPageV6 = components["schemas"]["KpiTeamFocusPageV6"];
+export type KpiTeamFocusItemV6 = components["schemas"]["KpiTeamFocusItemV6"];
+export type KpiTeamFocusPatchRequestV6 = components["schemas"]["KpiTeamFocusPatchRequestV6"];
+export type KpiTeamFocusPatchResponseV6 = components["schemas"]["KpiTeamFocusPatchResponseV6"];
+export type KpiTeamFocusQueryV6 = NonNullable<
+  operations["listKpiTeamFocusV6"]["parameters"]["query"]
+>;
+export type KpiMetricEvidenceV6 = components["schemas"]["KpiMetricEvidenceV6"];
+export type KpiTechnicalAnalysisV6 = components["schemas"]["KpiTechnicalAnalysisV6"];
+export type KpiDailyBucketV6 = components["schemas"]["KpiDailyBucketV6"];
+export type KpiResultView = components["schemas"]["KpiResultView"];
+export type KpiNeedsAttentionGroup = components["schemas"]["NeedsAttentionGroup"];
+export type KpiCurrentHealthStatus = components["schemas"]["CurrentHealthStatus"];
+export type KpiTrendHealthStatus = components["schemas"]["TrendHealthStatus"];
+export type KpiTaskMetricQueryV6 = NonNullable<
+  operations["listKpiTaskMetricsV6"]["parameters"]["query"]
+>;
+
+export type KpiMeasurementUnitV6 = components["schemas"]["KpiMeasurementUnitV6"];
+export type KpiMeasurementUnitPageV6 = components["schemas"]["KpiMeasurementUnitPageV6"];
+export type KpiMeasurementInspectionPatchV6 = components["schemas"]["KpiMeasurementInspectionPatchV6"];
+export type KpiMeasurementUnitQueryV6 = NonNullable<
+  operations["listKpiMeasurementUnitsV6"]["parameters"]["query"]
+>;
+export type KpiMeasurementBindingV6 = components["schemas"]["KpiMeasurementBindingV6"];
+export type KpiMeasurementBindingPageV6 = components["schemas"]["KpiMeasurementBindingPageV6"];
+export type KpiMeasurementBindingPatchV6 = components["schemas"]["KpiMeasurementBindingPatchV6"];
+export type KpiMeasurementBindingQueryV6 = NonNullable<
+  operations["listKpiMeasurementBindingsV6"]["parameters"]["query"]
+>;
+export type KpiLegacyRecoveryAuditV6 = components["schemas"]["KpiLegacyRecoveryAuditV6"];
+export type KpiLegacyRecoveryAuditPageV6 = components["schemas"]["KpiLegacyRecoveryAuditPageV6"];
+export type KpiLegacyRecoveryAuditQueryV6 = NonNullable<
+  operations["listKpiLegacyRecoveryAuditsV6"]["parameters"]["query"]
+>;
+export type KpiLegacyRecoveryRetryRequestV6 = components["schemas"]["KpiLegacyRecoveryRetryRequestV6"];
+export type KpiPendingAttributionV6 = components["schemas"]["KpiPendingAttributionV6"];
+export type KpiPendingAttributionPageV6 = components["schemas"]["KpiPendingAttributionPageV6"];
+export type KpiPendingAttributionQueryV6 = NonNullable<
+  operations["listKpiPendingAttributionsV6"]["parameters"]["query"]
+>;
+export type KpiPendingAttributionResolveRequestV6 = components["schemas"]["KpiPendingAttributionResolveRequestV6"];
+export type KpiMaintenanceOperationAcceptedV6 = components["schemas"]["KpiMaintenanceOperationAcceptedV6"];
+export type KpiMaintenanceOperationV6 = components["schemas"]["KpiMaintenanceOperationV6"];
+export type KpiRuleNetworkAssignmentV6 = components["schemas"]["KpiRuleNetworkAssignmentV6"];
+export type KpiRuleNetworkAssignmentPageV6 = components["schemas"]["KpiRuleNetworkAssignmentPageV6"];
+export type KpiRuleAssignmentWriteResultV6 = components["schemas"]["KpiRuleAssignmentWriteResultV6"];
+export type KpiRuleAssignmentPatchRequestV6 = components["schemas"]["KpiRuleAssignmentPatchRequestV6"];
+export type KpiRuleAssignmentBatchRequestV6 = components["schemas"]["KpiRuleAssignmentBatchRequestV6"];
+export type KpiRuleAssignmentBatchResponseV6 = components["schemas"]["KpiRuleAssignmentBatchResponseV6"];
+export type KpiRuleNetworkAssignmentQueryV6 = NonNullable<
+  operations["listKpiRuleNetworkAssignmentsV6"]["parameters"]["query"]
+>;
 
 export interface MeasurementTrendPoint {
   time: string;
@@ -190,6 +246,40 @@ export type RebuildRequestPayload = Omit<components["schemas"]["RebuildRequest"]
 const BASE = "/api/v2";
 const KPI_V5_BASE = "/api/v5";
 const AUTH_BASE = "/api/v1";
+
+type V6PathKey = Extract<keyof paths, `/api/v6/${string}`>;
+
+const KPI_V6_PATHS = {
+  taskSummary: "/api/v6/kpi/tasks/{task_id}/summary",
+  taskMetrics: "/api/v6/kpi/tasks/{task_id}/metrics",
+  metricEvidence: "/api/v6/kpi/tasks/{task_id}/metrics/{measurement_unit_id}/{metric_resource_id}/evidence",
+  metricTechnicalAnalysis: "/api/v6/kpi/tasks/{task_id}/metrics/{measurement_unit_id}/{metric_resource_id}/technical-analysis",
+  teamFocus: "/api/v6/kpi/team-focus/{network_element_type}",
+  measurementUnits: "/api/v6/kpi/measurement-units",
+  measurementUnit: "/api/v6/kpi/measurement-units/{network_element_type}/{measurement_unit_id}",
+  measurementBindings: "/api/v6/kpi/measurement-bindings",
+  measurementBinding: "/api/v6/kpi/measurement-bindings/{network_element_type}/{binding_id}",
+  legacyRecoveryAudits: "/api/v6/kpi/legacy-recovery-audits",
+  legacyRecoveryRetry: "/api/v6/kpi/legacy-recovery-audits/retry",
+  pendingAttributions: "/api/v6/kpi/pending-attributions",
+  pendingAttributionResolve: "/api/v6/kpi/pending-attributions/{pending_id}/resolve",
+  maintenanceOperation: "/api/v6/kpi/maintenance-operations/{operation_id}",
+  ruleNetworkAssignments: "/api/v6/kpi/rule-network-assignments",
+  ruleNetworkAssignmentBatch: "/api/v6/kpi/rule-network-assignments/batch",
+  ruleNetworkAssignmentAudits: "/api/v6/kpi/rule-network-assignments/audits",
+  ruleNetworkAssignment: "/api/v6/kpi/rule-network-assignments/{rule_code}",
+} satisfies Record<string, V6PathKey>;
+
+/** 用生成契约中的路径模板构造实际请求地址。 */
+function v6Path(template: V6PathKey, params: Record<string, string | number> = {}): string {
+  return template.replace(/\{([^}]+)\}/g, (_match, key: string) => {
+    const value = params[key];
+    if (value === undefined) {
+      throw new Error(`缺少路径参数: ${key}`);
+    }
+    return encodeURIComponent(String(value));
+  });
+}
 
 export interface TaskDeleteErrorDetail { task_id: string; locations: string[]; failed_path: string; reason: string; path_length?: number; path_limit?: number; }
 
@@ -570,6 +660,109 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  getKpiTaskSummaryV6: (taskId: string) =>
+    request<KpiTaskSummaryV6>(
+      v6Path(KPI_V6_PATHS.taskSummary, { task_id: taskId }),
+    ),
+
+  listKpiTeamFocusV6: (
+    networkElementType: string,
+    query: KpiTeamFocusQueryV6,
+  ) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiTeamFocusPageV6>(
+      `${v6Path(KPI_V6_PATHS.teamFocus, { network_element_type: networkElementType })}${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  patchKpiTeamFocusV6: (
+    networkElementType: string,
+    payload: KpiTeamFocusPatchRequestV6,
+  ) =>
+    request<KpiTeamFocusPatchResponseV6>(
+      v6Path(KPI_V6_PATHS.teamFocus, { network_element_type: networkElementType }),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  listKpiRuleNetworkAssignmentsV6: (query: KpiRuleNetworkAssignmentQueryV6 = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiRuleNetworkAssignmentPageV6>(
+      `${v6Path(KPI_V6_PATHS.ruleNetworkAssignments)}${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  updateKpiRuleNetworkAssignmentV6: (
+    ruleCode: string,
+    payload: KpiRuleAssignmentPatchRequestV6,
+  ) =>
+    request<KpiRuleAssignmentWriteResultV6>(
+      v6Path(KPI_V6_PATHS.ruleNetworkAssignment, { rule_code: ruleCode }),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  batchUpdateKpiRuleNetworkAssignmentsV6: (payload: KpiRuleAssignmentBatchRequestV6) =>
+    request<KpiRuleAssignmentBatchResponseV6>(
+      v6Path(KPI_V6_PATHS.ruleNetworkAssignmentBatch),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  listKpiTaskMetricsV6: (taskId: string, query: KpiTaskMetricQueryV6 = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return request<KpiMetricResultPageV6>(
+      `${v6Path(KPI_V6_PATHS.taskMetrics, { task_id: taskId })}${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  getKpiMetricEvidenceV6: (
+    taskId: string,
+    measurementUnitId: string,
+    metricResourceId: string,
+  ) =>
+    request<KpiMetricEvidenceV6>(
+      v6Path(KPI_V6_PATHS.metricEvidence, {
+        task_id: taskId,
+        measurement_unit_id: measurementUnitId,
+        metric_resource_id: metricResourceId,
+      }),
+    ),
+
+  getKpiMetricTechnicalAnalysisV6: (
+    taskId: string,
+    measurementUnitId: string,
+    metricResourceId: string,
+  ) =>
+    request<KpiTechnicalAnalysisV6>(
+      v6Path(KPI_V6_PATHS.metricTechnicalAnalysis, {
+        task_id: taskId,
+        measurement_unit_id: measurementUnitId,
+        metric_resource_id: metricResourceId,
+      }),
+    ),
+
   getKpiDailyHealthMetric: (
     taskId: string,
     ruleCode: string,
@@ -649,6 +842,116 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
+
+  listKpiMeasurementUnitsV6: (query: KpiMeasurementUnitQueryV6) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    return request<KpiMeasurementUnitPageV6>(
+      `${v6Path(KPI_V6_PATHS.measurementUnits)}?${params.toString()}`,
+    );
+  },
+
+  getKpiMeasurementUnitV6: (networkElementType: string, measurementUnitId: string) =>
+    request<KpiMeasurementUnitV6>(
+      v6Path(KPI_V6_PATHS.measurementUnit, {
+        network_element_type: networkElementType,
+        measurement_unit_id: measurementUnitId,
+      }),
+    ),
+
+  setKpiMeasurementInspectionEnabledV6: (
+    networkElementType: string,
+    measurementUnitId: string,
+    payload: KpiMeasurementInspectionPatchV6,
+  ) =>
+    request<KpiMeasurementUnitV6>(
+      v6Path(KPI_V6_PATHS.measurementUnit, {
+        network_element_type: networkElementType,
+        measurement_unit_id: measurementUnitId,
+      }),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  listKpiMeasurementBindingsV6: (query: KpiMeasurementBindingQueryV6) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    return request<KpiMeasurementBindingPageV6>(
+      `${v6Path(KPI_V6_PATHS.measurementBindings)}?${params.toString()}`,
+    );
+  },
+
+  correctKpiMeasurementBindingV6: (
+    networkElementType: string,
+    bindingId: number,
+    payload: KpiMeasurementBindingPatchV6,
+  ) =>
+    request<KpiMeasurementBindingV6>(
+      v6Path(KPI_V6_PATHS.measurementBinding, {
+        network_element_type: networkElementType,
+        binding_id: bindingId,
+      }),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  listKpiLegacyRecoveryAuditsV6: (query: KpiLegacyRecoveryAuditQueryV6 = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    return request<KpiLegacyRecoveryAuditPageV6>(
+      `${v6Path(KPI_V6_PATHS.legacyRecoveryAudits)}?${params.toString()}`,
+    );
+  },
+
+  retryKpiLegacyRecoveryV6: (payload: KpiLegacyRecoveryRetryRequestV6) =>
+    request<KpiMaintenanceOperationAcceptedV6>(
+      v6Path(KPI_V6_PATHS.legacyRecoveryRetry),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  listKpiPendingAttributionsV6: (query: KpiPendingAttributionQueryV6 = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined) params.set(key, String(value));
+    });
+    return request<KpiPendingAttributionPageV6>(
+      `${v6Path(KPI_V6_PATHS.pendingAttributions)}?${params.toString()}`,
+    );
+  },
+
+  resolveKpiPendingAttributionV6: (
+    pendingId: number,
+    payload: KpiPendingAttributionResolveRequestV6,
+  ) =>
+    request<KpiMaintenanceOperationAcceptedV6>(
+      v6Path(KPI_V6_PATHS.pendingAttributionResolve, { pending_id: pendingId }),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  getKpiMaintenanceOperationV6: (operationId: string) =>
+    request<KpiMaintenanceOperationV6>(
+      v6Path(KPI_V6_PATHS.maintenanceOperation, { operation_id: operationId }),
+    ),
 
 
   listUsers: async (query: { page?: number; page_size?: number } = {}) => {

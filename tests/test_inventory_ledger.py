@@ -403,10 +403,10 @@ def test_archive_out_of_order_uploads_keep_latest_execution_version(task_dir: Pa
 
     with session_factory() as session:
         device_id = session.query(InventoryDevice).one().device_id
-        history = get_version_history(session, device_id, page=1, page_size=10)[0]
-        assert [point.raw_version for point in history] == ["V1", "V2"]
-        assert [point.direction for point in history] == [None, "upgrade"]
-        assert [point.time_source for point in history] == ["lst_me", "lst_me"]
+    history = get_version_history(device_id, page=1, page_size=10)[0]
+    assert [point.raw_version for point in history] == ["V1", "V2"]
+    assert [point.direction for point in history] == [None, "upgrade"]
+    assert [point.time_source for point in history] == ["lst_me", "lst_me"]
 
 
 def test_archive_same_execution_time_breaks_tie_by_task_id(task_dir: Path) -> None:

@@ -23,6 +23,7 @@ from app.services.parallel import ParallelPolicy
 from app.services.tasks import task_service
 from tests.baseline_helpers import (
     SAMPLE,
+    assign_rules_to_network_element,
     load_logs,
     load_rule,
     load_system,
@@ -125,7 +126,7 @@ def test_small_payload_stays_serial_without_wall_clock_regression(tmp_path: Path
 
 def test_single_rule_rerun_never_builds_pool_and_preserves_other_results(tmp_path: Path, monkeypatch: Any) -> None:
     """单规则重跑保持串行：只改动目标规则产物，其他规则 JSON 与阶段日志不变（SC-005、契约 C10）。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     from app.cli import run_single_rule, run_task
 
     unrelated = Inspector(
@@ -142,6 +143,7 @@ def test_single_rule_rerun_never_builds_pool_and_preserves_other_results(tmp_pat
     )
     unrelated.run = lambda _ctx: make_result(unrelated, status=RuleStatus.PASS, summary="无关结果")
     monkeypatch.setitem(registry._rules, unrelated.code, unrelated)
+    assign_rules_to_network_element([unrelated.code], "UMF")
 
     task_id = run_task(
         SAMPLE,
@@ -180,7 +182,7 @@ def _forced_parallel_policy(*args: Any, **kwargs: Any) -> ParallelPolicy:
 def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monkeypatch: Any) -> None:
     """CLI 与 API 双模式执行同一契约：结果逐字段一致且无残留子进程（宪法“模式同构”）。"""
     monkeypatch.setattr("app.services.executor.ParallelPolicy", _forced_parallel_policy)
-    local_env = setup_env(tmp_path / "local", monkeypatch)
+    local_env = setup_env(tmp_path / "local", monkeypatch, assign_rules_to="UMF")
     from app.cli import run_task
 
     local_task = run_task(
@@ -192,7 +194,7 @@ def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monke
     assert local_system["rules"]
     assert multiprocessing.active_children() == []
 
-    online_env = setup_env(tmp_path / "online", monkeypatch)
+    online_env = setup_env(tmp_path / "online", monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(
         online_env,
         client,
@@ -214,7 +216,7 @@ def test_cli_and_api_share_the_parallel_execution_contract(tmp_path: Path, monke
 
 def test_busy_and_rebuild_paths_are_unaffected_by_parallel(tmp_path: Path, monkeypatch: Any) -> None:
     """删除 / BUSY / 全量重建：任务运行中仍拒绝操作，重建后结果与首轮一致（边界情况）。"""
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = upload_package(env, client, name="并行重建", product="UMF")
     wait_for_task(client, task_id)
 

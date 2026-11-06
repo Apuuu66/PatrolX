@@ -418,7 +418,7 @@ def test_unknown_rerun_rule_is_rejected(tmp_path, monkeypatch) -> None:
 
 
 def test_rerun_keeps_summary_report_and_contract_consistent(tmp_path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = _upload(env).json()["task_id"]
     wait_for_task(client, task_id)
     before_task = client.get(f"/api/v2/tasks/{task_id}").json()
@@ -436,7 +436,7 @@ def test_rerun_keeps_summary_report_and_contract_consistent(tmp_path, monkeypatc
 
 
 def test_corrupt_rule_result_is_rebuilt_by_single_rule_rerun(tmp_path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = _upload(env).json()["task_id"]
     wait_for_task(client, task_id)
     (env.rules_dir(task_id) / "kpi.measurement_units.json").write_text("{broken", encoding="utf-8")
@@ -454,7 +454,7 @@ def test_corrupt_rule_result_is_rebuilt_by_single_rule_rerun(tmp_path, monkeypat
 
 
 def test_concurrent_rerun_requests_complete_consistently(tmp_path, monkeypatch) -> None:
-    env = setup_env(tmp_path, monkeypatch)
+    env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = _upload(env).json()["task_id"]
     wait_for_task(client, task_id)
     before = client.get(f"/api/v2/tasks/{task_id}/system").json()

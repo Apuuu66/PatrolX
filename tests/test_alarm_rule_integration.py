@@ -67,7 +67,7 @@ def _add_uncatalogued_file(env, task_id: str) -> None:
 
 
 def test_local_alarm_rules_survive_single_rule_reruns_and_unrelated_changes(tmp_path: Path, monkeypatch) -> None:
-    env = setup_env(tmp_path / "local", monkeypatch)
+    env = setup_env(tmp_path / "local", monkeypatch, assign_rules_to="UMF")
     from app.cli import run_single_rule, run_task
 
     package = build_real_package(tmp_path / "fixtures")
@@ -122,7 +122,7 @@ def test_local_alarm_rules_survive_single_rule_reruns_and_unrelated_changes(tmp_
 def test_online_alarm_rules_match_local_and_rerun_independently(tmp_path: Path, monkeypatch) -> None:
     package = build_real_package(tmp_path / "fixtures")
 
-    local_env = setup_env(tmp_path / "local", monkeypatch)
+    local_env = setup_env(tmp_path / "local", monkeypatch, assign_rules_to="UMF")
     from app.cli import run_task
 
     local_task = run_task(
@@ -133,7 +133,7 @@ def test_online_alarm_rules_match_local_and_rerun_independently(tmp_path: Path, 
     )
     local_rules = {code: load_rule(local_env, local_task.task_id, code) for code in ALARM_RULES}
 
-    online_env = setup_env(tmp_path / "online", monkeypatch)
+    online_env = setup_env(tmp_path / "online", monkeypatch, assign_rules_to="UMF")
     online_task_id = upload_package(
         online_env,
         client,

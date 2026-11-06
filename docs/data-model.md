@@ -371,163 +371,131 @@ output/<task_id>/prepared/<owner_code>/
 }
 ```
 
-## 12. KPI Catalog
+## 12. KPI v6 作用域、快照与结果工作台
 
-PatrolX 将 KPI 数据拆为权威基础数据、分类状态和任务快照三层。
+KPI 数据按三个维度隔离：`network_element_type` 是网元类型边界，测量单元是巡检启停粒度，`task_id` 是结果与证据边界。
+任务结果、团队关注和规则归属都不使用“公共”范围兜底。
 
-### 拆分配置
+### 12.1 表族
 
-路径：`deploy/data/kpi/`。
-
-```text
-base/metrics.json
-base/units.json
-```
-
-`base/metrics.json` 保存完整基础指标快照；`base/units.json` 只保存 `UNIT_*` 预留单位。
-两个基础资源文件要求 UTF-8、LF、严格 JSON 和 `schema_version: 1`；加载器不回退旧
-`deploy/data/kpi_catalog.json`。指标规则、公式、阈值、容量规则、展示规则和公共配置保存在 SQLite，
-`deploy/data/kpi/rules/*.json` 不再被运行时读取，仅可作为过渡期备份。
-
-约束：
-
-- `metrics[].resource_id` 必须以 `ME_` 开头；`units[].resource_id` 必须以 `UNIT_` 开头。
-- 稳定 key 是资源 ID 的小写形式；`resource_id` 和 `key` 全局唯一。
-- `metrics[].unit_key` 当前必须是 `null`；单位解析是预留能力，不进入运行时。
-- SQLite 动态口径只能引用 `metrics` 中存在的 key，派生公式不得循环。
-- 资源 CSV 离线导入是基础资源完整替换；被移除指标仍被 SQLite 动态配置引用时导入失败，两个基础文件都不替换。
-- 文件不做业务域分类；分类状态只在数据库中维护。
-### DB 分类模型
-
-| 表 | 说明 |
+| 表 | 用途 |
 | --- | --- |
-| `kpi_classifications` | `metric_key` 主键；`domain` 为空表示未分类；保存 UTC 创建/更新时间。 |
-| `kpi_classification_revisions` | 单行修订表；每次批量原子提交递增 `classification_version`。 |
-| `kpi_classification_audits` | 保存 `metric_key`、操作、操作人、前后域、结果和 UTC 操作时间。 |
+| `kpi_v6_measurement_resources` | 按网元类型隔离的测量单元、指标和单位资源目录 |
+| `kpi_v6_measurement_units` | 测量单元及唯一巡检开关 `inspection_enabled`、revision、配置指纹 |
+| `kpi_v6_measurement_bindings` | 原始指标列到指标资源的自动绑定、冲突与单条修正 |
+| `kpi_v6_measurement_derived` | 受控成功率/反向成功率派生定义 |
+| `kpi_v6_metric_maintenance_configs` | 日聚合、方向、阈值、零值语义、一致性等判定口径 |
+| `kpi_team_focus_revisions` | 每个网元类型一份共享关注的乐观锁 revision |
+| `kpi_team_focus_items` | 共享关注项 |
+| `kpi_rule_assignment_states` / `kpi_rule_network_assignments` | 业务规则逐条归属与 revision |
+| `kpi_rule_assignment_global_state` / `kpi_rule_assignment_audits` | 任务快照使用的全局 revision 与追加审计 |
+| `task_rule_scope_snapshots` / `task_rule_scope_items` | 任务启动时冻结的规则集合、版本和归属 |
+| `task_kpi_scope_snapshots` / `task_kpi_scope_items` | 任务启动时冻结的 KPI 配置指纹和指标集合 |
+| `task_kpi_metric_results_v6` / `task_kpi_points_v6` | v6 指标最终判定与历史点 |
+| `kpi_legacy_recovery_audits` / `kpi_pending_attributions` | v5 历史停用恢复、待归属迁移与重试状态 |
+| `kpi_maintenance_operations` | 恢复和待归属解析的幂等异步操作 |
 
-分类只改变业务域，不改变拆分配置文件。被公式、阈值或容量规则引用的指标受引用保护；批量分类任一指标失败时整批回滚。
+### 12.2 身份与作用域不变量
 
-### 任务快照
+- 所有 v6 业务表的主业务键显式包含 `network_element_type`；禁止 NULL、空字符串、`*`、`COMMON`、
+  `PUBLIC` 或 `GENERIC` 表示公共范围。
+- 一个测量单元只属于一个网元类型；UMF 与 CSP 可拥有相同 `measurement_unit_id` 和
+  `metric_resource_id`，但二者不是同一对象。
+- 团队关注唯一身份为
+  `(network_element_type, measurement_unit_id, metric_resource_id)`，不包含 `device_id`、`task_id`
+  或用户名；同一网元类型内共享，不同网元类型完全隔离。
+- 测量单元启用后，其全部已确认基础指标和 `definition_state=defined` 的派生指标进入范围。
+  指标、绑定、派生和维护配置没有可抑制巡检的 `enabled` 列。
+- 业务规则归属唯一键为 `(rule_code, network_element_type)`；零行即“未归属”，不执行且不生成 `skip`。
+- 所有时间字段按 UTC 存储，并以 `_at` 结尾。
 
-路径：`output/<task_id>/kpi/kpi_catalog_snapshot.json`。
+### 12.3 配置语义
 
-```json
-{
-  "schema_version": 2,
-  "base_data_version": "sha256:...",
-  "classification_version": 1,
-  "rule_config_version": 3,
-  "captured_at": "2026-09-19T00:00:00Z",
-  "base_metrics": [],
-  "metrics": [],
-  "rules": {}
-}
-```
+`kpi_v6_measurement_units.inspection_enabled` 是后续任务的唯一日常启停控制。启停保留绑定、派生、维护配置和团队关注，
+只改变后续任务或显式重建的 KPI 范围；已完成任务和报告不被改写。
 
-快照在主包解压完成后生成，之后不可变。普通 KPI 规则只读取快照；单规则重跑优先复用。快照缺失时从基础资源 + SQLite 原子重建，损坏或当前配置校验失败时抛出错误并让任务失败。
+绑定正常入库直接写 `binding_state=confirmed`，异常状态为 `candidate` / `conflict` / `ignored`。
+`conflict` 支持单条人工修正并递增 revision；旧 v5 批量确认接口只保留 `deprecated` 兼容，不进入新流程。
 
-KPI 跨任务历史的字段、降级和查询边界见 [025 历史趋势数据模型](../specs/025-kpi-cross-task-trend/data-model.md)。设备 ID 保存在任务元数据（`customer["device_id"]`），历史索引不保存设备 ID。
+派生指标只有 `definition_state=defined` 才进入任务范围；配置不完整时显示待配置，不从范围中删除。
+源包直接提供的成功率（包括媒体资源创建、修改、删除及数据通道资源更新成功率）必须作为 `base` 指标读取，
+源值即最终值；不得在 PatrolX 内重算、回填或拆成第二个派生指标。源值为空时保持缺失。
 
-034 起，趋势与版本对比读取 SQLite 的 `task_kpi_points`（按任务写入的 DB 镜像，随终态发布整批替换，字段与 `kpi/history/index.jsonl` 一一对应，缺失字段以 NULL 保留）；
-`output/<task_id>/kpi/history/index.jsonl` 保留为现场副本，现场被清理后趋势查询仍可用。任务详情中的“台账解析”设备名来自任务台账证据（`inventory_parse_results` 及归档观测），与手动绑定的 `customer["device_id"]` 分开存储；手动绑定必须命中 `inventory_devices`。
+维护配置 `config_state=incomplete` 的指标仍属于任务范围，并输出 `needs_config` / `unjudgeable`，
+不能被当作正常，也不能通过修改 `enabled` 隐藏。历史 v5 指标、绑定或派生的 `enabled=false` 只进入
+`kpi_legacy_recovery_audits`；恢复不改写既有任务结果，也不自动生成关注。
 
-全量重建会删除旧快照并按当前基础资源、分类和动态口径生成新快照；增量重建在预检时要求既有快照可解析，重建解压现场后原样保留快照。
+### 12.4 团队关注
 
-### 动态口径配置
+`kpi_team_focus_revisions` 每个网元类型一行，初始 revision 为 0；每次成功 PATCH 递增 1。
+`kpi_team_focus_items` 保存 `added_by`、`added_at`，初始为空，不从旧 `enabled=true` 迁移。
 
-SQLite 保存分类之外的 KPI 动态配置：指标规则与受控 ratio 公式、阈值（默认值和 5/15/30/60 分钟周期）、容量规则、展示规则、公共配置、配置修订和配置审计。每次原子保存或删除会记录审计并递增 `rule_config_version`。分类线索只读展示，不改变规则状态；配置或分类变更后必须手动重跑受影响的 KPI 规则。
+当前任务中的关注可用性由任务 KPI 范围与当前测量单元状态共同解释：
 
-### 日健康结论与维护配置
+- 测量单元停用：`unavailable` + `measurement_unit_disabled`；
+- 指标不在该任务快照：`unavailable` + `not_in_task_scope`；
+- 其余为 `available`。
 
-`kpi.measurement_units` 的 `RuleResult.metadata.daily_health` 是当前判定与昨日趋势的唯一任务级结论快照
-（`schema_version=1`）。任务摘要、KPI 页面和 HTML 报告只读取该快照，不在展示层重新判定。
+不可用项必须保留配置并展示原因，不得自动删除。团队关注只影响结果页查看范围，不进入任务执行计划，
+不改变报告、指标结果或历史点。
 
-```json
-{
-  "schema_version": 1,
-  "timezone": "Asia/Shanghai",
-  "data_date": "2026-11-05",
-  "previous_date": "2026-11-04",
-  "latest_measured_at": "2026-11-05T23:45:00+08:00",
-  "legacy_fallback": null,
-  "current_counts": {
-    "normal": 8,
-    "warn": 3,
-    "fail": 1,
-    "pending_config": 4,
-    "unable_to_judge": 2,
-    "not_applicable": 2
-  },
-  "trend_counts": {
-    "improved": 4,
-    "stable": 8,
-    "worsened": 2,
-    "observe": 1,
-    "no_baseline": 5
-  },
-  "scope": {
-    "enabled_measurement_unit_count": 4,
-    "confirmed_binding_metric_count": 20,
-    "expected_metric_count": 20,
-    "out_of_scope_file_count": 1,
-    "unconfirmed_binding_count": 0,
-    "out_of_scope_reason_counts": {"disabled_unit": 1}
-  },
-  "metrics": []
-}
-```
+### 12.5 规则归属与任务规则快照
 
-`metrics[]` 每项只保留指标级摘要，不携带完整时间序列：
+业务规则不提供公共范围。`kpi_rule_network_assignments` 为一条规则保存一个或多个网元类型，
+`kpi_rule_assignment_audits` 追加记录变更前后集合、actor、来源、结果和 revision。
+清空最后一条归属前需要显式二次确认。
 
-| 字段组 | 关键字段 | 含义 |
-| --- | --- | --- |
-| 标识 | `measurement_unit_id`、`metric_resource_id`、中英文名、`role`、`importance` | 指标范围与稳定身份 |
-| 当前 | `current_status`、`current_reason`、`current_reason_text`、`today_value`、`today_display` | 当前判定、原因和展示值 |
-| 昨日 | `yesterday_value`、`yesterday_display`、`delta`、`delta_display` | 同对象同周期基线、绝对变化 |
-| 趋势 | `trend_status`、`trend_reason`、`trend_reason_code` | 较昨日结论及依据 |
-| 口径 | `direction`、`current_threshold`、`change_threshold`、`daily_aggregation`、`aggregation_source`、`zero_semantics`、`consistency` | 维护人员核对的配置与证据来源 |
-| 对象/周期 | `objects[]` | 每个对象的周期、当前/昨日值、分子分母、有效点数、首末测量时间和来源文件 |
+任务真正开始时写入 `task_rule_scope_snapshots` 和 `task_rule_scope_items`：
 
-当前判定 `CurrentHealthStatus`：
+- 快照记录任务网元类型、全局归属 revision、注册表指纹、触发方式、冻结时间和状态。
+- `task_rule_scope_items` 只包含当前任务网元类型命中的普通业务规则，记录规则版本、category、priority、
+  执行顺序和归属快照；隐藏解压/分类单元不进入该表。
+- 标准巡检任务使用 `product`；日志补充包新增可空 `tasks.rule_network_element_type`，最多一个值。
+  未指定类型的日志包规则快照为空，只执行内部技术单元，页面必须显示范围说明。
+- 规则归属或注册表在任务执行中变化，当前快照不变。单规则/增量重跑只接受快照内规则，分别返回
+  `rule_not_in_task_scope` 与 `rule_snapshot_version_mismatch`。
 
-| 值 | 语义 | 可作为正常 |
-| --- | --- | --- |
-| `normal` | 数据、方向、阈值和口径完整且通过 | 是 |
-| `warn` | 触发预警阈值 | 否 |
-| `fail` | 触发失败阈值 | 否 |
-| `pending_config` | 缺少方向、阈值、聚合、零值语义或派生公式 | 否 |
-| `unable_to_judge` | 无有效数据、读取失败、依赖缺失或对象匹配失败 | 否 |
-| `not_applicable` | 分母为零或已确认业务未触发 | 否 |
+### 12.6 任务 KPI 快照与结果发布
 
-趋势 `TrendHealthStatus`：
+`task_kpi_scope_snapshots` 冻结任务 KPI 配置指纹、数据日期、团队关注 revision 和范围说明。
+`task_kpi_scope_items` 只包含冻结时启用测量单元下的已确认基础指标和已定义派生指标；
+`scope_status=needs_config` / `unjudgeable` 的项仍保留。
 
-| 值 | 语义 |
-| --- | --- |
-| `improved` / `worsened` | 按 `higher_better` / `lower_better` 方向判断的改善或恶化 |
-| `stable` | 变化在容差内 |
-| `observe` | 方向中性且变化超过容差 |
-| `no_baseline` | 无昨日同对象同周期有效基线，或缺少方向 |
+`task_kpi_metric_results_v6` 保存每个指标最终判定与证据摘要，`task_kpi_points_v6` 保存复合作用域历史点。
+二者在同一发布事务中按 `task_id` 整批替换，并写入指标结果、摘要和审计所需的一致状态；任一失败不得留下半套结果。
+结果快照发布后不可原地改写，显式重建必须重新冻结范围和配置。
 
-日界固定为 `Asia/Shanghai`（UTC+8）自然日，锚点是任务内最新有效测量时间；存储仍为 UTC。当前判定只能覆盖
-启用测量单元、已确认绑定和启用指标资源。停用单元文件与未确认绑定文件进入 `scope.out_of_scope_reason_counts`，
-不计入未匹配业务异常。旧任务没有该 metadata 时设置 `legacy_fallback` 或由读取端明确降级，不自动补造结论。
+工作台读取规则：
 
-成功率按同一任务、测量单元、指标、对象、周期和测量时间配对分子/分母，日值为分子总和除以分母总和；
-分母为零时状态为 `not_applicable`，不把分钟成功率均值当作日成功率。`reverse_success_rate` 保持受控反向公式。
-原始成功率与重算值的差异以 `consistency_tolerance`（默认 `0.2pp`）核对，超差会保留证据并阻止将口径异常
-误报为正常。
+- 无 v6 规则/KPI 快照的旧任务固定返回 `409 task_result_requires_rebuild`，不从 v5 即时推导、降级或回退。
+- “全部指标”来自 `task_kpi_scope_items`；“团队关注”来自关注项与任务范围的有效交集；
+  “需处理 + 无需处理 = 当前任务可用关注数”；“全部指标”是独立全集。
+- 证据读取必须同时带 `task_id`、`network_element_type`、`measurement_unit_id` 和
+  `metric_resource_id`，不得只按测量单元或指标名称查询。
+- 7 日趋势、跨任务历史和版本对比只在按需技术分析中读取；不参与首屏汇总、需处理分组或排序。
 
-维护配置持久化在 SQLite：
+### 12.7 判定与证据字段
 
-| 表 | 关键内容 |
-| --- | --- |
-| `kpi_metric_maintenance_configs` | `(measurement_unit_id, metric_resource_id)` 唯一；角色、日聚合、变化容差及单位、百分比语义、零值语义、一致性容差、对象匹配方式、启停和 UTC 时间 |
-| `kpi_metric_maintenance_audits` | 操作者、变更字段、变更前后有效配置摘要和 UTC 时间 |
-| `kpi_measurement_derived` | 成功率分子、分母、模板和启停；`(measurement_unit_id, metric_resource_id)` 唯一 |
+`task_kpi_metric_results_v6.decision` 取 `pass` / `warn` / `fail` / `unjudgeable` /
+`needs_config` / `not_applicable`；`needs_attention_group` 取
+`failure` / `warning` / `trend_degraded` / `unjudgeable` / `needs_config`，
+多个信号由服务端按固定优先级选取一个。`special_state` 可表达
+`no_action` / `not_applicable` / `no_baseline` / `all_zero` / `zero_denominator` / `no_data` / `unavailable`。
 
-方向与静态阈值仍保存在既有指标资源字段，避免复制第二套阈值。维护配置更新是事务操作，并写审计记录。
-单指标 7 日证据由详情接口按 `task_id + measurement_unit_id + metric_resource_id + measured_at` 日期窗口查询，
-避免已完成后首屏扫描全量 KPI 点。
+日健康证据固定使用 `Asia/Shanghai` 自然日解释，锚点为任务内最新有效测量时间，存储仍为 UTC。
+当前判定与昨日趋势分离；无数据、依赖缺失、待配置、分母为零和全零待确认均不得折叠为正常。
+派生成功率按同一任务、测量单元、指标、对象、周期和测量时间配对分子/分母，日值为分子总和除以分母总和；
+一致性超差保留证据并阻止误报正常。
+
+### 12.8 v5 冻结与旧任务
+
+`deploy/data/kpi/` 基础目录、v3/v4 配置中心与 v5 KPI 表保留历史兼容；v5 字段语义不得原地改变，
+也不得作为 v6 工作台的读取、写入或回退来源。`POST /api/v5/kpi/measurement-bindings/batch-confirm`
+与 `/api/v2/inspector-states*` 只标记 `deprecated`，物理删除另行规划。
+
+旧任务无 v6 快照时，唯一升级方式是在任务列表行内全量重建：保持同一 `task_id`，按当前规则归属和
+KPI 配置生成新快照，原始上传包只读。现场清理提示重新上传同名包（`410 scene_cleaned`），原包缺失返回
+`409 package_missing`；不得修改旧 JSON、伪造重建成功或展示 v5 兼容面板。
 
 ## 13. 局点设备台账
 

@@ -196,6 +196,14 @@ CONTAINER_INSTANCES = [
 
 KPI_DAILY_HEALTH_PACKAGE_NAME = "KPI_Daily_Health_20_Metrics_20261105.zip"
 KPI_DAILY_HEALTH_FIXED_DATE = (2026, 11, 5, 10, 0, 0)
+KPI_V6_WORKBENCH_PACKAGE_NAMES = {
+    "UMF": "KPI_V6_Workbench_20_Base_UMF_20261105.zip",
+    "CSP": "KPI_V6_Workbench_20_Base_CSP_20261105.zip",
+}
+KPI_V6_LOG_SUPPLEMENT_PACKAGE_NAME = "KPI_V6_Log_Supplement_20261105.zip"
+KPI_V6_WORKBENCH_MANIFEST_PATH = "KPI/v6-workbench-fixture-manifest.json"
+KPI_V6_WORKBENCH_MEASUREMENT_UNIT_ID = "MU_MEDIA_DATA_CHANNEL_CALL"
+KPI_V6_WORKBENCH_MEASUREMENT_UNIT_NAME = "媒体与数据通道呼叫统计"
 KPI_DAILY_HEALTH_UNITS = (
     ("MU_CALL", "Call_Statistics", "呼叫统计"),
     ("MU_HEALTH_CALL", "Health_Call", "健康呼叫统计"),
@@ -424,7 +432,7 @@ _KPI_DAILY_HEALTH_RATE_METRICS = (
         "worsened",
         (122, 132, 140, 128, 145, 150, 129),
         (200, 200, 200, 200, 200, 200, 200),
-        (61.0, 66.0, 70.0, 64.0, 72.5, 75.0, 64.5),
+        (61.0, 66.0, 70.0, 64.0, 72.5, 75.0, 63.7),
     ),
     (
         "MU_HEALTH_SIGNAL",
@@ -462,6 +470,250 @@ _KPI_DAILY_HEALTH_RATE_METRICS = (
         (100, 100, 100, 100, 100, 100, 100),
         (65.0, 65.0, 65.0, 65.0, 65.0, 65.0, 70.0),
     ),
+)
+
+
+_KPI_V6_WORKBENCH_CREATION_RATE_ALIASES = (
+    "Media Resource Creation Success Rate(%)",
+    "Media Resource Creation Requests Success Rate(%)",
+)
+_KPI_V6_WORKBENCH_DATA_CHANNEL_RATE_ALIASES = (
+    "DC Resource Update Success Rate(%)",
+    "Data Channel Resource Update Requests Success Rate(%)",
+)
+
+# 真实呼叫 KPI 的 20 个逻辑身份；成功率均为源包直接提供的 base 指标。
+_KPI_V6_WORKBENCH_METRICS = (
+    {
+        "metric_resource_id": "ME_MEDIA_CREATION_REQUESTS",
+        "metric_group": "media_resource_creation",
+        "name_zh": "媒体资源创建请求次数",
+        "raw_source_names": ["Number of Media Resource Creation Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "warning",
+        "direction": "lower_better",
+        "warning_threshold": 100.0,
+        "critical_threshold": 150.0,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_CREATION_SUCCESS_RESPONSES",
+        "metric_group": "media_resource_creation",
+        "name_zh": "媒体资源创建成功响应次数",
+        "raw_source_names": ["Number of Success Responses to Media Resource Creation Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "trend_degraded",
+        "direction": "higher_better",
+        "warning_threshold": 120.0,
+        "critical_threshold": 100.0,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_CREATION_FAILURE_RESPONSES",
+        "metric_group": "media_resource_creation",
+        "name_zh": "媒体资源创建失败响应次数",
+        "raw_source_names": ["Number of Failure Responses to Media Resource Creation Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "failure",
+        "direction": "lower_better",
+        "warning_threshold": 20.0,
+        "critical_threshold": 50.0,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_CREATION_SUCCESS_RATE",
+        "metric_group": "media_resource_creation",
+        "name_zh": "媒体资源创建成功率",
+        "raw_source_names": list(_KPI_V6_WORKBENCH_CREATION_RATE_ALIASES),
+        "team_focus": True,
+        "expected_needs_attention_group": "failure",
+        "direction": "higher_better",
+        "warning_threshold": 80.0,
+        "critical_threshold": 70.0,
+        "is_percentage": True,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_MODIFICATION_REQUESTS",
+        "metric_group": "media_resource_modification",
+        "name_zh": "媒体资源修改请求次数",
+        "raw_source_names": ["Number of Media Resource Modification Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "needs_config",
+        "direction": None,
+        "warning_threshold": None,
+        "critical_threshold": None,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_MODIFICATION_SUCCESS_RESPONSES",
+        "metric_group": "media_resource_modification",
+        "name_zh": "媒体资源修改成功响应次数",
+        "raw_source_names": ["Number of Success Responses to Media Resource Modification Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "warning",
+        "direction": "higher_better",
+        "warning_threshold": 100.0,
+        "critical_threshold": 80.0,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_MODIFICATION_FAILURE_RESPONSES",
+        "metric_group": "media_resource_modification",
+        "name_zh": "媒体资源修改失败响应次数",
+        "raw_source_names": ["Number of Failure Responses to Media Resource Modification Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "trend_degraded",
+        "direction": "lower_better",
+        "warning_threshold": 10.0,
+        "critical_threshold": 30.0,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_DELETION_REQUESTS",
+        "metric_group": "media_resource_deletion",
+        "name_zh": "媒体资源删除请求次数",
+        "raw_source_names": ["Number of Media Resource Deletion Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "unjudgeable",
+        "direction": "higher_better",
+        "warning_threshold": 10.0,
+        "critical_threshold": 5.0,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_DELETION_SUCCESS_RESPONSES",
+        "metric_group": "media_resource_deletion",
+        "name_zh": "媒体资源删除成功响应次数",
+        "raw_source_names": ["Number of Success Responses to Media Resource Deletion Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "trend_degraded",
+        "direction": "higher_better",
+        "warning_threshold": 10.0,
+        "critical_threshold": 5.0,
+    },
+    {
+        "metric_resource_id": "ME_MEDIA_DELETION_FAILURE_RESPONSES",
+        "metric_group": "media_resource_deletion",
+        "name_zh": "媒体资源删除失败响应次数",
+        "raw_source_names": ["Number of Failure Responses to Media Resource Deletion Requests(times)"],
+        "team_focus": True,
+        "expected_needs_attention_group": "failure",
+        "direction": "lower_better",
+        "warning_threshold": 10.0,
+        "critical_threshold": 20.0,
+    },
+    {
+        "metric_resource_id": "ME_AV_TERMINATION_UPDATE_REQUESTS",
+        "metric_group": "audio_video_termination_resource_update",
+        "name_zh": "音视频终止资源更新请求次数",
+        "raw_source_names": ["Number of Audio/Video Termination Resource Update Requests(times)"],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "higher_better",
+        "warning_threshold": 20.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_AV_TERMINATION_UPDATE_SUCCESS_RESPONSES",
+        "metric_group": "audio_video_termination_resource_update",
+        "name_zh": "音视频终止资源更新成功响应次数",
+        "raw_source_names": ["Number of Success Responses to Audio/Video Termination Resource Update Requests(times)"],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "higher_better",
+        "warning_threshold": 20.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_AV_TERMINATION_UPDATE_FAILURE_RESPONSES",
+        "metric_group": "audio_video_termination_resource_update",
+        "name_zh": "音视频终止资源更新失败响应次数",
+        "raw_source_names": ["Number of Failure Responses to Audio/Video Termination Resource Update Requests(times)"],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "lower_better",
+        "warning_threshold": 5.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_AV_STREAM_ASSOCIATION_REQUESTS",
+        "metric_group": "audio_video_stream_association",
+        "name_zh": "音视频流关联设置请求次数",
+        "raw_source_names": [
+            "Number of Requests for Setting Associations Between Audio and Video Stream Resources(times)"
+        ],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "higher_better",
+        "warning_threshold": 20.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_AV_STREAM_ASSOCIATION_SUCCESS_RESPONSES",
+        "metric_group": "audio_video_stream_association",
+        "name_zh": "音视频流关联设置成功响应次数",
+        "raw_source_names": [
+            "Number of Success Responses to Requests for Setting Associations Between "
+            "Audio and Video Stream Resources(times)"
+        ],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "higher_better",
+        "warning_threshold": 20.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_AV_STREAM_ASSOCIATION_FAILURE_RESPONSES",
+        "metric_group": "audio_video_stream_association",
+        "name_zh": "音视频流关联设置失败响应次数",
+        "raw_source_names": [
+            "Number of Failure Responses to Requests for Setting Associations Between "
+            "Audio and Video Stream Resources(times)"
+        ],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "lower_better",
+        "warning_threshold": 5.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_DATA_CHANNEL_UPDATE_REQUESTS",
+        "metric_group": "data_channel_resource_update",
+        "name_zh": "数据通道资源更新请求次数",
+        "raw_source_names": ["Number of Data Channel Resource Update Requests(times)"],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "higher_better",
+        "warning_threshold": 20.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_DATA_CHANNEL_UPDATE_SUCCESS_RESPONSES",
+        "metric_group": "data_channel_resource_update",
+        "name_zh": "数据通道资源更新成功响应次数",
+        "raw_source_names": ["Number of Success Responses to Data Channel Resource Update Requests(times)"],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "higher_better",
+        "warning_threshold": 20.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_DATA_CHANNEL_UPDATE_FAILURE_RESPONSES",
+        "metric_group": "data_channel_resource_update",
+        "name_zh": "数据通道资源更新失败响应次数",
+        "raw_source_names": ["Number of Failure Responses to Data Channel Resource Update Requests(times)"],
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "lower_better",
+        "warning_threshold": 5.0,
+        "critical_threshold": 10.0,
+    },
+    {
+        "metric_resource_id": "ME_DATA_CHANNEL_UPDATE_SUCCESS_RATE",
+        "metric_group": "data_channel_resource_update",
+        "name_zh": "数据通道资源更新成功率",
+        "raw_source_names": list(_KPI_V6_WORKBENCH_DATA_CHANNEL_RATE_ALIASES),
+        "team_focus": False,
+        "expected_needs_attention_group": None,
+        "direction": "higher_better",
+        "warning_threshold": 85.0,
+        "critical_threshold": 75.0,
+        "is_percentage": True,
+    },
 )
 
 
@@ -735,12 +987,8 @@ def _kpi_daily_health_metric_entries() -> list[dict[str, object]]:
                 "measurement_unit_id": unit_id,
                 "metric_resource_id": metric_id,
                 "name_zh": name_zh,
-                "role": "derived",
-                "raw_columns": [
-                    f"{name_zh}分子",
-                    f"{name_zh}分母",
-                    name_zh,
-                ],
+                "role": "base",
+                "raw_columns": [name_zh],
                 "direction": "higher_better",
                 "warning_threshold": warning_threshold,
                 "critical_threshold": critical_threshold,
@@ -757,6 +1005,16 @@ def _kpi_daily_health_source_file(unit_id: str) -> str:
     return f"ne333_{fragment}_15_0_20261105000000.csv"
 
 
+def _kpi_daily_health_related_counter_name(metric_id: str, suffix: str) -> str:
+    topic = {
+        "ME_HEALTH_RATE_1": "媒体资源创建",
+        "ME_HEALTH_RATE_2": "媒体资源创建请求",
+        "ME_HEALTH_RATE_3": "DC 资源更新",
+        "ME_HEALTH_RATE_4": "数据通道资源更新请求",
+    }[metric_id]
+    return f"{topic}{suffix}"
+
+
 def _kpi_daily_health_csv(unit_id: str) -> str:
     base_metrics = [item for item in _KPI_DAILY_HEALTH_BASE_METRICS if item[0] == unit_id]
     rate_metrics = [item for item in _KPI_DAILY_HEALTH_RATE_METRICS if item[0] == unit_id]
@@ -764,7 +1022,14 @@ def _kpi_daily_health_csv(unit_id: str) -> str:
     fieldnames.extend(str(item[2]) for item in base_metrics)
     for item in rate_metrics:
         name_zh = str(item[2])
-        fieldnames.extend([f"{name_zh}分子", f"{name_zh}分母", name_zh])
+        fieldnames.extend(
+            [
+                _kpi_daily_health_related_counter_name(str(item[1]), "请求次数"),
+                _kpi_daily_health_related_counter_name(str(item[1]), "成功响应次数"),
+                _kpi_daily_health_related_counter_name(str(item[1]), "失败响应次数"),
+                name_zh,
+            ]
+        )
 
     buffer = io.StringIO(newline="")
     writer = csv.DictWriter(buffer, fieldnames=fieldnames, lineterminator="\n")
@@ -787,8 +1052,11 @@ def _kpi_daily_health_csv(unit_id: str) -> str:
             numerator_values = item[7]
             denominator_values = item[8]
             raw_values = item[9]
-            row[f"{name_zh}分子"] = numerator_values[index]
-            row[f"{name_zh}分母"] = denominator_values[index]
+            request_count = denominator_values[index]
+            success_count = numerator_values[index]
+            row[_kpi_daily_health_related_counter_name(str(item[1]), "请求次数")] = request_count
+            row[_kpi_daily_health_related_counter_name(str(item[1]), "成功响应次数")] = success_count
+            row[_kpi_daily_health_related_counter_name(str(item[1]), "失败响应次数")] = request_count - success_count
             row[name_zh] = raw_values[index]
         writer.writerow(row)
     return buffer.getvalue()
@@ -811,14 +1079,19 @@ def _kpi_daily_health_manifest() -> dict[str, object]:
         "expected_current_counts": {status: current_counts[status] for status in KPI_DAILY_HEALTH_CURRENT_STATUSES},
         "expected_trend_counts": {status: trend_counts[status] for status in KPI_DAILY_HEALTH_TREND_STATUSES},
         "boundaries": {
-            "zero_denominator_metric_ids": ["ME_HEALTH_RATE_2"],
+            "all_zero_success_rate_metric_ids": ["ME_HEALTH_RATE_2"],
             "no_data_metric_ids": ["ME_HEALTH_REGISTERED_USERS", "ME_HEALTH_ALARM_COUNT"],
             "all_zero_unknown_metric_ids": ["ME_HEALTH_CALL_QUALITY"],
             "success_rate_evidence": {
                 "metric_resource_id": "ME_HEALTH_RATE_1",
-                "numerator": 129,
-                "denominator": 200,
-                "value": 64.5,
+                "raw_source_name": "媒体资源创建成功率",
+                "expected_value": 63.7,
+                "related_source_columns": [
+                    "媒体资源创建请求次数",
+                    "媒体资源创建成功响应次数",
+                    "媒体资源创建失败响应次数",
+                ],
+                "computed_by_patrolx": False,
             },
             "disabled_measurement_unit_ids": [KPI_DAILY_HEALTH_DISABLED_UNIT[0]],
             "out_of_scope_files": [disabled_filename],
@@ -858,6 +1131,229 @@ def build_kpi_daily_health_fixture(directory: Path) -> Path:
             archive,
             "KPI/daily-health-fixture-manifest.json",
             json.dumps(_kpi_daily_health_manifest(), ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"),
+        )
+    return output
+
+
+def _kpi_v6_workbench_source_file(network_element_type: str) -> str:
+    return f"ne333_Call_Media_{network_element_type.upper()}_15_0_20261105000000.csv"
+
+
+def _kpi_v6_workbench_csv(network_element_type: str) -> str:
+    metric_columns = list(
+        dict.fromkeys(raw_name for metric in _KPI_V6_WORKBENCH_METRICS for raw_name in metric["raw_source_names"])
+    )
+    fieldnames = ["container", "测量开始时间", "测量结束时间", "周期(分钟)", *metric_columns]
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    start = datetime(2026, 11, 5, 10, 0, 0)
+    source_values = {
+        "Number of Media Resource Creation Requests(times)": ("180", "200"),
+        "Number of Success Responses to Media Resource Creation Requests(times)": ("150", "129"),
+        "Number of Failure Responses to Media Resource Creation Requests(times)": ("30", "71"),
+        "Number of Media Resource Modification Requests(times)": ("40", "42"),
+        "Number of Success Responses to Media Resource Modification Requests(times)": ("36", "35"),
+        "Number of Failure Responses to Media Resource Modification Requests(times)": ("4", "7"),
+        "Number of Media Resource Deletion Requests(times)": ("", ""),
+        "Number of Success Responses to Media Resource Deletion Requests(times)": ("12", "8"),
+        "Number of Failure Responses to Media Resource Deletion Requests(times)": ("1", "6"),
+        "Number of Audio/Video Termination Resource Update Requests(times)": ("26", "24"),
+        "Number of Success Responses to Audio/Video Termination Resource Update Requests(times)": ("24", "22"),
+        "Number of Failure Responses to Audio/Video Termination Resource Update Requests(times)": ("2", "2"),
+        "Number of Requests for Setting Associations Between Audio and Video Stream Resources(times)": ("33", "31"),
+        "Number of Success Responses to Requests for Setting Associations Between "
+        "Audio and Video Stream Resources(times)": (
+            "31",
+            "29",
+        ),
+        "Number of Failure Responses to Requests for Setting Associations Between "
+        "Audio and Video Stream Resources(times)": (
+            "2",
+            "2",
+        ),
+        "Number of Data Channel Resource Update Requests(times)": ("70", "75"),
+        "Number of Success Responses to Data Channel Resource Update Requests(times)": ("64", "70"),
+        "Number of Failure Responses to Data Channel Resource Update Requests(times)": ("6", "5"),
+        _KPI_V6_WORKBENCH_CREATION_RATE_ALIASES[0]: ("75.0", "63.7"),
+        _KPI_V6_WORKBENCH_CREATION_RATE_ALIASES[1]: ("", ""),
+        _KPI_V6_WORKBENCH_DATA_CHANNEL_RATE_ALIASES[0]: ("91.4", "93.3"),
+        _KPI_V6_WORKBENCH_DATA_CHANNEL_RATE_ALIASES[1]: ("", ""),
+    }
+    if network_element_type == "CSP":
+        source_values[_KPI_V6_WORKBENCH_CREATION_RATE_ALIASES[0]] = ("", "")
+        source_values[_KPI_V6_WORKBENCH_DATA_CHANNEL_RATE_ALIASES[0]] = ("74.0", "78.0")
+
+    for index, day_offset in enumerate((1, 0)):
+        measured_at = start - timedelta(days=day_offset)
+        row: dict[str, object] = {
+            "container": "pod-call-media-a",
+            "测量开始时间": measured_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "测量结束时间": (measured_at + timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S"),
+            "周期(分钟)": 15,
+        }
+        for column in metric_columns:
+            row[column] = source_values[column][index]
+        writer.writerow(row)
+    return (
+        f"设备类型：{network_element_type}\n测量单元名称：{KPI_V6_WORKBENCH_MEASUREMENT_UNIT_NAME}\n{buffer.getvalue()}"
+    )
+
+
+def _kpi_v6_workbench_manifest(network_element_type: str) -> dict[str, object]:
+    metrics = [
+        {
+            "measurement_unit_id": KPI_V6_WORKBENCH_MEASUREMENT_UNIT_ID,
+            "measurement_unit_name": KPI_V6_WORKBENCH_MEASUREMENT_UNIT_NAME,
+            **metric,
+            "role": "base",
+            "is_percentage": bool(metric.get("is_percentage", False)),
+        }
+        for metric in _KPI_V6_WORKBENCH_METRICS
+    ]
+    if network_element_type == "CSP":
+        creation_success_rate = next(
+            metric for metric in metrics if metric["metric_resource_id"] == "ME_MEDIA_CREATION_SUCCESS_RATE"
+        )
+        creation_success_rate["expected_needs_attention_group"] = "unjudgeable"
+    focus_metric_ids = [str(metric["metric_resource_id"]) for metric in metrics if metric["team_focus"]]
+    manifest: dict[str, object] = {
+        "schema_version": 1,
+        "package_kind": "kpi_v6_workbench",
+        "network_element_type": network_element_type,
+        "measurement_unit_id": KPI_V6_WORKBENCH_MEASUREMENT_UNIT_ID,
+        "measurement_unit_name": KPI_V6_WORKBENCH_MEASUREMENT_UNIT_NAME,
+        "source_file": _kpi_v6_workbench_source_file(network_element_type),
+        "data_date": "2026-11-05",
+        "metric_count": len(metrics),
+        "team_focus_count": len(focus_metric_ids),
+        "team_focus_metric_resource_ids": focus_metric_ids,
+        "team_focus_scope": {
+            "network_element_type": network_element_type,
+            "shared_across_tasks": True,
+            "contains_device_dimension": False,
+        },
+        "same_metric_ids_across_network_types": True,
+        "historical_recovery": [
+            {
+                "object_kind": "metric",
+                "metric_resource_id": "ME_MEDIA_MODIFICATION_REQUESTS",
+                "legacy_enabled": False,
+                "expects_recovery_audit": True,
+                "inspection_effect": "none",
+            },
+            {
+                "object_kind": "binding",
+                "metric_resource_id": "ME_MEDIA_CREATION_SUCCESS_RATE",
+                "raw_source_name": _KPI_V6_WORKBENCH_CREATION_RATE_ALIASES[0],
+                "legacy_enabled": False,
+                "expects_recovery_audit": True,
+                "inspection_effect": "none",
+            },
+            {
+                "object_kind": "derived",
+                "metric_resource_id": "ME_DERIVED_MEDIA_CREATION_QUALITY",
+                "legacy_enabled": False,
+                "expects_recovery_audit": True,
+                "inspection_effect": "none",
+            },
+        ],
+        "rule_assignments": [
+            {
+                "rule_code": "kpi.media.call_quality",
+                "network_element_types": ["CSP", "UMF"],
+            },
+            {
+                "rule_code": "kpi.media.umf_only",
+                "network_element_types": ["UMF"],
+            },
+            {
+                "rule_code": "kpi.media.unassigned",
+                "network_element_types": [],
+            },
+        ],
+        "log_supplement": {
+            "package_name": KPI_V6_LOG_SUPPLEMENT_PACKAGE_NAME,
+            "default_rule_network_element_type": None,
+            "allowed_rule_network_element_types": ["UMF", "CSP"],
+        },
+        "success_rate_alias_groups": {
+            "ME_MEDIA_CREATION_SUCCESS_RATE": list(_KPI_V6_WORKBENCH_CREATION_RATE_ALIASES),
+            "ME_DATA_CHANNEL_UPDATE_SUCCESS_RATE": list(_KPI_V6_WORKBENCH_DATA_CHANNEL_RATE_ALIASES),
+        },
+        "metrics": metrics,
+    }
+    if network_element_type == "CSP":
+        manifest["missing_success_rate_source"] = {
+            "metric_resource_id": "ME_MEDIA_CREATION_SUCCESS_RATE",
+            "raw_source_name": _KPI_V6_WORKBENCH_CREATION_RATE_ALIASES[0],
+            "expected_value": None,
+            "related_evidence_is_non_calculation_input": True,
+        }
+    return manifest
+
+
+def build_kpi_v6_workbench_fixture(directory: Path, *, network_element_type: str = "UMF") -> Path:
+    """生成固定、幂等的 KPI v6 20 指标夹具；成功率仅读取源列，不做重算。"""
+    normalized_scope = network_element_type.upper()
+    if normalized_scope not in KPI_V6_WORKBENCH_PACKAGE_NAMES:
+        raise ValueError(f"不支持的网元类型: {network_element_type}")
+
+    directory.mkdir(parents=True, exist_ok=True)
+    output = directory / KPI_V6_WORKBENCH_PACKAGE_NAMES[normalized_scope]
+    performance_buffer = io.BytesIO()
+    with zipfile.ZipFile(performance_buffer, "w", zipfile.ZIP_DEFLATED) as performance:
+        _add_bytes(
+            performance,
+            _kpi_v6_workbench_source_file(normalized_scope),
+            _kpi_v6_workbench_csv(normalized_scope).encode("utf-8"),
+        )
+
+    scene_root = UMF_SCENE_ROOT.replace("UMF", normalized_scope)
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        _add_bytes(
+            archive,
+            f"{scene_root}/Performance Measurement Results/PerfResult_20261105000000.zip",
+            performance_buffer.getvalue(),
+        )
+        _add_bytes(
+            archive,
+            KPI_V6_WORKBENCH_MANIFEST_PATH,
+            json.dumps(
+                _kpi_v6_workbench_manifest(normalized_scope),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ).encode("utf-8"),
+        )
+    return output
+
+
+def build_kpi_v6_log_supplement_fixture(directory: Path) -> Path:
+    """生成固定、幂等的日志补充包；规则适用网元类型只在任务元数据中选择。"""
+    directory.mkdir(parents=True, exist_ok=True)
+    output = directory / KPI_V6_LOG_SUPPLEMENT_PACKAGE_NAME
+    log_source = "CspService/logs/paas-192.168.2.2/CspService.log"
+    manifest = {
+        "schema_version": 1,
+        "package_kind": "log_supplement",
+        "package_name": KPI_V6_LOG_SUPPLEMENT_PACKAGE_NAME,
+        "rule_network_element_type": None,
+        "allowed_rule_network_element_types": ["UMF", "CSP"],
+        "log_source_files": [log_source],
+        "product": None,
+        "classification_profile": "GENERIC",
+    }
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        _add_bytes(
+            archive,
+            log_source,
+            b"2026-11-05T10:00:00Z INFO synthetic log supplement\n",
+        )
+        _add_bytes(
+            archive,
+            KPI_V6_WORKBENCH_MANIFEST_PATH,
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"),
         )
     return output
 
@@ -938,9 +1434,9 @@ def build_real_package(directory: Path, *, include_kpi: bool = True) -> Path:
         )
 
     umf_base = "Outer Device/Problem 038/wrapper/UMF Problem Scene"
+    repeated_call_kpi = _call_kpi(15).encode("utf-8")
     umf_kpi_members = {
-        f"ne333_Call_Session_API_Statistics_15_{index:02d}_202609180000.csv": _call_kpi(15).encode("utf-8")
-        for index in range(73)
+        f"ne333_Call_Session_API_Statistics_15_{index:02d}_202609180000.csv": repeated_call_kpi for index in range(73)
     }
     umf_kpi_members["ne333_Call_Session_API_Statistics_15_73_202609180000.csv"] = _english_call_kpi().encode("utf-8")
     umf_kpi_buffer = _zip_bytes(umf_kpi_members)

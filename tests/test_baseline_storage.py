@@ -36,7 +36,7 @@ def test_task_record_has_no_business_evidence_columns() -> None:
 def test_file_storage_layout_is_single_task_directory(tmp_path: Path, monkeypatch) -> None:
     from app.cli import run_task
 
-    env: Env = setup_env(tmp_path, monkeypatch)
+    env: Env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task = run_task(SAMPLE, task_id="task-sample", customer={"product": "UMF"})
 
     assert task.task_id == "task-sample"
@@ -202,6 +202,27 @@ def test_session_factory_waits_for_transient_sqlite_writer(tmp_path: Path, monke
     assert int(busy_timeout) >= 30_000
 
 
+def test_init_db_reuses_schema_initialization_for_same_path(tmp_path: Path, monkeypatch) -> None:
+    """同一进程重复调用不应反复建表、迁移和扫描启动回填。"""
+    from app.core.config import settings
+    from app.models import db as db_module
+
+    monkeypatch.setattr(settings, "sqlite_path", tmp_path / "cached-init.db")
+    db_module.init_db()
+    rebuild_calls = 0
+    original_rebuild = db_module._rebuild_legacy_inventory_tables
+
+    def count_rebuild(engine: object) -> None:
+        nonlocal rebuild_calls
+        rebuild_calls += 1
+        original_rebuild(engine)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(db_module, "_rebuild_legacy_inventory_tables", count_rebuild)
+    db_module.init_db()
+
+    assert rebuild_calls == 0, "同一路径已完成初始化时不得重复执行完整建表与迁移"
+
+
 def test_default_sqlite_path_is_outside_output_root(monkeypatch) -> None:
     """元数据库默认不与任务输出目录混放。"""
     from app.core.config import Settings
@@ -291,7 +312,7 @@ def test_single_rule_rerun_keeps_task_system_summary_only(tmp_path: Path, monkey
     """单规则重跑重建 task.json 时也不能把规则大明细复制回来。"""
     from app.cli import run_single_rule, run_task
 
-    env: Env = setup_env(tmp_path, monkeypatch)
+    env: Env = setup_env(tmp_path, monkeypatch, assign_rules_to="UMF")
     task_id = "task-single-summary"
     run_task(SAMPLE, task_id=task_id, customer={"product": "UMF"})
     task_path = env.task_dir(task_id) / "task.json"
